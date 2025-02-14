@@ -21,19 +21,19 @@ jobs:
 
       - name: Inject example code
         run: |
-          # Read and indent lib.rs for markdown formatting
-          LIB_CONTENT=$(sed -e 's/^/    /' examples/utxo/src/lib.rs)
+          LIB_CONTENT=$(cat examples/utxo/src/lib.rs | sed 's/^/    /')  # Indent for markdown
+          MAIN_CONTENT=$(cat examples/utxo/src/main.rs | sed 's/^/    /')  # Indent for markdown
           
-          # Read and indent main.rs for markdown formatting
-          MAIN_CONTENT=$(sed -e 's/^/    /' examples/utxo/src/main.rs)
-          
-          # Replace placeholders in README.md
           awk -v lib_content="$LIB_CONTENT" -v main_content="$MAIN_CONTENT" '
-            /<!-- BEGIN_LIB -->/ {print; print "```rust"; print lib_content; print "```"; next}
-            /<!-- END_LIB -->/ {seen_lib=1}
-            /<!-- BEGIN_MAIN -->/ {print; print "```rust"; print main_content; print "```"; next}
-            /<!-- END_MAIN -->/ {seen_main=1}
-            !seen_lib && !seen_main {print}
+            /<!-- BEGIN_LIB -->/ {
+              print; print "```rust"; print lib_content; print "```"; next
+            }
+            /<!-- END_LIB -->/ {print; seen_lib=1; next}
+            seen_lib && /<!-- BEGIN_MAIN -->/ {
+              print; print "```rust"; print main_content; print "```"; next
+            }
+            /<!-- END_MAIN -->/ {print; seen_main=1; next}
+            !seen_lib || !seen_main {print}
           ' README.md > README.md.tmp && mv README.md.tmp README.md
 
       - name: Commit changes
