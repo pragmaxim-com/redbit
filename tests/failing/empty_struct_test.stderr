@@ -1,0 +1,5 @@
+error: `#[pk]` attribute not found on any column. Exactly one column must have `#[pk]`.
+ --> tests/failing/empty_struct_test.rs:4:1
+  |
+4 | struct EmptyStruct {
+  | ^^^^^^

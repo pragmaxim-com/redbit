@@ -1,0 +1,8 @@
+[package]
+name = "utxo"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+redbit = { path = "../../redbit" }
+redb = "2.4.0"

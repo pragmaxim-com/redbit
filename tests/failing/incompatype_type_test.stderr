@@ -1,0 +1,5 @@
+error: `#[derive(Redbit)]` can only be applied to structs.
+ --> tests/failing/incompatype_type_test.rs:4:1
+  |
+4 | enum Enum {
+  | ^^^^

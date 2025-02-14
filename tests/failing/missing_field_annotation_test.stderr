@@ -1,0 +1,5 @@
+error: All columns must have a #[column] or #[pk] annotation
+ --> tests/failing/missing_field_annotation_test.rs:7:5
+  |
+7 |     name: String,
+  |     ^^^^

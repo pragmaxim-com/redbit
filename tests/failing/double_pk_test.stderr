@@ -1,0 +1,5 @@
+error: Multiple `#[pk]` columns found; only one is allowed
+ --> tests/failing/double_pk_test.rs:7:5
+  |
+7 |     #[pk]
+  |     ^

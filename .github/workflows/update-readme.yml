@@ -1,0 +1,43 @@
+name: Update README with Example Code
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-readme:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Inject example code
+        run: |
+          # Read and indent lib.rs for markdown formatting
+          LIB_CONTENT=$(sed -e 's/^/    /' examples/utxo/src/lib.rs)
+          
+          # Read and indent main.rs for markdown formatting
+          MAIN_CONTENT=$(sed -e 's/^/    /' examples/utxo/src/main.rs)
+          
+          # Replace placeholders in README.md
+          awk -v lib_content="$LIB_CONTENT" -v main_content="$MAIN_CONTENT" '
+            /<!-- BEGIN_LIB -->/ {print; print "```rust"; print lib_content; print "```"; next}
+            /<!-- END_LIB -->/ {seen_lib=1}
+            /<!-- BEGIN_MAIN -->/ {print; print "```rust"; print main_content; print "```"; next}
+            /<!-- END_MAIN -->/ {seen_main=1}
+            !seen_lib && !seen_main {print}
+          ' README.md > README.md.tmp && mv README.md.tmp README.md
+
+      - name: Commit changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions@users.noreply.github.com"
+          git diff --quiet || (git add README.md && git commit -m "Auto-update README with example code" && git push)
