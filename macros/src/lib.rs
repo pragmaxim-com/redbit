@@ -2,7 +2,6 @@ extern crate proc_macro;
 
 use proc_macro::TokenStream;
 use std::{env, fs};
-use std::path::PathBuf;
 use proc_macro2::{Ident, Span};
 use quote::{format_ident, quote};
 use syn::{parse_macro_input, DeriveInput, Data, Fields, Field, Type, spanned::Spanned, punctuated::Punctuated, token::Comma};

@@ -4,11 +4,7 @@ fn main() {
     let db = redb::Database::create(std::env::temp_dir().join("my_db.redb")).unwrap();
 
     let utxo = Utxo {
-        id: UtxoPointer {
-            block_height: 42,
-            tx_index: 7,
-            utxo_index: 6,
-        }.into(),
+        id: UtxoPointer { block_height: 42,tx_index: 7, utxo_index: 6 },
         amount: 999_999,
         datum: String::from("high cardinality"),
         address: String::from("low-medium cardinality"),

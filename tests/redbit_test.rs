@@ -83,7 +83,7 @@ fn it_should_override_entity_under_existing_unique_id() {
 #[test]
 fn compile_pass_tests() {
     let t = trybuild::TestCases::new();
-    t.pass("passing_test.rs");
+    t.pass("tests/passing_test.rs");
 }
 
 #[test]
