@@ -1,5 +1,5 @@
-error: All columns must have a #[column] or #[pk] annotation
- --> tests/failing/missing_field_annotation_test.rs:7:5
+error: No #[column(...)] fields found. You must have at least one field with #[column].
+ --> tests/failing/missing_field_annotation_test.rs:4:1
   |
-7 |     name: String,
-  |     ^^^^
+4 | struct MissingFieldAnnotationStruct {
+  | ^^^^^^

@@ -25,7 +25,7 @@ pub struct Block {
 
 #[derive(Redbit, Debug, Clone, PartialEq, Eq)]
 pub struct Utxo {
-    #[pk]
+    #[pk(range)]
     pub id: UtxoPointer,
     #[column]
     pub amount: Amount,

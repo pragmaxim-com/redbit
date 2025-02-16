@@ -1,3 +1,4 @@
+use redb::TableDefinition;
 use utxo::*;
 
 fn main() {
@@ -18,9 +19,11 @@ fn main() {
 
     let _ = Block::store(&db, &block).unwrap();
     let block = Block::get_by_hash(&db, &block.hash).unwrap();
-    let block_range_by_height = Block::range_by_height(&db, &block_height, &block_height).unwrap();
+    let blocks_by_height = Block::get_by_height(&db, &block_height).unwrap();
+    let block_range_by_height = Block::range_by_height(&db, &block_height, &(block_height+1)).unwrap();
 
     println!("{:?}", block);
+    println!("{:?}", blocks_by_height);
     println!("{:?}", block_range_by_height);
 
     let _ = Utxo::store(&db, &utxo).unwrap();

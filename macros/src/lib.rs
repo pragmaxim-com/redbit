@@ -6,6 +6,12 @@ use proc_macro2::{Ident, Span};
 use quote::{format_ident, quote};
 use syn::{parse_macro_input, DeriveInput, Data, Fields, Field, Type, spanned::Spanned, punctuated::Punctuated, token::Comma};
 
+struct PkColumn {
+    column_name: Ident,
+    column_type: Type,
+    range: bool,
+}
+
 struct Column {
     column_name: Ident,
     column_type: Type,
@@ -15,40 +21,45 @@ struct Column {
 struct ColumnMacros {
     table_definitions: Vec<proc_macro2::TokenStream>,
     store_statement: proc_macro2::TokenStream,
-    struct_initializer: proc_macro2::TokenStream,
+    struct_get_initializer: proc_macro2::TokenStream,
+    query_function: Option<proc_macro2::TokenStream>,
+    range_function: Option<proc_macro2::TokenStream>,
+}
+
+struct PkColumnMacros {
     query_function: proc_macro2::TokenStream,
     range_function: Option<proc_macro2::TokenStream>,
 }
 
 struct StructMacros {
     struct_name: Ident,
-    pk_name: Ident,
-    pk_type: Type,
+    pk_column: (PkColumn, PkColumnMacros),
     columns: Vec<(Column, ColumnMacros)>,
 }
 
 impl StructMacros {
     pub fn expand(&self) -> proc_macro2::TokenStream {
         let struct_ident = &self.struct_name;
-        let pk_ident = &self.pk_name;
-        let pk_type = &self.pk_type;
+        let (pk_column, pk_column_macros) = &self.pk_column;
+        let pk_ident = pk_column.column_name.clone();
+        let pk_type = pk_column.column_type.clone();
+        let pk_query_function = pk_column_macros.query_function.clone();
 
         let mut table_definitions = Vec::new();
         let mut store_statements = Vec::new();
-        let mut struct_initializers = Vec::new();
+        let mut struct_get_initializers = Vec::new();
         let mut query_functions = Vec::new();
         let mut range_functions = Vec::new();
 
         for (_, fm) in &self.columns {
             table_definitions.extend(fm.table_definitions.clone());
             store_statements.push(fm.store_statement.clone());
-            struct_initializers.push(fm.struct_initializer.clone());
+            struct_get_initializers.push(fm.struct_get_initializer.clone());
             query_functions.push(fm.query_function.clone());
             if let Some(range_fn) = &fm.range_function {
                 range_functions.push(range_fn.clone());
             }
         }
-
 
         // Build the final TokenStream
         let expanded = quote! {
@@ -58,11 +69,20 @@ impl StructMacros {
                 fn compose(read_txn: &::redb::ReadTransaction, pk: &#pk_type) -> Result<#struct_ident, DbEngineError> {
                     Ok(#struct_ident {
                         #pk_ident: pk.clone(),
-                        #(#struct_initializers),*
+                        #(#struct_get_initializers),*
                     })
                 }
+
+                #pk_query_function
                 #(#query_functions)*
 
+/*                fn range(read_txn: &::redb::ReadTransaction, from: &#pk_type, to: &#pk_type) -> Result<Vec<#struct_ident>, DbEngineError> {
+                    Ok(#struct_ident {
+                        #pk_ident: pk.clone(),
+                        #(#struct_get_initializers),*
+                    })
+                }
+*/
                 #(#range_functions)*
 
                 pub fn store(db: &::redb::Database, instance: &#struct_ident) -> Result<(), DbEngineError> {
@@ -74,7 +94,6 @@ impl StructMacros {
                     Ok(())
                 }
             }
-
         };
 
         let formatted_str = match syn::parse2(expanded.clone()) {
@@ -91,7 +110,7 @@ impl StructMacros {
 }
 
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum Indexing {
     Off,
     On { dictionary: bool, range: bool },
@@ -116,8 +135,8 @@ fn get_named_fields(ast: &DeriveInput) -> Result<Punctuated<Field, Comma>, syn::
 fn parse_struct_columns(
     columns: &Punctuated<Field, Comma>,
     span: &Span,
-) -> Result<(Ident, Type, Vec<Column>), syn::Error> {
-    let mut pk_column: Option<(Ident, Type)> = None;
+) -> Result<(PkColumn, Vec<Column>), syn::Error> {
+    let mut pk_column: Option<PkColumn> = None;
     let mut parsed_columns = Vec::new();
 
     for column in columns.iter() {
@@ -126,11 +145,8 @@ fn parse_struct_columns(
             None => continue, // Skip unnamed columns
         };
         let column_type = column.ty.clone();
-        let mut indexing = Indexing::Off;
-        let mut has_annotation = false;
 
         for attr in &column.attrs {
-            // If it's #[pk], set pk_column
             if attr.path().is_ident("pk") {
                 if pk_column.is_some() {
                     return Err(syn::Error::new(
@@ -138,12 +154,15 @@ fn parse_struct_columns(
                         "Multiple `#[pk]` columns found; only one is allowed",
                     ));
                 }
-                pk_column = Some((column_name.clone(), column_type.clone()));
-                has_annotation = true;
-            }
-            // If it's #[column(...)] parse indexing/dictionary
-            if attr.path().is_ident("column") {
-                has_annotation = true;
+                pk_column = Some(PkColumn{column_name: column_name.clone(), column_type: column_type.clone(), range: false});
+                let _ = attr.parse_nested_meta(|nested| {
+                    if nested.path.is_ident("range") {
+                        pk_column = Some(PkColumn{column_name: column_name.clone(), column_type: column_type.clone(), range: true});
+                    }
+                    Ok(())
+                });
+            } else if attr.path().is_ident("column") {
+                let mut indexing = Indexing::Off;
                 let _ = attr.parse_nested_meta(|nested| {
                     if nested.path.is_ident("index") {
                         indexing = Indexing::On { dictionary: false, range: false };
@@ -155,29 +174,20 @@ fn parse_struct_columns(
                     }
                     Ok(())
                 });
+                parsed_columns.push(Column {
+                    column_name: column_name.clone(),
+                    column_type: column_type.clone(),
+                    indexing: indexing.clone(),
+                });
+            } else {
+                return Err(syn::Error::new(column.span(), "Field must have either #[pk] or #[column(...)] annotation"));
             }
         }
 
-        // If neither #[pk] nor #[column(...)] is found => error
-        if !has_annotation {
-            return Err(syn::Error::new(
-                column.span(),
-                "All columns must have a #[column] or #[pk] annotation",
-            ));
-        }
-
-        // If this column is not the pk column, store it in parsed_columns
-        if pk_column.as_ref().map(|(pk_ident, _)| pk_ident) != Some(&column_name) {
-            parsed_columns.push(Column {
-                column_name,
-                column_type,
-                indexing,
-            });
-        }
     }
 
     // Ensure exactly one pk is found
-    let (pk_ident, pk_type) = pk_column.ok_or_else(|| {
+    let pk_col = pk_column.ok_or_else(|| {
         syn::Error::new(
             *span,
             "`#[pk]` attribute not found on any column. Exactly one column must have `#[pk]`.",
@@ -193,23 +203,24 @@ fn parse_struct_columns(
         ));
     }
 
-    Ok((pk_ident, pk_type, parsed_columns))
+    Ok((pk_col, parsed_columns))
 }
 
 fn generate_struct_macros(
     struct_columns: Vec<Column>,
     struct_name: Ident,
-    pk_name: Ident,
-    pk_type: Type,
+    pk_column: PkColumn,
 ) -> Result<StructMacros, syn::Error> {
+    let pk_name = &pk_column.column_name;
+    let pk_type = &pk_column.column_type;
     let mut columns: Vec<(Column, ColumnMacros)> = Vec::new();
     let mut table_names: Vec<String> = Vec::new();
     for struct_column in struct_columns.into_iter() {
         let mut table_definitions: Vec<proc_macro2::TokenStream> = Vec::new();
 
         let store_statement: proc_macro2::TokenStream;
-        let struct_initializer: proc_macro2::TokenStream;
-        let query_function: proc_macro2::TokenStream;
+        let struct_get_initializer: proc_macro2::TokenStream;
+        let mut query_function: Option<proc_macro2::TokenStream> = None;
         let mut range_function: Option<proc_macro2::TokenStream> = None;
 
         let column_name = &struct_column.column_name;
@@ -227,23 +238,13 @@ fn generate_struct_macros(
                         let mut table = write_txn.open_table(#table_ident)?;
                         table.insert(&instance.#pk_name, &instance.#column_name)?;
                     };
-                struct_initializer = quote! {
+                struct_get_initializer = quote! {
                         #column_name: {
                             let table = read_txn.open_table(#table_ident)?;
                             let guard = table.get(pk)?;
                             guard.unwrap().value()
                         }
                     };
-                let get_fn_name = format_ident!("get_by_{}", pk_name);
-                query_function = quote! {
-                    pub fn #get_fn_name(db: &::redb::Database, pk: &#pk_type) -> Result<#struct_name, DbEngineError> {
-                        let read_txn = match db.begin_read() {
-                            Ok(txn) => txn,
-                            Err(err) => return Err(DbEngineError::DbError(err.to_string())),
-                        };
-                        Self::compose(&read_txn, pk)
-                    }
-                };
             }
             Indexing::On { dictionary: false, range } => {
                 let table_ident = format_ident!("{}_{}_BY_{}", struct_name.to_string().to_uppercase(), column_name.to_string().to_uppercase(), pk_name.to_string().to_uppercase());
@@ -266,7 +267,7 @@ fn generate_struct_macros(
                         let mut mm = write_txn.open_multimap_table(#index_table_ident)?;
                         mm.insert(&instance.#column_name, &instance.#pk_name)?;
                     };
-                struct_initializer = quote! {
+                struct_get_initializer = quote! {
                         #column_name: {
                             let table = read_txn.open_table(#table_ident)?;
                             let guard = table.get(pk)?;
@@ -274,7 +275,7 @@ fn generate_struct_macros(
                         }
                     };
                 let get_fn_name = format_ident!("get_by_{}", column_name);
-                query_function = quote! {
+                query_function = Some(quote! {
                         pub fn #get_fn_name(
                             db: &::redb::Database,
                             val: &#column_type
@@ -296,7 +297,7 @@ fn generate_struct_macros(
                             }
                             Ok(results)
                         }
-                    };
+                    });
                 if range {
                     let range_fn_name = format_ident!("range_by_{}", column_name);
                     range_function = Some(quote! {
@@ -380,8 +381,7 @@ fn generate_struct_macros(
 
                         dict_index.insert(&birth_id, &instance.#pk_name)?;
                     };
-
-                struct_initializer = quote! {
+                struct_get_initializer = quote! {
                     #column_name: {
                         let pk2birth = read_txn.open_table(#table_dict_pk_by_pk_ident)?;
                         let birth_guard = pk2birth.get(pk)?;
@@ -391,9 +391,8 @@ fn generate_struct_macros(
                         val_guard.unwrap().value()
                     }
                 };
-
                 let get_fn_name = format_ident!("get_by_{}", column_name);
-                query_function = quote! {
+                query_function = Some(quote! {
                     pub fn #get_fn_name(
                         db: &::redb::Database,
                         val: &#column_type
@@ -422,7 +421,7 @@ fn generate_struct_macros(
                         }
                         Ok(results)
                     }
-                }
+                });
             }
             Indexing::On { dictionary: true, range: true } => {
                 return Err(syn::Error::new(column_name.span(), "Range indexing on dictionary columns is not supported"))
@@ -432,7 +431,7 @@ fn generate_struct_macros(
             ColumnMacros {
                 table_definitions,
                 store_statement,
-                struct_initializer,
+                struct_get_initializer,
                 query_function,
                 range_function
             };
@@ -440,12 +439,43 @@ fn generate_struct_macros(
         columns.push((struct_column, column_macros));
     }
 
+    let get_fn_name = format_ident!("get_by_{}", pk_name);
+    let pk_query_function =
+        quote! {
+            pub fn #get_fn_name(db: &::redb::Database, pk: &#pk_type) -> Result<#struct_name, DbEngineError> {
+                let read_txn = match db.begin_read() {
+                    Ok(txn) => txn,
+                    Err(err) => return Err(DbEngineError::DbError(err.to_string())),
+                };
+                Self::compose(&read_txn, pk)
+            }
+        };
+
+    let pk_range_function = None;
+/*        if pk_column.range {
+            let range_fn_name = format_ident!("range_by_{}", pk_name);
+            Some(quote! {
+                    pub fn #range_fn_name(db: &::redb::Database, from: &#pk_type, to: &#pk_type) -> Result<Vec<#struct_name>, DbEngineError> {
+                        let read_txn = match db.begin_read() {
+                            Ok(txn) => txn,
+                            Err(err) => return Err(DbEngineError::DbError(err.to_string())),
+                        };
+                        Self::range(&read_txn, from, to)
+                    }
+                })
+        } else {
+            None
+        };
+*/
+    let pk_column_macros = PkColumnMacros {
+        query_function: pk_query_function,
+        range_function: pk_range_function,
+    };
     // println!("Tables for {}:\n{}\n", struct_name, table_names.join("\n"));
 
     Ok(StructMacros {
         struct_name,
-        pk_name,
-        pk_type,
+        pk_column: (pk_column, pk_column_macros),
         columns
     })
 }
@@ -458,13 +488,13 @@ pub fn derive_indexed(input: TokenStream) -> TokenStream {
         Ok(columns) => columns,
         Err(err) => return err.to_compile_error().into(),
     };
-    let (pk_ident, pk_type, struct_columns) =
+    let (pk_column, struct_columns) =
         match parse_struct_columns(&named_fields, &ast.span()) {
             Ok(info) => info,
             Err(err) => return err.to_compile_error().into(),
         };
 
-    let struct_macros = match generate_struct_macros(struct_columns, struct_name.clone(), pk_ident, pk_type) {
+    let struct_macros = match generate_struct_macros(struct_columns, struct_name.clone(), pk_column) {
         Ok(struct_macros) => struct_macros,
         Err(err) => return err.to_compile_error().into(),
     };
