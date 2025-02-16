@@ -17,6 +17,7 @@ struct ColumnMacros {
     store_statement: proc_macro2::TokenStream,
     struct_initializer: proc_macro2::TokenStream,
     query_function: proc_macro2::TokenStream,
+    range_function: Option<proc_macro2::TokenStream>,
 }
 
 struct StructMacros {
@@ -36,13 +37,18 @@ impl StructMacros {
         let mut store_statements = Vec::new();
         let mut struct_initializers = Vec::new();
         let mut query_functions = Vec::new();
+        let mut range_functions = Vec::new();
 
         for (_, fm) in &self.columns {
             table_definitions.extend(fm.table_definitions.clone());
             store_statements.push(fm.store_statement.clone());
             struct_initializers.push(fm.struct_initializer.clone());
             query_functions.push(fm.query_function.clone());
+            if let Some(range_fn) = &fm.range_function {
+                range_functions.push(range_fn.clone());
+            }
         }
+
 
         // Build the final TokenStream
         let expanded = quote! {
@@ -56,6 +62,9 @@ impl StructMacros {
                     })
                 }
                 #(#query_functions)*
+
+                #(#range_functions)*
+
                 pub fn store(db: &::redb::Database, instance: &#struct_ident) -> Result<(), DbEngineError> {
                     let write_txn = db.begin_write()?;
                     {
@@ -85,7 +94,7 @@ impl StructMacros {
 #[derive(Debug, PartialEq, Eq)]
 enum Indexing {
     Off,
-    On { dictionary: bool },
+    On { dictionary: bool, range: bool },
 }
 
 fn get_named_fields(ast: &DeriveInput) -> Result<Punctuated<Field, Comma>, syn::Error> {
@@ -137,10 +146,12 @@ fn parse_struct_columns(
                 has_annotation = true;
                 let _ = attr.parse_nested_meta(|nested| {
                     if nested.path.is_ident("index") {
-                        indexing = Indexing::On { dictionary: false };
+                        indexing = Indexing::On { dictionary: false, range: false };
                     }
                     if nested.path.is_ident("dictionary") {
-                        indexing = Indexing::On { dictionary: true };
+                        indexing = Indexing::On { dictionary: true, range: false };
+                    } else if nested.path.is_ident("range") {
+                        indexing = Indexing::On { dictionary: false, range: true };
                     }
                     Ok(())
                 });
@@ -190,7 +201,7 @@ fn generate_struct_macros(
     struct_name: Ident,
     pk_name: Ident,
     pk_type: Type,
-) -> StructMacros {
+) -> Result<StructMacros, syn::Error> {
     let mut columns: Vec<(Column, ColumnMacros)> = Vec::new();
     let mut table_names: Vec<String> = Vec::new();
     for struct_column in struct_columns.into_iter() {
@@ -199,6 +210,7 @@ fn generate_struct_macros(
         let store_statement: proc_macro2::TokenStream;
         let struct_initializer: proc_macro2::TokenStream;
         let query_function: proc_macro2::TokenStream;
+        let mut range_function: Option<proc_macro2::TokenStream> = None;
 
         let column_name = &struct_column.column_name;
         let column_type  = &struct_column.column_type;
@@ -233,7 +245,7 @@ fn generate_struct_macros(
                     }
                 };
             }
-            Indexing::On { dictionary: false } => {
+            Indexing::On { dictionary: false, range } => {
                 let table_ident = format_ident!("{}_{}_BY_{}", struct_name.to_string().to_uppercase(), column_name.to_string().to_uppercase(), pk_name.to_string().to_uppercase());
                 let table_name_str = table_ident.to_string();
                 table_names.push(table_name_str.clone());
@@ -285,8 +297,39 @@ fn generate_struct_macros(
                             Ok(results)
                         }
                     };
+                if range {
+                    let range_fn_name = format_ident!("range_by_{}", column_name);
+                    range_function = Some(quote! {
+                        pub fn #range_fn_name(
+                            db: &::redb::Database,
+                            from: &#column_type,
+                            to: &#column_type
+                        ) -> Result<Vec<#struct_name>, DbEngineError> {
+                            let read_txn = db.begin_read()?;
+                            let mm_table = read_txn.open_multimap_table(#index_table_ident)?;
+                            let range_iter = mm_table.range(from.clone()..=to.clone())?;
+
+                            let mut results = Vec::new();
+                            for entry_res in range_iter {
+                                let (col_key, mut multi_iter) = entry_res?;
+                                while let Some(x) = multi_iter.next() {
+                                    let pk = x?.value();
+                                    match Self::compose(&read_txn, &pk) {
+                                        Ok(item) => {
+                                            results.push(item);
+                                        }
+                                        Err(err) => {
+                                            return Err(DbEngineError::DbError(err.to_string()));
+                                        }
+                                    }
+                                }
+                            }
+                            Ok(results)
+                        }
+                    })
+                }
             }
-            Indexing::On { dictionary: true } => {
+            Indexing::On { dictionary: true, range: false } => {
                 let table_dict_pk_by_pk_ident = format_ident!("{}_{}_DICT_PK_BY_{}", struct_name.to_string().to_uppercase(), column_str.to_string().to_uppercase(), pk_name.to_string().to_uppercase());
                 let table_dict_pk_by_pk_str = table_dict_pk_by_pk_ident.to_string();
                 let table_value_to_dict_pk_ident = format_ident!("{}_{}_TO_DICT_PK", struct_name.to_string().to_uppercase(), column_str.to_string().to_uppercase());
@@ -381,6 +424,9 @@ fn generate_struct_macros(
                     }
                 }
             }
+            Indexing::On { dictionary: true, range: true } => {
+                return Err(syn::Error::new(column_name.span(), "Range indexing on dictionary columns is not supported"))
+            }
         }
         let column_macros =
             ColumnMacros {
@@ -388,17 +434,20 @@ fn generate_struct_macros(
                 store_statement,
                 struct_initializer,
                 query_function,
+                range_function
             };
 
         columns.push((struct_column, column_macros));
     }
-    println!("Tables for {}:\n{}", struct_name, table_names.join("\n"));
-    StructMacros {
+
+    // println!("Tables for {}:\n{}\n", struct_name, table_names.join("\n"));
+
+    Ok(StructMacros {
         struct_name,
         pk_name,
         pk_type,
         columns
-    }
+    })
 }
 
 #[proc_macro_derive(Redbit, attributes(pk, column))]
@@ -415,7 +464,9 @@ pub fn derive_indexed(input: TokenStream) -> TokenStream {
             Err(err) => return err.to_compile_error().into(),
         };
 
-    let struct_macros = generate_struct_macros(struct_columns, struct_name.clone(), pk_ident, pk_type);
-
+    let struct_macros = match generate_struct_macros(struct_columns, struct_name.clone(), pk_ident, pk_type) {
+        Ok(struct_macros) => struct_macros,
+        Err(err) => return err.to_compile_error().into(),
+    };
     TokenStream::from(struct_macros.expand())
 }

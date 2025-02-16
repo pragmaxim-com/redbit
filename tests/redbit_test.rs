@@ -5,16 +5,20 @@ fn create_test_db() -> redb::Database {
     redb::Database::create(std::env::temp_dir().join(format!("test_db_{}.redb", random_number))).unwrap()
 }
 
-fn create_test_utxo(block_height: u32, tx_index: u16, utxo_index: u16) -> Utxo {
+fn create_test_utxo(block_height: Height, tx_index: TxIndex, utxo_index: UtxoIndex) -> Utxo {
     Utxo {
-        id: UtxoPointer {
-            block_height,
-            tx_index,
-            utxo_index,
-        }.into(),
+        id: UtxoPointer { block_height, tx_index, utxo_index},
         amount: 999_999,
         datum: format!("datum_{}", block_height),
         address: format!("address_{}", tx_index),
+    }
+}
+
+fn create_test_block(hash: Hash, height: Height) -> Block {
+    Block {
+        hash,
+        height,
+        timestamp: 1678296000,
     }
 }
 
@@ -33,7 +37,7 @@ fn it_should_get_entity_by_unique_id() {
 }
 
 #[test]
-fn it_should_get_entities_by_index_with_one_to_many_relationship() {
+fn it_should_get_entities_by_index() {
     let db = create_test_db();
     let utxo1 = create_test_utxo(42, 7, 6);
     let utxo2 = create_test_utxo(43, 7, 1);
@@ -55,6 +59,22 @@ fn it_should_get_entities_by_index_with_one_to_many_relationship() {
     let found_by_datum2 = Utxo::get_by_datum(&db, &utxo2.datum).expect("Failed to query by datum");
     assert_eq!(found_by_datum2.len(), 1);
     assert_eq!(found_by_datum2[0].id, utxo2.id);
+}
+
+#[test]
+fn it_should_get_entities_by_range_for_index() {
+    let db = create_test_db();
+    let mut blocks = Vec::new();
+    for height in 40..44 {
+        let block = create_test_block(format!("unique{}", height), height);
+        blocks.push(block.clone());
+        Block::store(&db, &block).expect("Failed to store block");
+    }
+
+    let found_by_height_range = Block::range_by_height(&db, &41, &42).expect("Failed to range by height");
+    let expected_blocks: Vec<Block> = blocks.into_iter().filter(|b| b.height == 41 || b.height == 42).collect();
+    assert_eq!(found_by_height_range.len(), 2);
+    assert_eq!(expected_blocks, found_by_height_range);
 }
 
 #[test]
