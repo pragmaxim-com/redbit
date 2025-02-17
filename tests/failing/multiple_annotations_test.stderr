@@ -1,0 +1,5 @@
+error: Only one #[pk] or #[column(...)] annotation allowed per field
+ --> tests/failing/multiple_annotations_test.rs:7:5
+  |
+7 |     #[column]
+  |     ^
