@@ -1,8 +1,8 @@
-use redb::TableDefinition;
 use utxo::*;
 
 fn main() {
     let db = redb::Database::create(std::env::temp_dir().join("my_db.redb")).unwrap();
+
     let block_height = 42;
     let block = Block { hash: String::from("unique"), height: block_height, timestamp: 1678296000 };
 
