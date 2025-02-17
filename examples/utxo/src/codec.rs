@@ -1,9 +1,9 @@
 use crate::UtxoPointer;
 
+use redb::{Key, TypeName, Value};
 use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::convert::TryInto;
-use redb::{Key, TypeName, Value};
 
 impl Key for UtxoPointer {
     fn compare(data1: &[u8], data2: &[u8]) -> Ordering {
@@ -13,11 +13,11 @@ impl Key for UtxoPointer {
 
 impl Value for UtxoPointer {
     type SelfType<'a>
-    = UtxoPointer
+        = UtxoPointer
     where
         Self: 'a;
     type AsBytes<'a>
-    = Cow<'a, [u8]>
+        = Cow<'a, [u8]>
     where
         Self: 'a;
 
