@@ -1,8 +1,8 @@
-pub use redbit::*;
-use std::fmt::Debug;
 use redb::{Key, TypeName, Value};
+pub use redbit::*;
 use std::borrow::Cow;
 use std::cmp::Ordering;
+use std::fmt::Debug;
 
 pub type Amount = u64;
 pub type Timestamp = u64;
@@ -49,15 +49,22 @@ impl Key for UtxoPointer {
 }
 
 impl Value for UtxoPointer {
-    type SelfType<'a> = UtxoPointer  where Self: 'a;
-    type AsBytes<'a> = Cow<'a, [u8]> where Self: 'a;
+    type SelfType<'a>
+        = UtxoPointer
+    where
+        Self: 'a;
+    type AsBytes<'a>
+        = Cow<'a, [u8]>
+    where
+        Self: 'a;
 
     fn fixed_width() -> Option<usize> {
         Some(8)
     }
 
     fn from_bytes<'a>(data: &'a [u8]) -> Self::SelfType<'a>
-        where Self: 'a,
+    where
+        Self: 'a,
     {
         UtxoPointer {
             block_height: u32::from_be_bytes(data[0..4].try_into().unwrap()),
@@ -67,7 +74,8 @@ impl Value for UtxoPointer {
     }
 
     fn as_bytes<'a, 'b: 'a>(value: &'a Self::SelfType<'b>) -> Self::AsBytes<'a>
-        where Self: 'b,
+    where
+        Self: 'b,
     {
         let mut buf = [0u8; 8];
         buf[0..4].copy_from_slice(&value.block_height.to_be_bytes());

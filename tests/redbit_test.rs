@@ -7,7 +7,7 @@ fn create_test_db() -> redb::Database {
 
 fn create_test_utxo(block_height: Height, tx_index: TxIndex, utxo_index: UtxoIndex) -> Utxo {
     Utxo {
-        id: UtxoPointer { block_height, tx_index, utxo_index},
+        id: UtxoPointer { block_height, tx_index, utxo_index },
         amount: 999_999,
         datum: format!("datum_{}", block_height),
         address: format!("address_{}", tx_index),
@@ -15,11 +15,7 @@ fn create_test_utxo(block_height: Height, tx_index: TxIndex, utxo_index: UtxoInd
 }
 
 fn create_test_block(hash: Hash, height: Height) -> Block {
-    Block {
-        hash,
-        height,
-        timestamp: 1678296000,
-    }
+    Block { hash, height, timestamp: 1678296000 }
 }
 
 #[test]
@@ -62,7 +58,7 @@ fn it_should_get_entities_by_index() {
 }
 
 #[test]
-fn it_should_get_entities_by_range_for_index() {
+fn it_should_get_entities_by_range_on_index() {
     let db = create_test_db();
     let mut blocks = Vec::new();
     for height in 40..44 {
@@ -75,6 +71,28 @@ fn it_should_get_entities_by_range_for_index() {
     let expected_blocks: Vec<Block> = blocks.into_iter().filter(|b| b.height == 41 || b.height == 42).collect();
     assert_eq!(found_by_height_range.len(), 2);
     assert_eq!(expected_blocks, found_by_height_range);
+}
+
+#[test]
+fn it_should_get_entities_by_range_on_pk() {
+    let db = create_test_db();
+    let mut utxos = Vec::new();
+    for height in 1..4 {
+        for tx_index in 1..2 {
+            for utxo_index in 1..2 {
+                let utxo = create_test_utxo(height, tx_index, utxo_index);
+                utxos.push(utxo.clone());
+                Utxo::store(&db, &utxo).expect("Failed to store utxo");
+            }
+        }
+    }
+
+    // take utxos except the first and last
+    let expected_utxos: Vec<Utxo> = utxos.clone().into_iter().skip(1).take(utxos.len() - 2).collect();
+
+    let found_by_pk_range =
+        Utxo::range_by_id(&db, &expected_utxos.first().unwrap().id, &expected_utxos.last().unwrap().id).expect("Failed to range by pk");
+    assert_eq!(expected_utxos, found_by_pk_range);
 }
 
 #[test]

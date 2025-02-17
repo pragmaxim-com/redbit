@@ -1,10 +1,10 @@
 extern crate proc_macro;
 
 use proc_macro::TokenStream;
-use std::{env, fs};
 use proc_macro2::{Ident, Span};
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, DeriveInput, Data, Fields, Field, Type, spanned::Spanned, punctuated::Punctuated, token::Comma};
+use std::{env, fs};
+use syn::{parse_macro_input, punctuated::Punctuated, spanned::Spanned, token::Comma, Data, DeriveInput, Field, Fields, Type};
 
 struct PkColumn {
     column_name: Ident,
@@ -18,16 +18,18 @@ struct Column {
     indexing: Indexing,
 }
 
-struct ColumnMacros {
-    table_definitions: Vec<proc_macro2::TokenStream>,
+struct PkColumnMacros {
+    table_definition: proc_macro2::TokenStream,
     store_statement: proc_macro2::TokenStream,
-    struct_get_initializer: proc_macro2::TokenStream,
-    query_function: Option<proc_macro2::TokenStream>,
+    query_function: proc_macro2::TokenStream,
     range_function: Option<proc_macro2::TokenStream>,
 }
 
-struct PkColumnMacros {
-    query_function: proc_macro2::TokenStream,
+struct ColumnMacros {
+    table_definitions: Vec<proc_macro2::TokenStream>,
+    store_statement: proc_macro2::TokenStream,
+    struct_initializer: proc_macro2::TokenStream,
+    query_function: Option<proc_macro2::TokenStream>,
     range_function: Option<proc_macro2::TokenStream>,
 }
 
@@ -43,18 +45,21 @@ impl StructMacros {
         let (pk_column, pk_column_macros) = &self.pk_column;
         let pk_ident = pk_column.column_name.clone();
         let pk_type = pk_column.column_type.clone();
+        let pk_table_definition = pk_column_macros.table_definition.clone();
+        let pk_store_statement = pk_column_macros.store_statement.clone();
         let pk_query_function = pk_column_macros.query_function.clone();
+        let pk_range_function = pk_column_macros.range_function.clone();
 
         let mut table_definitions = Vec::new();
         let mut store_statements = Vec::new();
-        let mut struct_get_initializers = Vec::new();
+        let mut struct_initializers = Vec::new();
         let mut query_functions = Vec::new();
         let mut range_functions = Vec::new();
 
         for (_, fm) in &self.columns {
             table_definitions.extend(fm.table_definitions.clone());
             store_statements.push(fm.store_statement.clone());
-            struct_get_initializers.push(fm.struct_get_initializer.clone());
+            struct_initializers.push(fm.struct_initializer.clone());
             query_functions.push(fm.query_function.clone());
             if let Some(range_fn) = &fm.range_function {
                 range_functions.push(range_fn.clone());
@@ -63,31 +68,28 @@ impl StructMacros {
 
         // Build the final TokenStream
         let expanded = quote! {
+            #pk_table_definition
             #(#table_definitions)*
 
             impl #struct_ident {
                 fn compose(read_txn: &::redb::ReadTransaction, pk: &#pk_type) -> Result<#struct_ident, DbEngineError> {
                     Ok(#struct_ident {
                         #pk_ident: pk.clone(),
-                        #(#struct_get_initializers),*
+                        #(#struct_initializers),*
                     })
                 }
 
                 #pk_query_function
                 #(#query_functions)*
 
-/*                fn range(read_txn: &::redb::ReadTransaction, from: &#pk_type, to: &#pk_type) -> Result<Vec<#struct_ident>, DbEngineError> {
-                    Ok(#struct_ident {
-                        #pk_ident: pk.clone(),
-                        #(#struct_get_initializers),*
-                    })
-                }
-*/
+                #pk_range_function
+
                 #(#range_functions)*
 
                 pub fn store(db: &::redb::Database, instance: &#struct_ident) -> Result<(), DbEngineError> {
                     let write_txn = db.begin_write()?;
                     {
+                        #pk_store_statement
                         #(#store_statements)*
                     }
                     write_txn.commit()?;
@@ -97,18 +99,13 @@ impl StructMacros {
         };
 
         let formatted_str = match syn::parse2(expanded.clone()) {
-            Ok(ast) => {
-                prettyplease::unparse(&ast)
-            }
-            Err(_) => {
-                expanded.to_string()
-            }
+            Ok(ast) => prettyplease::unparse(&ast),
+            Err(_) => expanded.to_string(),
         };
         let _ = fs::write(env::temp_dir().join("redbit_macro.rs"), &formatted_str).unwrap();
         expanded
     }
 }
-
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Indexing {
@@ -120,22 +117,13 @@ fn get_named_fields(ast: &DeriveInput) -> Result<Punctuated<Field, Comma>, syn::
     match &ast.data {
         Data::Struct(data_struct) => match &data_struct.fields {
             Fields::Named(columns_named) => Ok(columns_named.named.clone()),
-            _ => Err(syn::Error::new(
-                ast.span(),
-                "`#[derive(Redbit)]` only supports structs with named columns.",
-            )),
+            _ => Err(syn::Error::new(ast.span(), "`#[derive(Redbit)]` only supports structs with named columns.")),
         },
-        _ => Err(syn::Error::new(
-            ast.span(),
-            "`#[derive(Redbit)]` can only be applied to structs.",
-        )),
+        _ => Err(syn::Error::new(ast.span(), "`#[derive(Redbit)]` can only be applied to structs.")),
     }
 }
 
-fn parse_struct_columns(
-    columns: &Punctuated<Field, Comma>,
-    span: &Span,
-) -> Result<(PkColumn, Vec<Column>), syn::Error> {
+fn parse_struct_columns(columns: &Punctuated<Field, Comma>, span: &Span) -> Result<(PkColumn, Vec<Column>), syn::Error> {
     let mut pk_column: Option<PkColumn> = None;
     let mut parsed_columns = Vec::new();
 
@@ -149,15 +137,12 @@ fn parse_struct_columns(
         for attr in &column.attrs {
             if attr.path().is_ident("pk") {
                 if pk_column.is_some() {
-                    return Err(syn::Error::new(
-                        column.span(),
-                        "Multiple `#[pk]` columns found; only one is allowed",
-                    ));
+                    return Err(syn::Error::new(column.span(), "Multiple `#[pk]` columns found; only one is allowed"));
                 }
-                pk_column = Some(PkColumn{column_name: column_name.clone(), column_type: column_type.clone(), range: false});
+                pk_column = Some(PkColumn { column_name: column_name.clone(), column_type: column_type.clone(), range: false });
                 let _ = attr.parse_nested_meta(|nested| {
                     if nested.path.is_ident("range") {
-                        pk_column = Some(PkColumn{column_name: column_name.clone(), column_type: column_type.clone(), range: true});
+                        pk_column = Some(PkColumn { column_name: column_name.clone(), column_type: column_type.clone(), range: true });
                     }
                     Ok(())
                 });
@@ -174,43 +159,24 @@ fn parse_struct_columns(
                     }
                     Ok(())
                 });
-                parsed_columns.push(Column {
-                    column_name: column_name.clone(),
-                    column_type: column_type.clone(),
-                    indexing: indexing.clone(),
-                });
+                parsed_columns.push(Column { column_name: column_name.clone(), column_type: column_type.clone(), indexing: indexing.clone() });
             } else {
                 return Err(syn::Error::new(column.span(), "Field must have either #[pk] or #[column(...)] annotation"));
             }
         }
-
     }
 
-    // Ensure exactly one pk is found
-    let pk_col = pk_column.ok_or_else(|| {
-        syn::Error::new(
-            *span,
-            "`#[pk]` attribute not found on any column. Exactly one column must have `#[pk]`.",
-        )
-    })?;
+    let pk_col =
+        pk_column.ok_or_else(|| syn::Error::new(*span, "`#[pk]` attribute not found on any column. Exactly one column must have `#[pk]`."))?;
 
-    // Ensure there's at least one #[column(...)]
-    // If parsed_columns is empty => only pk was found => fail
     if parsed_columns.is_empty() {
-        return Err(syn::Error::new(
-            *span,
-            "No #[column(...)] fields found. You must have at least one field with #[column].",
-        ));
+        return Err(syn::Error::new(*span, "No #[column(...)] fields found. You must have at least one field with #[column]."));
     }
 
     Ok((pk_col, parsed_columns))
 }
 
-fn generate_struct_macros(
-    struct_columns: Vec<Column>,
-    struct_name: Ident,
-    pk_column: PkColumn,
-) -> Result<StructMacros, syn::Error> {
+fn generate_struct_macros(struct_columns: Vec<Column>, struct_name: Ident, pk_column: PkColumn) -> Result<StructMacros, syn::Error> {
     let pk_name = &pk_column.column_name;
     let pk_type = &pk_column.column_type;
     let mut columns: Vec<(Column, ColumnMacros)> = Vec::new();
@@ -219,85 +185,95 @@ fn generate_struct_macros(
         let mut table_definitions: Vec<proc_macro2::TokenStream> = Vec::new();
 
         let store_statement: proc_macro2::TokenStream;
-        let struct_get_initializer: proc_macro2::TokenStream;
+        let struct_initializer: proc_macro2::TokenStream;
         let mut query_function: Option<proc_macro2::TokenStream> = None;
         let mut range_function: Option<proc_macro2::TokenStream> = None;
 
         let column_name = &struct_column.column_name;
-        let column_type  = &struct_column.column_type;
-        let column_str  = column_name.to_string();
+        let column_type = &struct_column.column_type;
+        let column_str = column_name.to_string();
         match struct_column.indexing {
             Indexing::Off => {
-                let table_ident = format_ident!("{}_{}_BY_{}", struct_name.to_string().to_uppercase(), column_name.to_string().to_uppercase(), pk_name.to_string().to_uppercase());
+                let table_ident = format_ident!(
+                    "{}_{}_BY_{}",
+                    struct_name.to_string().to_uppercase(),
+                    column_name.to_string().to_uppercase(),
+                    pk_name.to_string().to_uppercase()
+                );
                 let table_name_str = table_ident.to_string();
                 table_names.push(table_name_str.clone());
                 table_definitions.push(quote! {
-                        pub const #table_ident: ::redb::TableDefinition<'static, #pk_type, #column_type> = ::redb::TableDefinition::new(#table_name_str);
-                    });
+                    pub const #table_ident: ::redb::TableDefinition<'static, #pk_type, #column_type> = ::redb::TableDefinition::new(#table_name_str);
+                });
                 store_statement = quote! {
-                        let mut table = write_txn.open_table(#table_ident)?;
-                        table.insert(&instance.#pk_name, &instance.#column_name)?;
-                    };
-                struct_get_initializer = quote! {
-                        #column_name: {
-                            let table = read_txn.open_table(#table_ident)?;
-                            let guard = table.get(pk)?;
-                            guard.unwrap().value()
-                        }
-                    };
+                    let mut table = write_txn.open_table(#table_ident)?;
+                    table.insert(&instance.#pk_name, &instance.#column_name)?;
+                };
+                struct_initializer = quote! {
+                    #column_name: {
+                        let table = read_txn.open_table(#table_ident)?;
+                        let guard = table.get(pk)?;
+                        guard.unwrap().value()
+                    }
+                };
             }
             Indexing::On { dictionary: false, range } => {
-                let table_ident = format_ident!("{}_{}_BY_{}", struct_name.to_string().to_uppercase(), column_name.to_string().to_uppercase(), pk_name.to_string().to_uppercase());
+                let table_ident = format_ident!(
+                    "{}_{}_BY_{}",
+                    struct_name.to_string().to_uppercase(),
+                    column_name.to_string().to_uppercase(),
+                    pk_name.to_string().to_uppercase()
+                );
                 let table_name_str = table_ident.to_string();
                 table_names.push(table_name_str.clone());
                 table_definitions.push(quote! {
-                        pub const #table_ident: ::redb::TableDefinition<'static, #pk_type, #column_type> = ::redb::TableDefinition::new(#table_name_str);
-                    });
+                    pub const #table_ident: ::redb::TableDefinition<'static, #pk_type, #column_type> = ::redb::TableDefinition::new(#table_name_str);
+                });
 
                 let index_table_ident = format_ident!("{}_{}_INDEX", struct_name.to_string().to_uppercase(), column_str.to_string().to_uppercase());
                 let index_table_name_str = index_table_ident.to_string();
                 table_names.push(index_table_name_str.clone());
                 table_definitions.push(quote! {
-                        pub const #index_table_ident: ::redb::MultimapTableDefinition<'static, #column_type, #pk_type> = ::redb::MultimapTableDefinition::new(#index_table_name_str);
-                    });
+                    pub const #index_table_ident: ::redb::MultimapTableDefinition<'static, #column_type, #pk_type> = ::redb::MultimapTableDefinition::new(#index_table_name_str);
+                });
                 store_statement = quote! {
-                        let mut table = write_txn.open_table(#table_ident)?;
-                        table.insert(&instance.#pk_name, &instance.#column_name)?;
+                    let mut table = write_txn.open_table(#table_ident)?;
+                    table.insert(&instance.#pk_name, &instance.#column_name)?;
 
-                        let mut mm = write_txn.open_multimap_table(#index_table_ident)?;
-                        mm.insert(&instance.#column_name, &instance.#pk_name)?;
-                    };
-                struct_get_initializer = quote! {
-                        #column_name: {
-                            let table = read_txn.open_table(#table_ident)?;
-                            let guard = table.get(pk)?;
-                            guard.unwrap().value()
-                        }
-                    };
+                    let mut mm = write_txn.open_multimap_table(#index_table_ident)?;
+                    mm.insert(&instance.#column_name, &instance.#pk_name)?;
+                };
+                struct_initializer = quote! {
+                    #column_name: {
+                        let table = read_txn.open_table(#table_ident)?;
+                        let guard = table.get(pk)?;
+                        guard.unwrap().value()
+                    }
+                };
                 let get_fn_name = format_ident!("get_by_{}", column_name);
                 query_function = Some(quote! {
-                        pub fn #get_fn_name(
-                            db: &::redb::Database,
-                            val: &#column_type
-                        ) -> Result<Vec<#struct_name>, DbEngineError> {
-                            let read_txn = db.begin_read()?;
-                            let mm_table = read_txn.open_multimap_table(#index_table_ident)?;
-                            let mut iter = mm_table.get(val)?;
-                            let mut results = Vec::new();
-                            while let Some(x) = iter.next() {
-                                let pk = x?.value();
-                                match Self::compose(&read_txn, &pk) {
-                                    Ok(item) => {
-                                        results.push(item);
-                                    }
-                                    Err(err) => {
-                                        return Err(DbEngineError::DbError(err.to_string()));
-                                    }
+                    pub fn #get_fn_name(
+                        db: &::redb::Database,
+                        val: &#column_type
+                    ) -> Result<Vec<#struct_name>, DbEngineError> {
+                        let read_txn = db.begin_read()?;
+                        let mm_table = read_txn.open_multimap_table(#index_table_ident)?;
+                        let mut iter = mm_table.get(val)?;
+                        let mut results = Vec::new();
+                        while let Some(x) = iter.next() {
+                            let pk = x?.value();
+                            match Self::compose(&read_txn, &pk) {
+                                Ok(item) => {
+                                    results.push(item);
+                                }
+                                Err(err) => {
+                                    return Err(DbEngineError::DbError(err.to_string()));
                                 }
                             }
-                            Ok(results)
                         }
-                    });
+                        Ok(results)
+                    }
+                });
                 if range {
                     let range_fn_name = format_ident!("range_by_{}", column_name);
                     range_function = Some(quote! {
@@ -331,57 +307,65 @@ fn generate_struct_macros(
                 }
             }
             Indexing::On { dictionary: true, range: false } => {
-                let table_dict_pk_by_pk_ident = format_ident!("{}_{}_DICT_PK_BY_{}", struct_name.to_string().to_uppercase(), column_str.to_string().to_uppercase(), pk_name.to_string().to_uppercase());
+                let table_dict_pk_by_pk_ident = format_ident!(
+                    "{}_{}_DICT_PK_BY_{}",
+                    struct_name.to_string().to_uppercase(),
+                    column_str.to_string().to_uppercase(),
+                    pk_name.to_string().to_uppercase()
+                );
                 let table_dict_pk_by_pk_str = table_dict_pk_by_pk_ident.to_string();
-                let table_value_to_dict_pk_ident = format_ident!("{}_{}_TO_DICT_PK", struct_name.to_string().to_uppercase(), column_str.to_string().to_uppercase());
+                let table_value_to_dict_pk_ident =
+                    format_ident!("{}_{}_TO_DICT_PK", struct_name.to_string().to_uppercase(), column_str.to_string().to_uppercase());
                 let table_value_to_dict_pk_str = table_value_to_dict_pk_ident.to_string();
-                let table_value_by_dict_pk_ident = format_ident!("{}_{}_BY_DICT_PK", struct_name.to_string().to_uppercase(), column_str.to_string().to_uppercase());
+                let table_value_by_dict_pk_ident =
+                    format_ident!("{}_{}_BY_DICT_PK", struct_name.to_string().to_uppercase(), column_str.to_string().to_uppercase());
                 let table_value_by_dict_pk_str = table_value_by_dict_pk_ident.to_string();
-                let table_dict_index_ident = format_ident!("{}_{}_DICT_INDEX", struct_name.to_string().to_uppercase(), column_str.to_string().to_uppercase());
+                let table_dict_index_ident =
+                    format_ident!("{}_{}_DICT_INDEX", struct_name.to_string().to_uppercase(), column_str.to_string().to_uppercase());
                 let table_dict_index_str = table_dict_index_ident.to_string();
 
                 table_names.push(table_dict_pk_by_pk_str.clone());
                 table_definitions.push(quote! {
-                        pub const #table_dict_pk_by_pk_ident: ::redb::TableDefinition<'static, #pk_type, #pk_type> = ::redb::TableDefinition::new(#table_dict_pk_by_pk_str);
-                    });
+                    pub const #table_dict_pk_by_pk_ident: ::redb::TableDefinition<'static, #pk_type, #pk_type> = ::redb::TableDefinition::new(#table_dict_pk_by_pk_str);
+                });
                 table_names.push(table_value_to_dict_pk_str.clone());
                 table_definitions.push(quote! {
-                        pub const #table_value_to_dict_pk_ident: ::redb::TableDefinition<'static, #column_type, #pk_type> = ::redb::TableDefinition::new(#table_value_to_dict_pk_str);
-                    });
+                    pub const #table_value_to_dict_pk_ident: ::redb::TableDefinition<'static, #column_type, #pk_type> = ::redb::TableDefinition::new(#table_value_to_dict_pk_str);
+                });
                 table_names.push(table_value_by_dict_pk_str.clone());
                 table_definitions.push(quote! {
-                        pub const #table_value_by_dict_pk_ident: ::redb::TableDefinition<'static, #pk_type, #column_type> = ::redb::TableDefinition::new(#table_value_by_dict_pk_str);
-                    });
+                    pub const #table_value_by_dict_pk_ident: ::redb::TableDefinition<'static, #pk_type, #column_type> = ::redb::TableDefinition::new(#table_value_by_dict_pk_str);
+                });
                 table_names.push(table_dict_index_str.clone());
                 table_definitions.push(quote! {
-                        pub const #table_dict_index_ident: ::redb::MultimapTableDefinition<'static, #pk_type, #pk_type>= ::redb::MultimapTableDefinition::new(#table_dict_index_str);
-                    });
+                    pub const #table_dict_index_ident: ::redb::MultimapTableDefinition<'static, #pk_type, #pk_type>= ::redb::MultimapTableDefinition::new(#table_dict_index_str);
+                });
                 store_statement = quote! {
-                        let mut dict_pk_by_pk       = write_txn.open_table(#table_dict_pk_by_pk_ident)?;
-                        let mut value_to_dict_pk    = write_txn.open_table(#table_value_to_dict_pk_ident)?;
-                        let mut value_by_dict_pk    = write_txn.open_table(#table_value_by_dict_pk_ident)?;
-                        let mut dict_index          = write_txn.open_multimap_table(#table_dict_index_ident)?;
+                    let mut dict_pk_by_pk       = write_txn.open_table(#table_dict_pk_by_pk_ident)?;
+                    let mut value_to_dict_pk    = write_txn.open_table(#table_value_to_dict_pk_ident)?;
+                    let mut value_by_dict_pk    = write_txn.open_table(#table_value_by_dict_pk_ident)?;
+                    let mut dict_index          = write_txn.open_multimap_table(#table_dict_index_ident)?;
 
-                        let (birth_id, newly_created) = {
-                            let existing_guard = value_to_dict_pk.get(&instance.#column_name)?;
-                            if let Some(guard) = existing_guard {
-                                (guard.value().clone(), false)
-                            } else {
-                                let new_birth = instance.#pk_name.clone();
-                                (new_birth, true)
-                            }
-                        };
-
-                        if newly_created {
-                            value_to_dict_pk.insert(&instance.#column_name, &birth_id)?;
-                            value_by_dict_pk.insert(&birth_id, &instance.#column_name)?;
+                    let (birth_id, newly_created) = {
+                        let existing_guard = value_to_dict_pk.get(&instance.#column_name)?;
+                        if let Some(guard) = existing_guard {
+                            (guard.value().clone(), false)
+                        } else {
+                            let new_birth = instance.#pk_name.clone();
+                            (new_birth, true)
                         }
-
-                        dict_pk_by_pk.insert(&instance.#pk_name, &birth_id)?;
-
-                        dict_index.insert(&birth_id, &instance.#pk_name)?;
                     };
-                struct_get_initializer = quote! {
+
+                    if newly_created {
+                        value_to_dict_pk.insert(&instance.#column_name, &birth_id)?;
+                        value_by_dict_pk.insert(&birth_id, &instance.#column_name)?;
+                    }
+
+                    dict_pk_by_pk.insert(&instance.#pk_name, &birth_id)?;
+
+                    dict_index.insert(&birth_id, &instance.#pk_name)?;
+                };
+                struct_initializer = quote! {
                     #column_name: {
                         let pk2birth = read_txn.open_table(#table_dict_pk_by_pk_ident)?;
                         let birth_guard = pk2birth.get(pk)?;
@@ -427,57 +411,60 @@ fn generate_struct_macros(
                 return Err(syn::Error::new(column_name.span(), "Range indexing on dictionary columns is not supported"))
             }
         }
-        let column_macros =
-            ColumnMacros {
-                table_definitions,
-                store_statement,
-                struct_get_initializer,
-                query_function,
-                range_function
-            };
+        let column_macros = ColumnMacros { table_definitions, store_statement, struct_initializer, query_function, range_function };
 
         columns.push((struct_column, column_macros));
     }
 
+    let table_ident = format_ident!("{}_{}", struct_name.to_string().to_uppercase(), pk_name.to_string().to_uppercase());
+    let table_name_str = table_ident.to_string();
+    let table_definition = quote! {
+        pub const #table_ident: ::redb::TableDefinition<'static, #pk_type, ()> = ::redb::TableDefinition::new(#table_name_str);
+    };
+
+    let store_statement = quote! {
+        let mut table = write_txn.open_table(#table_ident)?;
+        table.insert(&instance.#pk_name, ())?;
+    };
+
     let get_fn_name = format_ident!("get_by_{}", pk_name);
-    let pk_query_function =
-        quote! {
-            pub fn #get_fn_name(db: &::redb::Database, pk: &#pk_type) -> Result<#struct_name, DbEngineError> {
+    let query_function = quote! {
+        pub fn #get_fn_name(db: &::redb::Database, pk: &#pk_type) -> Result<#struct_name, DbEngineError> {
+            let read_txn = match db.begin_read() {
+                Ok(txn) => txn,
+                Err(err) => return Err(DbEngineError::DbError(err.to_string())),
+            };
+            Self::compose(&read_txn, pk)
+        }
+    };
+
+    let range_function = if pk_column.range {
+        let range_fn_name = format_ident!("range_by_{}", pk_name);
+        Some(quote! {
+            pub fn #range_fn_name(db: &::redb::Database, from: &#pk_type, to: &#pk_type) -> Result<Vec<#struct_name>, DbEngineError> {
                 let read_txn = match db.begin_read() {
                     Ok(txn) => txn,
                     Err(err) => return Err(DbEngineError::DbError(err.to_string())),
                 };
-                Self::compose(&read_txn, pk)
+                let table = read_txn.open_table(#table_ident)?;
+                let range = from.clone()..=to.clone();
+                let mut iter = table.range(range)?;
+                let mut results = Vec::new();
+                while let Some(entry_res) = iter.next() {
+                    let pk = entry_res?.0.value();
+                    results.push(Self::compose(&read_txn, &pk)?);
+                }
+                Ok(results)
             }
-        };
-
-    let pk_range_function = None;
-/*        if pk_column.range {
-            let range_fn_name = format_ident!("range_by_{}", pk_name);
-            Some(quote! {
-                    pub fn #range_fn_name(db: &::redb::Database, from: &#pk_type, to: &#pk_type) -> Result<Vec<#struct_name>, DbEngineError> {
-                        let read_txn = match db.begin_read() {
-                            Ok(txn) => txn,
-                            Err(err) => return Err(DbEngineError::DbError(err.to_string())),
-                        };
-                        Self::range(&read_txn, from, to)
-                    }
-                })
-        } else {
-            None
-        };
-*/
-    let pk_column_macros = PkColumnMacros {
-        query_function: pk_query_function,
-        range_function: pk_range_function,
+        })
+    } else {
+        None
     };
-    // println!("Tables for {}:\n{}\n", struct_name, table_names.join("\n"));
 
-    Ok(StructMacros {
-        struct_name,
-        pk_column: (pk_column, pk_column_macros),
-        columns
-    })
+    let pk_column_macros = PkColumnMacros { table_definition, store_statement, query_function, range_function };
+    // println!("Tables for {}:\n{}\n{}\n", struct_name, table_name_str, table_names.join("\n"));
+
+    Ok(StructMacros { struct_name, pk_column: (pk_column, pk_column_macros), columns })
 }
 
 #[proc_macro_derive(Redbit, attributes(pk, column))]
@@ -488,11 +475,10 @@ pub fn derive_indexed(input: TokenStream) -> TokenStream {
         Ok(columns) => columns,
         Err(err) => return err.to_compile_error().into(),
     };
-    let (pk_column, struct_columns) =
-        match parse_struct_columns(&named_fields, &ast.span()) {
-            Ok(info) => info,
-            Err(err) => return err.to_compile_error().into(),
-        };
+    let (pk_column, struct_columns) = match parse_struct_columns(&named_fields, &ast.span()) {
+        Ok(info) => info,
+        Err(err) => return err.to_compile_error().into(),
+    };
 
     let struct_macros = match generate_struct_macros(struct_columns, struct_name.clone(), pk_column) {
         Ok(struct_macros) => struct_macros,
