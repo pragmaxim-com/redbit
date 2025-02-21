@@ -1,4 +1,4 @@
-error: No #[column(...)] fields found. You must have at least one field with #[column].
+error: No relationships or #[column(...)] fields found. You must have at least one of those.
  --> tests/failing/missing_columns_test.rs:4:1
   |
 4 | struct MissingColumnsStruct {

@@ -2,7 +2,7 @@
 
 use redbit::*;
 
-#[derive(Redbit)]
+#[derive(Entity)]
 struct MinimalStruct {
     #[pk]
     id: u32,
@@ -10,23 +10,23 @@ struct MinimalStruct {
     persisted_no_index_no_dict: i32,
 }
 
-#[derive(Redbit)]
-struct StructWithPersistedRedbitField {
+#[derive(Entity)]
+struct StructWithPersistedEntityField {
     #[pk]
     id: u32,
     #[column(index)]
     persisted_indexed_no_dict: i32,
 }
 
-#[derive(Redbit)]
-struct StructWithPersistedRedbitFieldWithDict {
+#[derive(Entity)]
+struct StructWithPersistedEntityFieldWithDict {
     #[pk]
     id: u32,
     #[column(index, dictionary)]
     persisted_indexed_with_dict: i32,
 }
 
-#[derive(Redbit)]
+#[derive(Entity)]
 pub struct FullStruct {
     #[pk]
     pub id: u32,
@@ -41,7 +41,7 @@ pub struct FullStruct {
 fn main() {
     let _ = MinimalStruct { id: 1, persisted_no_index_no_dict: 42 };
 
-    let _ = StructWithPersistedRedbitField { id: 2, persisted_indexed_no_dict: 43 };
-    let _ = StructWithPersistedRedbitFieldWithDict { id: 3, persisted_indexed_with_dict: 44 };
+    let _ = StructWithPersistedEntityField { id: 2, persisted_indexed_no_dict: 43 };
+    let _ = StructWithPersistedEntityFieldWithDict { id: 3, persisted_indexed_with_dict: 44 };
     let _ = FullStruct { id: 4, amount: 45, datum: "datum".to_string(), address: "address".to_string() };
 }

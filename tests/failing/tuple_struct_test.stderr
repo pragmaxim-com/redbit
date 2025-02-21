@@ -1,4 +1,4 @@
-error: `#[derive(Redbit)]` only supports structs with named columns.
+error: `#[derive(Entity)]` only supports structs with named columns.
  --> tests/failing/tuple_struct_test.rs:4:1
   |
 4 | struct TupleStruct(u32, String);

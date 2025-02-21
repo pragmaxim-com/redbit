@@ -2,49 +2,51 @@ use std::{env, fs};
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use crate::column_macros::ColumnMacros;
-use crate::{Column, Indexing, Pk};
+use crate::{Column, Indexing, Pk, Relationship};
 use crate::pk_macros::PkMacros;
+use crate::relationship_macros::RelationshipMacros;
 
-pub struct StructMacros {
+pub struct EntityMacros {
     pub struct_name: Ident,
     pub pk_column: (Pk, PkMacros),
     pub columns: Vec<(Column, ColumnMacros)>,
+    pub relationships: Vec<(Relationship, RelationshipMacros)>
 }
 
-impl StructMacros {
-    pub fn new(struct_columns: Vec<Column>, struct_name: Ident, pk_column: Pk) -> Result<StructMacros, syn::Error> {
-        let pk_name = &pk_column.pk_name;
-        let pk_type = &pk_column.pk_type;
-        let mut columns: Vec<(Column, ColumnMacros)> = Vec::new();
+impl EntityMacros {
+    pub fn new(struct_name: Ident, pk_column: Pk, struct_columns: Vec<Column>, relationships: Vec<Relationship>) -> Result<EntityMacros, syn::Error> {
+        let pk_name = &pk_column.field.name;
+        let pk_type = &pk_column.field.tpe;
+        let mut column_macros: Vec<(Column, ColumnMacros)> = Vec::new();
         for struct_column in struct_columns.into_iter() {
-            let column_name = &struct_column.column_name.clone();
-            let column_type = &struct_column.column_type.clone();
+            let column_name = &struct_column.field.name.clone();
+            let column_type = &struct_column.field.tpe.clone();
             match struct_column.indexing {
                 Indexing::Off => {
-                    columns.push((struct_column, ColumnMacros::simple(&struct_name, pk_name, pk_type, column_name, column_type)));
+                    column_macros.push((struct_column, ColumnMacros::simple(&struct_name, pk_name, pk_type, column_name, column_type)));
                 }
                 Indexing::On { dictionary: false, range } => {
-                    columns.push((struct_column, ColumnMacros::indexed(&struct_name, pk_name, pk_type, column_name, column_type, range)));
+                    column_macros.push((struct_column, ColumnMacros::indexed(&struct_name, pk_name, pk_type, column_name, column_type, range)));
                 }
                 Indexing::On { dictionary: true, range: false } => {
-                    columns.push((struct_column, ColumnMacros::indexed_with_dict(&struct_name, pk_name, pk_type, column_name, column_type)));
+                    column_macros.push((struct_column, ColumnMacros::indexed_with_dict(&struct_name, pk_name, pk_type, column_name, column_type)));
                 }
                 Indexing::On { dictionary: true, range: true } => {
                     return Err(syn::Error::new(column_name.span(), "Range indexing on dictionary columns is not supported"))
                 }
             }
         }
-
         // println!("Tables for {}:\n{}\n{}\n", struct_name, table_name_str, table_names.join("\n"));
         let pk_macros = PkMacros::new(&struct_name, &pk_column);
-        Ok(StructMacros { struct_name, pk_column: (pk_column, pk_macros), columns })
+        let relationship_macros= RelationshipMacros::new(&pk_column, relationships);
+        Ok(EntityMacros { struct_name, pk_column: (pk_column, pk_macros), columns: column_macros, relationships: relationship_macros })
     }
 
     pub fn expand(&self) -> TokenStream {
         let struct_ident = &self.struct_name;
         let (pk_column, pk_column_macros) = &self.pk_column;
-        let pk_ident = pk_column.pk_name.clone();
-        let pk_type = pk_column.pk_type.clone();
+        let pk_ident = pk_column.field.name.clone();
+        let pk_type = pk_column.field.tpe.clone();
         let pk_table_definition = pk_column_macros.table_definition.clone();
         let pk_store_statement = pk_column_macros.store_statement.clone();
         let pk_query_function = pk_column_macros.query_function.clone();
@@ -56,14 +58,20 @@ impl StructMacros {
         let mut query_functions = Vec::new();
         let mut range_functions = Vec::new();
 
-        for (_, fm) in &self.columns {
-            table_definitions.extend(fm.table_definitions.clone());
-            store_statements.push(fm.store_statement.clone());
-            struct_initializers.push(fm.struct_initializer.clone());
-            query_functions.push(fm.query_function.clone());
-            if let Some(range_fn) = &fm.range_function {
+        for (_, macros) in &self.columns {
+            table_definitions.extend(macros.table_definitions.clone());
+            store_statements.push(macros.store_statement.clone());
+            struct_initializers.push(macros.struct_initializer.clone());
+            query_functions.push(macros.query_function.clone());
+            if let Some(range_fn) = &macros.range_function {
                 range_functions.push(range_fn.clone());
             }
+        }
+
+        for (_, macros) in &self.relationships {
+            store_statements.push(macros.store_statement.clone());
+            struct_initializers.push(macros.struct_initializer.clone());
+            query_functions.push(Some(macros.query_function.clone()));
         }
 
         // Build the final TokenStream
@@ -72,7 +80,9 @@ impl StructMacros {
             #(#table_definitions)*
 
             impl #struct_ident {
-                fn compose(read_txn: &::redb::ReadTransaction, pk: &#pk_type) -> Result<#struct_ident, DbEngineError> {
+                #pk_range_function
+
+                fn compose(read_tx: &::redb::ReadTransaction, pk: &#pk_type) -> Result<#struct_ident, DbEngineError> {
                     Ok(#struct_ident {
                         #pk_ident: pk.clone(),
                         #(#struct_initializers),*
@@ -81,18 +91,20 @@ impl StructMacros {
 
                 #pk_query_function
                 #(#query_functions)*
-
-                #pk_range_function
-
                 #(#range_functions)*
 
-                pub fn store(db: &::redb::Database, instance: &#struct_ident) -> Result<(), DbEngineError> {
-                    let write_txn = db.begin_write()?;
+                pub fn store(write_tx: &::redb::WriteTransaction, instance: &#struct_ident) -> Result<(), DbEngineError> {
+                    #pk_store_statement
+                    #(#store_statements)*
+                    Ok(())
+                }
+                pub fn store_and_commit(db: &::redb::Database, instance: &#struct_ident) -> Result<(), DbEngineError> {
+                    let write_tx = db.begin_write()?;
                     {
                         #pk_store_statement
                         #(#store_statements)*
                     }
-                    write_txn.commit()?;
+                    write_tx.commit()?;
                     Ok(())
                 }
             }

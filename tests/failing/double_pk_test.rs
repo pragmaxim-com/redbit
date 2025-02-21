@@ -1,6 +1,6 @@
 use redbit::*;
 
-#[derive(Redbit)]
+#[derive(Entity)]
 struct DoublePkStruct {
     #[pk]
     id1: u32,

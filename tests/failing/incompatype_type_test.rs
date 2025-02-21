@@ -1,6 +1,6 @@
 use redbit::*;
 
-#[derive(Redbit)]
+#[derive(Entity)]
 enum Enum {
     Variant1,
     Variant2,

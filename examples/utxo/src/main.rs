@@ -3,33 +3,55 @@ use utxo::*;
 fn main() {
     let db = redb::Database::create(std::env::temp_dir().join("my_db.redb")).unwrap();
 
-    let block_height = 42;
-    let block = Block { hash: String::from("unique"), height: block_height, timestamp: 1678296000 };
+    let height = 42;
+    let timestamp= 1678296000;
+    let block_id = BlockPointer{height};
+    let block_hash = String::from("block_hash");
 
-    let utxo = Utxo {
-        id: UtxoPointer { block_height, tx_index: 7, utxo_index: 6 },
-        amount: 999_999,
-        datum: String::from("high cardinality"),
-        address: String::from("low-medium cardinality"),
+    let transactions: Vec<Transaction> = (0..1)
+        .map(|tx_index| {
+            let tx_id = TxPointer { block_pointer: block_id.clone(), tx_index };
+            let utxos: Vec<Utxo> = (0..2)
+                .map(|utxo_index| Utxo {
+                    id: UtxoPointer { tx_pointer: tx_id.clone(), utxo_index },
+                    amount: 999_999,
+                    datum: "high cardinality".to_string(),
+                    address: "low-medium cardinality".to_string(),
+                })
+                .collect();
+            Transaction {
+                id: tx_id,
+                hash: format!("tx_hash_{}", tx_index),
+                utxos,
+            }
+        })
+        .collect();
+
+    let block = Block {
+        id: block_id.clone(),
+        hash: block_hash.clone(),
+        timestamp,
+        transactions,
     };
+    let _ = Block::store_and_commit(&db, &block).unwrap();
 
-    let _ = Block::store(&db, &block).unwrap();
-    let block = Block::get_by_hash(&db, &block.hash).unwrap();
-    let blocks_by_height = Block::get_by_height(&db, &block_height).unwrap();
-    let block_range_by_height = Block::range_by_height(&db, &block_height, &(block_height + 1)).unwrap();
+    let read_tx = db.begin_read().unwrap();
 
-    println!("{:?}", block);
-    println!("{:?}", blocks_by_height);
-    println!("{:?}", block_range_by_height);
+    let _block = Block::get_by_id(&read_tx, &block.id).unwrap();
+    let _block_range_by_ids = Block::range(&read_tx, &block.id, &block.id).unwrap();
+    let _block_range_by_ids = Block::range_by_timestamp(&read_tx, &timestamp, &timestamp).unwrap();
+    let _blocks = Block::get_by_hash(&read_tx, &block_hash).unwrap();
+    let _blocks_by_height = Block::get_by_timestamp(&read_tx, &timestamp).unwrap();
+    let _block_transactions = Block::get_transactions(&read_tx, &block.id).unwrap();
 
-    let _ = Utxo::store(&db, &utxo).unwrap();
-    let utxo = Utxo::get_by_id(&db, &utxo.id).unwrap();
-    let utxos_by_address = Utxo::get_by_address(&db, &utxo.address).unwrap();
-    let utxos_by_datum = Utxo::get_by_datum(&db, &utxo.datum).unwrap();
-    let utxo_range_by_ids = Utxo::range_by_id(&db, &utxo.id, &utxo.id).unwrap();
+    let _transactions = Transaction::get_by_id(&read_tx, &block.transactions.first().unwrap().id).unwrap();
+    let _transactions_by_timestamp = Transaction::get_by_hash(&read_tx, &block.transactions.first().unwrap().hash).unwrap();
+    let _transaction_range_by_ids = Transaction::range(&read_tx, &block.transactions.first().unwrap().id, &block.transactions.last().unwrap().id).unwrap();
+    let _transaction_utxos = Transaction::get_utxos(&read_tx, &block.transactions.first().unwrap().id).unwrap();
 
-    println!("{:?}", utxo);
-    println!("{:?}", utxos_by_address);
-    println!("{:?}", utxos_by_datum);
-    println!("{:?}", utxo_range_by_ids);
+    let utxo = Utxo::get_by_id(&read_tx, &block.transactions.first().unwrap().utxos.first().unwrap().id).unwrap();
+    let _utxos_by_address = Utxo::get_by_address(&read_tx, &utxo.address).unwrap();
+    let _utxos_by_datum = Utxo::get_by_datum(&read_tx, &utxo.datum).unwrap();
+    let _utxo_range_by_ids = Utxo::range(&read_tx, &utxo.id, &utxo.id).unwrap();
 }
+

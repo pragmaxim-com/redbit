@@ -1,6 +1,6 @@
 use redbit::*;
 
-#[derive(Redbit)]
+#[derive(Entity)]
 struct TupleStruct(u32, String);
 
 fn main() {

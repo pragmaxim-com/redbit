@@ -12,17 +12,27 @@ pub type Datum = String;
 pub type Address = String;
 pub type Hash = String;
 
-#[derive(Redbit, Debug, Clone, PartialEq, Eq)]
+#[derive(Entity, Debug, Clone, PartialEq, Eq)]
 pub struct Block {
-    #[pk]
+    #[pk(range)]
+    pub id: BlockPointer,
+    #[column(index)]
     pub hash: Hash,
-    #[column]
-    pub timestamp: Timestamp,
     #[column(index, range)]
-    pub height: Height,
+    pub timestamp: Timestamp,
+    pub transactions: Vec<Transaction>,
 }
 
-#[derive(Redbit, Debug, Clone, PartialEq, Eq)]
+#[derive(Entity, Debug, Clone, PartialEq, Eq)]
+pub struct Transaction {
+    #[pk(range)]
+    pub id: TxPointer,
+    #[column(index)]
+    pub hash: Hash,
+    pub utxos: Vec<Utxo>,
+}
+
+#[derive(Entity, Debug, Clone, PartialEq, Eq)]
 pub struct Utxo {
     #[pk(range)]
     pub id: UtxoPointer,
@@ -36,7 +46,47 @@ pub struct Utxo {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UtxoPointer {
-    pub block_height: Height,
-    pub tx_index: TxIndex,
+    pub tx_pointer: TxPointer,
     pub utxo_index: UtxoIndex,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TxPointer {
+    pub block_pointer: BlockPointer,
+    pub tx_index: TxIndex,
+}
+
+
+impl FkRange<UtxoPointer> for TxPointer {
+    fn fk_range(&self) -> (UtxoPointer, UtxoPointer) {
+        (
+            UtxoPointer {
+                tx_pointer: self.clone(),
+                utxo_index: TxIndex::MIN,
+            },
+            UtxoPointer {
+                tx_pointer: self.clone(),
+                utxo_index: TxIndex::MAX,
+            }
+        )
+    }
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlockPointer {
+    pub height: Height,
+}
+
+impl FkRange<TxPointer> for BlockPointer {
+    fn fk_range(&self) -> (TxPointer, TxPointer) {
+        (
+            TxPointer {
+                block_pointer: self.clone(),
+                tx_index: TxIndex::MIN,
+            },
+            TxPointer {
+                block_pointer: self.clone(),
+                tx_index: TxIndex::MAX,
+            }
+        )
+    }
 }

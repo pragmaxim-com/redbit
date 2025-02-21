@@ -1,5 +1,70 @@
-error: Field must have either #[pk] or #[column(...)] annotation
- --> tests/failing/missing_field_annotation_test.rs:7:5
+error[E0599]: no method named `fk_range` found for reference `&u32` in the current scope
+ --> tests/failing/missing_field_annotation_test.rs:3:10
   |
-7 |     name: String,
-  |     ^^^^
+3 | #[derive(Entity)]
+  |          ^^^^^^ method not found in `&u32`
+  |
+  = note: this error originates in the derive macro `Entity` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0599]: no function or associated item named `range` found for struct `String` in the current scope
+ --> tests/failing/missing_field_annotation_test.rs:3:10
+  |
+3 | #[derive(Entity)]
+  |          ^^^^^^ function or associated item not found in `String`
+  |
+note: if you're trying to build a new `String` consider using one of the following associated functions:
+      String::new
+      String::with_capacity
+      String::try_with_capacity
+      String::from_utf8
+      and $N others
+ --> $RUST/alloc/src/string.rs
+  |
+  |     pub const fn new() -> String {
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+  |     pub fn with_capacity(capacity: usize) -> String {
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+  |     pub fn try_with_capacity(capacity: usize) -> Result<String, TryReserveError> {
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+  |     pub fn from_utf8(vec: Vec<u8>) -> Result<String, FromUtf8Error> {
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: this error originates in the derive macro `Entity` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: `&String` is not an iterator
+ --> tests/failing/missing_field_annotation_test.rs:3:10
+  |
+3 | #[derive(Entity)]
+  |          ^^^^^^ `&String` is not an iterator
+  |
+  = help: the trait `Iterator` is not implemented for `&String`
+  = note: required for `&String` to implement `IntoIterator`
+
+error[E0599]: no function or associated item named `store` found for struct `String` in the current scope
+ --> tests/failing/missing_field_annotation_test.rs:3:10
+  |
+3 | #[derive(Entity)]
+  |          ^^^^^^ function or associated item not found in `String`
+  |
+note: if you're trying to build a new `String` consider using one of the following associated functions:
+      String::new
+      String::with_capacity
+      String::try_with_capacity
+      String::from_utf8
+      and $N others
+ --> $RUST/alloc/src/string.rs
+  |
+  |     pub const fn new() -> String {
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+  |     pub fn with_capacity(capacity: usize) -> String {
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+  |     pub fn try_with_capacity(capacity: usize) -> Result<String, TryReserveError> {
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+  |     pub fn from_utf8(vec: Vec<u8>) -> Result<String, FromUtf8Error> {
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: this error originates in the derive macro `Entity` (in Nightly builds, run with -Z macro-backtrace for more info)

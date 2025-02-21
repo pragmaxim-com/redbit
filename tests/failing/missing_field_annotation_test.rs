@@ -1,6 +1,6 @@
 use redbit::*;
 
-#[derive(Redbit)]
+#[derive(Entity)]
 struct MissingFieldAnnotationStruct {
     #[pk]
     id: u32,

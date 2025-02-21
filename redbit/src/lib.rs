@@ -1,5 +1,9 @@
-pub use macros::Redbit;
+pub use macros::Entity;
 pub use redb::ReadableTable;
+
+pub trait FkRange<PK>: Sized {
+    fn fk_range(&self) -> (PK, PK);
+}
 
 #[derive(Debug)]
 pub enum DbEngineError {
