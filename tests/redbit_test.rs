@@ -5,38 +5,43 @@ fn create_test_db() -> redb::Database {
     redb::Database::create(std::env::temp_dir().join(format!("test_db_{}.redb", random_number))).unwrap()
 }
 
+fn create_test_asset(height: Height, tx_index: TxIndex, utxo_index: UtxoIndex, asset_index: AssetIndex) -> Asset {
+    Asset {
+        id: AssetPointer {
+            utxo_pointer: UtxoPointer { tx_pointer: TxPointer { block_pointer: BlockPointer { height }, tx_index }, utxo_index },
+            asset_index,
+        },
+        amount: 100_000,
+        name: format!("asset_name_{}", asset_index),
+        policy_id: format!("policy_id_{}", asset_index),
+    }
+}
+
 fn create_test_utxo(block_height: Height, tx_index: TxIndex, utxo_index: UtxoIndex) -> Utxo {
+    let assets = (0..2).map(|asset_index| create_test_asset(block_height, tx_index, utxo_index, asset_index)).collect();
     Utxo {
-        id: UtxoPointer { tx_pointer: TxPointer{block_pointer: BlockPointer {height: block_height}, tx_index }, utxo_index },
+        id: UtxoPointer { tx_pointer: TxPointer { block_pointer: BlockPointer { height: block_height }, tx_index }, utxo_index },
         amount: 999_999,
         datum: format!("datum_{}", block_height),
         address: format!("address_{}", tx_index),
+        assets,
     }
 }
 
 fn create_test_transaction(block_height: Height, tx_index: TxIndex) -> Transaction {
-    let tx_id = TxPointer { block_pointer: BlockPointer {height: block_height}, tx_index };
-    let utxos: Vec<Utxo> = (0..2)
-        .map(|utxo_index| create_test_utxo(block_height, tx_index, utxo_index))
-        .collect();
+    let tx_id = TxPointer { block_pointer: BlockPointer { height: block_height }, tx_index };
+    let utxos: Vec<Utxo> = (0..2).map(|utxo_index| create_test_utxo(block_height, tx_index, utxo_index)).collect();
 
-    Transaction {
-        id: tx_id,
-        hash: format!("tx_hash_{}", tx_index),
-        utxos,
-    }
+    Transaction { id: tx_id, hash: format!("tx_hash_{}", tx_index), utxos }
 }
 
 fn create_test_block(hash: Hash, height: Height, timestamp: u64) -> Block {
-    let block_id = BlockPointer{height};
-    let transactions: Vec<Transaction> = (0..1)
-        .map(|tx_index| create_test_transaction(height, tx_index))
-        .collect();
+    let block_id = BlockPointer { height };
+    let transactions: Vec<Transaction> = (0..1).map(|tx_index| create_test_transaction(height, tx_index)).collect();
 
     Block {
         id: block_id.clone(),
-        hash,
-        timestamp,
+        header: BlockHeader { id: block_id.clone(), hash, timestamp, merkle_root: String::from("merkle_root"), nonce: 0 },
         transactions,
     }
 }
@@ -48,7 +53,7 @@ fn it_should_get_entity_by_unique_id() {
 
     Utxo::store_and_commit(&db, &utxo).expect("Failed to store utxo");
 
-    let found_by_id = Utxo::get_by_id(&db.begin_read().unwrap(), &utxo.id).expect("Failed to query by ID");
+    let found_by_id = Utxo::get(&db.begin_read().unwrap(), &utxo.id).expect("Failed to query by ID");
     assert_eq!(found_by_id.id, utxo.id);
     assert_eq!(found_by_id.amount, utxo.amount);
     assert_eq!(found_by_id.datum, utxo.datum);
@@ -94,8 +99,8 @@ fn it_should_get_entities_by_range_on_index() {
     }
     write_tx.commit().unwrap();
 
-    let found_by_height_range = Block::range_by_timestamp(&db.begin_read().unwrap(), &41, &42).expect("Failed to range by height");
-    let expected_blocks: Vec<Block> = blocks.into_iter().filter(|b| b.timestamp == 41 || b.timestamp == 42).collect();
+    let found_by_height_range = BlockHeader::range_by_timestamp(&db.begin_read().unwrap(), &41, &42).expect("Failed to range by height");
+    let expected_blocks: Vec<BlockHeader> = blocks.into_iter().map(|b| b.header).filter(|b| b.timestamp == 41 || b.timestamp == 42).collect();
     assert_eq!(found_by_height_range.len(), 2);
     assert_eq!(expected_blocks, found_by_height_range);
 }
@@ -119,13 +124,13 @@ fn it_should_get_entities_by_range_on_pk() {
     // take utxos except the first and last
     let expected_utxos: Vec<Utxo> = utxos.clone().into_iter().skip(1).take(utxos.len() - 2).collect();
 
-    let found_by_pk_range =
-        Utxo::range(&db.begin_read().unwrap(), &expected_utxos.first().unwrap().id, &expected_utxos.last().unwrap().id).expect("Failed to range by pk");
+    let found_by_pk_range = Utxo::range(&db.begin_read().unwrap(), &expected_utxos.first().unwrap().id, &expected_utxos.last().unwrap().id)
+        .expect("Failed to range by pk");
     assert_eq!(expected_utxos, found_by_pk_range);
 }
 
 #[test]
-fn it_should_get_related_entities() {
+fn it_should_get_related_one_to_many_entities() {
     let db = create_test_db();
 
     let block = create_test_block(String::from("block_hash_1"), 42, 7);
@@ -139,6 +144,19 @@ fn it_should_get_related_entities() {
 
     assert_eq!(expected_transactions, transactions);
     assert_eq!(expected_utxos, utxos);
+}
+
+#[test]
+fn it_should_get_related_one_to_one_entity() {
+    let db = create_test_db();
+
+    let block = create_test_block(String::from("block_hash_1"), 42, 7);
+    Block::store_and_commit(&db, &block).expect("Failed to store block");
+
+    let expected_header: BlockHeader = block.header;
+    let header = Block::get_header(&db.begin_read().unwrap(), &block.id).expect("Failed to get header");
+
+    assert_eq!(expected_header, header);
 }
 
 #[test]
@@ -157,7 +175,7 @@ fn it_should_override_entity_under_existing_unique_id() {
     Utxo::store_and_commit(&db, &utxo).expect("Failed to store updated utxo");
 
     // Retrieve and verify the updated UTXO
-    let updated_utxo = Utxo::get_by_id(&db.begin_read().unwrap(), &utxo.id).expect("Failed to query updated UTXO");
+    let updated_utxo = Utxo::get(&db.begin_read().unwrap(), &utxo.id).expect("Failed to query updated UTXO");
     assert_eq!(updated_utxo.id, utxo.id);
     assert_eq!(updated_utxo.amount, 1_000_000);
     assert_eq!(updated_utxo.datum, "updated_datum");

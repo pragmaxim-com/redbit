@@ -1,12 +1,13 @@
 use redbit::*;
 
 #[derive(Entity)]
-struct MultipleAnnotationsStruct {
+struct MultipleOne2ManyAnnotationsStruct {
     #[pk]
     id: u32,
-    #[column]
-    #[column]
-    name: String,
+    #[one2many]
+    foos: Vec<String>,
+    #[one2many]
+    bars: Vec<String>,
 }
 
 fn main() {

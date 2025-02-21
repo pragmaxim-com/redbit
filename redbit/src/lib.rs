@@ -1,8 +1,8 @@
 pub use macros::Entity;
 pub use redb::ReadableTable;
 
-pub trait FkRange<PK>: Sized {
-    fn fk_range(&self) -> (PK, PK);
+pub trait PK<FK>: Sized {
+    fn fk_range(&self) -> (FK, FK);
 }
 
 #[derive(Debug)]

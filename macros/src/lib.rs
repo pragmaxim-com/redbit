@@ -5,9 +5,11 @@ mod relationship_macros;
 
 extern crate proc_macro;
 
-use proc_macro2::Ident;
-use syn::{parse_macro_input, punctuated::Punctuated, spanned::Spanned, token::Comma, Data, DeriveInput, Fields, GenericArgument, PathArguments, Type};
 use crate::entity_macros::EntityMacros;
+use proc_macro2::Ident;
+use syn::{
+    parse_macro_input, punctuated::Punctuated, spanned::Spanned, token::Comma, Data, DeriveInput, Fields, GenericArgument, PathArguments, Type,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Indexing {
@@ -15,9 +17,10 @@ enum Indexing {
     On { dictionary: bool, range: bool },
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum Multiplicity {
     OneToOne,
-    OneToMany
+    OneToMany,
 }
 
 enum ParsingResult {
@@ -26,6 +29,7 @@ enum ParsingResult {
     RelationShip(Relationship),
 }
 
+#[derive(Clone)]
 struct Field {
     name: Ident,
     tpe: Type,
@@ -41,9 +45,10 @@ struct Column {
     indexing: Indexing,
 }
 
+#[derive(Clone)]
 struct Relationship {
     field: Field,
-    multiplicity: Multiplicity
+    multiplicity: Multiplicity,
 }
 
 fn get_named_fields(ast: &DeriveInput) -> Result<Punctuated<syn::Field, Comma>, syn::Error> {
@@ -61,7 +66,6 @@ fn parse_entity_field(field: &syn::Field) -> Result<ParsingResult, syn::Error> {
         None => Err(syn::Error::new(field.span(), "Unnamed fields not supported")),
         Some(column_name) => {
             let column_type = field.ty.clone();
-            let mut column: Option<ParsingResult> = None;
             for attr in &field.attrs {
                 if attr.path().is_ident("pk") {
                     let mut range = false;
@@ -71,13 +75,9 @@ fn parse_entity_field(field: &syn::Field) -> Result<ParsingResult, syn::Error> {
                         }
                         Ok(())
                     });
-                    if column.is_some() {
-                        return Err(syn::Error::new(field.span(), "Only one #[pk] or #[column(...)] annotation allowed per field"));
-                    }
                     let field = Field { name: column_name.clone(), tpe: column_type.clone() };
-                    column = Some(ParsingResult::Pk(Pk { field, range }));
-                }
-                if attr.path().is_ident("column") {
+                    return Ok(ParsingResult::Pk(Pk { field, range }));
+                } else if attr.path().is_ident("column") {
                     let mut indexing = Indexing::Off;
                     let _ = attr.parse_nested_meta(|nested| {
                         if nested.path.is_ident("index") {
@@ -90,60 +90,32 @@ fn parse_entity_field(field: &syn::Field) -> Result<ParsingResult, syn::Error> {
                         }
                         Ok(())
                     });
-                    if column.is_some() {
-                        return Err(syn::Error::new(field.span(), "Only one #[pk] or #[column(...)] annotation allowed per field"));
-                    }
                     let field = Field { name: column_name.clone(), tpe: column_type.clone() };
-                    column = Some(ParsingResult::Column(Column {
-                        field,
-                        indexing,
-                    }));
-                }
-            }
-            if column.is_none() {
-                if let Type::Path(type_path) = &column_type {
+                    return Ok(ParsingResult::Column(Column { field, indexing }));
+                } else if let Type::Path(type_path) = &column_type {
                     if let Some(segment) = type_path.path.segments.last() {
-                        if segment.ident == "Vec" {
+                        if attr.path().is_ident("one2many") && segment.ident == "Vec" {
                             if let PathArguments::AngleBracketed(args) = &segment.arguments {
                                 if let Some(GenericArgument::Type(Type::Path(inner_type_path))) = args.args.first() {
                                     let inner_type = &inner_type_path.path.segments.last().unwrap().ident;
-                                    let type_path = syn::Type::Path(syn::TypePath {
-                                        qself: None,
-                                        path: syn::Path::from(inner_type.clone()),
-                                    });
-                                    let field = Field {
-                                        name: column_name.clone(),
-                                        tpe: type_path,
-                                    };
-                                    column = Some(ParsingResult::RelationShip(Relationship {
-                                        field,
-                                        multiplicity: Multiplicity::OneToMany,
-                                    }));
+                                    let type_path = Type::Path(syn::TypePath { qself: None, path: syn::Path::from(inner_type.clone()) });
+                                    let field = Field { name: column_name.clone(), tpe: type_path };
+                                    return Ok(ParsingResult::RelationShip(Relationship { field, multiplicity: Multiplicity::OneToMany }));
                                 }
                             }
-                        } else {
+                        } else if attr.path().is_ident("one2one") && segment.arguments.is_empty() {
                             let struct_type = &segment.ident;
-                            let type_path = syn::Type::Path(syn::TypePath {
-                                qself: None,
-                                path: syn::Path::from(struct_type.clone()),
-                            });
-                            let field = Field {
-                                name: column_name.clone(),
-                                tpe: type_path,
-                            };
-                            column = Some(ParsingResult::RelationShip(Relationship {
-                                field,
-                                multiplicity: Multiplicity::OneToOne,
-                            }));
+                            let type_path = Type::Path(syn::TypePath { qself: None, path: syn::Path::from(struct_type.clone()) });
+                            let field = Field { name: column_name.clone(), tpe: type_path };
+                            return Ok(ParsingResult::RelationShip(Relationship { field, multiplicity: Multiplicity::OneToOne }));
                         }
                     }
                 }
             }
 
-
-            column.ok_or_else(|| syn::Error::new(
+            Err(syn::Error::new(
                 field.span(),
-                "Field must have either #[pk] / #[column(...)] annotation or be a OneToOne / OneToMany relationship",
+                "Field must have one of #[pk(...)] / #[column(...)] / #[one2one] / #[one2many] annotations of expected underlying types",
             ))
         }
     }
@@ -162,13 +134,19 @@ fn get_pk_and_column_macros(fields: &Punctuated<syn::Field, Comma>, ast: &Derive
                     return Err(syn::Error::new(field.span(), "Multiple `#[pk]` columns found; only one is allowed"));
                 }
                 pk_column = Some(pk);
-            },
+            }
             ParsingResult::RelationShip(relationship) => relationships.push(relationship),
         }
     }
 
     let pk_col =
         pk_column.ok_or_else(|| syn::Error::new(ast.span(), "`#[pk]` attribute not found on any column. Exactly one column must have `#[pk]`."))?;
+
+    let one2many_rels_count = relationships.iter().filter(|rel| rel.multiplicity == Multiplicity::OneToMany).count();
+
+    if one2many_rels_count > 1 {
+        return Err(syn::Error::new(ast.span(), "Multiple `#[one2many]` relationships found. Only one relationship is allowed per entity."));
+    }
 
     if columns.is_empty() && relationships.is_empty() {
         return Err(syn::Error::new(ast.span(), "No relationships or #[column(...)] fields found. You must have at least one of those."));
@@ -177,8 +155,7 @@ fn get_pk_and_column_macros(fields: &Punctuated<syn::Field, Comma>, ast: &Derive
     Ok((pk_col, columns, relationships))
 }
 
-
-#[proc_macro_derive(Entity, attributes(pk, column))]
+#[proc_macro_derive(Entity, attributes(pk, column, one2many, one2one))]
 pub fn derive_entity(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let ast: DeriveInput = parse_macro_input!(input as DeriveInput);
     let struct_name = &ast.ident;

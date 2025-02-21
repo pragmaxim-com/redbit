@@ -1,6 +1,6 @@
+use crate::Pk;
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
-use crate::Pk;
 
 pub struct PkMacros {
     pub table_definition: TokenStream,
@@ -25,7 +25,7 @@ impl PkMacros {
             table.insert(&instance.#pk_name, ())?;
         };
 
-        let get_fn_name = format_ident!("get_by_{}", pk_column.field.name);
+        let get_fn_name = format_ident!("get");
         let query_function = quote! {
             pub fn #get_fn_name(read_tx: &::redb::ReadTransaction, pk: &#pk_type) -> Result<#struct_name, DbEngineError> {
                 Self::compose(&read_tx, pk)

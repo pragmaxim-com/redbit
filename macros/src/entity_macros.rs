@@ -1,16 +1,16 @@
-use std::{env, fs};
-use proc_macro2::{Ident, TokenStream};
-use quote::quote;
 use crate::column_macros::ColumnMacros;
-use crate::{Column, Indexing, Pk, Relationship};
 use crate::pk_macros::PkMacros;
 use crate::relationship_macros::RelationshipMacros;
+use crate::{Column, Indexing, Pk, Relationship};
+use proc_macro2::{Ident, TokenStream};
+use quote::quote;
+use std::{env, fs};
 
 pub struct EntityMacros {
     pub struct_name: Ident,
     pub pk_column: (Pk, PkMacros),
     pub columns: Vec<(Column, ColumnMacros)>,
-    pub relationships: Vec<(Relationship, RelationshipMacros)>
+    pub relationships: Vec<(Relationship, RelationshipMacros)>,
 }
 
 impl EntityMacros {
@@ -38,7 +38,7 @@ impl EntityMacros {
         }
         // println!("Tables for {}:\n{}\n{}\n", struct_name, table_name_str, table_names.join("\n"));
         let pk_macros = PkMacros::new(&struct_name, &pk_column);
-        let relationship_macros= RelationshipMacros::new(&pk_column, relationships);
+        let relationship_macros = RelationshipMacros::new(&pk_column, relationships);
         Ok(EntityMacros { struct_name, pk_column: (pk_column, pk_macros), columns: column_macros, relationships: relationship_macros })
     }
 
