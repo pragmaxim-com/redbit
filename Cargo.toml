@@ -9,8 +9,6 @@ publish = false
 redbit = { path = "redbit" }
 trybuild = "1.0"
 redb = "2.4.0"
-utxo = { path = "examples/utxo" }
-rand = "0.9.0"
 
 [workspace]
 members = ["macros", "redbit", "examples/utxo"]
