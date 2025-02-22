@@ -2,69 +2,54 @@ use utxo::*;
 
 fn main() {
     let db = redb::Database::create(std::env::temp_dir().join("my_db.redb")).unwrap();
-
-    let height = 42;
-    let timestamp = 1678296000;
-    let block_id = BlockPointer { height };
-    let block_hash = String::from("block_hash");
-
-    let transactions: Vec<Transaction> = (0..1)
-        .map(|tx_index| {
-            let tx_id = TxPointer { block_pointer: block_id.clone(), tx_index };
-            let utxos: Vec<Utxo> = (0..2)
-                .map(|utxo_index| {
-                    let assets: Vec<Asset> = (0..2)
-                        .map(|asset_index| Asset {
-                            id: AssetPointer { utxo_pointer: UtxoPointer { tx_pointer: tx_id.clone(), utxo_index }, asset_index },
-                            amount: 999_999,
-                            name: "low-medium cardinality".to_string(),
-                            policy_id: "low cardinality".to_string(),
-                        })
-                        .collect();
-                    Utxo {
-                        id: UtxoPointer { tx_pointer: tx_id.clone(), utxo_index },
-                        amount: 999_999,
-                        datum: "high cardinality".to_string(),
-                        address: "low-medium cardinality".to_string(),
-                        assets,
-                    }
-                })
-                .collect();
-            Transaction { id: tx_id, hash: format!("tx_hash_{}", tx_index), utxos }
-        })
-        .collect();
-
-    let merkle_root = String::from("merkle_root");
-    let header = BlockHeader { id: block_id.clone(), hash: block_hash.clone(), timestamp, merkle_root: merkle_root.clone(), nonce: 0 };
-    let block = Block { id: block_id.clone(), header, transactions };
-    let _ = Block::store_and_commit(&db, &block).unwrap();
-
+    persist_blocks(&db, 10, 10, 10, 10).unwrap();
     let read_tx = db.begin_read().unwrap();
 
-    Block::get(&read_tx, &block.id).unwrap();
-    Block::range(&read_tx, &block.id, &block.id).unwrap();
-    Block::get_transactions(&read_tx, &block.id).unwrap();
-    Block::get_header(&read_tx, &block.id).unwrap();
+    let first_block = Block::first(&read_tx).unwrap().unwrap();
+    let last_block = Block::last(&read_tx).unwrap().unwrap();
 
-    BlockHeader::get(&read_tx, &block.id).unwrap();
-    BlockHeader::range(&read_tx, &block.id, &block.id).unwrap();
-    BlockHeader::range_by_timestamp(&read_tx, &timestamp, &timestamp).unwrap();
-    BlockHeader::get_by_hash(&read_tx, &block_hash).unwrap();
-    BlockHeader::get_by_timestamp(&read_tx, &timestamp).unwrap();
-    BlockHeader::get_by_merkle_root(&read_tx, &merkle_root).unwrap();
+    Block::all(&read_tx).unwrap();
+    Block::get(&read_tx, &first_block.id).unwrap();
+    Block::range(&read_tx, &first_block.id, &last_block.id).unwrap();
+    Block::get_transactions(&read_tx, &first_block.id).unwrap();
+    Block::get_header(&read_tx, &first_block.id).unwrap();
 
-    Transaction::get(&read_tx, &block.transactions.first().unwrap().id).unwrap();
-    Transaction::get_by_hash(&read_tx, &block.transactions.first().unwrap().hash).unwrap();
-    Transaction::range(&read_tx, &block.transactions.first().unwrap().id, &block.transactions.last().unwrap().id).unwrap();
-    Transaction::get_utxos(&read_tx, &block.transactions.first().unwrap().id).unwrap();
+    let first_block_header = BlockHeader::first(&read_tx).unwrap().unwrap();
+    let last_block_header = BlockHeader::last(&read_tx).unwrap().unwrap();
 
-    let utxo = Utxo::get(&read_tx, &block.transactions.first().unwrap().utxos.first().unwrap().id).unwrap();
-    Utxo::get_by_address(&read_tx, &utxo.address).unwrap();
-    Utxo::get_by_datum(&read_tx, &utxo.datum).unwrap();
-    Utxo::range(&read_tx, &utxo.id, &utxo.id).unwrap();
+    BlockHeader::all(&read_tx).unwrap();
+    BlockHeader::get(&read_tx, &first_block_header.id).unwrap();
+    BlockHeader::range(&read_tx, &first_block_header.id, &last_block_header.id).unwrap();
+    BlockHeader::range_by_timestamp(&read_tx, &first_block_header.timestamp, &last_block_header.timestamp).unwrap();
+    BlockHeader::get_by_hash(&read_tx, &first_block_header.hash).unwrap();
+    BlockHeader::get_by_timestamp(&read_tx, &first_block_header.timestamp).unwrap();
+    BlockHeader::get_by_merkle_root(&read_tx, &first_block_header.merkle_root).unwrap();
 
-    let asset = Asset::get(&read_tx, &utxo.assets.first().unwrap().id).unwrap();
-    Asset::get_by_name(&read_tx, &asset.name).unwrap();
-    Asset::get_by_policy_id(&read_tx, &asset.policy_id).unwrap();
-    Asset::range(&read_tx, &asset.id, &asset.id).unwrap();
+    let first_transaction = Transaction::first(&read_tx).unwrap().unwrap();
+    let last_transaction = Transaction::last(&read_tx).unwrap().unwrap();
+
+    Transaction::all(&read_tx).unwrap();
+    Transaction::get(&read_tx, &first_transaction.id).unwrap();
+    Transaction::get_by_hash(&read_tx, &first_transaction.hash).unwrap();
+    Transaction::range(&read_tx, &first_transaction.id, &last_transaction.id).unwrap();
+    Transaction::get_utxos(&read_tx, &first_transaction.id).unwrap();
+
+    let first_utxo = Utxo::first(&read_tx).unwrap().unwrap();
+    let last_utxo = Utxo::last(&read_tx).unwrap().unwrap();
+
+    Utxo::all(&read_tx).unwrap();
+    Utxo::get(&read_tx, &first_utxo.id).unwrap();
+    Utxo::get_by_address(&read_tx, &first_utxo.address).unwrap();
+    Utxo::get_by_datum(&read_tx, &first_utxo.datum).unwrap();
+    Utxo::range(&read_tx, &first_utxo.id, &last_utxo.id).unwrap();
+    Utxo::get_assets(&read_tx, &first_utxo.id).unwrap();
+
+    let first_asset = Asset::first(&read_tx).unwrap().unwrap();
+    let last_asset = Asset::last(&read_tx).unwrap().unwrap();
+
+    Asset::all(&read_tx).unwrap();
+    Asset::get(&read_tx, &first_asset.id).unwrap();
+    Asset::get_by_name(&read_tx, &first_asset.name).unwrap();
+    Asset::get_by_policy_id(&read_tx, &first_asset.policy_id).unwrap();
+    Asset::range(&read_tx, &first_asset.id, &last_asset.id).unwrap();
 }

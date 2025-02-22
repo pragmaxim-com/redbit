@@ -5,7 +5,7 @@ use quote::{format_ident, quote};
 pub struct RelationshipMacros {
     pub struct_initializer: TokenStream,
     pub store_statement: TokenStream,
-    pub query_function: TokenStream,
+    pub query_function: (String, TokenStream),
 }
 
 impl RelationshipMacros {
@@ -17,7 +17,7 @@ impl RelationshipMacros {
             let child_type = &rel.field.tpe; // e.g., the type `Transaction` from Vec<Transaction>
             let struct_initializer: TokenStream;
             let store_statement: TokenStream;
-            let query_function: TokenStream;
+            let query_function: (String, TokenStream);
             match rel.multiplicity {
                 Multiplicity::OneToOne => {
                     struct_initializer = quote! {
@@ -30,11 +30,11 @@ impl RelationshipMacros {
                         #child_type::store(&write_tx, child)?;
                     };
                     let query_fn_name = format_ident!("get_{}", field_name);
-                    query_function = quote! {
+                    query_function = (query_fn_name.to_string(), quote! {
                         pub fn #query_fn_name(read_tx: &::redb::ReadTransaction, pk: &#pk_type) -> Result<#child_type, DbEngineError> {
                             #child_type::get(&read_tx, &pk)
                         }
-                    };
+                    });
                 }
                 Multiplicity::OneToMany => {
                     struct_initializer = quote! {
@@ -49,12 +49,12 @@ impl RelationshipMacros {
                         }
                     };
                     let query_fn_name = format_ident!("get_{}", field_name);
-                    query_function = quote! {
+                    query_function = (query_fn_name.to_string(), quote! {
                         pub fn #query_fn_name(read_tx: &::redb::ReadTransaction, pk: &#pk_type) -> Result<Vec<#child_type>, DbEngineError> {
                             let (from, to) = pk.fk_range();
                             #child_type::range(&read_tx, &from, &to)
                         }
-                    };
+                    });
                 }
             }
             relationship_macros.push((rel, RelationshipMacros { struct_initializer, store_statement, query_function }))

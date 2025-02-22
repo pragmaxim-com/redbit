@@ -6,8 +6,7 @@ pub struct ColumnMacros {
     pub table_definitions: Vec<TokenStream>,
     pub store_statement: TokenStream,
     pub struct_initializer: TokenStream,
-    pub query_function: Option<TokenStream>,
-    pub range_function: Option<TokenStream>,
+    pub functions: Vec<(String, TokenStream)>,
 }
 
 impl ColumnMacros {
@@ -36,7 +35,7 @@ impl ColumnMacros {
                 guard.unwrap().value()
             }
         };
-        ColumnMacros { table_definitions, store_statement, struct_initializer, query_function: None, range_function: None }
+        ColumnMacros { table_definitions, store_statement, struct_initializer, functions: vec![] }
     }
 
     pub fn indexed(struct_name: &Ident, pk_name: &Ident, pk_type: &Type, column_name: &Ident, column_type: &Type, range: bool) -> ColumnMacros {
@@ -75,8 +74,9 @@ impl ColumnMacros {
                 guard.unwrap().value()
             }
         };
+        let mut functions: Vec<(String, TokenStream)> = Vec::new();
         let get_fn_name = format_ident!("get_by_{}", column_name);
-        let query_function = Some(quote! {
+        functions.push((get_fn_name.to_string(), quote! {
             pub fn #get_fn_name(
                 read_tx: &::redb::ReadTransaction,
                 val: &#column_type
@@ -97,10 +97,11 @@ impl ColumnMacros {
                 }
                 Ok(results)
             }
-        });
-        let range_function = if range {
+        }));
+
+        if range {
             let range_fn_name = format_ident!("range_by_{}", column_name);
-            Some(quote! {
+            functions.push((range_fn_name.to_string(), quote! {
                 pub fn #range_fn_name(
                     read_tx: &::redb::ReadTransaction,
                     from: &#column_type,
@@ -125,11 +126,9 @@ impl ColumnMacros {
                     }
                     Ok(results)
                 }
-            })
-        } else {
-            None
+            }))
         };
-        ColumnMacros { table_definitions, store_statement, struct_initializer, query_function, range_function }
+        ColumnMacros { table_definitions, store_statement, struct_initializer, functions }
     }
 
     pub fn indexed_with_dict(struct_name: &Ident, pk_name: &Ident, pk_type: &Type, column_name: &Ident, column_type: &Type) -> ColumnMacros {
@@ -204,8 +203,9 @@ impl ColumnMacros {
                 val_guard.unwrap().value()
             }
         };
+        let mut functions: Vec<(String, TokenStream)> = Vec::new();
         let get_fn_name = format_ident!("get_by_{}", column_name);
-        let query_function = Some(quote! {
+        functions.push((get_fn_name.to_string(), quote! {
             pub fn #get_fn_name(
                 read_tx: &::redb::ReadTransaction,
                 val: &#column_type
@@ -232,7 +232,7 @@ impl ColumnMacros {
                 }
                 Ok(results)
             }
-        });
-        ColumnMacros { table_definitions, store_statement, struct_initializer, query_function, range_function: None }
+        }));
+        ColumnMacros { table_definitions, store_statement, struct_initializer, functions }
     }
 }

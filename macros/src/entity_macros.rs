@@ -4,7 +4,9 @@ use crate::relationship_macros::RelationshipMacros;
 use crate::{Column, Indexing, Pk, Relationship};
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
-use std::{env, fs};
+use std::env;
+use std::fs::OpenOptions;
+use std::io::Write;
 
 pub struct EntityMacros {
     pub struct_name: Ident,
@@ -49,39 +51,31 @@ impl EntityMacros {
         let pk_type = pk_column.field.tpe.clone();
         let pk_table_definition = pk_column_macros.table_definition.clone();
         let pk_store_statement = pk_column_macros.store_statement.clone();
-        let pk_query_function = pk_column_macros.query_function.clone();
-        let pk_range_function = pk_column_macros.range_function.clone();
 
         let mut table_definitions = Vec::new();
         let mut store_statements = Vec::new();
         let mut struct_initializers = Vec::new();
-        let mut query_functions = Vec::new();
-        let mut range_functions = Vec::new();
+        let mut functions = Vec::new();
+        functions.extend(pk_column_macros.functions.clone());
 
         for (_, macros) in &self.columns {
             table_definitions.extend(macros.table_definitions.clone());
             store_statements.push(macros.store_statement.clone());
             struct_initializers.push(macros.struct_initializer.clone());
-            query_functions.push(macros.query_function.clone());
-            if let Some(range_fn) = &macros.range_function {
-                range_functions.push(range_fn.clone());
-            }
+            functions.extend(macros.functions.clone());
         }
 
         for (_, macros) in &self.relationships {
             store_statements.push(macros.store_statement.clone());
             struct_initializers.push(macros.struct_initializer.clone());
-            query_functions.push(Some(macros.query_function.clone()));
+            functions.push(macros.query_function.clone());
         }
-
-        // Build the final TokenStream
+        let function_macros: Vec<TokenStream> = functions.into_iter().map(|f| f.1).collect::<Vec<_>>();
         let expanded = quote! {
             #pk_table_definition
             #(#table_definitions)*
 
             impl #struct_ident {
-                #pk_range_function
-
                 fn compose(read_tx: &::redb::ReadTransaction, pk: &#pk_type) -> Result<#struct_ident, DbEngineError> {
                     Ok(#struct_ident {
                         #pk_ident: pk.clone(),
@@ -89,9 +83,7 @@ impl EntityMacros {
                     })
                 }
 
-                #pk_query_function
-                #(#query_functions)*
-                #(#range_functions)*
+                #(#function_macros)*
 
                 pub fn store(write_tx: &::redb::WriteTransaction, instance: &#struct_ident) -> Result<(), DbEngineError> {
                     #pk_store_statement
@@ -114,7 +106,9 @@ impl EntityMacros {
             Ok(ast) => prettyplease::unparse(&ast),
             Err(_) => expanded.to_string(),
         };
-        let _ = fs::write(env::temp_dir().join("redbit_macro.rs"), &formatted_str).unwrap();
+        let path = env::temp_dir().join("redbit_macro.rs");
+        let mut file = OpenOptions::new().create(true).append(true).open(&path).unwrap();
+        file.write_all(formatted_str.as_bytes()).unwrap();
         expanded
     }
 }
