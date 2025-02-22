@@ -16,7 +16,7 @@ impl PkMacros {
         let pk_type = pk_column.field.tpe.clone();
 
         let table_definition = quote! {
-            pub const #table_ident: ::redb::TableDefinition<'static, #pk_type, ()> = ::redb::TableDefinition::new(#table_name_str);
+            pub const #table_ident: ::redb::TableDefinition<'static, Bincode<#pk_type>, ()> = ::redb::TableDefinition::new(#table_name_str);
         };
 
         let store_statement = quote! {
