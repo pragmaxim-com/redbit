@@ -2,7 +2,7 @@ use utxo::*;
 
 fn main() {
     let db = redb::Database::create(std::env::temp_dir().join("my_db.redb")).unwrap();
-    persist_blocks(&db, 10, 10, 10, 10).unwrap();
+    persist_blocks(&db, 5, 5, 5, 5).unwrap();
     let read_tx = db.begin_read().unwrap();
 
     let first_block = Block::first(&read_tx).unwrap().unwrap();
