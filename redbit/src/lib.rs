@@ -1,13 +1,13 @@
 pub use macros::Entity;
 pub use redb::ReadableTable;
 
+use bincode::Options;
 use redb::{Key, TypeName, Value};
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use std::any::type_name;
 use std::cmp::Ordering;
 use std::fmt::Debug;
-use serde::{Deserialize, Serialize};
-use serde::de::DeserializeOwned;
-use bincode::Options;
 
 pub trait PK<FK>: Sized {
     fn fk_range(&self) -> (FK, FK);
@@ -61,11 +61,13 @@ impl<T> Value for Bincode<T>
 where
     T: Debug + Serialize + for<'a> Deserialize<'a>,
 {
-    type SelfType<'a> = T
+    type SelfType<'a>
+        = T
     where
         Self: 'a;
 
-    type AsBytes<'a> = Vec<u8>
+    type AsBytes<'a>
+        = Vec<u8>
     where
         Self: 'a;
 

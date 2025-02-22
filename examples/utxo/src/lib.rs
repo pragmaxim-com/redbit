@@ -1,10 +1,10 @@
 mod data;
 
-pub use redbit::*;
 pub use data::*;
+pub use redbit::*;
 
-use std::fmt::Debug;
 use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
 
 pub type Amount = u64;
 pub type Timestamp = u64;

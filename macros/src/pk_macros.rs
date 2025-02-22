@@ -26,47 +26,59 @@ impl PkMacros {
 
         let mut functions: Vec<(String, TokenStream)> = Vec::new();
         let get_fn_name = format_ident!("get");
-        functions.push((get_fn_name.to_string(), quote! {
-            pub fn #get_fn_name(read_tx: &::redb::ReadTransaction, pk: &#pk_type) -> Result<#struct_name, DbEngineError> {
-                Self::compose(&read_tx, pk)
-            }
-        }));
+        functions.push((
+            get_fn_name.to_string(),
+            quote! {
+                pub fn #get_fn_name(read_tx: &::redb::ReadTransaction, pk: &#pk_type) -> Result<#struct_name, DbEngineError> {
+                    Self::compose(&read_tx, pk)
+                }
+            },
+        ));
 
         let all_fn_name = format_ident!("all");
-        functions.push((all_fn_name.to_string(), quote! {
-            pub fn #all_fn_name(read_tx: &::redb::ReadTransaction) -> Result<Vec<#struct_name>, DbEngineError> {
-                let table = read_tx.open_table(#table_ident)?;
-                let mut iter = table.iter()?;
-                let mut results = Vec::new();
-                while let Some(entry_res) = iter.next() {
-                    let pk = entry_res?.0.value();
-                    results.push(Self::compose(&read_tx, &pk)?);
+        functions.push((
+            all_fn_name.to_string(),
+            quote! {
+                pub fn #all_fn_name(read_tx: &::redb::ReadTransaction) -> Result<Vec<#struct_name>, DbEngineError> {
+                    let table = read_tx.open_table(#table_ident)?;
+                    let mut iter = table.iter()?;
+                    let mut results = Vec::new();
+                    while let Some(entry_res) = iter.next() {
+                        let pk = entry_res?.0.value();
+                        results.push(Self::compose(&read_tx, &pk)?);
+                    }
+                    Ok(results)
                 }
-                Ok(results)
-            }
-        }));
+            },
+        ));
 
         let first_fn_name = format_ident!("first");
-        functions.push((first_fn_name.to_string(), quote! {
-            pub fn #first_fn_name(read_tx: &::redb::ReadTransaction) -> Result<Option<#struct_name>, DbEngineError> {
-                let table = read_tx.open_table(#table_ident)?;
-                if let Some((k, _)) = table.last()? {
-                    return Self::compose(&read_tx, &k.value()).map(Some);
+        functions.push((
+            first_fn_name.to_string(),
+            quote! {
+                pub fn #first_fn_name(read_tx: &::redb::ReadTransaction) -> Result<Option<#struct_name>, DbEngineError> {
+                    let table = read_tx.open_table(#table_ident)?;
+                    if let Some((k, _)) = table.last()? {
+                        return Self::compose(&read_tx, &k.value()).map(Some);
+                    }
+                    Ok(None)
                 }
-                Ok(None)
-            }
-        }));
+            },
+        ));
 
         let last_fn_name = format_ident!("last");
-        functions.push((last_fn_name.to_string(), quote! {
-            pub fn #last_fn_name(read_tx: &::redb::ReadTransaction) -> Result<Option<#struct_name>, DbEngineError> {
-                let table = read_tx.open_table(#table_ident)?;
-                if let Some((k, _)) = table.last()? {
-                    return Self::compose(&read_tx, &k.value()).map(Some);
+        functions.push((
+            last_fn_name.to_string(),
+            quote! {
+                pub fn #last_fn_name(read_tx: &::redb::ReadTransaction) -> Result<Option<#struct_name>, DbEngineError> {
+                    let table = read_tx.open_table(#table_ident)?;
+                    if let Some((k, _)) = table.last()? {
+                        return Self::compose(&read_tx, &k.value()).map(Some);
+                    }
+                    Ok(None)
                 }
-                Ok(None)
-            }
-        }));
+            },
+        ));
 
         if pk_column.range {
             let range_fn_name = format_ident!("range");

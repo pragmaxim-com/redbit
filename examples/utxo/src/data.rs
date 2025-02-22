@@ -1,7 +1,13 @@
-use redbit::DbEngineError;
 use crate::*;
+use redbit::DbEngineError;
 
-pub fn persist_blocks(db: &redb::Database, block_count: Height, tx_count: TxIndex, utxo_count: UtxoIndex, asset_count: AssetIndex) -> Result<Vec<Block>, DbEngineError> {
+pub fn persist_blocks(
+    db: &redb::Database,
+    block_count: Height,
+    tx_count: TxIndex,
+    utxo_count: UtxoIndex,
+    asset_count: AssetIndex,
+) -> Result<Vec<Block>, DbEngineError> {
     let timestamp = 1678296000;
     let block_hash = String::from("block_hash");
     let merkle_root = String::from("merkle_root");
@@ -34,7 +40,8 @@ pub fn persist_blocks(db: &redb::Database, block_count: Height, tx_count: TxInde
             })
             .collect();
 
-        let header = BlockHeader { id: block_id.clone(), hash: block_hash.clone(), timestamp: timestamp+1, merkle_root: merkle_root.clone(), nonce: 0 };
+        let header =
+            BlockHeader { id: block_id.clone(), hash: block_hash.clone(), timestamp: timestamp + 1, merkle_root: merkle_root.clone(), nonce: 0 };
         let block = Block { id: block_id, header, transactions };
         blocks.push(block.clone());
         Block::store_and_commit(&db, &block)?

@@ -40,7 +40,6 @@ pub struct FullStruct {
 
 fn main() {
     let _ = MinimalStruct { id: 1, persisted_no_index_no_dict: 42 };
-
     let _ = StructWithPersistedEntityField { id: 2, persisted_indexed_no_dict: 43 };
     let _ = StructWithPersistedEntityFieldWithDict { id: 3, persisted_indexed_with_dict: 44 };
     let _ = FullStruct { id: 4, amount: 45, datum: "datum".to_string(), address: "address".to_string() };

@@ -76,57 +76,63 @@ impl ColumnMacros {
         };
         let mut functions: Vec<(String, TokenStream)> = Vec::new();
         let get_fn_name = format_ident!("get_by_{}", column_name);
-        functions.push((get_fn_name.to_string(), quote! {
-            pub fn #get_fn_name(
-                read_tx: &::redb::ReadTransaction,
-                val: &#column_type
-            ) -> Result<Vec<#struct_name>, DbEngineError> {
-                let mm_table = read_tx.open_multimap_table(#index_table_ident)?;
-                let mut iter = mm_table.get(val)?;
-                let mut results = Vec::new();
-                while let Some(x) = iter.next() {
-                    let pk = x?.value();
-                    match Self::compose(&read_tx, &pk) {
-                        Ok(item) => {
-                            results.push(item);
-                        }
-                        Err(err) => {
-                            return Err(DbEngineError::DbError(err.to_string()));
-                        }
-                    }
-                }
-                Ok(results)
-            }
-        }));
-
-        if range {
-            let range_fn_name = format_ident!("range_by_{}", column_name);
-            functions.push((range_fn_name.to_string(), quote! {
-                pub fn #range_fn_name(
+        functions.push((
+            get_fn_name.to_string(),
+            quote! {
+                pub fn #get_fn_name(
                     read_tx: &::redb::ReadTransaction,
-                    from: &#column_type,
-                    to: &#column_type
+                    val: &#column_type
                 ) -> Result<Vec<#struct_name>, DbEngineError> {
                     let mm_table = read_tx.open_multimap_table(#index_table_ident)?;
-                    let range_iter = mm_table.range(from.clone()..=to.clone())?;
+                    let mut iter = mm_table.get(val)?;
                     let mut results = Vec::new();
-                    for entry_res in range_iter {
-                        let (col_key, mut multi_iter) = entry_res?;
-                        while let Some(x) = multi_iter.next() {
-                            let pk = x?.value();
-                            match Self::compose(&read_tx, &pk) {
-                                Ok(item) => {
-                                    results.push(item);
-                                }
-                                Err(err) => {
-                                    return Err(DbEngineError::DbError(err.to_string()));
-                                }
+                    while let Some(x) = iter.next() {
+                        let pk = x?.value();
+                        match Self::compose(&read_tx, &pk) {
+                            Ok(item) => {
+                                results.push(item);
+                            }
+                            Err(err) => {
+                                return Err(DbEngineError::DbError(err.to_string()));
                             }
                         }
                     }
                     Ok(results)
                 }
-            }))
+            },
+        ));
+
+        if range {
+            let range_fn_name = format_ident!("range_by_{}", column_name);
+            functions.push((
+                range_fn_name.to_string(),
+                quote! {
+                    pub fn #range_fn_name(
+                        read_tx: &::redb::ReadTransaction,
+                        from: &#column_type,
+                        to: &#column_type
+                    ) -> Result<Vec<#struct_name>, DbEngineError> {
+                        let mm_table = read_tx.open_multimap_table(#index_table_ident)?;
+                        let range_iter = mm_table.range(from.clone()..=to.clone())?;
+                        let mut results = Vec::new();
+                        for entry_res in range_iter {
+                            let (col_key, mut multi_iter) = entry_res?;
+                            while let Some(x) = multi_iter.next() {
+                                let pk = x?.value();
+                                match Self::compose(&read_tx, &pk) {
+                                    Ok(item) => {
+                                        results.push(item);
+                                    }
+                                    Err(err) => {
+                                        return Err(DbEngineError::DbError(err.to_string()));
+                                    }
+                                }
+                            }
+                        }
+                        Ok(results)
+                    }
+                },
+            ))
         };
         ColumnMacros { table_definitions, store_statement, struct_initializer, functions }
     }
@@ -205,34 +211,37 @@ impl ColumnMacros {
         };
         let mut functions: Vec<(String, TokenStream)> = Vec::new();
         let get_fn_name = format_ident!("get_by_{}", column_name);
-        functions.push((get_fn_name.to_string(), quote! {
-            pub fn #get_fn_name(
-                read_tx: &::redb::ReadTransaction,
-                val: &#column_type
-            ) -> Result<Vec<#struct_name>, DbEngineError> {
-                let val2birth = read_tx.open_table(#table_value_to_dict_pk_ident)?;
-                let birth_guard = val2birth.get(val)?;
-                let birth_id = match birth_guard {
-                    Some(g) => g.value().clone(),
-                    None => return Ok(Vec::new()),
-                };
-                let birth2pks = read_tx.open_multimap_table(#table_dict_index_ident)?;
-                let mut iter = birth2pks.get(&birth_id)?;
-                let mut results = Vec::new();
-                while let Some(x) = iter.next() {
-                    let pk = x?.value();
-                    match Self::compose(&read_tx, &pk) {
-                        Ok(item) => {
-                            results.push(item);
-                        }
-                        Err(err) => {
-                            return Err(DbEngineError::DbError(err.to_string()));
+        functions.push((
+            get_fn_name.to_string(),
+            quote! {
+                pub fn #get_fn_name(
+                    read_tx: &::redb::ReadTransaction,
+                    val: &#column_type
+                ) -> Result<Vec<#struct_name>, DbEngineError> {
+                    let val2birth = read_tx.open_table(#table_value_to_dict_pk_ident)?;
+                    let birth_guard = val2birth.get(val)?;
+                    let birth_id = match birth_guard {
+                        Some(g) => g.value().clone(),
+                        None => return Ok(Vec::new()),
+                    };
+                    let birth2pks = read_tx.open_multimap_table(#table_dict_index_ident)?;
+                    let mut iter = birth2pks.get(&birth_id)?;
+                    let mut results = Vec::new();
+                    while let Some(x) = iter.next() {
+                        let pk = x?.value();
+                        match Self::compose(&read_tx, &pk) {
+                            Ok(item) => {
+                                results.push(item);
+                            }
+                            Err(err) => {
+                                return Err(DbEngineError::DbError(err.to_string()));
+                            }
                         }
                     }
+                    Ok(results)
                 }
-                Ok(results)
-            }
-        }));
+            },
+        ));
         ColumnMacros { table_definitions, store_statement, struct_initializer, functions }
     }
 }

@@ -1,9 +1,9 @@
+extern crate proc_macro;
+
 mod column_macros;
 mod entity_macros;
 mod pk_macros;
 mod relationship_macros;
-
-extern crate proc_macro;
 
 use crate::entity_macros::EntityMacros;
 use proc_macro2::Ident;
