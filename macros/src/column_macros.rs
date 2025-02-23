@@ -5,6 +5,7 @@ use syn::Type;
 pub struct ColumnMacros {
     pub table_definitions: Vec<TokenStream>,
     pub store_statement: TokenStream,
+    pub delete_statement: TokenStream,
     pub struct_initializer: TokenStream,
     pub functions: Vec<(String, TokenStream)>,
 }
@@ -28,6 +29,11 @@ impl ColumnMacros {
             let mut table = write_tx.open_table(#table_ident)?;
             table.insert(&instance.#pk_name, &instance.#column_name)?;
         };
+        let delete_statement = quote! {
+            let mut table = write_tx.open_table(#table_ident)?;
+            let value = table.remove(pk)?;
+            value.map(|g| g.value());
+        };
         let struct_initializer = quote! {
             #column_name: {
                 let table = read_tx.open_table(#table_ident)?;
@@ -35,7 +41,7 @@ impl ColumnMacros {
                 guard.unwrap().value()
             }
         };
-        ColumnMacros { table_definitions, store_statement, struct_initializer, functions: vec![] }
+        ColumnMacros { table_definitions, store_statement, delete_statement, struct_initializer, functions: vec![] }
     }
 
     pub fn indexed(struct_name: &Ident, pk_name: &Ident, pk_type: &Type, column_name: &Ident, column_type: &Type, range: bool) -> ColumnMacros {
@@ -66,6 +72,14 @@ impl ColumnMacros {
 
             let mut mm = write_tx.open_multimap_table(#index_table_ident)?;
             mm.insert(&instance.#column_name, &instance.#pk_name)?;
+        };
+        let delete_statement = quote! {
+            let mut table = write_tx.open_table(#table_ident)?;
+            if let Some(value_guard) = table.remove(pk)? {
+                let mut mm = write_tx.open_multimap_table(#index_table_ident)?;
+                let value = value_guard.value();
+                mm.remove(&value, pk)?;
+            }
         };
         let struct_initializer = quote! {
             #column_name: {
@@ -134,7 +148,7 @@ impl ColumnMacros {
                 },
             ))
         };
-        ColumnMacros { table_definitions, store_statement, struct_initializer, functions }
+        ColumnMacros { table_definitions, store_statement, delete_statement, struct_initializer, functions }
     }
 
     pub fn indexed_with_dict(struct_name: &Ident, pk_name: &Ident, pk_type: &Type, column_name: &Ident, column_type: &Type) -> ColumnMacros {
@@ -181,8 +195,7 @@ impl ColumnMacros {
             let mut dict_index          = write_tx.open_multimap_table(#table_dict_index_ident)?;
 
             let (birth_id, newly_created) = {
-                let existing_guard = value_to_dict_pk.get(&instance.#column_name)?;
-                if let Some(guard) = existing_guard {
+                if let Some(guard) = value_to_dict_pk.get(&instance.#column_name)? {
                     (guard.value().clone(), false)
                 } else {
                     let new_birth = instance.#pk_name.clone();
@@ -196,8 +209,25 @@ impl ColumnMacros {
             }
 
             dict_pk_by_pk.insert(&instance.#pk_name, &birth_id)?;
-
             dict_index.insert(&birth_id, &instance.#pk_name)?;
+        };
+        let delete_statement = quote! {
+            let mut dict_pk_by_pk       = write_tx.open_table(#table_dict_pk_by_pk_ident)?;
+            let mut value_to_dict_pk    = write_tx.open_table(#table_value_to_dict_pk_ident)?;
+            let mut value_by_dict_pk    = write_tx.open_table(#table_value_by_dict_pk_ident)?;
+            let mut dict_index          = write_tx.open_multimap_table(#table_dict_index_ident)?;
+
+            let birth_id_opt = dict_pk_by_pk.remove(pk)?.map(|guard| guard.value().clone());
+            if let Some(birth_id) = birth_id_opt {
+                let value_opt = value_by_dict_pk.get(&birth_id)?.map(|guard| guard.value().clone());
+                if let Some(value) = value_opt {
+                    dict_index.remove(&birth_id, pk)?;
+                    if dict_index.get(&birth_id)?.is_empty() {
+                        value_to_dict_pk.remove(&value)?;
+                        value_by_dict_pk.remove(&birth_id)?;
+                    }
+                }
+            }
         };
         let struct_initializer = quote! {
             #column_name: {
@@ -242,6 +272,6 @@ impl ColumnMacros {
                 }
             },
         ));
-        ColumnMacros { table_definitions, store_statement, struct_initializer, functions }
+        ColumnMacros { table_definitions, store_statement, delete_statement, struct_initializer, functions }
     }
 }

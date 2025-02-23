@@ -3,7 +3,8 @@ use utxo::*;
 fn create_test_db() -> (Vec<Block>, redb::Database) {
     let random_number = rand::random::<u32>();
     let db = redb::Database::create(std::env::temp_dir().join(format!("test_db_{}.redb", random_number))).unwrap();
-    let blocks = persist_blocks(&db, 3, 3, 3, 3).expect("Failed to persist blocks");
+    let blocks = get_blocks(3, 3, 3, 3);
+    blocks.iter().for_each(|block| Block::store_and_commit(&db, &block).expect("Failed to persist blocks"));
     (blocks, db)
 }
 
@@ -11,10 +12,36 @@ fn create_test_db() -> (Vec<Block>, redb::Database) {
 fn it_should_get_entity_by_unique_id() {
     let (blocks, db) = create_test_db();
     let block = blocks.first().unwrap();
-    let found_by_id = Block::get(&db.begin_read().unwrap(), &block.id).expect("Failed to query by ID");
+    let found_by_id = Block::get(&db.begin_read().unwrap(), &block.id).expect("Failed to query by ID").unwrap();
     assert_eq!(found_by_id.id, block.id);
     assert_eq!(found_by_id.transactions, block.transactions);
     assert_eq!(found_by_id.header, block.header);
+}
+
+#[test]
+fn it_should_delete_entity_by_unique_id() {
+    let (blocks, db) = create_test_db();
+    let block = blocks.first().unwrap();
+    let found_by_id = Block::get(&db.begin_read().unwrap(), &block.id).expect("Failed to query by ID").unwrap();
+    assert_eq!(found_by_id.id, block.id);
+
+    Block::delete_and_commit(&db, &block.id).expect("Failed to delete by ID");
+
+    let read_tx = db.begin_read().unwrap();
+
+    let block_not_found = Block::get(&read_tx, &block.id).expect("Failed to query by ID after deletion").is_none();
+    assert!(block_not_found);
+
+    let transitive_entities_not_found = block.transactions.iter().any(|tx| {
+        let tx_not_found = Transaction::get(&read_tx, &tx.id).unwrap().is_none();
+        let utxos_not_found = tx.utxos.iter().any(|utxo| {
+            let utxo_not_found = Utxo::get(&read_tx, &utxo.id).unwrap().is_none();
+            let assets_not_found = utxo.assets.iter().any(|asset| Asset::get(&read_tx, &asset.id).unwrap().is_none());
+            utxo_not_found && assets_not_found
+        });
+        tx_not_found && utxos_not_found
+    });
+    assert!(transitive_entities_not_found);
 }
 
 #[test]
@@ -116,7 +143,7 @@ fn it_should_get_related_one_to_one_entity() {
     let block = blocks.first().unwrap();
 
     let expected_header: BlockHeader = block.header.clone();
-    let header = Block::get_header(&read_tx, &block.id).expect("Failed to get header");
+    let header = Block::get_header(&read_tx, &block.id).expect("Failed to get header").unwrap();
 
     assert_eq!(expected_header, header);
 }

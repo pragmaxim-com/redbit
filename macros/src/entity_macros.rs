@@ -51,10 +51,12 @@ impl EntityMacros {
         let pk_type = pk_column.field.tpe.clone();
         let pk_table_definition = pk_column_macros.table_definition.clone();
         let pk_store_statement = pk_column_macros.store_statement.clone();
+        let pk_delete_statement = pk_column_macros.delete_statement.clone();
 
         let mut table_definitions = Vec::new();
         let mut store_statements = Vec::new();
         let mut struct_initializers = Vec::new();
+        let mut delete_statements = Vec::new();
         let mut functions = Vec::new();
         functions.extend(pk_column_macros.functions.clone());
 
@@ -63,12 +65,14 @@ impl EntityMacros {
             store_statements.push(macros.store_statement.clone());
             struct_initializers.push(macros.struct_initializer.clone());
             functions.extend(macros.functions.clone());
+            delete_statements.push(macros.delete_statement.clone());
         }
 
         for (_, macros) in &self.relationships {
             store_statements.push(macros.store_statement.clone());
             struct_initializers.push(macros.struct_initializer.clone());
             functions.push(macros.query_function.clone());
+            delete_statements.push(macros.delete_statement.clone());
         }
         let function_macros: Vec<TokenStream> = functions.into_iter().map(|f| f.1).collect::<Vec<_>>();
         let expanded = quote! {
@@ -76,6 +80,8 @@ impl EntityMacros {
             #(#table_definitions)*
 
             impl #struct_ident {
+                #(#function_macros)*
+
                 fn compose(read_tx: &::redb::ReadTransaction, pk: &#pk_type) -> Result<#struct_ident, DbEngineError> {
                     Ok(#struct_ident {
                         #pk_ident: pk.clone(),
@@ -83,7 +89,21 @@ impl EntityMacros {
                     })
                 }
 
-                #(#function_macros)*
+                pub fn delete(write_tx: &::redb::WriteTransaction, pk: &#pk_type) -> Result<(), DbEngineError> {
+                    #pk_delete_statement
+                    #(#delete_statements)*
+                    Ok(())
+                }
+
+                pub fn delete_and_commit(db: &::redb::Database, pk: &#pk_type) -> Result<(), DbEngineError> {
+                    let write_tx = db.begin_write()?;
+                    {
+                        #pk_delete_statement
+                        #(#delete_statements)*
+                    }
+                    write_tx.commit()?;
+                    Ok(())
+                }
 
                 pub fn store(write_tx: &::redb::WriteTransaction, instance: &#struct_ident) -> Result<(), DbEngineError> {
                     #pk_store_statement

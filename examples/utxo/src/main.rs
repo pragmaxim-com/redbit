@@ -2,7 +2,10 @@ use utxo::*;
 
 fn main() {
     let db = redb::Database::create(std::env::temp_dir().join("my_db.redb")).unwrap();
-    persist_blocks(&db, 5, 5, 5, 5).unwrap();
+    let blocks = get_blocks(5, 5, 5, 5);
+
+    blocks.iter().for_each(|block| Block::store_and_commit(&db, &block).unwrap());
+
     let read_tx = db.begin_read().unwrap();
 
     let first_block = Block::first(&read_tx).unwrap().unwrap();
@@ -52,4 +55,6 @@ fn main() {
     Asset::get_by_name(&read_tx, &first_asset.name).unwrap();
     Asset::get_by_policy_id(&read_tx, &first_asset.policy_id).unwrap();
     Asset::range(&read_tx, &first_asset.id, &last_asset.id).unwrap();
+
+    blocks.iter().for_each(|block| Block::delete_and_commit(&db, &block.id).unwrap());
 }

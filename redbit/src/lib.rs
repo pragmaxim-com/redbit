@@ -1,4 +1,5 @@
 pub use macros::Entity;
+pub use redb::ReadableMultimapTable;
 pub use redb::ReadableTable;
 
 use bincode::Options;

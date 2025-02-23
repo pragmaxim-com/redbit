@@ -5,6 +5,7 @@ use quote::{format_ident, quote};
 pub struct PkMacros {
     pub table_definition: TokenStream,
     pub store_statement: TokenStream,
+    pub delete_statement: TokenStream,
     pub functions: Vec<(String, TokenStream)>,
 }
 
@@ -24,13 +25,24 @@ impl PkMacros {
             table.insert(&instance.#pk_name, ())?;
         };
 
+        let delete_statement = quote! {
+            let mut table = write_tx.open_table(#table_ident)?;
+            let value = table.remove(pk)?;
+            value.map(|g| g.value());
+        };
+
         let mut functions: Vec<(String, TokenStream)> = Vec::new();
         let get_fn_name = format_ident!("get");
         functions.push((
             get_fn_name.to_string(),
             quote! {
-                pub fn #get_fn_name(read_tx: &::redb::ReadTransaction, pk: &#pk_type) -> Result<#struct_name, DbEngineError> {
-                    Self::compose(&read_tx, pk)
+                pub fn #get_fn_name(read_tx: &::redb::ReadTransaction, pk: &#pk_type) -> Result<Option<#struct_name>, DbEngineError> {
+                    let table = read_tx.open_table(#table_ident)?;
+                    if table.get(pk)?.is_some() {
+                        Ok(Some(Self::compose(&read_tx, pk)?))
+                    } else {
+                        Ok(None)
+                    }
                 }
             },
         ));
@@ -97,6 +109,6 @@ impl PkMacros {
             }))
         };
 
-        PkMacros { table_definition, store_statement, functions }
+        PkMacros { table_definition, store_statement, delete_statement, functions }
     }
 }
