@@ -38,3 +38,27 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions@users.noreply.github.com"
           git diff --quiet || (git add README.md && git commit -m "Auto-update README with example code" && git push)
+
+  test:
+    name: Run Cargo Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-
+
+      - name: Run tests
+        run: cargo test --package utxo
