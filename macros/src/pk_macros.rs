@@ -32,6 +32,24 @@ impl PkMacros {
         };
 
         let mut functions: Vec<(String, TokenStream)> = Vec::new();
+        let range_delete_fn_name = format_ident!("range_delete");
+        functions.push((range_delete_fn_name.to_string(), quote! {
+            pub fn #range_delete_fn_name(write_tx: &::redb::WriteTransaction, from: &#pk_type, to: &#pk_type) -> Result<Vec<#pk_type>, DbEngineError> {
+                let mut table = write_tx.open_table(#table_ident)?;
+                let range = from.clone()..=to.clone();
+                let mut iter = table.range(range)?;
+                let mut pks_to_delete = Vec::new();
+                while let Some(entry_res) = iter.next() {
+                    let pk = entry_res?.0.value();
+                    pks_to_delete.push(pk.clone());
+                }
+                for pk in pks_to_delete.iter() {
+                    table.remove(pk)?;
+                }
+                Ok(pks_to_delete)
+            }
+        }));
+
         let get_fn_name = format_ident!("get");
         functions.push((
             get_fn_name.to_string(),
@@ -95,9 +113,9 @@ impl PkMacros {
         if pk_column.range {
             let range_fn_name = format_ident!("range");
             functions.push((range_fn_name.to_string(), quote! {
-                pub fn #range_fn_name(read_tx: &::redb::ReadTransaction, from: &#pk_type, to: &#pk_type) -> Result<Vec<#struct_name>, DbEngineError> {
+                pub fn #range_fn_name(read_tx: &::redb::ReadTransaction, from: &#pk_type, until: &#pk_type) -> Result<Vec<#struct_name>, DbEngineError> {
                     let table = read_tx.open_table(#table_ident)?;
-                    let range = from.clone()..=to.clone();
+                    let range = from.clone()..until.clone();
                     let mut iter = table.range(range)?;
                     let mut results = Vec::new();
                     while let Some(entry_res) = iter.next() {

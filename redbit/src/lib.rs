@@ -10,8 +10,12 @@ use std::any::type_name;
 use std::cmp::Ordering;
 use std::fmt::Debug;
 
-pub trait PK<FK>: Sized {
+pub trait PK<FK>: Sized
+where
+    FK: PartialOrd + Clone + Ord,
+{
     fn fk_range(&self) -> (FK, FK);
+    fn next(&self) -> Self;
 }
 
 #[derive(Debug)]
@@ -31,6 +35,11 @@ impl std::error::Error for DbEngineError {}
 
 impl From<redb::Error> for DbEngineError {
     fn from(e: redb::Error) -> Self {
+        DbEngineError::DbError(e.to_string())
+    }
+}
+impl From<redb::DatabaseError> for DbEngineError {
+    fn from(e: redb::DatabaseError) -> Self {
         DbEngineError::DbError(e.to_string())
     }
 }

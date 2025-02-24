@@ -103,21 +103,30 @@ pub struct AssetPointer {
 
 impl PK<TxPointer> for BlockPointer {
     fn fk_range(&self) -> (TxPointer, TxPointer) {
-        (TxPointer { block_pointer: self.clone(), tx_index: TxIndex::MIN }, TxPointer { block_pointer: self.clone(), tx_index: TxIndex::MAX })
+        (TxPointer { block_pointer: self.clone(), tx_index: TxIndex::MIN }, TxPointer { block_pointer: self.next(), tx_index: TxIndex::MIN })
+    }
+
+    fn next(&self) -> Self {
+        BlockPointer{ height: self.height + 1 }
     }
 }
 
 impl PK<UtxoPointer> for TxPointer {
     fn fk_range(&self) -> (UtxoPointer, UtxoPointer) {
-        (UtxoPointer { tx_pointer: self.clone(), utxo_index: UtxoIndex::MIN }, UtxoPointer { tx_pointer: self.clone(), utxo_index: UtxoIndex::MAX })
+        (UtxoPointer { tx_pointer: self.clone(), utxo_index: UtxoIndex::MIN }, UtxoPointer { tx_pointer: self.next(), utxo_index: UtxoIndex::MIN })
+    }
+
+    fn next(&self) -> Self {
+        TxPointer { block_pointer: self.block_pointer.clone(), tx_index: self.tx_index+1 }
     }
 }
 
 impl PK<AssetPointer> for UtxoPointer {
     fn fk_range(&self) -> (AssetPointer, AssetPointer) {
-        (
-            AssetPointer { utxo_pointer: self.clone(), asset_index: AssetIndex::MIN },
-            AssetPointer { utxo_pointer: self.clone(), asset_index: AssetIndex::MAX },
-        )
+        (AssetPointer { utxo_pointer: self.clone(), asset_index: AssetIndex::MIN }, AssetPointer { utxo_pointer: self.next(), asset_index: AssetIndex::MIN })
+    }
+
+    fn next(&self) -> Self {
+        UtxoPointer { tx_pointer: self.tx_pointer.clone(), utxo_index: self.utxo_index+1 }
     }
 }

@@ -1,9 +1,10 @@
+use std::collections::HashSet;
 use utxo::*;
 
 fn create_test_db() -> (Vec<Block>, redb::Database) {
     let random_number = rand::random::<u32>();
     let db = redb::Database::create(std::env::temp_dir().join(format!("test_db_{}.redb", random_number))).unwrap();
-    let blocks = get_blocks(3, 3, 3, 3);
+    let blocks = get_blocks(4, 4, 4, 4);
     blocks.iter().for_each(|block| Block::store_and_commit(&db, &block).expect("Failed to persist blocks"));
     (blocks, db)
 }
@@ -45,6 +46,29 @@ fn it_should_delete_entity_by_unique_id() {
 }
 
 #[test]
+fn it_should_range_delete_entities() {
+    let (blocks, db) = create_test_db();
+    let first_block = blocks.first().unwrap();
+    let last_block = blocks.last().unwrap();
+    let write_tx = db.begin_write().unwrap();
+    Block::range_delete(&write_tx, &first_block.id, &last_block.id).expect("Failed to range delete by ID");
+    write_tx.commit().unwrap();
+
+    let read_tx = db.begin_read().unwrap();
+    let blocks_deleted = Block::all(&read_tx).expect("Failed to query all blocks").is_empty();
+    let block_headers_deleted = BlockHeader::all(&read_tx).expect("Failed to query all block headers").is_empty();
+    let block_txs_deleted = Transaction::all(&read_tx).expect("Failed to query all txs").is_empty();
+    let block_utxos_deleted = Utxo::all(&read_tx).expect("Failed to query all utxos").is_empty();
+    let block_assets_deleted = Asset::all(&read_tx).expect("Failed to query all assets").is_empty();
+
+    assert!(blocks_deleted);
+    assert!(block_headers_deleted);
+    assert!(block_txs_deleted);
+    assert!(block_utxos_deleted);
+    assert!(block_assets_deleted);
+}
+
+#[test]
 fn it_should_get_entities_by_index() {
     let (blocks, db) = create_test_db();
 
@@ -52,7 +76,7 @@ fn it_should_get_entities_by_index() {
     let transaction = blocks.first().unwrap().transactions.first().unwrap();
 
     let found_by_hash = Transaction::get_by_hash(&read_tx, &transaction.hash).expect("Failed to query by hash");
-    assert_eq!(found_by_hash.len(), 3);
+    assert_eq!(found_by_hash.len(), 4);
     assert!(found_by_hash.iter().any(|tx| tx.id == transaction.id));
     assert!(found_by_hash.iter().any(|tx| tx.id == transaction.id));
 }
@@ -65,7 +89,7 @@ fn it_should_get_entities_by_index_with_dict() {
     let utxo = blocks.first().unwrap().transactions.first().unwrap().utxos.first().unwrap();
 
     let found_by_address = Utxo::get_by_address(&read_tx, &utxo.address).expect("Failed to query by address");
-    assert_eq!(found_by_address.len(), 27);
+    assert_eq!(found_by_address.len(), 64);
     assert!(found_by_address.iter().any(|tx| tx.id == utxo.id));
     assert!(found_by_address.iter().any(|tx| tx.id == utxo.id));
 }
@@ -77,12 +101,13 @@ fn it_should_get_entities_by_range_on_index() {
     let read_tx = db.begin_read().unwrap();
 
     let from_timestamp = blocks[1].header.timestamp;
-    let to_timestamp = blocks[2].header.timestamp;
+    let until_timestamp = blocks[3].header.timestamp;
+    let expected_blocks: Vec<BlockHeader> = vec![blocks[1].header.clone(), blocks[2].header.clone()];
+    let unique_timestamps: HashSet<Timestamp> = BlockHeader::all(&read_tx).unwrap().iter().map(|h| h.timestamp).collect();
+    assert_eq!(unique_timestamps.len(), 4);
 
-    let found_by_timestamp_range = BlockHeader::range_by_timestamp(&read_tx, &from_timestamp, &to_timestamp).expect("Failed to range by timestamp");
-    let expected_blocks: Vec<BlockHeader> =
-        blocks.into_iter().map(|b| b.header).take_while(|b| b.timestamp >= from_timestamp && b.timestamp <= to_timestamp).collect();
-    assert_eq!(found_by_timestamp_range.len(), 3);
+    let found_by_timestamp_range = BlockHeader::range_by_timestamp(&read_tx, &from_timestamp, &until_timestamp).expect("Failed to range by timestamp");
+    assert_eq!(found_by_timestamp_range.len(), 2);
     assert_eq!(expected_blocks, found_by_timestamp_range);
 }
 
@@ -92,28 +117,27 @@ fn it_should_get_entities_by_range_on_pk() {
 
     let read_tx = db.begin_read().unwrap();
 
-    let all_expected_transactions: Vec<Transaction> = blocks.clone().into_iter().flat_map(|b| b.transactions).collect();
-    let all_expected_utxos: Vec<Utxo> = blocks.clone().into_iter().flat_map(|b| b.transactions).flat_map(|t| t.utxos).collect();
+    let block_pointer_1 = BlockPointer { height: 1 };
+    let block_pointer_2 = BlockPointer { height: 2 };
+    let block_pointer_3 = BlockPointer { height: 3 };
+    let actual_blocks = Block::range(&read_tx, &block_pointer_1, &block_pointer_3).expect("Failed to range by PK");
+    let expected_blocks: Vec<Block> = vec![blocks[1].clone(), blocks[2].clone()];
 
-    let expected_transactions: Vec<Transaction> =
-        all_expected_transactions.clone().into_iter().skip(1).take(all_expected_transactions.len() - 2).collect();
-    let expected_utxos: Vec<Utxo> = all_expected_utxos.clone().into_iter().skip(1).take(all_expected_utxos.len() - 2).collect();
+    assert_eq!(expected_blocks.len(), actual_blocks.len());
+    assert_eq!(actual_blocks[0].transactions.len(), 4);
+    assert_eq!(actual_blocks[1].transactions.len(), 4);
+    assert_eq!(expected_blocks, actual_blocks);
 
-    let found_tx_by_pk_range = Transaction::range(&read_tx, &expected_transactions.first().unwrap().id, &expected_transactions.last().unwrap().id)
-        .expect("Failed to range by pk");
-    let found_utxo_by_pk_range =
-        Utxo::range(&read_tx, &expected_utxos.first().unwrap().id, &expected_utxos.last().unwrap().id).expect("Failed to range by pk");
+    let tx_pointer_1 = TxPointer { block_pointer: block_pointer_1, tx_index: 1 };
+    let tx_pointer_2 = TxPointer { block_pointer: block_pointer_2, tx_index: 3 };
+    let actual_transactions = Transaction::range(&read_tx, &tx_pointer_1, &tx_pointer_2).expect("Failed to range by PK");
+    let mut expected_transactions: Vec<Transaction> = Vec::new();
+    expected_transactions.extend(blocks[1].transactions.clone().into_iter().filter(|t| t.id.tx_index >= 1));
+    expected_transactions.extend(blocks[2].transactions.clone().into_iter().filter(|t| t.id.tx_index < 3));
 
-    let all_transactions =
-        Transaction::range(&read_tx, &all_expected_transactions.first().unwrap().id, &all_expected_transactions.last().unwrap().id)
-            .expect("Failed to range by pk");
-    let all_utxos =
-        Utxo::range(&read_tx, &all_expected_utxos.first().unwrap().id, &all_expected_utxos.last().unwrap().id).expect("Failed to range by pk");
-
-    assert_eq!(expected_utxos, found_utxo_by_pk_range);
-    assert_eq!(all_expected_utxos, all_utxos);
-    assert_eq!(all_expected_transactions, all_transactions);
-    assert_eq!(expected_transactions, found_tx_by_pk_range);
+    assert_eq!(expected_transactions.len(), actual_transactions.len());
+    assert_eq!(expected_transactions, actual_transactions);
+    assert!(actual_transactions.iter().all(|t| t.utxos.len() == 4));
 }
 
 #[test]

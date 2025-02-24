@@ -58,8 +58,7 @@ impl RelationshipMacros {
                     };
                     delete_statement = quote! {
                         let (from, to) = pk.fk_range();
-                        #child_type::delete(&write_tx, &from)?; //TODO range it !
-                        #child_type::delete(&write_tx, &to)?;
+                        #child_type::range_delete(&write_tx, &from, &to)?;
                     };
                     let query_fn_name = format_ident!("get_{}", field_name);
                     query_function = (

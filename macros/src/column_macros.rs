@@ -124,10 +124,10 @@ impl ColumnMacros {
                     pub fn #range_fn_name(
                         read_tx: &::redb::ReadTransaction,
                         from: &#column_type,
-                        to: &#column_type
+                        until: &#column_type
                     ) -> Result<Vec<#struct_name>, DbEngineError> {
                         let mm_table = read_tx.open_multimap_table(#index_table_ident)?;
-                        let range_iter = mm_table.range(from.clone()..=to.clone())?;
+                        let range_iter = mm_table.range(from.clone()..until.clone())?;
                         let mut results = Vec::new();
                         for entry_res in range_iter {
                             let (col_key, mut multi_iter) = entry_res?;

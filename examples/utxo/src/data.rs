@@ -35,7 +35,7 @@ pub fn get_blocks(block_count: Height, tx_count: TxIndex, utxo_count: UtxoIndex,
 
             Block {
                 id: block_id.clone(),
-                header: BlockHeader { id: block_id, hash: block_hash.clone(), timestamp: timestamp + 1, merkle_root: merkle_root.clone(), nonce: 0 },
+                header: BlockHeader { id: block_id, hash: block_hash.clone(), timestamp: timestamp + u64::from(height), merkle_root: merkle_root.clone(), nonce: 0 },
                 transactions,
             }
         })
