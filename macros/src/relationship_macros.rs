@@ -53,12 +53,14 @@ impl RelationshipMacros {
                     };
                     store_statement = quote! {
                         for child in &instance.#field_name {
-                            #child_type::store(&write_tx, child)?;
+                            #child_type::store(&write_tx, child)?
                         }
                     };
                     delete_statement = quote! {
                         let (from, to) = pk.fk_range();
-                        #child_type::range_delete(&write_tx, &from, &to)?;
+                        for child_pk in #child_type::pk_range(&write_tx, &from, &to)? {
+                            #child_type::delete(&write_tx, &child_pk)?
+                        }
                     };
                     let query_fn_name = format_ident!("get_{}", field_name);
                     query_function = (

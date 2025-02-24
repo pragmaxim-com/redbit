@@ -2,14 +2,16 @@ use utxo::*;
 
 fn demo() -> Result<(), DbEngineError> {
     let db = redb::Database::create(std::env::temp_dir().join("my_db.redb"))?;
-    let blocks = get_blocks(5, 5, 5, 5);
+    let blocks = get_blocks(10, 5, 5, 5);
 
+    println!("Persisting blocks:");
     for block in blocks.iter() {
         Block::store_and_commit(&db, block)?
     }
 
     let read_tx = db.begin_read()?;
 
+    println!("Querying blocks:");
     let first_block = Block::first(&read_tx)?.unwrap();
     let last_block = Block::last(&read_tx)?.unwrap();
 
@@ -19,6 +21,7 @@ fn demo() -> Result<(), DbEngineError> {
     Block::get_transactions(&read_tx, &first_block.id)?;
     Block::get_header(&read_tx, &first_block.id)?;
 
+    println!("Querying block headers:");
     let first_block_header = BlockHeader::first(&read_tx)?.unwrap();
     let last_block_header = BlockHeader::last(&read_tx)?.unwrap();
 
@@ -30,6 +33,7 @@ fn demo() -> Result<(), DbEngineError> {
     BlockHeader::get_by_timestamp(&read_tx, &first_block_header.timestamp)?;
     BlockHeader::get_by_merkle_root(&read_tx, &first_block_header.merkle_root)?;
 
+    println!("Querying transactions:");
     let first_transaction = Transaction::first(&read_tx)?.unwrap();
     let last_transaction = Transaction::last(&read_tx)?.unwrap();
 
@@ -39,6 +43,7 @@ fn demo() -> Result<(), DbEngineError> {
     Transaction::range(&read_tx, &first_transaction.id, &last_transaction.id)?;
     Transaction::get_utxos(&read_tx, &first_transaction.id)?;
 
+    println!("Querying utxos:");
     let first_utxo = Utxo::first(&read_tx)?.unwrap();
     let last_utxo = Utxo::last(&read_tx)?.unwrap();
 
@@ -49,6 +54,7 @@ fn demo() -> Result<(), DbEngineError> {
     Utxo::range(&read_tx, &first_utxo.id, &last_utxo.id)?;
     Utxo::get_assets(&read_tx, &first_utxo.id)?;
 
+    println!("Querying assets:");
     let first_asset = Asset::first(&read_tx)?.unwrap();
     let last_asset = Asset::last(&read_tx)?.unwrap();
 
@@ -58,6 +64,7 @@ fn demo() -> Result<(), DbEngineError> {
     Asset::get_by_policy_id(&read_tx, &first_asset.policy_id)?;
     Asset::range(&read_tx, &first_asset.id, &last_asset.id)?;
 
+    println!("Deleting blocks:");
     for block in blocks.iter() {
         Block::delete_and_commit(&db, &block.id)?
     }

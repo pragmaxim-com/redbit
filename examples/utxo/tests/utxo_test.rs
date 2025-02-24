@@ -46,29 +46,6 @@ fn it_should_delete_entity_by_unique_id() {
 }
 
 #[test]
-fn it_should_range_delete_entities() {
-    let (blocks, db) = create_test_db();
-    let first_block = blocks.first().unwrap();
-    let last_block = blocks.last().unwrap();
-    let write_tx = db.begin_write().unwrap();
-    Block::range_delete(&write_tx, &first_block.id, &last_block.id).expect("Failed to range delete by ID");
-    write_tx.commit().unwrap();
-
-    let read_tx = db.begin_read().unwrap();
-    let blocks_deleted = Block::all(&read_tx).expect("Failed to query all blocks").is_empty();
-    let block_headers_deleted = BlockHeader::all(&read_tx).expect("Failed to query all block headers").is_empty();
-    let block_txs_deleted = Transaction::all(&read_tx).expect("Failed to query all txs").is_empty();
-    let block_utxos_deleted = Utxo::all(&read_tx).expect("Failed to query all utxos").is_empty();
-    let block_assets_deleted = Asset::all(&read_tx).expect("Failed to query all assets").is_empty();
-
-    assert!(blocks_deleted);
-    assert!(block_headers_deleted);
-    assert!(block_txs_deleted);
-    assert!(block_utxos_deleted);
-    assert!(block_assets_deleted);
-}
-
-#[test]
 fn it_should_get_entities_by_index() {
     let (blocks, db) = create_test_db();
 

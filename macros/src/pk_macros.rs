@@ -32,24 +32,6 @@ impl PkMacros {
         };
 
         let mut functions: Vec<(String, TokenStream)> = Vec::new();
-        let range_delete_fn_name = format_ident!("range_delete");
-        functions.push((range_delete_fn_name.to_string(), quote! {
-            pub fn #range_delete_fn_name(write_tx: &::redb::WriteTransaction, from: &#pk_type, to: &#pk_type) -> Result<Vec<#pk_type>, DbEngineError> {
-                let mut table = write_tx.open_table(#table_ident)?;
-                let range = from.clone()..=to.clone();
-                let mut iter = table.range(range)?;
-                let mut pks_to_delete = Vec::new();
-                while let Some(entry_res) = iter.next() {
-                    let pk = entry_res?.0.value();
-                    pks_to_delete.push(pk.clone());
-                }
-                for pk in pks_to_delete.iter() {
-                    table.remove(pk)?;
-                }
-                Ok(pks_to_delete)
-            }
-        }));
-
         let get_fn_name = format_ident!("get");
         functions.push((
             get_fn_name.to_string(),
@@ -121,6 +103,20 @@ impl PkMacros {
                     while let Some(entry_res) = iter.next() {
                         let pk = entry_res?.0.value();
                         results.push(Self::compose(&read_tx, &pk)?);
+                    }
+                    Ok(results)
+                }
+            }));
+            let pk_range_fn_name = format_ident!("pk_range");
+            functions.push((pk_range_fn_name.to_string(), quote! {
+                fn #pk_range_fn_name(write_tx: &::redb::WriteTransaction, from: &#pk_type, until: &#pk_type) -> Result<Vec<#pk_type>, DbEngineError> {
+                    let table = write_tx.open_table(#table_ident)?;
+                    let range = from.clone()..until.clone();
+                    let mut iter = table.range(range)?;
+                    let mut results = Vec::new();
+                    while let Some(entry_res) = iter.next() {
+                        let pk = entry_res?.0.value();
+                        results.push(pk);
                     }
                     Ok(results)
                 }
