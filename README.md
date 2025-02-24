@@ -1,11 +1,17 @@
 Redbit reads struct annotations and derives code necessary for persisting and querying structured data into/from redb
 using secondary indexes and dictionaries, let's say we want to persist Utxo into Redb using Redbit :
 
-### ✅ **Major Out-of-the-Box Features**
+### Main motivations
+- ✅ Achieving more advanced querying capabilities with embedded KV stores is non-trivial  
+- ✅ Absence of any existing abstraction layer for structured data  
+- ✅ Handwriting custom codecs on byte-level is tedious and painful
 
-- ✅ **Querying and ranging by secondary index**
-- ✅ **Optional dictionaries for low cardinality fields**
-- ✅ **One-to-One and One-to-Many entities with cascade read/write/delete**
+### Major Out-of-the-Box Features
+
+- ✅ Querying and ranging by secondary index
+- ✅ Optional dictionaries for low cardinality fields
+- ✅ One-to-One and One-to-Many entities with cascade read/write/delete
+- ✅ All goodies including intuitive data ordering without writing custom codecs
 
 Declare annotated Struct `examples/utxo/src/lib.rs`:
 
