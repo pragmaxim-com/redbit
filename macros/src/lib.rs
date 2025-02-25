@@ -6,8 +6,8 @@ mod pk_macros;
 mod relationship_macros;
 
 use crate::entity_macros::EntityMacros;
-use syn::{parse_macro_input, DeriveInput};
 use crate::pk_macros::{PkMacros, PointerType};
+use syn::{parse_macro_input, DeriveInput};
 
 #[proc_macro_derive(PK, attributes(parent))]
 pub fn derive_pk(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -24,11 +24,10 @@ pub fn derive_pk(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         Err(e) => return e.to_compile_error().into(),
     };
 
-    let impls = match pointer_type {
-        PointerType::Root => PkMacros::generate_root_impls(struct_name, index_field),
-        PointerType::Child => PkMacros::generate_child_impls(struct_name, parent_field.unwrap(), index_field),
-    };
-    impls.into()
+    match pointer_type {
+        PointerType::Root => PkMacros::generate_root_impls(struct_name, index_field).into(),
+        PointerType::Child => PkMacros::generate_child_impls(struct_name, parent_field.unwrap(), index_field).into(),
+    }
 }
 
 #[proc_macro_derive(Entity, attributes(pk, column, one2many, one2one))]
