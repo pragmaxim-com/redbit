@@ -7,6 +7,7 @@ pub struct RelationshipMacros {
     pub store_statement: TokenStream,
     pub store_many_statement: TokenStream,
     pub delete_statement: TokenStream,
+    pub delete_many_statement: TokenStream,
     pub query_function: (String, TokenStream),
 }
 
@@ -21,6 +22,7 @@ impl RelationshipMacros {
             let store_statement: TokenStream;
             let store_many_statement: TokenStream;
             let delete_statement: TokenStream;
+            let delete_many_statement: TokenStream;
             let query_function: (String, TokenStream);
             match rel.multiplicity {
                 Multiplicity::OneToOne => {
@@ -39,6 +41,9 @@ impl RelationshipMacros {
                     };
                     delete_statement = quote! {
                         #child_type::delete(&write_tx, pk)?;
+                    };
+                    delete_many_statement = quote! {
+                        #child_type::delete_many(&write_tx, pks)?;
                     };
                     let query_fn_name = format_ident!("get_{}", field_name);
                     query_function = (
@@ -69,9 +74,17 @@ impl RelationshipMacros {
                     };
                     delete_statement = quote! {
                         let (from, to) = pk.fk_range();
-                        for child_pk in #child_type::pk_range(&write_tx, &from, &to)? {
-                            #child_type::delete(&write_tx, &child_pk)?
+                        let child_pks = #child_type::pk_range(&write_tx, &from, &to)?;
+                        #child_type::delete_many(&write_tx, &child_pks)?;
+                    };
+                    delete_many_statement = quote! {
+                        let mut children = Vec::new();
+                        for pk in pks.iter() {
+                            let (from, to) = pk.fk_range();
+                            let child_pks = #child_type::pk_range(&write_tx, &from, &to)?;
+                            children.extend_from_slice(&child_pks);
                         }
+                        #child_type::delete_many(&write_tx, &children)?;
                     };
                     let query_fn_name = format_ident!("get_{}", field_name);
                     query_function = (
@@ -85,7 +98,7 @@ impl RelationshipMacros {
                     );
                 }
             }
-            relationship_macros.push((rel, RelationshipMacros { struct_initializer, store_statement, store_many_statement, delete_statement, query_function }))
+            relationship_macros.push((rel, RelationshipMacros { struct_initializer, store_statement, store_many_statement, delete_statement, delete_many_statement, query_function }))
         }
         relationship_macros
     }

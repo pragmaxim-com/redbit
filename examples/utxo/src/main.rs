@@ -4,7 +4,7 @@ use utxo::*;
 
 fn demo() -> Result<(), DbEngineError> {
     let db = redb::Database::create(std::env::temp_dir().join("my_db.redb"))?;
-    let blocks = get_blocks(10, 5, 5, 5);
+    let blocks = get_blocks(10, 10, 20, 3);
 
     println!("Persisting blocks:");
     for block in blocks.iter() {

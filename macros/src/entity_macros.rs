@@ -96,12 +96,14 @@ impl EntityMacros {
         let pk_store_statement = pk_column_macros.store_statement.clone();
         let pk_store_many_statement = pk_column_macros.store_many_statement.clone();
         let pk_delete_statement = pk_column_macros.delete_statement.clone();
+        let pk_delete_many_statement = pk_column_macros.delete_many_statement.clone();
 
         let mut table_definitions = Vec::new();
         let mut store_statements = Vec::new();
         let mut store_many_statements = Vec::new();
         let mut struct_initializers = Vec::new();
         let mut delete_statements = Vec::new();
+        let mut delete_many_statements = Vec::new();
         let mut functions = Vec::new();
         functions.extend(pk_column_macros.functions.clone());
 
@@ -112,6 +114,7 @@ impl EntityMacros {
             struct_initializers.push(macros.struct_initializer.clone());
             functions.extend(macros.functions.clone());
             delete_statements.push(macros.delete_statement.clone());
+            delete_many_statements.push(macros.delete_many_statement.clone());
         }
 
         for (_, macros) in &self.relationships {
@@ -120,6 +123,7 @@ impl EntityMacros {
             struct_initializers.push(macros.struct_initializer.clone());
             functions.push(macros.query_function.clone());
             delete_statements.push(macros.delete_statement.clone());
+            delete_many_statements.push(macros.delete_many_statement.clone());
         }
         let function_macros: Vec<TokenStream> = functions.into_iter().map(|f| f.1).collect::<Vec<_>>();
         let expanded = quote! {
@@ -139,6 +143,12 @@ impl EntityMacros {
                 pub fn delete(write_tx: &::redb::WriteTransaction, pk: &#pk_type) -> Result<(), DbEngineError> {
                     #pk_delete_statement
                     #(#delete_statements)*
+                    Ok(())
+                }
+
+                pub fn delete_many(write_tx: &::redb::WriteTransaction, pks: &Vec<#pk_type>) -> Result<(), DbEngineError> {
+                    #pk_delete_many_statement
+                    #(#delete_many_statements)*
                     Ok(())
                 }
 

@@ -13,6 +13,7 @@ pub struct PkMacros {
     pub store_statement: TokenStream,
     pub store_many_statement: TokenStream,
     pub delete_statement: TokenStream,
+    pub delete_many_statement: TokenStream,
     pub functions: Vec<(String, TokenStream)>,
 }
 
@@ -43,6 +44,13 @@ impl PkMacros {
             let mut table = write_tx.open_table(#table_ident)?;
             let value = table.remove(pk)?;
             value.map(|g| g.value());
+        };
+
+        let delete_many_statement = quote! {
+            let mut table = write_tx.open_table(#table_ident)?;
+            for pk in pks.iter() {
+                table.remove(pk)?;
+            }
         };
 
         let mut functions: Vec<(String, TokenStream)> = Vec::new();
@@ -137,7 +145,7 @@ impl PkMacros {
             }))
         };
 
-        PkMacros { table_definition, store_statement, store_many_statement, delete_statement, functions }
+        PkMacros { table_definition, store_statement, store_many_statement, delete_statement, delete_many_statement, functions }
     }
 
     /// Determines whether a struct is a `Root` or `Child` based on `#[parent]` attributes.
