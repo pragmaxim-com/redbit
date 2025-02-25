@@ -51,10 +51,12 @@ impl EntityMacros {
         let pk_type = pk_column.field.tpe.clone();
         let pk_table_definition = pk_column_macros.table_definition.clone();
         let pk_store_statement = pk_column_macros.store_statement.clone();
+        let pk_store_many_statement = pk_column_macros.store_many_statement.clone();
         let pk_delete_statement = pk_column_macros.delete_statement.clone();
 
         let mut table_definitions = Vec::new();
         let mut store_statements = Vec::new();
+        let mut store_many_statements = Vec::new();
         let mut struct_initializers = Vec::new();
         let mut delete_statements = Vec::new();
         let mut functions = Vec::new();
@@ -63,6 +65,7 @@ impl EntityMacros {
         for (_, macros) in &self.columns {
             table_definitions.extend(macros.table_definitions.clone());
             store_statements.push(macros.store_statement.clone());
+            store_many_statements.push(macros.store_many_statement.clone());
             struct_initializers.push(macros.struct_initializer.clone());
             functions.extend(macros.functions.clone());
             delete_statements.push(macros.delete_statement.clone());
@@ -70,6 +73,7 @@ impl EntityMacros {
 
         for (_, macros) in &self.relationships {
             store_statements.push(macros.store_statement.clone());
+            store_many_statements.push(macros.store_many_statement.clone());
             struct_initializers.push(macros.struct_initializer.clone());
             functions.push(macros.query_function.clone());
             delete_statements.push(macros.delete_statement.clone());
@@ -102,6 +106,12 @@ impl EntityMacros {
                         #(#delete_statements)*
                     }
                     write_tx.commit()?;
+                    Ok(())
+                }
+
+                pub fn store_many(write_tx: &::redb::WriteTransaction, instances: &Vec<#struct_ident>) -> Result<(), DbEngineError> {
+                    #pk_store_many_statement
+                    #(#store_many_statements)*
                     Ok(())
                 }
 

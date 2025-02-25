@@ -5,6 +5,7 @@ use quote::{format_ident, quote};
 pub struct PkMacros {
     pub table_definition: TokenStream,
     pub store_statement: TokenStream,
+    pub store_many_statement: TokenStream,
     pub delete_statement: TokenStream,
     pub functions: Vec<(String, TokenStream)>,
 }
@@ -23,6 +24,13 @@ impl PkMacros {
         let store_statement = quote! {
             let mut table = write_tx.open_table(#table_ident)?;
             table.insert(&instance.#pk_name, ())?;
+        };
+
+        let store_many_statement = quote! {
+            let mut table = write_tx.open_table(#table_ident)?;
+            for instance in instances.iter() {
+                table.insert(&instance.#pk_name, ())?;
+            };
         };
 
         let delete_statement = quote! {
@@ -123,6 +131,6 @@ impl PkMacros {
             }))
         };
 
-        PkMacros { table_definition, store_statement, delete_statement, functions }
+        PkMacros { table_definition, store_statement, store_many_statement, delete_statement, functions }
     }
 }

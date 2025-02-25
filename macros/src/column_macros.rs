@@ -5,6 +5,7 @@ use syn::Type;
 pub struct ColumnMacros {
     pub table_definitions: Vec<TokenStream>,
     pub store_statement: TokenStream,
+    pub store_many_statement: TokenStream,
     pub delete_statement: TokenStream,
     pub struct_initializer: TokenStream,
     pub functions: Vec<(String, TokenStream)>,
@@ -29,6 +30,12 @@ impl ColumnMacros {
             let mut table = write_tx.open_table(#table_ident)?;
             table.insert(&instance.#pk_name, &instance.#column_name)?;
         };
+        let store_many_statement = quote! {
+            let mut table = write_tx.open_table(#table_ident)?;
+            for instance in instances.iter() {
+                table.insert(&instance.#pk_name, &instance.#column_name)?;
+            }
+        };
         let delete_statement = quote! {
             let mut table = write_tx.open_table(#table_ident)?;
             let value = table.remove(pk)?;
@@ -41,7 +48,7 @@ impl ColumnMacros {
                 guard.unwrap().value()
             }
         };
-        ColumnMacros { table_definitions, store_statement, delete_statement, struct_initializer, functions: vec![] }
+        ColumnMacros { table_definitions, store_statement, store_many_statement, delete_statement, struct_initializer, functions: vec![] }
     }
 
     pub fn indexed(struct_name: &Ident, pk_name: &Ident, pk_type: &Type, column_name: &Ident, column_type: &Type, range: bool) -> ColumnMacros {
@@ -72,6 +79,14 @@ impl ColumnMacros {
 
             let mut mm = write_tx.open_multimap_table(#index_table_ident)?;
             mm.insert(&instance.#column_name, &instance.#pk_name)?;
+        };
+        let store_many_statement = quote! {
+            let mut table = write_tx.open_table(#table_ident)?;
+            let mut mm = write_tx.open_multimap_table(#index_table_ident)?;
+            for instance in instances.iter() {
+                table.insert(&instance.#pk_name, &instance.#column_name)?;
+                mm.insert(&instance.#column_name, &instance.#pk_name)?;
+            };
         };
         let delete_statement = quote! {
             let mut table = write_tx.open_table(#table_ident)?;
@@ -148,7 +163,7 @@ impl ColumnMacros {
                 },
             ))
         };
-        ColumnMacros { table_definitions, store_statement, delete_statement, struct_initializer, functions }
+        ColumnMacros { table_definitions, store_statement, store_many_statement, delete_statement, struct_initializer, functions }
     }
 
     pub fn indexed_with_dict(struct_name: &Ident, pk_name: &Ident, pk_type: &Type, column_name: &Ident, column_type: &Type) -> ColumnMacros {
@@ -211,6 +226,31 @@ impl ColumnMacros {
             dict_pk_by_pk.insert(&instance.#pk_name, &birth_id)?;
             dict_index.insert(&birth_id, &instance.#pk_name)?;
         };
+        let store_many_statement = quote! {
+            let mut dict_pk_by_pk       = write_tx.open_table(#table_dict_pk_by_pk_ident)?;
+            let mut value_to_dict_pk    = write_tx.open_table(#table_value_to_dict_pk_ident)?;
+            let mut value_by_dict_pk    = write_tx.open_table(#table_value_by_dict_pk_ident)?;
+            let mut dict_index          = write_tx.open_multimap_table(#table_dict_index_ident)?;
+
+            for instance in instances.iter() {
+                 let (birth_id, newly_created) = {
+                    if let Some(guard) = value_to_dict_pk.get(&instance.#column_name)? {
+                        (guard.value().clone(), false)
+                    } else {
+                        let new_birth = instance.#pk_name.clone();
+                        (new_birth, true)
+                    }
+                };
+
+                if newly_created {
+                    value_to_dict_pk.insert(&instance.#column_name, &birth_id)?;
+                    value_by_dict_pk.insert(&birth_id, &instance.#column_name)?;
+                }
+
+                dict_pk_by_pk.insert(&instance.#pk_name, &birth_id)?;
+                dict_index.insert(&birth_id, &instance.#pk_name)?;
+            }
+        };
         let delete_statement = quote! {
             let mut dict_pk_by_pk       = write_tx.open_table(#table_dict_pk_by_pk_ident)?;
             let mut value_to_dict_pk    = write_tx.open_table(#table_value_to_dict_pk_ident)?;
@@ -272,6 +312,6 @@ impl ColumnMacros {
                 }
             },
         ));
-        ColumnMacros { table_definitions, store_statement, delete_statement, struct_initializer, functions }
+        ColumnMacros { table_definitions, store_statement, store_many_statement, delete_statement, struct_initializer, functions }
     }
 }

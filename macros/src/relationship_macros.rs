@@ -5,6 +5,7 @@ use quote::{format_ident, quote};
 pub struct RelationshipMacros {
     pub struct_initializer: TokenStream,
     pub store_statement: TokenStream,
+    pub store_many_statement: TokenStream,
     pub delete_statement: TokenStream,
     pub query_function: (String, TokenStream),
 }
@@ -18,6 +19,7 @@ impl RelationshipMacros {
             let child_type = &rel.field.tpe; // e.g., the type `Transaction` from Vec<Transaction>
             let struct_initializer: TokenStream;
             let store_statement: TokenStream;
+            let store_many_statement: TokenStream;
             let delete_statement: TokenStream;
             let query_function: (String, TokenStream);
             match rel.multiplicity {
@@ -30,6 +32,10 @@ impl RelationshipMacros {
                     store_statement = quote! {
                         let child = &instance.#field_name;
                         #child_type::store(&write_tx, child)?;
+                    };
+                    store_many_statement = quote! {
+                        let children = instances.iter().map(|instance| instance.#field_name.clone()).collect();
+                        #child_type::store_many(&write_tx, &children)?;
                     };
                     delete_statement = quote! {
                         #child_type::delete(&write_tx, pk)?;
@@ -52,9 +58,14 @@ impl RelationshipMacros {
                         }
                     };
                     store_statement = quote! {
-                        for child in &instance.#field_name {
-                            #child_type::store(&write_tx, child)?
-                        }
+                        #child_type::store_many(&write_tx, &instance.#field_name)?;
+                    };
+                    store_many_statement = quote! {
+                        let mut children: Vec<#child_type> = Vec::new();
+                        for instance in instances.iter() {
+                            children.extend_from_slice(&instance.#field_name)
+                        };
+                        #child_type::store_many(&write_tx, &children)?;
                     };
                     delete_statement = quote! {
                         let (from, to) = pk.fk_range();
@@ -74,7 +85,7 @@ impl RelationshipMacros {
                     );
                 }
             }
-            relationship_macros.push((rel, RelationshipMacros { struct_initializer, store_statement, delete_statement, query_function }))
+            relationship_macros.push((rel, RelationshipMacros { struct_initializer, store_statement, store_many_statement, delete_statement, query_function }))
         }
         relationship_macros
     }

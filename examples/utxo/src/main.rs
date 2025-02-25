@@ -1,3 +1,5 @@
+use std::fs::File;
+use pprof::ProfilerGuard;
 use utxo::*;
 
 fn demo() -> Result<(), DbEngineError> {
@@ -72,5 +74,12 @@ fn demo() -> Result<(), DbEngineError> {
 }
 
 fn main() {
-    demo().unwrap()
+    let guard = ProfilerGuard::new(100).unwrap();
+    demo().unwrap();
+    if let Ok(report) = guard.report().build() {
+        let mut file = File::create(std::env::temp_dir().join("flamegraph.svg")).unwrap();
+        report.flamegraph(&mut file).unwrap();
+        println!("Flamegraph written to flamegraph.svg");
+    }
+
 }
