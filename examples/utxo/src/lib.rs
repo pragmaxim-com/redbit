@@ -8,6 +8,7 @@ use std::fmt::Debug;
 
 pub type Amount = u64;
 pub type Timestamp = u64;
+pub type Nonce = u32;
 pub type Height = u32;
 pub type TxIndex = u16;
 pub type UtxoIndex = u16;
@@ -39,7 +40,7 @@ pub struct BlockHeader {
     #[column(index)]
     pub merkle_root: Hash,
     #[column]
-    pub nonce: u32,
+    pub nonce: Nonce,
 }
 
 #[derive(Entity, Debug, Clone, PartialEq, Eq)]
@@ -78,55 +79,28 @@ pub struct Asset {
     pub policy_id: PolicyId,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(PK, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct BlockPointer {
     pub height: Height,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(PK, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TxPointer {
+    #[parent]
     pub block_pointer: BlockPointer,
     pub tx_index: TxIndex,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(PK, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct UtxoPointer {
+    #[parent]
     pub tx_pointer: TxPointer,
     pub utxo_index: UtxoIndex,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(PK, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AssetPointer {
+    #[parent]
     pub utxo_pointer: UtxoPointer,
     pub asset_index: AssetIndex,
-}
-
-impl PK<TxPointer> for BlockPointer {
-    fn fk_range(&self) -> (TxPointer, TxPointer) {
-        (TxPointer { block_pointer: self.clone(), tx_index: TxIndex::MIN }, TxPointer { block_pointer: self.next(), tx_index: TxIndex::MIN })
-    }
-
-    fn next(&self) -> Self {
-        BlockPointer{ height: self.height + 1 }
-    }
-}
-
-impl PK<UtxoPointer> for TxPointer {
-    fn fk_range(&self) -> (UtxoPointer, UtxoPointer) {
-        (UtxoPointer { tx_pointer: self.clone(), utxo_index: UtxoIndex::MIN }, UtxoPointer { tx_pointer: self.next(), utxo_index: UtxoIndex::MIN })
-    }
-
-    fn next(&self) -> Self {
-        TxPointer { block_pointer: self.block_pointer.clone(), tx_index: self.tx_index+1 }
-    }
-}
-
-impl PK<AssetPointer> for UtxoPointer {
-    fn fk_range(&self) -> (AssetPointer, AssetPointer) {
-        (AssetPointer { utxo_pointer: self.clone(), asset_index: AssetIndex::MIN }, AssetPointer { utxo_pointer: self.next(), asset_index: AssetIndex::MIN })
-    }
-
-    fn next(&self) -> Self {
-        UtxoPointer { tx_pointer: self.tx_pointer.clone(), utxo_index: self.utxo_index+1 }
-    }
 }

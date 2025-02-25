@@ -1,4 +1,5 @@
 pub use macros::Entity;
+pub use macros::PK;
 pub use redb::ReadableMultimapTable;
 pub use redb::ReadableTable;
 
@@ -9,13 +10,34 @@ use serde::{Deserialize, Serialize};
 use std::any::type_name;
 use std::cmp::Ordering;
 use std::fmt::Debug;
+use std::ops::Add;
 
-pub trait PK<FK>: Sized
-where
-    FK: PartialOrd + Clone + Ord,
-{
-    fn fk_range(&self) -> (FK, FK);
+pub trait IndexedPointer: Clone {
+    type Index: Copy + Ord + Add<Output = Self::Index> + Default;
+    fn index(&self) -> Self::Index;
     fn next(&self) -> Self;
+}
+
+pub trait RootPointer: IndexedPointer {}
+
+pub trait ChildPointer: IndexedPointer {
+    type Parent: IndexedPointer;
+    fn parent(&self) -> &Self::Parent;
+    fn from_parent(parent: Self::Parent) -> Self;
+}
+
+pub trait ForeignKey<T: ChildPointer> {
+    fn fk_range(&self) -> (T, T);
+}
+
+impl<T> ForeignKey<T> for T::Parent
+where
+    T: ChildPointer + Clone,
+    T::Parent: IndexedPointer + Clone,
+{
+    fn fk_range(&self) -> (T, T) {
+        (T::from_parent(self.clone()), T::from_parent(self.clone().next()))
+    }
 }
 
 #[derive(Debug)]

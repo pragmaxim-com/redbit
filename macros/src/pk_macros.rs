@@ -1,6 +1,12 @@
-use crate::Pk;
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
+use syn::{DeriveInput, Data, Fields, Attribute};
+use crate::entity_macros::{EntityMacros, Pk};
+
+pub enum PointerType {
+    Root,
+    Child,
+}
 
 pub struct PkMacros {
     pub table_definition: TokenStream,
@@ -132,5 +138,128 @@ impl PkMacros {
         };
 
         PkMacros { table_definition, store_statement, store_many_statement, delete_statement, functions }
+    }
+
+    /// Determines whether a struct is a `Root` or `Child` based on `#[parent]` attributes.
+    pub fn extract_pointer_type(input: &DeriveInput) -> Result<PointerType, syn::Error> {
+        let data_struct = match &input.data {
+            Data::Struct(data_struct) => data_struct,
+            _ => return Err(syn::Error::new_spanned(input, "Pk can only be derived for structs")),
+        };
+
+        let fields: Vec<_> = match &data_struct.fields {
+            Fields::Named(fields) => fields.named.iter().collect(),
+            _ => return Err(syn::Error::new_spanned(input, "Pk can only be used with named fields")),
+        };
+
+        if fields.iter().any(|f| Self::has_parent_attribute(&f.attrs)) {
+            Ok(PointerType::Child)
+        } else {
+            Ok(PointerType::Root)
+        }
+    }
+
+    /// Extracts and validates the required fields (parent & index) for root or child structs.
+    pub fn extract_fields(input: &DeriveInput, pointer_type: &PointerType) -> Result<(Option<syn::Field>, syn::Field), syn::Error> {
+        let data_struct = match input.data.clone() {
+            Data::Struct(data_struct) => data_struct,
+            _ => return Err(syn::Error::new_spanned(input, "Pk can only be derived for structs")),
+        };
+
+        let fields: Vec<_> = match data_struct.fields {
+            Fields::Named(fields) => fields.named.into_iter().collect(),
+            _ => return Err(syn::Error::new_spanned(input, "Pk can only be used with named fields")),
+        };
+
+        match pointer_type {
+            PointerType::Root => {
+                if fields.len() != 1 {
+                    return Err(syn::Error::new_spanned(input, "Root struct must have exactly one field"));
+                }
+                Ok((None, fields[0].clone())) // Root has only an index field
+            }
+            PointerType::Child => {
+                if fields.len() != 2 {
+                    return Err(syn::Error::new_spanned(input, "Child struct must have exactly two fields (parent and index)"));
+                }
+
+                let parent_field = fields.iter().find(|f| Self::has_parent_attribute(&f.attrs)).unwrap().clone();
+                let index_field = fields.iter().find(|f| !Self::has_parent_attribute(&f.attrs)).unwrap().clone();
+
+                Ok((Some(parent_field), index_field))
+            }
+        }
+    }
+
+    /// Generates trait implementations for **Root Pointers**.
+    pub fn generate_root_impls(struct_name: &Ident, index_field: syn::Field) -> TokenStream {
+        let index_type = &index_field.ty;
+        let index_name = &index_field.ident;
+
+        let expanded =
+            quote! {
+            impl IndexedPointer for #struct_name {
+                type Index = #index_type;
+
+                fn index(&self) -> Self::Index {
+                    self.#index_name
+                }
+
+                fn next(&self) -> Self {
+                    #struct_name { #index_name: self.#index_name + 1 }
+                }
+            }
+            impl RootPointer for #struct_name {}
+
+        };
+        EntityMacros::write_to_file(&expanded, "redbit_pk_macros.rs").unwrap();
+        expanded
+    }
+
+    /// Generates trait implementations for **Child Pointers**.
+    pub fn generate_child_impls(struct_name: &Ident, parent_field: syn::Field, index_field: syn::Field) -> TokenStream {
+        let parent_name = &parent_field.ident;
+        let parent_type = &parent_field.ty;
+        let index_name = &index_field.ident;
+        let index_type = &index_field.ty;
+        let expanded =
+            quote! {
+                impl IndexedPointer for #struct_name {
+                    type Index = #index_type;
+
+                    fn index(&self) -> Self::Index {
+                        self.#index_name
+                    }
+
+                    fn next(&self) -> Self {
+                        #struct_name {
+                            #parent_name: self.#parent_name.clone(),
+                            #index_name: self.#index_name + 1,
+                        }
+                    }
+                }
+                impl ChildPointer for #struct_name {
+                    type Parent = #parent_type;
+
+                    fn parent(&self) -> &Self::Parent {
+                        &self.#parent_name
+                    }
+
+                    fn from_parent(parent: Self::Parent) -> Self {
+                        #struct_name {
+                            #parent_name: parent,
+                            #index_name: <#index_type as Default>::default(),
+                        }
+                    }
+                }
+
+            };
+        EntityMacros::write_to_file(&expanded, "redbit_pk_macros.rs").unwrap();
+        expanded
+    }
+
+    /// Checks if a field has the `#[parent]` attribute.
+    fn has_parent_attribute(attrs: &[Attribute]) -> bool {
+        attrs.iter().any(|attr| attr.path().is_ident("parent"))
     }
 }

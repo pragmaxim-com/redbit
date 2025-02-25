@@ -1,6 +1,6 @@
-use crate::{Multiplicity, Pk, Relationship};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
+use crate::entity_macros::{Multiplicity, Pk, Relationship};
 
 pub struct RelationshipMacros {
     pub struct_initializer: TokenStream,
