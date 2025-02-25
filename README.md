@@ -13,7 +13,7 @@ using secondary indexes and dictionaries, let's say we want to persist Utxo into
 - ✅ One-to-One and One-to-Many entities with cascade read/write/delete
 - ✅ All goodies including intuitive data ordering without writing custom codecs
 
-Performance wise, check [flamegraph](https://raw.githubusercontent.com/pragmaxim-com/redbit/refs/heads/master/flamegraph.svg).
+Performance wise, check [flamegraph](https://rawcdn.githack.com/pragmaxim-com/redbit/refs/heads/master/flamegraph.svg).
 
 Declare annotated Struct `examples/utxo/src/lib.rs`:
 
