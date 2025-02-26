@@ -92,7 +92,7 @@ impl PkMacros {
             quote! {
                 pub fn #first_fn_name(read_tx: &::redb::ReadTransaction) -> Result<Option<#struct_name>, DbEngineError> {
                     let table = read_tx.open_table(#table_ident)?;
-                    if let Some((k, _)) = table.last()? {
+                    if let Some((k, _)) = table.first()? {
                         return Self::compose(&read_tx, &k.value()).map(Some);
                     }
                     Ok(None)

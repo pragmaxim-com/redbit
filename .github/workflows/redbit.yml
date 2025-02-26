@@ -60,13 +60,31 @@ jobs:
 
       - name: Run Criterion Benchmarks
         run: |
-          cargo bench --package utxo --bench utxo | tee bench_results.txt
-          jq '.mean | {estimate, unit}' target/criterion/*/base/estimates.json > summary.json || echo "{}" > summary.json
-
+          cargo bench --package utxo --bench utxo
+          echo "[" > summary.json
+          find target/criterion -path "*/base/estimates.json" -print0 | while IFS= read -r -d '' file; do
+            FUNCTION=$(basename $(dirname $(dirname "$file")))
+            
+            if [[ "$FUNCTION" == "criterion" ]]; then
+              continue
+            fi
+            
+            TIME_NS=$(jq -r '.mean.point_estimate' "$file")
+            
+            if [[ "$TIME_NS" != "null" && "$TIME_NS" != "0" ]]; then
+              OPS_PER_SEC=$(awk "BEGIN {print 1000000 / $TIME_NS}")
+              OPS_PER_SEC=$(awk "BEGIN {printf \"%.0f\", $OPS_PER_SEC}")
+            else
+              OPS_PER_SEC=0
+            fi
+            echo "{\"function\": \"$FUNCTION\", \"ops/ms\": $OPS_PER_SEC}," >> summary.json
+          done
+          sed -i '$ s/,$//' summary.json
+          echo "]" >> summary.json
       - name: Update README with Benchmark Results
         run: |
-          LIB_CONTENT=$(cat examples/utxo/src/lib.rs | sed 's/^/    /')  # Indent for markdown
-          MAIN_CONTENT=$(cat examples/utxo/src/main.rs | sed 's/^/    /')  # Indent for markdown
+          LIB_CONTENT=$(cat examples/utxo/src/lib.rs | sed 's/^/    /')
+          MAIN_CONTENT=$(cat examples/utxo/src/main.rs | sed 's/^/    /')
 
           awk -v lib_content="$LIB_CONTENT" -v main_content="$MAIN_CONTENT" '
             BEGIN { in_lib = 0; in_main = 0 }
@@ -78,7 +96,10 @@ jobs:
           ' README.md > README.md.tmp && mv README.md.tmp README.md
           echo "" >> README.md
           echo "### ⏱️ Benchmark Summary" >> README.md
+          echo "An operation on top of a block with 5 transactions each having 5 utxos each having 3 assets" >> README.md
+          echo "\`\`\`json" >> README.md
           cat summary.json >> README.md
+          echo "\`\`\`" >> README.md
 
       - name: Commit changes
         run: |

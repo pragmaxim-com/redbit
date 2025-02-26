@@ -165,4 +165,16 @@ fn it_should_override_entity() {
     assert_eq!(block, &loaded_block2);
 }
 
+#[test]
+fn it_should_get_first_and_last_entity() {
+    let (blocks, db) = create_test_db();
+
+    let read_tx = db.begin_read().unwrap();
+    let first_block = Block::first(&read_tx).expect("Failed to get first block").unwrap();
+    let last_block = Block::last(&read_tx).expect("Failed to get last block").unwrap();
+
+    assert_eq!(blocks.first().unwrap().id, first_block.id);
+    assert_eq!(blocks.last().unwrap().id, last_block.id);
+}
+
 
