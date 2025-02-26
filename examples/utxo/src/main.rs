@@ -1,10 +1,8 @@
-use std::fs::File;
-use pprof::ProfilerGuard;
 use utxo::*;
 
 fn demo() -> Result<(), DbEngineError> {
     let db = redb::Database::create(std::env::temp_dir().join("my_db.redb"))?;
-    let blocks = get_blocks(10, 10, 20, 3);
+    let blocks = get_blocks(4, 10, 10, 3);
 
     println!("Persisting blocks:");
     for block in blocks.iter() {
@@ -74,12 +72,5 @@ fn demo() -> Result<(), DbEngineError> {
 }
 
 fn main() {
-    let guard = ProfilerGuard::new(100).unwrap();
     demo().unwrap();
-    if let Ok(report) = guard.report().build() {
-        let mut file = File::create(std::env::temp_dir().join("flamegraph.svg")).unwrap();
-        report.flamegraph(&mut file).unwrap();
-        println!("Flamegraph written to flamegraph.svg");
-    }
-
 }

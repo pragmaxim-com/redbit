@@ -1,0 +1,89 @@
+name: Update README with Example Code
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    name: Run Cargo Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-
+
+      - name: Run tests
+        run: cargo test --package utxo
+
+  performance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: setup | rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust Binaries (flamegraph)
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: rust-binaries-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            rust-binaries-${{ runner.os }}-
+
+      - name: Run Criterion Benchmarks
+        run: |
+          cargo bench --bench my_benchmark | tee bench_results.txt
+          jq '.mean | {estimate, unit}' target/criterion/*/base/estimates.json > summary.json || echo "{}" > summary.json
+
+      - name: Update README with Benchmark Results
+        run: |
+          LIB_CONTENT=$(cat examples/utxo/src/lib.rs | sed 's/^/    /')  # Indent for markdown
+          MAIN_CONTENT=$(cat examples/utxo/src/main.rs | sed 's/^/    /')  # Indent for markdown
+
+          awk -v lib_content="$LIB_CONTENT" -v main_content="$MAIN_CONTENT" '
+            BEGIN { in_lib = 0; in_main = 0 }
+            /<!-- BEGIN_LIB -->/ { print; print "```rust"; print lib_content; print "```"; in_lib = 1; next }
+            /<!-- END_LIB -->/ { print; in_lib = 0; next }
+            /<!-- BEGIN_MAIN -->/ { print; print "```rust"; print main_content; print "```"; in_main = 1; next }
+            /<!-- END_MAIN -->/ { print; in_main = 0; next }
+            !in_lib && !in_main { print }
+          ' README.md > README.md.tmp && mv README.md.tmp README.md
+          echo "" >> README.md
+          echo "## 🔥 Performance Results" >> README.md
+          echo "" >> README.md
+          echo "### ⏱️ Benchmark Summary" >> README.md
+          cat summary.json >> README.md
+
+      - name: Commit changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions@users.noreply.github.com"
+          git diff --quiet || (git add README.md && git commit -m "Auto-update README with example code" && git push)

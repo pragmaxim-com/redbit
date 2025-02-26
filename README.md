@@ -14,6 +14,7 @@ using secondary indexes and dictionaries, let's say we want to persist Utxo into
 - ✅ All goodies including intuitive data ordering without writing custom codecs
 
 Performance wise, check [flamegraph](https://rawcdn.githack.com/pragmaxim-com/redbit/refs/heads/master/flamegraph.svg).
+Instances are persisted completely structured by fields which means Redbit has slower write performance but blazing fast reads.
 
 Declare annotated Struct `examples/utxo/src/lib.rs`:
 
