@@ -60,7 +60,7 @@ jobs:
 
       - name: Run Criterion Benchmarks
         run: |
-          cargo bench --bench my_benchmark | tee bench_results.txt
+          cargo bench --package utxo --bench utxo | tee bench_results.txt
           jq '.mean | {estimate, unit}' target/criterion/*/base/estimates.json > summary.json || echo "{}" > summary.json
 
       - name: Update README with Benchmark Results
@@ -76,8 +76,6 @@ jobs:
             /<!-- END_MAIN -->/ { print; in_main = 0; next }
             !in_lib && !in_main { print }
           ' README.md > README.md.tmp && mv README.md.tmp README.md
-          echo "" >> README.md
-          echo "## 🔥 Performance Results" >> README.md
           echo "" >> README.md
           echo "### ⏱️ Benchmark Summary" >> README.md
           cat summary.json >> README.md

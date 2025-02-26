@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use utxo::*;
 
 fn create_test_db() -> (Vec<Block>, redb::Database) {
-    let random_number = rand::random::<u32>();
+    let random_number = rand::random::<u64>();
     let db = redb::Database::create(std::env::temp_dir().join(format!("test_db_{}.redb", random_number))).unwrap();
     let blocks = get_blocks(4, 4, 4, 4);
     blocks.iter().for_each(|block| Block::store_and_commit(&db, &block).expect("Failed to persist blocks"));
@@ -148,3 +148,21 @@ fn it_should_get_related_one_to_one_entity() {
 
     assert_eq!(expected_header, header);
 }
+
+#[test]
+fn it_should_override_entity() {
+    let (blocks, db) = create_test_db();
+    let read_tx = db.begin_read().unwrap();
+    let block = blocks.first().unwrap();
+
+    let loaded_block = Block::get(&read_tx, &block.id).expect("Failed to get by ID").unwrap();
+
+    assert_eq!(block, &loaded_block);
+
+    Block::store_and_commit(&db, &block).expect("Failed to delete by ID");
+    let loaded_block2 = Block::get(&read_tx, &block.id).expect("Failed to get by ID").unwrap();
+
+    assert_eq!(block, &loaded_block2);
+}
+
+
