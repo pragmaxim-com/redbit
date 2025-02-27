@@ -61,7 +61,7 @@ jobs:
       - name: Run Criterion Benchmarks
         run: |
           cargo bench --package utxo --bench utxo
-          echo "function,ops/ms" > benchmarks.csv
+          echo "function,ops/s" > benchmarks.csv
           find target/criterion -path "*/base/estimates.json" -print0 | while IFS= read -r -d '' file; do
             FUNCTION=$(basename $(dirname $(dirname "$file")))
             if [[ "$FUNCTION" == "criterion" ]]; then
@@ -69,12 +69,12 @@ jobs:
             fi
             TIME_NS=$(jq -r '.mean.point_estimate' "$file")
             if [[ "$TIME_NS" != "null" && "$TIME_NS" != "0" ]]; then
-              OPS_PER_MS=$(awk "BEGIN {print (1000000000 / $TIME_NS) / 1000}") # Convert to ops/ms
-              OPS_PER_MS=$(awk "BEGIN {printf \"%.0f\", $OPS_PER_MS}") # Round to whole number
+              OPS_PER_MS=$(awk "BEGIN {print (1000000000 / $TIME_NS)}") # Convert to ops/s
+              OPS_PER_MS=$(awk "BEGIN {printf \"%.0f\", $OPS_PER_S}") # Round to whole number
             else
               OPS_PER_MS=0 # Prevent division by zero errors
             fi
-            echo "$FUNCTION,$OPS_PER_MS" >> benchmarks.csv
+            echo "$FUNCTION,$OPS_PER_S" >> benchmarks.csv
           done
       
           (head -n1 benchmarks.csv && tail -n +2 benchmarks.csv | sort -t, -k2 -n) > sorted_benchmarks.csv
@@ -94,7 +94,7 @@ jobs:
           ' README.md > README.md.tmp && mv README.md.tmp README.md
           echo "" >> README.md
           echo "### ⏱️ Benchmark Summary" >> README.md
-          echo "An operation on top of a 3 blocks of 5 transactions of 6 utxos of 3 assets" >> README.md
+          echo "An operation on top of a 3 blocks of 10 transactions of 20 utxos of 3 assets" >> README.md
           echo "\`\`\`csv" >> README.md
           cat benchmarks.csv >> README.md
           echo "\`\`\`" >> README.md

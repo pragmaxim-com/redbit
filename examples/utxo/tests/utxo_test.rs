@@ -176,5 +176,3 @@ fn it_should_get_first_and_last_entity() {
     assert_eq!(blocks.first().unwrap().id, first_block.id);
     assert_eq!(blocks.last().unwrap().id, last_block.id);
 }
-
-
