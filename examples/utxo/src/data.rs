@@ -16,15 +16,15 @@ pub fn get_blocks(block_count: Height, tx_count: TxIndex, utxo_count: UtxoIndex,
                                 .map(|asset_index| Asset {
                                     id: AssetPointer { utxo_pointer: UtxoPointer { tx_pointer: tx_id.clone(), utxo_index }, asset_index },
                                     amount: 999_999,
-                                    name: "low-medium cardinality".to_string(),
-                                    policy_id: "low cardinality".to_string(),
+                                    name: format!("medium cardinality_{}", tx_index),
+                                    policy_id: format!("low cardinality_{}", height),
                                 })
                                 .collect();
                             Utxo {
                                 id: UtxoPointer { tx_pointer: tx_id.clone(), utxo_index },
                                 amount: 999_999,
-                                datum: "high cardinality".to_string(),
-                                address: "low-medium cardinality".to_string(),
+                                datum: format!("high cardinality_{}", utxo_index),
+                                address: format!("medium cardinality_{}", tx_index),
                                 assets,
                             }
                         })

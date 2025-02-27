@@ -18,8 +18,7 @@ fn setup_db() -> Database {
 
 fn benchmark_blocks(c: &mut Criterion) {
     let db = setup_db();
-    let blocks = get_blocks(3, 5, 6, 3);
-    let block = blocks.first().unwrap();
+    let blocks = get_blocks(3, 4, 5, 3);
 
     let mut group = c.benchmark_group("Block");
     group.throughput(Throughput::Elements(1));
@@ -27,7 +26,9 @@ fn benchmark_blocks(c: &mut Criterion) {
     // Persist blocks
     group.bench_function("Block::store_and_commit", |b| {
         b.iter(|| {
-            Block::store_and_commit(&db, block).unwrap();
+            for block in blocks.iter() {
+                Block::store_and_commit(&db, block).unwrap();
+            }
         })
     });
 
