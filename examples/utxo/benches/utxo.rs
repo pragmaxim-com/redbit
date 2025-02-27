@@ -18,7 +18,7 @@ fn setup_db() -> Database {
 
 fn benchmark_blocks(c: &mut Criterion) {
     let db = setup_db();
-    let blocks = get_blocks(1, 5, 5, 3);
+    let blocks = get_blocks(3, 5, 6, 3);
     let block = blocks.first().unwrap();
 
     let mut group = c.benchmark_group("Block");
