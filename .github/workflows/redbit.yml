@@ -69,10 +69,10 @@ jobs:
             fi
             TIME_NS=$(jq -r '.mean.point_estimate' "$file")
             if [[ "$TIME_NS" != "null" && "$TIME_NS" != "0" ]]; then
-              OPS_PER_MS=$(awk "BEGIN {print (1000000000 / $TIME_NS)}") # Convert to ops/s
-              OPS_PER_MS=$(awk "BEGIN {printf \"%.0f\", $OPS_PER_S}") # Round to whole number
+              OPS_PER_S=$(awk "BEGIN {print 1000000000 / $TIME_NS}") # Convert to ops/s
+              OPS_PER_S=$(awk "BEGIN {printf \"%.0f\", $OPS_PER_S}") # Round to whole number
             else
-              OPS_PER_MS=0 # Prevent division by zero errors
+              OPS_PER_S=0 # Prevent division by zero errors
             fi
             echo "$FUNCTION,$OPS_PER_S" >> benchmarks.csv
           done

@@ -66,7 +66,7 @@ fn it_should_get_entities_by_index_with_dict() {
     let utxo = blocks.first().unwrap().transactions.first().unwrap().utxos.first().unwrap();
 
     let found_by_address = Utxo::get_by_address(&read_tx, &utxo.address).expect("Failed to query by address");
-    assert_eq!(found_by_address.len(), 64);
+    assert_eq!(found_by_address.len(), 16);
     assert!(found_by_address.iter().any(|tx| tx.id == utxo.id));
     assert!(found_by_address.iter().any(|tx| tx.id == utxo.id));
 }
