@@ -1,5 +1,5 @@
-Redbit reads struct annotations and derives code necessary for persisting and querying structured data into/from redb
-using secondary indexes and dictionaries, let's say we want to persist Utxo into Redb using Redbit :
+Redbit reads struct annotations and derives code necessary for persisting and querying structured data into/from 
+[Redb](https://github.com/cberner/redb) using secondary indexes and dictionaries.
 
 ### Main motivations
 - ✅ Achieving more advanced querying capabilities with embedded KV stores is non-trivial  
@@ -13,7 +13,7 @@ using secondary indexes and dictionaries, let's say we want to persist Utxo into
 - ✅ One-to-One and One-to-Many entities with cascade read/write/delete
 - ✅ All goodies including intuitive data ordering without writing custom codecs
 
-Declare annotated Struct `examples/utxo/src/lib.rs`:
+Let's say we want to persist Utxo into Redb using Redbit, declare annotated Struct `examples/utxo/src/lib.rs`:
 
 <!-- BEGIN_LIB -->
 ```rust
