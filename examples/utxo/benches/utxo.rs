@@ -126,6 +126,35 @@ fn benchmark_utxos(c: &mut Criterion) {
     group.bench_function("Utxo::get_assets", |b| {
         b.iter(|| Utxo::get_assets(&read_tx, &first.id).unwrap())
     });
+
+    group.bench_function("Utxo::get_by_datum", |b| {
+        b.iter(|| Utxo::get_by_datum(&read_tx, &first.datum).unwrap())
+    });
+
+    group.bench_function("Utxo::compose", |b| {
+        let utxo = first.clone(); // Assuming `first` is a valid UTXO
+        b.iter(|| Utxo::compose(utxo.clone()).unwrap())
+    });
+}
+
+fn benchmark_assets_optimized(c: &mut Criterion) {
+    let db = setup_db();
+    let read_tx = db.begin_read().unwrap();
+    let first = Asset::first(&read_tx).unwrap().unwrap();
+    let range = Asset::range(&read_tx, &first.id, &first.id + 10).unwrap().collect::<Vec<_>>(); // Assuming `first.id` is numeric and can be incremented
+
+    let mut group = c.benchmark_group("Asset_Optimized");
+    group.throughput(Throughput::Elements(range.len() as u64));
+
+    group.bench_function("Asset::range", |b| {
+        b.iter(|| Asset::range(&read_tx, &first.id, &first.id + 10).unwrap().collect::<Vec<_>>())
+    });
+
+    group.bench_function("Asset::compose", |b| {
+        let asset = range.first().unwrap().clone(); // Assuming `range` is not empty
+        b.iter(|| Asset::compose(asset.clone()).unwrap())
+    });
+}
 }
 
 fn benchmark_assets(c: &mut Criterion) {
