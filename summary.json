@@ -1,118 +1,30 @@
-[
-  {
-    "function": "BlockHeader__range",
-    "ops_per_ms": 1368
-  },
-  {
-    "function": "Block__range",
-    "ops_per_ms": 1332
-  },
-  {
-    "function": "BlockHeader__range_by_timestamp",
-    "ops_per_ms": 1144
-  },
-  {
-    "function": "Block__get_header",
-    "ops_per_ms": 304
-  },
-  {
-    "function": "BlockHeader__get_by_timestamp",
-    "ops_per_ms": 290
-  },
-  {
-    "function": "BlockHeader__all",
-    "ops_per_ms": 288
-  },
-  {
-    "function": "BlockHeader__get_by_hash",
-    "ops_per_ms": 276
-  },
-  {
-    "function": "BlockHeader__get_by_merkle_root",
-    "ops_per_ms": 274
-  },
-  {
-    "function": "BlockHeader__get",
-    "ops_per_ms": 271
-  },
-  {
-    "function": "Asset__get",
-    "ops_per_ms": 226
-  },
-  {
-    "function": "Utxo__get_assets",
-    "ops_per_ms": 78
-  },
-  {
-    "function": "Utxo__get",
-    "ops_per_ms": 61
-  },
-  {
-    "function": "Transaction__get_by_hash",
-    "ops_per_ms": 12
-  },
-  {
-    "function": "Transaction__get_utxos",
-    "ops_per_ms": 12
-  },
-  {
-    "function": "Transaction__get",
-    "ops_per_ms": 11
-  },
-  {
-    "function": "Transaction__range",
-    "ops_per_ms": 3
-  },
-  {
-    "function": "Utxo__range",
-    "ops_per_ms": 3
-  },
-  {
-    "function": "Asset__get_by_name",
-    "ops_per_ms": 3
-  },
-  {
-    "function": "Asset__all",
-    "ops_per_ms": 3
-  },
-  {
-    "function": "Asset__range",
-    "ops_per_ms": 3
-  },
-  {
-    "function": "Asset__get_by_policy_id",
-    "ops_per_ms": 3
-  },
-  {
-    "function": "Block__get",
-    "ops_per_ms": 2
-  },
-  {
-    "function": "Block__all",
-    "ops_per_ms": 2
-  },
-  {
-    "function": "Block__get_transactions",
-    "ops_per_ms": 2
-  },
-  {
-    "function": "Transaction__all",
-    "ops_per_ms": 2
-  },
-  {
-    "function": "Utxo__all",
-    "ops_per_ms": 2
-  },
-  {
-    "function": "Utxo__get_by_address",
-    "ops_per_ms": 2
-  },
-  {
-    "function": "Utxo__get_by_datum",
-    "ops_per_ms": 2
-  },
-  {
-    "function": "Block__store_and_commit",
-    "ops_per_ms": 1
-  }
-]
+curl -X POST http://naked:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "hhao/qwen2.5-coder-tools:32b",
+    "messages": [
+      {
+        "role": "user",
+        "content": "What is the current weather in Paris?"
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_current_weather",
+          "description": "Gets the current weather for a given location",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "location": {
+                "type": "string",
+                "description": "The city and country, e.g., Paris, France"
+              }
+            },
+            "required": ["location"]
+          }
+        }
+      }
+    ]
+  }'
