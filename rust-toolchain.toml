@@ -1,2 +1,4 @@
 [toolchain]
 channel = "nightly"
+[build]
+rustflags = ["-Zmacro-backtrace"]
