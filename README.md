@@ -211,3 +211,38 @@ And R/W entire instances efficiently using indexes and dictionaries `examples/ut
 
 Performance wise, check 🔥[flamegraph](https://rawcdn.githack.com/pragmaxim-com/redbit/refs/heads/master/flamegraph.svg).
 Instances are persisted completely structured by fields which means Redbit has slower write performance but blazing fast reads.
+
+### ⏱️ Benchmark Summary
+An operation on top of a 3 blocks of 10 transactions of 20 utxos of 3 assets
+```csv
+function,ops/s
+Block__store_and_commit,44
+Transaction__all,82
+Block__all,83
+Transaction__range,86
+Utxo__all,86
+Utxo__range,86
+Asset__range,121
+Asset__all,122
+Block__range,125
+Block__get,250
+Block__get_transactions,250
+Asset__get_by_policy_id,367
+Transaction__get_by_hash,833
+Utxo__get_by_address,859
+Asset__get_by_name,1220
+Utxo__get_by_datum,1699
+Transaction__get,2536
+Transaction__get_utxos,2567
+Utxo__get,51032
+Utxo__get_assets,67857
+BlockHeader__get_by_hash,98706
+BlockHeader__all,100749
+BlockHeader__get_by_merkle_root,101365
+BlockHeader__range_by_timestamp,137551
+BlockHeader__range,145552
+Asset__get,191702
+BlockHeader__get_by_timestamp,266531
+Block__get_header,287371
+BlockHeader__get,289710
+```
