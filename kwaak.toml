@@ -1,0 +1,20 @@
+project_name = "redbit"
+language = "Rust"
+github_api_key = "env:GITHUB_TOKEN_KWAAK"
+[commands]
+[git]
+main_branch = "master"
+owner = "pragmaxim-com"
+repository = "redbit"
+auto_push_remote = false
+[llm.indexing]
+provider = "Ollama"
+prompt_model = "llama3.2"
+[llm.query]
+provider = "Ollama"
+prompt_model = "hhao/qwen2.5-coder-tools:32b"
+[llm.embedding]
+provider = "Ollama"
+embedding_model = {name = "bge-m3", vector_size = 1024}
+[docker]
+dockerfile = "Dockerfile"

@@ -1,3 +1,10 @@
+//! redbit reads struct annotations and derives code necessary for persisting and querying structured data into/from 
+//! [Redb](https://github.com/cberner/redb) using secondary indexes and dictionaries.
+//!
+//! It leverages the `redb` crate for storage, with custom implementations for serializing and deserializing data using `bincode`.
+//! The library provides methods for storing, retrieving, and deleting entities based on primary keys (PKs) and secondary indexes,
+//! supporting one-to-one and one-to-many relationships.
+//!
 pub use macros::Entity;
 pub use macros::PK;
 pub use redb::ReadableMultimapTable;

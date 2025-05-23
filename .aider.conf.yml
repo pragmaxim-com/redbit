@@ -1,0 +1,2 @@
+model: ollama_chat/hhao/qwen2.5-coder-tools:32b
+read: [README.md, CONVENTIONS.md]
