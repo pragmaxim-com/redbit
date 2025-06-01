@@ -4,9 +4,9 @@ pub fn get_blocks(block_count: Height, tx_count: TxIndex, utxo_count: UtxoIndex,
     let timestamp = 1678296000;
     let block_hash = String::from("block_hash");
     let merkle_root = String::from("merkle_root");
-    (0..block_count)
+    (0..block_count.0)
         .map(|height| {
-            let block_id = BlockPointer { height };
+            let block_id = BlockPointer { height: Height(height) };
             let transactions: Vec<Transaction> = (0..tx_count)
                 .map(|tx_index| {
                     let tx_id = TxPointer { block_pointer: block_id.clone(), tx_index };
@@ -29,13 +29,16 @@ pub fn get_blocks(block_count: Height, tx_count: TxIndex, utxo_count: UtxoIndex,
                             }
                         })
                         .collect();
-                    Transaction { id: tx_id, hash: format!("tx_hash_{}", tx_index), utxos }
+                    let input: InputRef = InputRef {
+                        id: InputPointer { tx_pointer: tx_id.clone(), utxo_index: 0 },
+                    };
+                    Transaction { id: tx_id, hash: format!("tx_hash_{}", tx_index), utxos, inputs: vec![input] }
                 })
                 .collect();
 
             Block {
                 id: block_id.clone(),
-                header: BlockHeader { id: block_id, hash: block_hash.clone(), timestamp: timestamp + u64::from(height), merkle_root: merkle_root.clone(), nonce: 0 },
+                header: BlockHeader { id: block_id, hash: block_hash.clone(), timestamp: Timestamp(timestamp + u32::from(height)), merkle_root: merkle_root.clone(), nonce: 0 },
                 transactions,
             }
         })

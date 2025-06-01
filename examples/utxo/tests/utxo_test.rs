@@ -4,7 +4,7 @@ use utxo::*;
 fn create_test_db() -> (Vec<Block>, redb::Database) {
     let random_number = rand::random::<u64>();
     let db = redb::Database::create(std::env::temp_dir().join(format!("test_db_{}.redb", random_number))).unwrap();
-    let blocks = get_blocks(4, 4, 4, 4);
+    let blocks = get_blocks(Height(4), 4, 4, 4);
     blocks.iter().for_each(|block| Block::store_and_commit(&db, &block).expect("Failed to persist blocks"));
     (blocks, db)
 }
@@ -40,7 +40,11 @@ fn it_should_delete_entity_by_unique_id() {
             let assets_not_found = utxo.assets.iter().any(|asset| Asset::get(&read_tx, &asset.id).unwrap().is_none());
             utxo_not_found && assets_not_found
         });
-        tx_not_found && utxos_not_found
+        let inputs_not_found = tx.inputs.iter().any(|input| {
+            let input_ref_not_found = InputRef::get(&read_tx, &input.id).unwrap().is_none();
+            input_ref_not_found
+        });
+        tx_not_found && utxos_not_found && inputs_not_found
     });
     assert!(transitive_entities_not_found);
 }
@@ -80,7 +84,7 @@ fn it_should_get_entities_by_range_on_index() {
     let from_timestamp = blocks[1].header.timestamp;
     let until_timestamp = blocks[3].header.timestamp;
     let expected_blocks: Vec<BlockHeader> = vec![blocks[1].header.clone(), blocks[2].header.clone()];
-    let unique_timestamps: HashSet<Timestamp> = BlockHeader::all(&read_tx).unwrap().iter().map(|h| h.timestamp).collect();
+    let unique_timestamps: HashSet<u32> = BlockHeader::all(&read_tx).unwrap().iter().map(|h| h.timestamp.0).collect();
     assert_eq!(unique_timestamps.len(), 4);
 
     let found_by_timestamp_range = BlockHeader::range_by_timestamp(&read_tx, &from_timestamp, &until_timestamp).expect("Failed to range by timestamp");
@@ -94,9 +98,9 @@ fn it_should_get_entities_by_range_on_pk() {
 
     let read_tx = db.begin_read().unwrap();
 
-    let block_pointer_1 = BlockPointer { height: 1 };
-    let block_pointer_2 = BlockPointer { height: 2 };
-    let block_pointer_3 = BlockPointer { height: 3 };
+    let block_pointer_1 = BlockPointer { height: Height(1) };
+    let block_pointer_2 = BlockPointer { height: Height(2) };
+    let block_pointer_3 = BlockPointer { height: Height(3) };
     let actual_blocks = Block::range(&read_tx, &block_pointer_1, &block_pointer_3).expect("Failed to range by PK");
     let expected_blocks: Vec<Block> = vec![blocks[1].clone(), blocks[2].clone()];
 
@@ -129,10 +133,14 @@ fn it_should_get_related_one_to_many_entities() {
     let expected_utxos: Vec<Utxo> = expected_transactions.iter().flat_map(|t| t.utxos.clone()).collect();
     let utxos: Vec<Utxo> = transactions.iter().flat_map(|t| t.utxos.clone()).collect();
 
+    let expected_input_refs: Vec<InputRef> = expected_transactions.iter().flat_map(|t| t.inputs.clone()).collect();
+    let input_refs: Vec<InputRef> = transactions.iter().flat_map(|t| t.inputs.clone()).collect();
+
     let expected_assets: Vec<Asset> = expected_utxos.iter().flat_map(|u| u.assets.clone()).collect();
     let assets: Vec<Asset> = utxos.iter().flat_map(|u| u.assets.clone()).collect();
 
     assert_eq!(expected_transactions, transactions);
+    assert_eq!(expected_input_refs, input_refs);
     assert_eq!(expected_utxos, utxos);
     assert_eq!(expected_assets, assets);
 }
@@ -144,7 +152,7 @@ fn it_should_get_related_one_to_one_entity() {
     let block = blocks.first().unwrap();
 
     let expected_header: BlockHeader = block.header.clone();
-    let header = Block::get_header(&read_tx, &block.id).expect("Failed to get header").unwrap();
+    let header = Block::get_header(&read_tx, &block.id).expect("Failed to get header");
 
     assert_eq!(expected_header, header);
 }

@@ -27,9 +27,7 @@ impl RelationshipMacros {
             match rel.multiplicity {
                 Multiplicity::OneToOne => {
                     struct_initializer = quote! {
-                        #field_name: {
-                            #child_type::get(read_tx, pk)?.unwrap()
-                        }
+                        #field_name: #child_type::get(read_tx, pk)?.expect("Missing one-to-one child")
                     };
                     store_statement = quote! {
                         let child = &instance.#field_name;
@@ -49,8 +47,10 @@ impl RelationshipMacros {
                     query_function = (
                         query_fn_name.to_string(),
                         quote! {
-                            pub fn #query_fn_name(read_tx: &::redb::ReadTransaction, pk: &#pk_type) -> Result<Option<#child_type>, DbEngineError> {
-                                #child_type::get(&read_tx, &pk)
+                            pub fn #query_fn_name(read_tx: &::redb::ReadTransaction, pk: &#pk_type) -> Result<#child_type, DbEngineError> {
+                                #child_type::get(&read_tx, &pk).and_then(|opt| {
+                                    opt.ok_or_else(|| DbEngineError::DbError(format!("No child found for pk: {:?}", pk)))
+                                })
                             }
                         },
                     );

@@ -12,7 +12,6 @@ harness = false
 
 [dev-dependencies]
 rand = "0.9.0"
-criterion = "0.5"
 
 [dependencies]
 redbit = { path = "../../redbit" }

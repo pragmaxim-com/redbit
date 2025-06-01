@@ -5,11 +5,37 @@ pub use redbit::*;
 
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
+use std::ops::Add;
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
+pub struct Height(pub u32);
+
+impl Default for Height {
+    fn default() -> Self {
+        Height(0)
+    }
+}
+impl Add<u32> for Height {
+    type Output = Self;
+
+    fn add(self, other: u32) -> Self {
+        Height(self.0 + other)
+    }
+}
+impl Add for Height {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self {
+        Height(self.0 + other.0)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
+pub struct Timestamp(pub u32);
 
 pub type Amount = u64;
-pub type Timestamp = u64;
 pub type Nonce = u32;
-pub type Height = u32;
+
 pub type TxIndex = u16;
 pub type UtxoIndex = u16;
 pub type AssetIndex = u16;
@@ -19,7 +45,7 @@ pub type AssetName = String;
 pub type PolicyId = String;
 pub type Hash = String;
 
-#[derive(Entity, Debug, Clone, PartialEq, Eq)]
+#[derive(Entity, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Block {
     #[pk(range)]
     pub id: BlockPointer,
@@ -29,7 +55,7 @@ pub struct Block {
     pub transactions: Vec<Transaction>,
 }
 
-#[derive(Entity, Debug, Clone, PartialEq, Eq)]
+#[derive(Entity, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct BlockHeader {
     #[pk(range)]
     pub id: BlockPointer,
@@ -43,7 +69,7 @@ pub struct BlockHeader {
     pub nonce: Nonce,
 }
 
-#[derive(Entity, Debug, Clone, PartialEq, Eq)]
+#[derive(Entity, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Transaction {
     #[pk(range)]
     pub id: TxPointer,
@@ -51,9 +77,11 @@ pub struct Transaction {
     pub hash: Hash,
     #[one2many]
     pub utxos: Vec<Utxo>,
+    #[one2many]
+    pub inputs: Vec<InputRef>,
 }
 
-#[derive(Entity, Debug, Clone, PartialEq, Eq)]
+#[derive(Entity, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Utxo {
     #[pk(range)]
     pub id: UtxoPointer,
@@ -67,7 +95,7 @@ pub struct Utxo {
     pub assets: Vec<Asset>,
 }
 
-#[derive(Entity, Debug, Clone, PartialEq, Eq)]
+#[derive(Entity, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Asset {
     #[pk(range)]
     pub id: AssetPointer,
@@ -96,6 +124,19 @@ pub struct UtxoPointer {
     #[parent]
     pub tx_pointer: TxPointer,
     pub utxo_index: UtxoIndex,
+}
+
+#[derive(PK, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub struct InputPointer {
+    #[parent]
+    pub tx_pointer: TxPointer,
+    pub utxo_index: UtxoIndex,
+}
+
+#[derive(Entity, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct InputRef {
+    #[pk(range)]
+    pub id: InputPointer,
 }
 
 #[derive(PK, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]

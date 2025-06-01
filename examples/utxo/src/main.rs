@@ -1,8 +1,10 @@
+use std::env;
 use utxo::*;
 
 fn demo() -> Result<(), DbEngineError> {
-    let db = redb::Database::create(std::env::temp_dir().join("my_db.redb"))?;
-    let blocks = get_blocks(1, 10, 10, 3);
+    let dir = env::temp_dir().join("redbit");
+    let db = redb::Database::create(dir.join("my_db.redb"))?;
+    let blocks = get_blocks(Height(1), 10, 10, 3);
 
     println!("Persisting blocks:");
     for block in blocks.iter() {
@@ -42,6 +44,7 @@ fn demo() -> Result<(), DbEngineError> {
     Transaction::get_by_hash(&read_tx, &first_transaction.hash)?;
     Transaction::range(&read_tx, &first_transaction.id, &last_transaction.id)?;
     Transaction::get_utxos(&read_tx, &first_transaction.id)?;
+    Transaction::get_inputs(&read_tx, &first_transaction.id)?;
 
     println!("Querying utxos:");
     let first_utxo = Utxo::first(&read_tx)?.unwrap();

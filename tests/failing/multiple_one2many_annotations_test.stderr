@@ -1,5 +1,0 @@
-error: Multiple `#[one2many]` relationships found. Only one relationship is allowed per entity.
- --> tests/failing/multiple_one2many_annotations_test.rs:4:1
-  |
-4 | struct MultipleOne2ManyAnnotationsStruct {
-  | ^^^^^^

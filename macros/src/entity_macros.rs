@@ -185,7 +185,7 @@ impl EntityMacros {
             }
         };
 
-        Self::write_to_file(&expanded, "redbit_entity_macros.rs").unwrap();
+        Self::write_to_file(&expanded, &struct_ident.to_string()).unwrap();
         expanded
     }
 
@@ -194,9 +194,14 @@ impl EntityMacros {
             Ok(ast) => prettyplease::unparse(&ast),
             Err(_) => stream.to_string(),
         };
-        let path = env::temp_dir().join(file_path);
-        let mut file = OpenOptions::new().create(true).append(true).open(&path)?;
-        file.write_all(formatted_str.as_bytes())
+        let dir = env::temp_dir().join("redbit");
+        if !dir.exists() {
+            std::fs::create_dir_all(dir.clone())?;
+        }
+        let path = dir.join(format!("{}.rs", file_path));
+        let mut file = OpenOptions::new().create(true).write(true).append(false).open(&path)?;
+        file.write_all(formatted_str.as_bytes())?;
+        Ok(())
     }
 
 
@@ -290,16 +295,6 @@ impl EntityMacros {
 
         let pk_col =
             pk_column.ok_or_else(|| syn::Error::new(ast.span(), "`#[pk]` attribute not found on any column. Exactly one column must have `#[pk]`."))?;
-
-        let one2many_rels_count = relationships.iter().filter(|rel| rel.multiplicity == Multiplicity::OneToMany).count();
-
-        if one2many_rels_count > 1 {
-            return Err(syn::Error::new(ast.span(), "Multiple `#[one2many]` relationships found. Only one relationship is allowed per entity."));
-        }
-
-        if columns.is_empty() && relationships.is_empty() {
-            return Err(syn::Error::new(ast.span(), "No relationships or #[column(...)] fields found. You must have at least one of those."));
-        }
 
         Ok((pk_col, columns, relationships))
     }

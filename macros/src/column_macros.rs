@@ -28,30 +28,29 @@ impl ColumnMacros {
             pub const #table_ident: ::redb::TableDefinition<'static, Bincode<#pk_type>, Bincode<#column_type>> = ::redb::TableDefinition::new(#table_name_str);
         });
         let store_statement = quote! {
-            let mut table = write_tx.open_table(#table_ident)?;
-            table.insert(&instance.#pk_name, &instance.#column_name)?;
+            let mut table_col_1 = write_tx.open_table(#table_ident)?;
+            table_col_1.insert(&instance.#pk_name, &instance.#column_name)?;
         };
         let store_many_statement = quote! {
-            let mut table = write_tx.open_table(#table_ident)?;
+            let mut table_col_2 = write_tx.open_table(#table_ident)?;
             for instance in instances.iter() {
-                table.insert(&instance.#pk_name, &instance.#column_name)?;
+                table_col_2.insert(&instance.#pk_name, &instance.#column_name)?;
             }
         };
         let delete_statement = quote! {
-            let mut table = write_tx.open_table(#table_ident)?;
-            let value = table.remove(pk)?;
-            value.map(|g| g.value()); // todo return what?
+            let mut table_col_3 = write_tx.open_table(#table_ident)?;
+            let _ = table_col_3.remove(pk)?;
         };
         let delete_many_statement = quote! {
-            let mut table = write_tx.open_table(#table_ident)?;
+            let mut table_col_4 = write_tx.open_table(#table_ident)?;
             for pk in pks.iter() {
-                table.remove(pk)?;
+                table_col_4.remove(pk)?;
             }
         };
         let struct_initializer = quote! {
             #column_name: {
-                let table = read_tx.open_table(#table_ident)?;
-                let guard = table.get(pk)?;
+                let table_col_5 = read_tx.open_table(#table_ident)?;
+                let guard = table_col_5.get(pk)?;
                 guard.unwrap().value()
             }
         };
@@ -81,33 +80,41 @@ impl ColumnMacros {
                     pub const #index_table_ident: ::redb::MultimapTableDefinition<'static, Bincode<#column_type>, Bincode<#pk_type>> = ::redb::MultimapTableDefinition::new(#index_table_name_str);
                 });
         let store_statement = quote! {
-            let mut table = write_tx.open_table(#table_ident)?;
-            table.insert(&instance.#pk_name, &instance.#column_name)?;
+            let mut table_col_6 = write_tx.open_table(#table_ident)?;
+            table_col_6.insert(&instance.#pk_name, &instance.#column_name)?;
 
             let mut mm = write_tx.open_multimap_table(#index_table_ident)?;
             mm.insert(&instance.#column_name, &instance.#pk_name)?;
         };
         let store_many_statement = quote! {
-            let mut table = write_tx.open_table(#table_ident)?;
+            let mut table_col_7 = write_tx.open_table(#table_ident)?;
             let mut mm = write_tx.open_multimap_table(#index_table_ident)?;
             for instance in instances.iter() {
-                table.insert(&instance.#pk_name, &instance.#column_name)?;
+                table_col_7.insert(&instance.#pk_name, &instance.#column_name)?;
                 mm.insert(&instance.#column_name, &instance.#pk_name)?;
             };
         };
         let delete_statement = quote! {
-            let mut table = write_tx.open_table(#table_ident)?;
-            if let Some(value_guard) = table.remove(pk)? {
-                let mut mm = write_tx.open_multimap_table(#index_table_ident)?;
-                let value = value_guard.value();
-                mm.remove(&value, pk)?;
+            {
+                let mut table_col_8 = write_tx.open_table(#table_ident)?;
+                let maybe_value = {
+                    if let Some(value_guard) = table_col_8.remove(pk)? {
+                        Some(value_guard.value().clone())
+                    } else {
+                        None
+                    }
+                };
+                if let Some(value) = maybe_value {
+                    let mut mm = write_tx.open_multimap_table(#index_table_ident)?;
+                    mm.remove(&value, pk)?;
+                }
             }
         };
         let delete_many_statement = quote! {
-            let mut table = write_tx.open_table(#table_ident)?;
+            let mut table_col_9 = write_tx.open_table(#table_ident)?;
             let mut mm = write_tx.open_multimap_table(#index_table_ident)?;
             for pk in pks.iter() {
-                if let Some(value_guard) = table.remove(pk)? {
+                if let Some(value_guard) = table_col_9.remove(pk)? {
                     let value = value_guard.value();
                     mm.remove(&value, pk)?;
                 }
@@ -115,8 +122,8 @@ impl ColumnMacros {
         };
         let struct_initializer = quote! {
             #column_name: {
-                let table = read_tx.open_table(#table_ident)?;
-                let guard = table.get(pk)?;
+                let table_col_10 = read_tx.open_table(#table_ident)?;
+                let guard = table_col_10.get(pk)?;
                 guard.unwrap().value()
             }
         };
