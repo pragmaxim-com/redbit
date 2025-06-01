@@ -1,9 +1,15 @@
 use std::collections::HashSet;
+use std::env;
 use utxo::*;
 
 fn create_test_db() -> (Vec<Block>, redb::Database) {
     let random_number = rand::random::<u64>();
-    let db = redb::Database::create(std::env::temp_dir().join(format!("test_db_{}.redb", random_number))).unwrap();
+    let dir = env::temp_dir().join("redbit");
+    if !dir.exists() {
+        std::fs::create_dir_all(dir.clone()).unwrap();
+    }
+
+    let db = redb::Database::create(dir.join(format!("test_db_{}.redb", random_number))).unwrap();
     let blocks = get_blocks(Height(4), 4, 4, 4);
     blocks.iter().for_each(|block| Block::store_and_commit(&db, &block).expect("Failed to persist blocks"));
     (blocks, db)

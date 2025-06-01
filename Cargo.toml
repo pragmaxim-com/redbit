@@ -10,6 +10,7 @@ debug = true
 redbit = { path = "redbit" }
 trybuild = "1.0"
 redb = "2.4.0"
+serde = { version = "1.0.219", features = ["derive"] }
 
 [workspace]
 members = ["macros", "redbit", "examples/utxo"]

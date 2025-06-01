@@ -1,6 +1,6 @@
+use std::env;
 use utxo::*;
 use redb::Database;
-use std::env::temp_dir;
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 
 fn configure_criterion() -> Criterion {
@@ -11,14 +11,17 @@ fn configure_criterion() -> Criterion {
 }
 
 fn setup_db() -> Database {
-    let db_path = temp_dir().join("benchmark_db.redb");
+    let dir = env::temp_dir().join("redbit");
+    if !dir.exists() {
+        std::fs::create_dir_all(dir.clone()).unwrap();
+    }
+    let db_path = dir.join("benchmark_db.redb");
     Database::create(db_path).expect("Failed to create database")
 }
 
-
 fn benchmark_blocks(c: &mut Criterion) {
     let db = setup_db();
-    let blocks = get_blocks(3, 10, 20, 3);
+    let blocks = get_blocks(Height(3), 10, 20, 3);
 
     let mut group = c.benchmark_group("Block");
     group.throughput(Throughput::Elements(1));
