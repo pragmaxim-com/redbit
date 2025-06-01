@@ -82,7 +82,8 @@ jobs:
       
           echo -e "\nFormatted Benchmark Results:"
           tail -n +2 benchmarks.csv | awk -F, '{ printf "%-45s %10s ops/s\n", $1, $2 }'
-      - name: Update README with Benchmark Results
+
+      - name: Update README
         run: |
           LIB_CONTENT=$(cat examples/utxo/src/lib.rs | sed 's/^/    /')
           MAIN_CONTENT=$(cat examples/utxo/src/main.rs | sed 's/^/    /')
@@ -95,12 +96,26 @@ jobs:
             /<!-- END_MAIN -->/ { print; in_main = 0; next }
             !in_lib && !in_main { print }
           ' README.md > README.md.tmp && mv README.md.tmp README.md
-          echo "" >> README.md
-          echo "### ⏱️ Benchmark Summary" >> README.md
-          echo "An operation on top of a 3 blocks of 10 transactions of 20 utxos of 3 assets" >> README.md
-          echo "\`\`\`csv" >> README.md
-          cat benchmarks.csv >> README.md
-          echo "\`\`\`" >> README.md
+
+          # Extract formatted CSV benchmark block (including header)
+          FORMATTED_BENCH=$(tail -n +1 benchmarks.csv)
+
+          # Escape backslashes and double quotes for awk
+          ESCAPED_BENCH=$(echo "$FORMATTED_BENCH" | sed 's/\\/\\\\/g; s/"/\\"/g')
+
+          awk -v bench_block="$ESCAPED_BENCH" '
+            BEGIN { in_bench = 0 }
+            /<!-- BEGIN_BENCH -->/ {
+              print;
+              print "";
+              print bench_block;
+              print "";
+              in_bench = 1;
+              next
+            }
+            /<!-- END_BENCH -->/ { print; in_bench = 0; next }
+            !in_bench { print }
+          ' README.md > README.md.tmp && mv README.md.tmp README.md
 
       - name: Commit changes
         run: |

@@ -9,7 +9,7 @@ debug = true
 [dev-dependencies]
 redbit = { path = "redbit" }
 trybuild = "1.0"
-redb = "2.4.0"
+redb = "2.6.0"
 serde = { version = "1.0.219", features = ["derive"] }
 
 [workspace]
