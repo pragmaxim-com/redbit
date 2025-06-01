@@ -88,6 +88,7 @@ jobs:
           LIB_CONTENT=$(cat examples/utxo/src/lib.rs | sed 's/^/    /')
           MAIN_CONTENT=$(cat examples/utxo/src/main.rs | sed 's/^/    /')
 
+          # Update BEGIN_LIB and BEGIN_MAIN sections
           awk -v lib_content="$LIB_CONTENT" -v main_content="$MAIN_CONTENT" '
             BEGIN { in_lib = 0; in_main = 0 }
             /<!-- BEGIN_LIB -->/ { print; print "```rust"; print lib_content; print "```"; in_lib = 1; next }
@@ -97,19 +98,21 @@ jobs:
             !in_lib && !in_main { print }
           ' README.md > README.md.tmp && mv README.md.tmp README.md
 
-          # Extract formatted CSV benchmark block (including header)
-          FORMATTED_BENCH=$(tail -n +1 benchmarks.csv)
+          # Prepare formatted benchmark lines
+          FORMATTED_BENCH=$(tail -n +2 benchmarks.csv | awk -F, '{ printf "%-45s %10s\n", $1, $2 }')
+          FORMATTED_BENCH="function,ops/s\n$FORMATTED_BENCH"
 
-          # Escape backslashes and double quotes for awk
-          ESCAPED_BENCH=$(echo "$FORMATTED_BENCH" | sed 's/\\/\\\\/g; s/"/\\"/g')
+          # Escape double quotes and backslashes
+          ESCAPED_BENCH=$(echo -e "$FORMATTED_BENCH" | sed 's/\\/\\\\/g; s/"/\\"/g')
 
+          # Replace section between BEGIN_BENCH and END_BENCH
           awk -v bench_block="$ESCAPED_BENCH" '
             BEGIN { in_bench = 0 }
             /<!-- BEGIN_BENCH -->/ {
               print;
-              print "";
+              print "```";
               print bench_block;
-              print "";
+              print "```";
               in_bench = 1;
               next
             }

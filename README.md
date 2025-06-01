@@ -260,7 +260,7 @@ Instances are persisted completely structured by fields which means Redbit has s
 An operation on top of a 3 blocks of 10 transactions of 20 utxos of 3 assets
 
 <!-- BEGIN_BENCH -->
-
+```
 function,ops/s
 Block__store_and_commit,44
 Block__all,84
@@ -291,5 +291,5 @@ Asset__get,193563
 BlockHeader__get_by_timestamp,253262
 BlockHeader__get,278733
 Block__get_header,280711
-
+```
 <!-- END_BENCH -->
