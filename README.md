@@ -262,34 +262,34 @@ An operation on top of a 3 blocks of 10 transactions of 20 utxos of 3 assets
 <!-- BEGIN_BENCH -->
 ```
 function,ops/s
-Block__store_and_commit,44
-Block__all,84
-Transaction__all,84
-Utxo__all,86
-Utxo__range,86
-Transaction__range,87
-Asset__range,121
-Asset__all,123
-Block__range,125
-Block__get,247
-Block__get_transactions,253
-Asset__get_by_policy_id,363
-Transaction__get_by_hash,847
-Utxo__get_by_address,853
-Asset__get_by_name,1214
-Utxo__get_by_datum,1704
-Transaction__get,2554
-Transaction__get_utxos,2599
-Utxo__get,51398
-Utxo__get_assets,67320
-BlockHeader__get_by_hash,97851
-BlockHeader__all,98813
-BlockHeader__get_by_merkle_root,99094
-BlockHeader__range_by_timestamp,132258
-BlockHeader__range,142090
-Asset__get,193563
-BlockHeader__get_by_timestamp,253262
-BlockHeader__get,278733
-Block__get_header,280711
+Block__store_and_commit                               43
+Block__all                                            84
+Transaction__all                                      84
+Utxo__all                                             85
+Utxo__range                                           86
+Transaction__range                                    87
+Asset__range                                         122
+Asset__all                                           123
+Block__range                                         123
+Block__get                                           251
+Block__get_transactions                              251
+Asset__get_by_policy_id                              367
+Transaction__get_by_hash                             846
+Utxo__get_by_address                                 852
+Asset__get_by_name                                  1214
+Utxo__get_by_datum                                  1685
+Transaction__get_utxos                              2568
+Transaction__get                                    2576
+Utxo__get                                          50268
+Utxo__get_assets                                   67286
+BlockHeader__all                                   98777
+BlockHeader__get_by_merkle_root                    99148
+BlockHeader__get_by_hash                           99656
+BlockHeader__range_by_timestamp                   131814
+BlockHeader__range                                141273
+Asset__get                                        190000
+BlockHeader__get_by_timestamp                     257552
+Block__get_header                                 277993
+BlockHeader__get                                  280582
 ```
 <!-- END_BENCH -->
