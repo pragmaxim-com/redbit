@@ -3,7 +3,7 @@ use quote::{format_ident, quote};
 use syn::Type;
 
 pub struct ColumnMacros {
-    pub table_definitions: Vec<TokenStream>,
+    pub table_definitions: Vec<(String, TokenStream)>,
     pub store_statement: TokenStream,
     pub store_many_statement: TokenStream,
     pub delete_statement: TokenStream,
@@ -14,8 +14,7 @@ pub struct ColumnMacros {
 
 impl ColumnMacros {
     pub fn simple(struct_name: &Ident, pk_name: &Ident, pk_type: &Type, column_name: &Ident, column_type: &Type) -> ColumnMacros {
-        let mut table_definitions: Vec<TokenStream> = Vec::new();
-        let mut table_names: Vec<String> = Vec::new();
+        let mut table_definitions: Vec<(String, TokenStream)> = Vec::new();
         let table_ident = format_ident!(
             "{}_{}_BY_{}",
             struct_name.to_string().to_uppercase(),
@@ -23,10 +22,12 @@ impl ColumnMacros {
             pk_name.to_string().to_uppercase()
         );
         let table_name_str = table_ident.to_string();
-        table_names.push(table_name_str.clone());
-        table_definitions.push(quote! {
-            pub const #table_ident: ::redb::TableDefinition<'static, Bincode<#pk_type>, Bincode<#column_type>> = ::redb::TableDefinition::new(#table_name_str);
-        });
+        table_definitions.push((
+            table_name_str.clone(),
+            quote! {
+                pub const #table_ident: ::redb::TableDefinition<'static, Bincode<#pk_type>, Bincode<#column_type>> = ::redb::TableDefinition::new(#table_name_str);
+            }
+        ));
         let store_statement = quote! {
             let mut table_col_1 = write_tx.open_table(#table_ident)?;
             table_col_1.insert(&instance.#pk_name, &instance.#column_name)?;
@@ -58,8 +59,7 @@ impl ColumnMacros {
     }
 
     pub fn indexed(struct_name: &Ident, pk_name: &Ident, pk_type: &Type, column_name: &Ident, column_type: &Type, range: bool) -> ColumnMacros {
-        let mut table_definitions: Vec<TokenStream> = Vec::new();
-        let mut table_names: Vec<String> = Vec::new();
+        let mut table_definitions: Vec<(String, TokenStream)> = Vec::new();
 
         let table_ident = format_ident!(
             "{}_{}_BY_{}",
@@ -68,17 +68,18 @@ impl ColumnMacros {
             pk_name.to_string().to_uppercase()
         );
         let table_name_str = table_ident.to_string();
-        table_names.push(table_name_str.clone());
-        table_definitions.push(quote! {
-            pub const #table_ident: ::redb::TableDefinition<'static, Bincode<#pk_type>, Bincode<#column_type>> = ::redb::TableDefinition::new(#table_name_str);
-        });
+        table_definitions.push((
+            table_name_str.clone(),
+            quote! {
+                pub const #table_ident: ::redb::TableDefinition<'static, Bincode<#pk_type>, Bincode<#column_type>> = ::redb::TableDefinition::new(#table_name_str);
+            }
+        ));
 
         let index_table_ident = format_ident!("{}_{}_INDEX", struct_name.to_string().to_uppercase(), column_name.to_string().to_uppercase());
         let index_table_name_str = index_table_ident.to_string();
-        table_names.push(index_table_name_str.clone());
-        table_definitions.push(quote! {
+        table_definitions.push((index_table_name_str.clone(), quote! {
                     pub const #index_table_ident: ::redb::MultimapTableDefinition<'static, Bincode<#column_type>, Bincode<#pk_type>> = ::redb::MultimapTableDefinition::new(#index_table_name_str);
-                });
+                }));
         let store_statement = quote! {
             let mut table_col_6 = write_tx.open_table(#table_ident)?;
             table_col_6.insert(&instance.#pk_name, &instance.#column_name)?;
@@ -191,8 +192,7 @@ impl ColumnMacros {
     }
 
     pub fn indexed_with_dict(struct_name: &Ident, pk_name: &Ident, pk_type: &Type, column_name: &Ident, column_type: &Type) -> ColumnMacros {
-        let mut table_definitions: Vec<TokenStream> = Vec::new();
-        let mut table_names: Vec<String> = Vec::new();
+        let mut table_definitions: Vec<(String, TokenStream)> = Vec::new();
 
         let table_dict_pk_by_pk_ident = format_ident!(
             "{}_{}_DICT_PK_BY_{}",
@@ -211,22 +211,30 @@ impl ColumnMacros {
             format_ident!("{}_{}_DICT_INDEX", struct_name.to_string().to_uppercase(), column_name.to_string().to_uppercase());
         let table_dict_index_str = table_dict_index_ident.to_string();
 
-        table_names.push(table_dict_pk_by_pk_str.clone());
-        table_definitions.push(quote! {
-                    pub const #table_dict_pk_by_pk_ident: ::redb::TableDefinition<'static, Bincode<#pk_type>, Bincode<#pk_type>> = ::redb::TableDefinition::new(#table_dict_pk_by_pk_str);
-                });
-        table_names.push(table_value_to_dict_pk_str.clone());
-        table_definitions.push(quote! {
-                    pub const #table_value_to_dict_pk_ident: ::redb::TableDefinition<'static, Bincode<#column_type>, Bincode<#pk_type>> = ::redb::TableDefinition::new(#table_value_to_dict_pk_str);
-                });
-        table_names.push(table_value_by_dict_pk_str.clone());
-        table_definitions.push(quote! {
-                    pub const #table_value_by_dict_pk_ident: ::redb::TableDefinition<'static, Bincode<#pk_type>, Bincode<#column_type>> = ::redb::TableDefinition::new(#table_value_by_dict_pk_str);
-                });
-        table_names.push(table_dict_index_str.clone());
-        table_definitions.push(quote! {
-                    pub const #table_dict_index_ident: ::redb::MultimapTableDefinition<'static, Bincode<#pk_type>, Bincode<#pk_type>>= ::redb::MultimapTableDefinition::new(#table_dict_index_str);
-                });
+        table_definitions.push((
+            table_dict_pk_by_pk_str.clone(),
+            quote! {
+                pub const #table_dict_pk_by_pk_ident: ::redb::TableDefinition<'static, Bincode<#pk_type>, Bincode<#pk_type>> = ::redb::TableDefinition::new(#table_dict_pk_by_pk_str);
+            }
+        ));
+        table_definitions.push((
+            table_value_to_dict_pk_str.clone(), 
+            quote! {
+                pub const #table_value_to_dict_pk_ident: ::redb::TableDefinition<'static, Bincode<#column_type>, Bincode<#pk_type>> = ::redb::TableDefinition::new(#table_value_to_dict_pk_str);
+            }
+        ));
+        table_definitions.push((
+            table_value_by_dict_pk_str.clone(), 
+            quote! {
+                pub const #table_value_by_dict_pk_ident: ::redb::TableDefinition<'static, Bincode<#pk_type>, Bincode<#column_type>> = ::redb::TableDefinition::new(#table_value_by_dict_pk_str);
+            }
+        ));
+        table_definitions.push((
+            table_dict_index_str.clone(), 
+            quote! {
+                pub const #table_dict_index_ident: ::redb::MultimapTableDefinition<'static, Bincode<#pk_type>, Bincode<#pk_type>>= ::redb::MultimapTableDefinition::new(#table_dict_index_str);
+            }
+        ));
         let store_statement = quote! {
             let mut dict_pk_by_pk       = write_tx.open_table(#table_dict_pk_by_pk_ident)?;
             let mut value_to_dict_pk    = write_tx.open_table(#table_value_to_dict_pk_ident)?;

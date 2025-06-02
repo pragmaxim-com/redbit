@@ -9,6 +9,7 @@ pub enum PointerType {
 }
 
 pub struct PkMacros {
+    pub table_name: String,
     pub table_definition: TokenStream,
     pub store_statement: TokenStream,
     pub store_many_statement: TokenStream,
@@ -20,12 +21,12 @@ pub struct PkMacros {
 impl PkMacros {
     pub fn new(struct_name: &Ident, pk_column: &Pk) -> Self {
         let table_ident = format_ident!("{}_{}", struct_name.to_string().to_uppercase(), pk_column.field.name.to_string().to_uppercase());
-        let table_name_str = table_ident.to_string();
+        let table_name = table_ident.to_string();
         let pk_name: Ident = pk_column.field.name.clone();
         let pk_type = pk_column.field.tpe.clone();
 
         let table_definition = quote! {
-            pub const #table_ident: ::redb::TableDefinition<'static, Bincode<#pk_type>, ()> = ::redb::TableDefinition::new(#table_name_str);
+            pub const #table_ident: ::redb::TableDefinition<'static, Bincode<#pk_type>, ()> = ::redb::TableDefinition::new(#table_name);
         };
 
         let store_statement = quote! {
@@ -144,7 +145,7 @@ impl PkMacros {
             }))
         };
 
-        PkMacros { table_definition, store_statement, store_many_statement, delete_statement, delete_many_statement, functions }
+        PkMacros { table_name, table_definition, store_statement, store_many_statement, delete_statement, delete_many_statement, functions }
     }
 
     /// Determines whether a struct is a `Root` or `Child` based on `#[parent]` attributes.

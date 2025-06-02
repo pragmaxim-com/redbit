@@ -92,6 +92,7 @@ impl EntityMacros {
         let (pk_column, pk_column_macros) = &self.pk_column;
         let pk_ident = pk_column.field.name.clone();
         let pk_type = pk_column.field.tpe.clone();
+        let pk_table_name = pk_column_macros.table_name.clone();
         let pk_table_definition = pk_column_macros.table_definition.clone();
         let pk_store_statement = pk_column_macros.store_statement.clone();
         let pk_store_many_statement = pk_column_macros.store_many_statement.clone();
@@ -126,9 +127,17 @@ impl EntityMacros {
             delete_many_statements.push(macros.delete_many_statement.clone());
         }
         let function_macros: Vec<TokenStream> = functions.into_iter().map(|f| f.1).collect::<Vec<_>>();
+        let table_definition_names: Vec<String> = table_definitions.iter().map(|(name, _)| name.to_string()).collect();
+        let table_definition_streams: Vec<TokenStream> = table_definitions.into_iter().map(|(_, stream)| stream).collect();
+
+        eprintln!("Pk     :  {}", pk_table_name);
+        for column_table_name in &table_definition_names {
+            eprintln!("Index  :  {}", column_table_name);
+        }
+
         let expanded = quote! {
             #pk_table_definition
-            #(#table_definitions)*
+            #(#table_definition_streams)*
 
             impl #struct_ident {
                 #(#function_macros)*
