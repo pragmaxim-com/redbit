@@ -259,10 +259,10 @@ The demo example persists data into 30 tables to allow for rich querying.
 ### ⏱️ Benchmark Summary
 An operation on top of a 3 blocks of 10 transactions of 20 utxos of 3 assets, ie.
 `Block__store_and_commit` and `Block__all` operations write/read :
-    - 3 blocks
-    - 3 * 10 = 30 transactions
-    - 3 * 10 * 20 = 600 utxos
-    - 3 * 10 * 20 * 3 = 1800 assets
+- 3 blocks
+- 3 * 10 = 30 transactions
+- 3 * 10 * 20 = 600 utxos
+- 3 * 10 * 20 * 3 = 1800 assets
 
 Which means indexing `Bitcoin` is way faster than Bitcoin Core syncs itself.
 
