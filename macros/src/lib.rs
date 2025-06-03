@@ -30,22 +30,19 @@ pub fn derive_pk(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     }
 }
 
-#[proc_macro_derive(Entity, attributes(pk, column, one2many, one2one))]
+#[proc_macro_derive(Entity, attributes(pk, column, one2many, one2one, transient))]
 pub fn derive_entity(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let ast: DeriveInput = parse_macro_input!(input as DeriveInput);
     let struct_name = &ast.ident;
-    let named_fields = match EntityMacros::get_named_fields(&ast) {
-        Ok(columns) => columns,
-        Err(err) => return err.to_compile_error().into(),
-    };
-    let (pk_column, columns, relationships) = match EntityMacros::get_pk_and_column_macros(&named_fields, &ast) {
-        Ok(info) => info,
-        Err(err) => return err.to_compile_error().into(),
-    };
 
-    let entity_macros = match EntityMacros::new(struct_name.clone(), pk_column, columns, relationships) {
-        Ok(struct_macros) => struct_macros,
-        Err(err) => return err.to_compile_error().into(),
-    };
+    let entity_macros =
+        EntityMacros::get_named_fields(&ast)
+            .and_then(|named_fields| {
+                EntityMacros::get_field_macros(&named_fields, &ast)
+            })
+            .and_then(|field_macros| {
+                EntityMacros::new(struct_name.clone(), field_macros)
+            })
+            .map_err(|err| err.to_compile_error()).expect("Failed to derive Entity");
     entity_macros.expand().into()
 }

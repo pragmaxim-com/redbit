@@ -1,5 +1,7 @@
-error: `#[pk]` attribute not found on any column. Exactly one column must have `#[pk]`.
- --> tests/failing/empty_struct_test.rs:4:1
+error: proc-macro derive panicked
+ --> tests/failing/empty_struct_test.rs:3:10
   |
-4 | struct EmptyStruct {
-  | ^^^^^^
+3 | #[derive(Entity)]
+  |          ^^^^^^
+  |
+  = help: message: Failed to derive Entity: TokenStream [Punct { ch: ':', spacing: Joint, span: #0 bytes(34..40) }, Punct { ch: ':', spacing: Alone, span: #0 bytes(34..40) }, Ident { ident: "core", span: #0 bytes(34..40) }, Punct { ch: ':', spacing: Joint, span: #0 bytes(34..40) }, Punct { ch: ':', spacing: Alone, span: #0 bytes(34..40) }, Ident { ident: "compile_error", span: #0 bytes(34..40) }, Punct { ch: '!', spacing: Alone, span: #0 bytes(34..40) }, Group { delimiter: Brace, stream: TokenStream [Literal { kind: Str, symbol: "`#[pk]` attribute not found on any column. Exactly one column must have `#[pk]`.", suffix: None, span: #0 bytes(34..40) }], span: #0 bytes(34..40) }]

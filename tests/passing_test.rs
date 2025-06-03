@@ -16,6 +16,23 @@ struct ParentPK {
     pub id: u32,
 }
 
+struct Key {
+    pub key: u32,
+}
+impl Default for Key {
+    fn default() -> Self {
+        Key { key: 0 }
+    }
+}
+
+#[derive(Entity)]
+struct TransientAnnotationStruct {
+    #[pk]
+    id: u32,
+    #[transient]
+    name: Key
+}
+
 #[derive(PK, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 struct ChildPK {
     #[parent]
@@ -77,4 +94,5 @@ fn main() {
     let _ = FullStruct { id: 4, amount: 45, datum: "datum".to_string(), address: "address".to_string() };
     let _ = MissingColumnsStruct { id: 0 };
     let _ = MultipleOne2ManyAnnotationsStruct { id: parent_pointer, foos: vec![MinimalStruct { id: child_pointer_0.clone(), persisted_no_index_no_dict: 46 }], bars: vec![MinimalStruct { id: child_pointer_1, persisted_no_index_no_dict: 47 }] };
+    let _ = TransientAnnotationStruct { id: 1, name: Key { key: 48 } };
 }

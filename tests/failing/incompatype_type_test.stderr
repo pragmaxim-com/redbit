@@ -1,5 +1,7 @@
-error: `#[derive(Entity)]` can only be applied to structs.
- --> tests/failing/incompatype_type_test.rs:4:1
+error: proc-macro derive panicked
+ --> tests/failing/incompatype_type_test.rs:3:10
   |
-4 | enum Enum {
-  | ^^^^
+3 | #[derive(Entity)]
+  |          ^^^^^^
+  |
+  = help: message: Failed to derive Entity: TokenStream [Punct { ch: ':', spacing: Joint, span: #0 bytes(34..38) }, Punct { ch: ':', spacing: Alone, span: #0 bytes(34..38) }, Ident { ident: "core", span: #0 bytes(34..38) }, Punct { ch: ':', spacing: Joint, span: #0 bytes(34..38) }, Punct { ch: ':', spacing: Alone, span: #0 bytes(34..38) }, Ident { ident: "compile_error", span: #0 bytes(34..38) }, Punct { ch: '!', spacing: Alone, span: #0 bytes(34..38) }, Group { delimiter: Brace, stream: TokenStream [Literal { kind: Str, symbol: "`#[derive(Entity)]` can only be applied to structs.", suffix: None, span: #0 bytes(34..38) }], span: #0 bytes(34..38) }]

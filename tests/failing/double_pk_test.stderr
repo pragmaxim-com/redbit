@@ -1,5 +1,7 @@
-error: Multiple `#[pk]` columns found; only one is allowed
- --> tests/failing/double_pk_test.rs:7:5
+error: proc-macro derive panicked
+ --> tests/failing/double_pk_test.rs:3:10
   |
-7 |     #[pk]
-  |     ^
+3 | #[derive(Entity)]
+  |          ^^^^^^
+  |
+  = help: message: Failed to derive Entity: TokenStream [Punct { ch: ':', spacing: Joint, span: #0 bytes(86..87) }, Punct { ch: ':', spacing: Alone, span: #0 bytes(86..87) }, Ident { ident: "core", span: #0 bytes(86..87) }, Punct { ch: ':', spacing: Joint, span: #0 bytes(86..87) }, Punct { ch: ':', spacing: Alone, span: #0 bytes(86..87) }, Ident { ident: "compile_error", span: #0 bytes(86..87) }, Punct { ch: '!', spacing: Alone, span: #0 bytes(86..87) }, Group { delimiter: Brace, stream: TokenStream [Literal { kind: Str, symbol: "Multiple `#[pk]` columns found; only one is allowed", suffix: None, span: #0 bytes(86..87) }], span: #0 bytes(86..87) }]

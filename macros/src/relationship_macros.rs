@@ -1,6 +1,10 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use crate::entity_macros::{Multiplicity, Pk, Relationship};
+use crate::entity_macros::{Multiplicity, Pk, Relationship, Transient};
+
+pub struct TransientMacros {
+    pub struct_initializer: TokenStream,
+}
 
 pub struct RelationshipMacros {
     pub struct_initializer: TokenStream,
@@ -9,6 +13,21 @@ pub struct RelationshipMacros {
     pub delete_statement: TokenStream,
     pub delete_many_statement: TokenStream,
     pub query_function: (String, TokenStream),
+}
+
+impl TransientMacros {
+    pub fn new(transients: Vec<Transient>) -> Vec<(Transient, TransientMacros)> {
+        let mut transient_macros: Vec<(Transient, TransientMacros)> = Vec::new();
+        for transient in transients {
+            let field_name = &transient.field.name;
+            let field_type = &transient.field.tpe;
+            let struct_initializer = quote! {
+                #field_name: <#field_type as Default>::default()
+            };
+            transient_macros.push((transient, TransientMacros { struct_initializer}))
+        }
+        transient_macros
+    }
 }
 
 impl RelationshipMacros {

@@ -1,6 +1,6 @@
 use crate::column_macros::ColumnMacros;
 use crate::pk_macros::PkMacros;
-use crate::relationship_macros::RelationshipMacros;
+use crate::relationship_macros::{RelationshipMacros, TransientMacros};
 
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
@@ -27,6 +27,7 @@ enum ParsingResult {
     Pk(Pk),
     Column(Column),
     RelationShip(Relationship),
+    Transient(Transient),
 }
 
 #[derive(Clone)]
@@ -45,6 +46,10 @@ pub struct Column {
     pub indexing: Indexing,
 }
 
+pub struct Transient {
+    pub field: Field,
+}
+
 #[derive(Clone)]
 pub struct Relationship {
     pub field: Field,
@@ -56,14 +61,23 @@ pub struct EntityMacros {
     pub pk_column: (Pk, PkMacros),
     pub columns: Vec<(Column, ColumnMacros)>,
     pub relationships: Vec<(Relationship, RelationshipMacros)>,
+    pub transients: Vec<(Transient, TransientMacros)>,
+}
+
+pub struct FieldMacros {
+    pub pk: Pk,
+    pub columns: Vec<Column>,
+    pub relationships: Vec<Relationship>,
+    pub transients: Vec<Transient>
 }
 
 impl EntityMacros {
-    pub fn new(struct_name: Ident, pk_column: Pk, struct_columns: Vec<Column>, relationships: Vec<Relationship>) -> Result<EntityMacros, syn::Error> {
-        let pk_name = &pk_column.field.name;
-        let pk_type = &pk_column.field.tpe;
+    pub fn new(struct_name: Ident, field_macros: FieldMacros) -> Result<EntityMacros, syn::Error> {
+        let FieldMacros { pk, columns, relationships, transients } = field_macros;
+        let pk_name = &pk.field.name;
+        let pk_type = &pk.field.tpe;
         let mut column_macros: Vec<(Column, ColumnMacros)> = Vec::new();
-        for struct_column in struct_columns.into_iter() {
+        for struct_column in columns.into_iter() {
             let column_name = &struct_column.field.name.clone();
             let column_type = &struct_column.field.tpe.clone();
             match struct_column.indexing {
@@ -82,9 +96,16 @@ impl EntityMacros {
             }
         }
         // println!("Tables for {}:\n{}\n{}\n", struct_name, table_name_str, table_names.join("\n"));
-        let pk_macros = PkMacros::new(&struct_name, &pk_column);
-        let relationship_macros = RelationshipMacros::new(&pk_column, relationships);
-        Ok(EntityMacros { struct_name, pk_column: (pk_column, pk_macros), columns: column_macros, relationships: relationship_macros })
+        let pk_macros = PkMacros::new(&struct_name, &pk);
+        let relationship_macros = RelationshipMacros::new(&pk, relationships);
+        let transient_macros = TransientMacros::new(transients);
+        Ok(EntityMacros {
+            struct_name,
+            pk_column: (pk, pk_macros),
+            columns: column_macros,
+            relationships: relationship_macros,
+            transients: transient_macros
+        })
     }
 
     pub fn expand(&self) -> TokenStream {
@@ -125,6 +146,10 @@ impl EntityMacros {
             functions.push(macros.query_function.clone());
             delete_statements.push(macros.delete_statement.clone());
             delete_many_statements.push(macros.delete_many_statement.clone());
+        }
+
+        for (_, macros) in &self.transients {
+            struct_initializers.push(macros.struct_initializer.clone());
         }
         let function_macros: Vec<TokenStream> = functions.into_iter().map(|f| f.1).collect::<Vec<_>>();
         let table_definition_names: Vec<String> = table_definitions.iter().map(|(name, _)| name.to_string()).collect();
@@ -255,6 +280,9 @@ impl EntityMacros {
                         });
                         let field = Field { name: column_name.clone(), tpe: column_type.clone() };
                         return Ok(ParsingResult::Column(Column { field, indexing }));
+                    } else if attr.path().is_ident("transient") {
+                        let field = Field { name: column_name.clone(), tpe: column_type.clone() };
+                        return Ok(ParsingResult::Transient(Transient{field}))
                     } else if let Type::Path(type_path) = &column_type {
                         if let Some(segment) = type_path.path.segments.last() {
                             if attr.path().is_ident("one2many") && segment.ident == "Vec" {
@@ -275,19 +303,19 @@ impl EntityMacros {
                         }
                     }
                 }
-
                 Err(syn::Error::new(
                     field.span(),
-                    "Field must have one of #[pk(...)] / #[column(...)] / #[one2one] / #[one2many] annotations of expected underlying types",
+                    "Field must have one of #[pk(...)] / #[column(...)] / #[one2one] / #[one2many] / #[transient] annotations of expected underlying types",
                 ))
             }
         }
     }
 
-    pub fn get_pk_and_column_macros(fields: &Punctuated<syn::Field, Comma>, ast: &DeriveInput) -> Result<(Pk, Vec<Column>, Vec<Relationship>), syn::Error> {
+    pub fn get_field_macros(fields: &Punctuated<syn::Field, Comma>, ast: &DeriveInput) -> Result<FieldMacros, syn::Error> {
         let mut pk_column: Option<Pk> = None;
         let mut columns: Vec<Column> = Vec::new();
         let mut relationships: Vec<Relationship> = Vec::new();
+        let mut transients: Vec<Transient> = Vec::new();
 
         for field in fields.iter() {
             match Self::parse_entity_field(field)? {
@@ -299,13 +327,18 @@ impl EntityMacros {
                     pk_column = Some(pk);
                 }
                 ParsingResult::RelationShip(relationship) => relationships.push(relationship),
+                ParsingResult::Transient(transient) => transients.push(transient),
             }
         }
 
-        let pk_col =
-            pk_column.ok_or_else(|| syn::Error::new(ast.span(), "`#[pk]` attribute not found on any column. Exactly one column must have `#[pk]`."))?;
+        let pk = pk_column.ok_or_else(|| syn::Error::new(ast.span(), "`#[pk]` attribute not found on any column. Exactly one column must have `#[pk]`."))?;
 
-        Ok((pk_col, columns, relationships))
+        Ok(FieldMacros {
+            pk,
+            columns,
+            relationships,
+            transients,
+        })
     }
 
 }

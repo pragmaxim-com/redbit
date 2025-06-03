@@ -1,5 +1,0 @@
-error: Field must have one of #[pk(...)] / #[column(...)] / #[one2one] / #[one2many] annotations of expected underlying types
- --> tests/failing/missing_field_annotation_test.rs:7:5
-  |
-7 |     name: String,
-  |     ^^^^
