@@ -1,7 +1,8 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use syn::{DeriveInput, Data, Fields, Attribute};
-use crate::entity_macros::{EntityMacros, Pk};
+use crate::entity_macros::Pk;
+use crate::macro_utils;
 
 pub enum PointerType {
     Root,
@@ -191,8 +192,14 @@ impl PkMacros {
                     return Err(syn::Error::new_spanned(input, "Child struct must have exactly two fields (parent and index)"));
                 }
 
-                let parent_field = fields.iter().find(|f| Self::has_parent_attribute(&f.attrs)).unwrap().clone();
-                let index_field = fields.iter().find(|f| !Self::has_parent_attribute(&f.attrs)).unwrap().clone();
+                let parent_field = match fields.iter().find(|f| Self::has_parent_attribute(&f.attrs)) {
+                    Some(f) => f.clone(),
+                    None => return Err(syn::Error::new_spanned(input, "Unable to find parent field")),
+                };
+                let index_field = match fields.iter().find(|f| !Self::has_parent_attribute(&f.attrs)) {
+                    Some(f) => f.clone(),
+                    None => return Err(syn::Error::new_spanned(input, "Unable to find index field")),
+                };
 
                 Ok((Some(parent_field), index_field))
             }
@@ -220,8 +227,7 @@ impl PkMacros {
             impl RootPointer for #struct_name {}
 
         };
-        EntityMacros::write_to_file(&expanded, &struct_name.to_string()).unwrap();
-        expanded
+        macro_utils::write_stream_and_return(expanded, &struct_name.to_string())
     }
 
     /// Generates trait implementations for **Child Pointers**.
@@ -262,8 +268,7 @@ impl PkMacros {
                 }
 
             };
-        EntityMacros::write_to_file(&expanded, &struct_name.to_string()).unwrap();
-        expanded
+        macro_utils::write_stream_and_return(expanded, &struct_name.to_string())
     }
 
     /// Checks if a field has the `#[parent]` attribute.

@@ -4,12 +4,10 @@ use crate::relationship_macros::{RelationshipMacros, TransientMacros};
 
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
-use std::env;
-use std::fs::OpenOptions;
-use std::io::Write;
 use syn::{spanned::Spanned, Data, DeriveInput, Fields, GenericArgument, PathArguments, Type};
 use syn::punctuated::Punctuated;
 use syn::token::Comma;
+use crate::macro_utils;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Indexing {
@@ -219,25 +217,8 @@ impl EntityMacros {
             }
         };
 
-        Self::write_to_file(&expanded, &struct_ident.to_string()).unwrap();
-        expanded
+        macro_utils::write_stream_and_return(expanded, &struct_ident.to_string())
     }
-
-    pub fn write_to_file(stream: &TokenStream, file_path: &str) -> Result<(), std::io::Error> {
-        let formatted_str = match syn::parse2(stream.clone()) {
-            Ok(ast) => prettyplease::unparse(&ast),
-            Err(_) => stream.to_string(),
-        };
-        let dir = env::temp_dir().join("redbit");
-        if !dir.exists() {
-            std::fs::create_dir_all(dir.clone())?;
-        }
-        let path = dir.join(format!("{}.rs", file_path));
-        let mut file = OpenOptions::new().create(true).write(true).append(false).open(&path)?;
-        file.write_all(formatted_str.as_bytes())?;
-        Ok(())
-    }
-
 
     pub fn get_named_fields(ast: &DeriveInput) -> Result<Punctuated<syn::Field, Comma>, syn::Error> {
         match &ast.data {
@@ -288,7 +269,9 @@ impl EntityMacros {
                             if attr.path().is_ident("one2many") && segment.ident == "Vec" {
                                 if let PathArguments::AngleBracketed(args) = &segment.arguments {
                                     if let Some(GenericArgument::Type(Type::Path(inner_type_path))) = args.args.first() {
-                                        let inner_type = &inner_type_path.path.segments.last().unwrap().ident;
+                                        let inner_type = 
+                                            &inner_type_path.path.segments.last()
+                                                .ok_or_else(|| syn::Error::new(field.span(), "Parent field missing"))?.ident;
                                         let type_path = Type::Path(syn::TypePath { qself: None, path: syn::Path::from(inner_type.clone()) });
                                         let field = Field { name: column_name.clone(), tpe: type_path };
                                         return Ok(ParsingResult::RelationShip(Relationship { field, multiplicity: Multiplicity::OneToMany }));

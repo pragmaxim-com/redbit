@@ -52,7 +52,12 @@ impl ColumnMacros {
             #column_name: {
                 let table_col_5 = read_tx.open_table(#table_ident)?;
                 let guard = table_col_5.get(pk)?;
-                guard.unwrap().value()
+                guard.ok_or_else(|| DbEngineError::NotFound(format!(
+                        "table `{}`: no row for primary key {:?}",
+                        stringify!(#table_ident),
+                        pk
+                    ))
+                )?.value()
             }
         };
         ColumnMacros { table_definitions, store_statement, store_many_statement, delete_statement, delete_many_statement, struct_initializer, functions: vec![] }
@@ -125,7 +130,12 @@ impl ColumnMacros {
             #column_name: {
                 let table_col_10 = read_tx.open_table(#table_ident)?;
                 let guard = table_col_10.get(pk)?;
-                guard.unwrap().value()
+                guard.ok_or_else(|| DbEngineError::NotFound(format!(
+                        "table `{}`: no row for primary key {:?}",
+                        stringify!(#table_ident),
+                        pk
+                    ))
+                )?.value()
             }
         };
         let mut functions: Vec<(String, TokenStream)> = Vec::new();
@@ -218,19 +228,19 @@ impl ColumnMacros {
             }
         ));
         table_definitions.push((
-            table_value_to_dict_pk_str.clone(), 
+            table_value_to_dict_pk_str.clone(),
             quote! {
                 pub const #table_value_to_dict_pk_ident: ::redb::TableDefinition<'static, Bincode<#column_type>, Bincode<#pk_type>> = ::redb::TableDefinition::new(#table_value_to_dict_pk_str);
             }
         ));
         table_definitions.push((
-            table_value_by_dict_pk_str.clone(), 
+            table_value_by_dict_pk_str.clone(),
             quote! {
                 pub const #table_value_by_dict_pk_ident: ::redb::TableDefinition<'static, Bincode<#pk_type>, Bincode<#column_type>> = ::redb::TableDefinition::new(#table_value_by_dict_pk_str);
             }
         ));
         table_definitions.push((
-            table_dict_index_str.clone(), 
+            table_dict_index_str.clone(),
             quote! {
                 pub const #table_dict_index_ident: ::redb::MultimapTableDefinition<'static, Bincode<#pk_type>, Bincode<#pk_type>>= ::redb::MultimapTableDefinition::new(#table_dict_index_str);
             }
@@ -325,10 +335,20 @@ impl ColumnMacros {
             #column_name: {
                 let pk2birth = read_tx.open_table(#table_dict_pk_by_pk_ident)?;
                 let birth_guard = pk2birth.get(pk)?;
-                let birth_id = birth_guard.unwrap().value();
+                let birth_id = birth_guard.ok_or_else(|| DbEngineError::NotFound(format!(
+                        "table_dict_pk_by_pk_ident `{}`: no row for primary key {:?}",
+                        stringify!(#table_dict_pk_by_pk_ident),
+                        pk
+                    ))
+                )?.value();
                 let birth2val = read_tx.open_table(#table_value_by_dict_pk_ident)?;
                 let val_guard = birth2val.get(&birth_id)?;
-                val_guard.unwrap().value()
+                val_guard.ok_or_else(|| DbEngineError::NotFound(format!(
+                        "table_value_by_dict_pk_ident `{}`: no row for birth id {:?}",
+                        stringify!(#table_value_by_dict_pk_ident),
+                        birth_id
+                    ))
+                )?.value()
             }
         };
         let mut functions: Vec<(String, TokenStream)> = Vec::new();

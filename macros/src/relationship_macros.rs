@@ -46,7 +46,7 @@ impl RelationshipMacros {
             match rel.multiplicity {
                 Multiplicity::OneToOne => {
                     struct_initializer = quote! {
-                        #field_name: #child_type::get(read_tx, pk)?.expect("Missing one-to-one child")
+                        #field_name: #child_type::get(read_tx, pk)?.ok_or_else(|| DbEngineError::NotFound(format!("Missing one-to-one child {:?}", pk)))?
                     };
                     store_statement = quote! {
                         let child = &instance.#field_name;

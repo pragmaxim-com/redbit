@@ -50,12 +50,14 @@ where
 #[derive(Debug)]
 pub enum DbEngineError {
     DbError(String),
+    NotFound(String),
 }
 
 impl std::fmt::Display for DbEngineError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             DbEngineError::DbError(msg) => write!(f, "Database error: {}", msg),
+            DbEngineError::NotFound(msg) => write!(f, "Not Found: {}", msg),
         }
     }
 }
@@ -118,7 +120,7 @@ where
     where
         Self: 'a,
     {
-        bincode::options().with_big_endian().with_fixint_encoding().deserialize(data).unwrap()
+        bincode::options().with_big_endian().with_fixint_encoding().deserialize(data).expect("Unable to deserialize value")
     }
 
     fn as_bytes<'a, 'b: 'a>(value: &'a Self::SelfType<'b>) -> Self::AsBytes<'a>
@@ -126,7 +128,7 @@ where
         Self: 'a,
         Self: 'b,
     {
-        bincode::options().with_big_endian().with_fixint_encoding().serialize(value).unwrap()
+        bincode::options().with_big_endian().with_fixint_encoding().serialize(value).expect("Unable to serialize value")
     }
 
     fn type_name() -> TypeName {
