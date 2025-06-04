@@ -2,6 +2,13 @@ use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use syn::Type;
 
+#[derive(Clone)]
+pub struct EndpointMacro {
+    pub endpoint: String,
+    pub function_name: Ident,
+    pub handler: TokenStream,
+}
+
 pub struct ColumnMacros {
     pub table_definitions: Vec<(String, TokenStream)>,
     pub store_statement: TokenStream,
@@ -10,6 +17,7 @@ pub struct ColumnMacros {
     pub delete_many_statement: TokenStream,
     pub struct_initializer: TokenStream,
     pub functions: Vec<(String, TokenStream)>,
+    pub endpoints: Vec<EndpointMacro>,
 }
 
 impl ColumnMacros {
@@ -52,7 +60,7 @@ impl ColumnMacros {
             #column_name: {
                 let table_col_5 = read_tx.open_table(#table_ident)?;
                 let guard = table_col_5.get(pk)?;
-                guard.ok_or_else(|| DbEngineError::NotFound(format!(
+                guard.ok_or_else(|| AppError::NotFound(format!(
                         "table `{}`: no row for primary key {:?}",
                         stringify!(#table_ident),
                         pk
@@ -60,7 +68,7 @@ impl ColumnMacros {
                 )?.value()
             }
         };
-        ColumnMacros { table_definitions, store_statement, store_many_statement, delete_statement, delete_many_statement, struct_initializer, functions: vec![] }
+        ColumnMacros { table_definitions, store_statement, store_many_statement, delete_statement, delete_many_statement, struct_initializer, functions: vec![], endpoints: vec![] }
     }
 
     pub fn indexed(struct_name: &Ident, pk_name: &Ident, pk_type: &Type, column_name: &Ident, column_type: &Type, range: bool) -> ColumnMacros {
@@ -130,7 +138,7 @@ impl ColumnMacros {
             #column_name: {
                 let table_col_10 = read_tx.open_table(#table_ident)?;
                 let guard = table_col_10.get(pk)?;
-                guard.ok_or_else(|| DbEngineError::NotFound(format!(
+                guard.ok_or_else(|| AppError::NotFound(format!(
                         "table `{}`: no row for primary key {:?}",
                         stringify!(#table_ident),
                         pk
@@ -139,14 +147,14 @@ impl ColumnMacros {
             }
         };
         let mut functions: Vec<(String, TokenStream)> = Vec::new();
-        let get_fn_name = format_ident!("get_by_{}", column_name);
+        let get_by_name = format_ident!("get_by_{}", column_name);
         functions.push((
-            get_fn_name.to_string(),
+            get_by_name.to_string(),
             quote! {
-                pub fn #get_fn_name(
+                pub fn #get_by_name(
                     read_tx: &::redb::ReadTransaction,
                     val: &#column_type
-                ) -> Result<Vec<#struct_name>, DbEngineError> {
+                ) -> Result<Vec<#struct_name>, AppError> {
                     let mm_table = read_tx.open_multimap_table(#index_table_ident)?;
                     let mut iter = mm_table.get(val)?;
                     let mut results = Vec::new();
@@ -157,7 +165,7 @@ impl ColumnMacros {
                                 results.push(item);
                             }
                             Err(err) => {
-                                return Err(DbEngineError::DbError(err.to_string()));
+                                return Err(AppError::Internal(err.to_string()));
                             }
                         }
                     }
@@ -166,16 +174,35 @@ impl ColumnMacros {
             },
         ));
 
+        let handle_get_by_name = format_ident!("{}_handle_{}", struct_name.to_string().to_lowercase(), get_by_name);
+        let mut endpoints: Vec<EndpointMacro> = Vec::new();
+        endpoints.push(EndpointMacro {
+            endpoint: format!("/{}/{}", struct_name.to_string().to_lowercase(), get_by_name),
+            function_name: handle_get_by_name.clone(),
+            handler: quote! {
+                #[axum::debug_handler]
+                pub async fn #handle_get_by_name(
+                    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+                    AppJson(params): AppJson<ByParams<#column_type>>,
+                ) -> Result<AppJson<Vec<#struct_name>>, AppError> {
+                    state.db.begin_read()
+                        .map_err(|err| err.into())
+                        .and_then(|read_tx| #struct_name::#get_by_name(&read_tx, &params.value))
+                        .map(|result| AppJson(result))
+                }
+           },
+        });
+
         if range {
-            let range_fn_name = format_ident!("range_by_{}", column_name);
+            let range_by_name = format_ident!("range_by_{}", column_name);
             functions.push((
-                range_fn_name.to_string(),
+                range_by_name.to_string(),
                 quote! {
-                    pub fn #range_fn_name(
+                    pub fn #range_by_name(
                         read_tx: &::redb::ReadTransaction,
                         from: &#column_type,
                         until: &#column_type
-                    ) -> Result<Vec<#struct_name>, DbEngineError> {
+                    ) -> Result<Vec<#struct_name>, AppError> {
                         let mm_table = read_tx.open_multimap_table(#index_table_ident)?;
                         let range_iter = mm_table.range(from.clone()..until.clone())?;
                         let mut results = Vec::new();
@@ -188,7 +215,7 @@ impl ColumnMacros {
                                         results.push(item);
                                     }
                                     Err(err) => {
-                                        return Err(DbEngineError::DbError(err.to_string()));
+                                        return Err(AppError::Internal(err.to_string()));
                                     }
                                 }
                             }
@@ -196,9 +223,26 @@ impl ColumnMacros {
                         Ok(results)
                     }
                 },
-            ))
+            ));
+            let handle_range_by_name = format_ident!("{}_handle_{}", struct_name.to_string().to_lowercase(), range_by_name);
+            endpoints.push(EndpointMacro {
+                endpoint: format!("/{}/{}", struct_name.to_string().to_lowercase(), range_by_name),
+                function_name: handle_range_by_name.clone(),
+                handler: quote! {
+                    #[axum::debug_handler]
+                    pub async fn #handle_range_by_name(
+                        ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+                        AppJson(params): AppJson<RangeParams<#column_type, #column_type>>,
+                    ) -> Result<AppJson<Vec<#struct_name>>, AppError> {
+                        state.db.begin_read()
+                            .map_err(|err| err.into())
+                            .and_then(|read_tx| #struct_name::#range_by_name(&read_tx, &params.from, &params.to))
+                            .map(|result| AppJson(result))
+                    }
+                }
+            });
         };
-        ColumnMacros { table_definitions, store_statement, store_many_statement, delete_statement, delete_many_statement, struct_initializer, functions }
+        ColumnMacros { table_definitions, store_statement, store_many_statement, delete_statement, delete_many_statement, struct_initializer, functions, endpoints }
     }
 
     pub fn indexed_with_dict(struct_name: &Ident, pk_name: &Ident, pk_type: &Type, column_name: &Ident, column_type: &Type) -> ColumnMacros {
@@ -335,7 +379,7 @@ impl ColumnMacros {
             #column_name: {
                 let pk2birth = read_tx.open_table(#table_dict_pk_by_pk_ident)?;
                 let birth_guard = pk2birth.get(pk)?;
-                let birth_id = birth_guard.ok_or_else(|| DbEngineError::NotFound(format!(
+                let birth_id = birth_guard.ok_or_else(|| AppError::NotFound(format!(
                         "table_dict_pk_by_pk_ident `{}`: no row for primary key {:?}",
                         stringify!(#table_dict_pk_by_pk_ident),
                         pk
@@ -343,7 +387,7 @@ impl ColumnMacros {
                 )?.value();
                 let birth2val = read_tx.open_table(#table_value_by_dict_pk_ident)?;
                 let val_guard = birth2val.get(&birth_id)?;
-                val_guard.ok_or_else(|| DbEngineError::NotFound(format!(
+                val_guard.ok_or_else(|| AppError::NotFound(format!(
                         "table_value_by_dict_pk_ident `{}`: no row for birth id {:?}",
                         stringify!(#table_value_by_dict_pk_ident),
                         birth_id
@@ -359,7 +403,7 @@ impl ColumnMacros {
                 pub fn #get_fn_name(
                     read_tx: &::redb::ReadTransaction,
                     val: &#column_type
-                ) -> Result<Vec<#struct_name>, DbEngineError> {
+                ) -> Result<Vec<#struct_name>, AppError> {
                     let val2birth = read_tx.open_table(#table_value_to_dict_pk_ident)?;
                     let birth_guard = val2birth.get(val)?;
                     let birth_id = match birth_guard {
@@ -376,7 +420,7 @@ impl ColumnMacros {
                                 results.push(item);
                             }
                             Err(err) => {
-                                return Err(DbEngineError::DbError(err.to_string()));
+                                return Err(AppError::Internal(err.to_string()));
                             }
                         }
                     }
@@ -384,6 +428,6 @@ impl ColumnMacros {
                 }
             },
         ));
-        ColumnMacros { table_definitions, store_statement, store_many_statement, delete_statement, delete_many_statement, struct_initializer, functions }
+        ColumnMacros { table_definitions, store_statement, store_many_statement, delete_statement, delete_many_statement, struct_initializer, functions, endpoints: vec![] }
     }
 }

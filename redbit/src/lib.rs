@@ -1,4 +1,4 @@
-//! redbit reads struct annotations and derives code necessary for persisting and querying structured data into/from 
+//! redbit reads struct annotations and derives code necessary for persisting and querying structured data into/from
 //! [Redb](https://github.com/cberner/redb) using secondary indexes and dictionaries.
 //!
 //! It leverages the `redb` crate for storage, with custom implementations for serializing and deserializing data using `bincode`.
@@ -9,6 +9,8 @@ pub use macros::Entity;
 pub use macros::PK;
 pub use redb::ReadableMultimapTable;
 pub use redb::ReadableTable;
+pub use inventory;
+pub use axum;
 
 use bincode::Options;
 use redb::{Key, TypeName, Value};
@@ -17,7 +19,16 @@ use serde::{Deserialize, Serialize};
 use std::any::type_name;
 use std::cmp::Ordering;
 use std::fmt::Debug;
+use std::net::SocketAddr;
 use std::ops::Add;
+use axum::extract::FromRequest;
+use axum::extract::rejection::JsonRejection;
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
+use axum::Router;
+use tokio::net::TcpListener;
+use std::sync::Arc;
+use redb::Database;
 
 pub trait IndexedPointer: Clone {
     type Index: Copy + Ord + Add<Output = Self::Index> + Default;
@@ -48,50 +59,58 @@ where
 }
 
 #[derive(Debug)]
-pub enum DbEngineError {
-    DbError(String),
+pub enum AppError {
+    Internal(String),
     NotFound(String),
+    JsonRejection(JsonRejection),
 }
 
-impl std::fmt::Display for DbEngineError {
+impl std::fmt::Display for AppError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            DbEngineError::DbError(msg) => write!(f, "Database error: {}", msg),
-            DbEngineError::NotFound(msg) => write!(f, "Not Found: {}", msg),
+            AppError::Internal(msg) => write!(f, "Database error: {}", msg),
+            AppError::NotFound(msg) => write!(f, "Not Found: {}", msg),
+            AppError::JsonRejection(reject) => write!(f, "Json rejection: {}", reject),
         }
     }
 }
 
-impl std::error::Error for DbEngineError {}
+impl From<JsonRejection> for AppError {
+    fn from(rejection: JsonRejection) -> Self {
+        Self::JsonRejection(rejection)
+    }
+}
 
-impl From<redb::Error> for DbEngineError {
+impl std::error::Error for AppError {}
+
+impl From<redb::Error> for AppError {
     fn from(e: redb::Error) -> Self {
-        DbEngineError::DbError(e.to_string())
+        AppError::Internal(e.to_string())
     }
 }
-impl From<redb::DatabaseError> for DbEngineError {
+impl From<redb::DatabaseError> for AppError {
     fn from(e: redb::DatabaseError) -> Self {
-        DbEngineError::DbError(e.to_string())
+        AppError::Internal(e.to_string())
     }
 }
-impl From<redb::TransactionError> for DbEngineError {
+impl From<redb::TransactionError> for AppError {
     fn from(e: redb::TransactionError) -> Self {
-        DbEngineError::DbError(e.to_string())
+        AppError::Internal(e.to_string())
     }
 }
-impl From<redb::StorageError> for DbEngineError {
+impl From<redb::StorageError> for AppError {
     fn from(e: redb::StorageError) -> Self {
-        DbEngineError::DbError(e.to_string())
+        AppError::Internal(e.to_string())
     }
 }
-impl From<redb::TableError> for DbEngineError {
+impl From<redb::TableError> for AppError {
     fn from(e: redb::TableError) -> Self {
-        DbEngineError::DbError(e.to_string())
+        AppError::Internal(e.to_string())
     }
 }
-impl From<redb::CommitError> for DbEngineError {
+impl From<redb::CommitError> for AppError {
     fn from(e: redb::CommitError) -> Self {
-        DbEngineError::DbError(e.to_string())
+        AppError::Internal(e.to_string())
     }
 }
 
@@ -143,4 +162,75 @@ where
     fn compare(data1: &[u8], data2: &[u8]) -> Ordering {
         Self::from_bytes(data1).cmp(&Self::from_bytes(data2))
     }
+}
+
+#[derive(Deserialize)]
+pub struct RangeParams<F, T> {
+    pub from: F,
+    pub to: T,
+}
+
+#[derive(Deserialize)]
+pub struct ByParams<B> {
+    pub value: B,
+}
+
+// Create our own JSON extractor by wrapping `axum::Json`. This makes it easy to override the
+// rejection and provide our own which formats errors to match our application.
+//
+// `axum::Json` responds with plain text if the input is invalid.
+#[derive(FromRequest)]
+#[from_request(via(axum::Json), rejection(AppError))]
+pub struct AppJson<T>(pub T);
+
+impl<T> IntoResponse for AppJson<T>
+where
+    axum::Json<T>: IntoResponse,
+{
+    fn into_response(self) -> Response {
+        axum::Json(self.0).into_response()
+    }
+}
+
+impl IntoResponse for AppError {
+    fn into_response(self) -> Response {
+        #[derive(Serialize)]
+        struct ErrorResponse {
+            message: String,
+        }
+
+        let (status, message) = match self {
+            AppError::NotFound(msg) =>
+                (StatusCode::NOT_FOUND, msg),
+            AppError::JsonRejection(rejection) => 
+                (rejection.status(), rejection.body_text()),
+            AppError::Internal(msg) =>
+                (StatusCode::INTERNAL_SERVER_ERROR, msg),
+        };
+
+        (status, AppJson(ErrorResponse { message })).into_response()
+    }
+}
+
+#[derive(Clone)]
+pub struct RequestState {
+    pub db: Arc<Database>
+}
+
+pub struct EntityInfo {
+    pub name: &'static str,
+    pub routes_fn: fn() -> axum::Router<RequestState>,
+}
+
+inventory::collect!(EntityInfo);
+
+pub async fn serve(state: RequestState, socket_addr: SocketAddr) -> () {
+    let mut router = Router::new();
+    for reg in inventory::iter::<EntityInfo> {
+        router = router.merge((reg.routes_fn)());
+    }
+    let router_with_state: Router<()> = router.with_state(state);
+    println!("Starting server on {}", socket_addr);
+    let tcp = TcpListener::bind(socket_addr).await.unwrap();
+    axum::serve(tcp, router_with_state).await.unwrap();
 }

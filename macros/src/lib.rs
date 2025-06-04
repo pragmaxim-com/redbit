@@ -1,11 +1,11 @@
 extern crate proc_macro;
-
 mod column_macros;
 mod entity_macros;
 mod pk_macros;
 mod relationship_macros;
 mod macro_utils;
 
+use quote::quote;
 use crate::entity_macros::EntityMacros;
 use crate::pk_macros::{PkMacros, PointerType};
 use syn::{parse_macro_input, DeriveInput};
@@ -41,15 +41,29 @@ pub fn derive_entity(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
     let ast: DeriveInput = parse_macro_input!(input as DeriveInput);
     let struct_name = &ast.ident;
 
-    match EntityMacros::get_named_fields(&ast)
+    let register = quote! {
+        inventory::submit! {
+            EntityInfo {
+                name: stringify!(#struct_name),
+                routes_fn: #struct_name::routes,
+            }
+        }
+    };
+
+    let stream = EntityMacros::get_named_fields(&ast)
         .and_then(|named_fields| {
             EntityMacros::get_field_macros(&named_fields, &ast)
         })
         .and_then(|field_macros| {
             EntityMacros::new(struct_name.clone(), field_macros)
         })
-        .map(|entity_macros| entity_macros.expand()) {
-            Ok(stream) => stream.into(),
-            Err(e) => e.to_compile_error().into(),
-        }
+        .map(|entity_macros| entity_macros.expand()).unwrap_or_else(|e| e.to_compile_error().into());
+
+    // Combine both parts
+    let expanded = quote! {
+        #stream
+        #register
+    };
+
+    expanded.into()
 }

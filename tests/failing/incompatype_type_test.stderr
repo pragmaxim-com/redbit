@@ -1,5 +1,18 @@
 error: `#[derive(Entity)]` can only be applied to structs.
  --> tests/failing/incompatype_type_test.rs:4:1
   |
+4 | / enum Enum {
+5 | |     Variant1,
+6 | |     Variant2,
+7 | | }
+  | |_^
+
+error[E0599]: no variant or associated item named `routes` found for enum `Enum` in the current scope
+ --> tests/failing/incompatype_type_test.rs:3:10
+  |
+3 | #[derive(Entity)]
+  |          ^^^^^^ variant or associated item not found in `Enum`
 4 | enum Enum {
-  | ^^^^
+  | --------- variant or associated item `routes` not found for this enum
+  |
+  = note: this error originates in the derive macro `Entity` (in Nightly builds, run with -Z macro-backtrace for more info)

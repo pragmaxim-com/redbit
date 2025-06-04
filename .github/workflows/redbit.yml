@@ -86,7 +86,7 @@ jobs:
       - name: Update README
         run: |
           LIB_CONTENT=$(cat examples/utxo/src/lib.rs | sed 's/^/    /')
-          MAIN_CONTENT=$(cat examples/utxo/src/main.rs | sed 's/^/    /')
+          MAIN_CONTENT=$(cat examples/utxo/src/db_demo.rs | sed 's/^/    /')
 
           # Update BEGIN_LIB and BEGIN_MAIN sections
           awk -v lib_content="$LIB_CONTENT" -v main_content="$MAIN_CONTENT" '

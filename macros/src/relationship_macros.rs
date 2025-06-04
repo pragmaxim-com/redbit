@@ -46,7 +46,7 @@ impl RelationshipMacros {
             match rel.multiplicity {
                 Multiplicity::OneToOne => {
                     struct_initializer = quote! {
-                        #field_name: #child_type::get(read_tx, pk)?.ok_or_else(|| DbEngineError::NotFound(format!("Missing one-to-one child {:?}", pk)))?
+                        #field_name: #child_type::get(read_tx, pk)?.ok_or_else(|| AppError::NotFound(format!("Missing one-to-one child {:?}", pk)))?
                     };
                     store_statement = quote! {
                         let child = &instance.#field_name;
@@ -66,9 +66,9 @@ impl RelationshipMacros {
                     query_function = (
                         query_fn_name.to_string(),
                         quote! {
-                            pub fn #query_fn_name(read_tx: &::redb::ReadTransaction, pk: &#pk_type) -> Result<#child_type, DbEngineError> {
+                            pub fn #query_fn_name(read_tx: &::redb::ReadTransaction, pk: &#pk_type) -> Result<#child_type, AppError> {
                                 #child_type::get(&read_tx, &pk).and_then(|opt| {
-                                    opt.ok_or_else(|| DbEngineError::DbError(format!("No child found for pk: {:?}", pk)))
+                                    opt.ok_or_else(|| AppError::Internal(format!("No child found for pk: {:?}", pk)))
                                 })
                             }
                         },
@@ -109,7 +109,7 @@ impl RelationshipMacros {
                     query_function = (
                         query_fn_name.to_string(),
                         quote! {
-                            pub fn #query_fn_name(read_tx: &::redb::ReadTransaction, pk: &#pk_type) -> Result<Vec<#child_type>, DbEngineError> {
+                            pub fn #query_fn_name(read_tx: &::redb::ReadTransaction, pk: &#pk_type) -> Result<Vec<#child_type>, AppError> {
                                 let (from, to) = pk.fk_range();
                                 #child_type::range(&read_tx, &from, &to)
                             }

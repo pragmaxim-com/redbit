@@ -174,7 +174,7 @@ And R/W entire instances efficiently using indexes and dictionaries `examples/ut
     use std::env;
     use utxo::*;
     
-    fn demo() -> Result<(), DbEngineError> {
+    fn demo() -> Result<(), AppError> {
         let dir = env::temp_dir().join("redbit");
         let db = redb::Database::create(dir.join("my_db.redb"))?;
         let blocks = get_blocks(Height(1), 10, 10, 3);

@@ -40,7 +40,7 @@ struct ChildPK {
     pub index: u32,
 }
 
-#[derive(Entity)]
+#[derive(Entity, Serialize)]
 struct StructWithPersistedEntityField {
     #[pk]
     id: u32,
@@ -56,7 +56,7 @@ struct StructWithPersistedEntityFieldWithDict {
     persisted_indexed_with_dict: i32,
 }
 
-#[derive(Entity)]
+#[derive(Entity, Serialize)]
 pub struct FullStruct {
     #[pk]
     pub id: u32,

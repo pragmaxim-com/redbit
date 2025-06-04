@@ -1,5 +1,16 @@
 error: Multiple `#[pk]` columns found; only one is allowed
  --> tests/failing/double_pk_test.rs:7:5
   |
-7 |     #[pk]
-  |     ^
+7 | /     #[pk]
+8 | |     id2: u32,
+  | |____________^
+
+error[E0599]: no function or associated item named `routes` found for struct `DoublePkStruct` in the current scope
+ --> tests/failing/double_pk_test.rs:3:10
+  |
+3 | #[derive(Entity)]
+  |          ^^^^^^ function or associated item not found in `DoublePkStruct`
+4 | struct DoublePkStruct {
+  | --------------------- function or associated item `routes` not found for this struct
+  |
+  = note: this error originates in the derive macro `Entity` (in Nightly builds, run with -Z macro-backtrace for more info)

@@ -1,4 +1,4 @@
-use crate::column_macros::ColumnMacros;
+use crate::column_macros::{ColumnMacros};
 use crate::pk_macros::PkMacros;
 use crate::relationship_macros::{RelationshipMacros, TransientMacros};
 
@@ -126,6 +126,7 @@ impl EntityMacros {
         let mut delete_many_statements = Vec::new();
         let mut functions = Vec::new();
         functions.extend(pk_column_macros.functions.clone());
+        let mut endpoints = Vec::new();
 
         for (_, macros) in &self.columns {
             table_definitions.extend(macros.table_definitions.clone());
@@ -133,6 +134,7 @@ impl EntityMacros {
             store_many_statements.push(macros.store_many_statement.clone());
             struct_initializers.push(macros.struct_initializer.clone());
             functions.extend(macros.functions.clone());
+            endpoints.extend(macros.endpoints.clone());
             delete_statements.push(macros.delete_statement.clone());
             delete_many_statements.push(macros.delete_many_statement.clone());
         }
@@ -141,7 +143,7 @@ impl EntityMacros {
             store_statements.push(macros.store_statement.clone());
             store_many_statements.push(macros.store_many_statement.clone());
             struct_initializers.push(macros.struct_initializer.clone());
-            functions.push(macros.query_function.clone());
+            functions.push(macros.query_function.clone()); //TODO endpoints
             delete_statements.push(macros.delete_statement.clone());
             delete_many_statements.push(macros.delete_many_statement.clone());
         }
@@ -153,38 +155,57 @@ impl EntityMacros {
         let table_definition_names: Vec<String> = table_definitions.iter().map(|(name, _)| name.to_string()).collect();
         let table_definition_streams: Vec<TokenStream> = table_definitions.into_iter().map(|(_, stream)| stream).collect();
 
-        eprintln!("Pk     :  {}", pk_table_name);
+        eprintln!("Pk        :  {}", pk_table_name);
         for column_table_name in &table_definition_names {
-            eprintln!("Index  :  {}", column_table_name);
+            eprintln!("Index     :  {}", column_table_name);
+        }
+        for endpoint in &endpoints {
+            eprintln!("Endpoint  :  {}", endpoint.endpoint);
         }
 
+        let endpoint_macros: Vec<TokenStream> = endpoints.iter().map(|e| e.handler.clone()).collect();
+        let route_chains: Vec<TokenStream> =
+            endpoints
+                .into_iter()
+                .map(|e| (e.endpoint, e.function_name))
+                .map(|(endpoint, function_name)| {
+                    quote! {
+                        .route(#endpoint, ::axum::routing::get(#function_name))
+                    }
+                })
+                .collect();
+
         let expanded = quote! {
+            // table definitions are not in the impl object because they are accessed globally with semantic meaning
             #pk_table_definition
             #(#table_definition_streams)*
+            // axum endpoints cannot be in the impl object https://docs.rs/axum/latest/axum/attr.debug_handler.html#limitations
+            #(#endpoint_macros)*
 
             impl #struct_ident {
+
                 #(#function_macros)*
 
-                fn compose(read_tx: &::redb::ReadTransaction, pk: &#pk_type) -> Result<#struct_ident, DbEngineError> {
+                fn compose(read_tx: &::redb::ReadTransaction, pk: &#pk_type) -> Result<#struct_ident, AppError> {
                     Ok(#struct_ident {
                         #pk_ident: pk.clone(),
                         #(#struct_initializers),*
                     })
                 }
 
-                pub fn delete(write_tx: &::redb::WriteTransaction, pk: &#pk_type) -> Result<(), DbEngineError> {
+                pub fn delete(write_tx: &::redb::WriteTransaction, pk: &#pk_type) -> Result<(), AppError> {
                     #pk_delete_statement
                     #(#delete_statements)*
                     Ok(())
                 }
 
-                pub fn delete_many(write_tx: &::redb::WriteTransaction, pks: &Vec<#pk_type>) -> Result<(), DbEngineError> {
+                pub fn delete_many(write_tx: &::redb::WriteTransaction, pks: &Vec<#pk_type>) -> Result<(), AppError> {
                     #pk_delete_many_statement
                     #(#delete_many_statements)*
                     Ok(())
                 }
 
-                pub fn delete_and_commit(db: &::redb::Database, pk: &#pk_type) -> Result<(), DbEngineError> {
+                pub fn delete_and_commit(db: &::redb::Database, pk: &#pk_type) -> Result<(), AppError> {
                     let write_tx = db.begin_write()?;
                     {
                         #pk_delete_statement
@@ -194,18 +215,18 @@ impl EntityMacros {
                     Ok(())
                 }
 
-                pub fn store_many(write_tx: &::redb::WriteTransaction, instances: &Vec<#struct_ident>) -> Result<(), DbEngineError> {
+                pub fn store_many(write_tx: &::redb::WriteTransaction, instances: &Vec<#struct_ident>) -> Result<(), AppError> {
                     #pk_store_many_statement
                     #(#store_many_statements)*
                     Ok(())
                 }
 
-                pub fn store(write_tx: &::redb::WriteTransaction, instance: &#struct_ident) -> Result<(), DbEngineError> {
+                pub fn store(write_tx: &::redb::WriteTransaction, instance: &#struct_ident) -> Result<(), AppError> {
                     #pk_store_statement
                     #(#store_statements)*
                     Ok(())
                 }
-                pub fn store_and_commit(db: &::redb::Database, instance: &#struct_ident) -> Result<(), DbEngineError> {
+                pub fn store_and_commit(db: &::redb::Database, instance: &#struct_ident) -> Result<(), AppError> {
                     let write_tx = db.begin_write()?;
                     {
                         #pk_store_statement
@@ -213,6 +234,11 @@ impl EntityMacros {
                     }
                     write_tx.commit()?;
                     Ok(())
+                }
+
+                    pub fn routes() -> axum::Router<RequestState> {
+                        axum::Router::new()
+                            #(#route_chains)*
                 }
             }
         };
@@ -269,7 +295,7 @@ impl EntityMacros {
                             if attr.path().is_ident("one2many") && segment.ident == "Vec" {
                                 if let PathArguments::AngleBracketed(args) = &segment.arguments {
                                     if let Some(GenericArgument::Type(Type::Path(inner_type_path))) = args.args.first() {
-                                        let inner_type = 
+                                        let inner_type =
                                             &inner_type_path.path.segments.last()
                                                 .ok_or_else(|| syn::Error::new(field.span(), "Parent field missing"))?.ident;
                                         let type_path = Type::Path(syn::TypePath { qself: None, path: syn::Path::from(inner_type.clone()) });

@@ -59,7 +59,7 @@ impl PkMacros {
         functions.push((
             get_fn_name.to_string(),
             quote! {
-                pub fn #get_fn_name(read_tx: &::redb::ReadTransaction, pk: &#pk_type) -> Result<Option<#struct_name>, DbEngineError> {
+                pub fn #get_fn_name(read_tx: &::redb::ReadTransaction, pk: &#pk_type) -> Result<Option<#struct_name>, AppError> {
                     let table_pk_5 = read_tx.open_table(#table_ident)?;
                     if table_pk_5.get(pk)?.is_some() {
                         Ok(Some(Self::compose(&read_tx, pk)?))
@@ -74,7 +74,7 @@ impl PkMacros {
         functions.push((
             all_fn_name.to_string(),
             quote! {
-                pub fn #all_fn_name(read_tx: &::redb::ReadTransaction) -> Result<Vec<#struct_name>, DbEngineError> {
+                pub fn #all_fn_name(read_tx: &::redb::ReadTransaction) -> Result<Vec<#struct_name>, AppError> {
                     let table_pk_6 = read_tx.open_table(#table_ident)?;
                     let mut iter = table_pk_6.iter()?;
                     let mut results = Vec::new();
@@ -91,7 +91,7 @@ impl PkMacros {
         functions.push((
             first_fn_name.to_string(),
             quote! {
-                pub fn #first_fn_name(read_tx: &::redb::ReadTransaction) -> Result<Option<#struct_name>, DbEngineError> {
+                pub fn #first_fn_name(read_tx: &::redb::ReadTransaction) -> Result<Option<#struct_name>, AppError> {
                     let table_pk_7 = read_tx.open_table(#table_ident)?;
                     if let Some((k, _)) = table_pk_7.first()? {
                         return Self::compose(&read_tx, &k.value()).map(Some);
@@ -105,7 +105,7 @@ impl PkMacros {
         functions.push((
             last_fn_name.to_string(),
             quote! {
-                pub fn #last_fn_name(read_tx: &::redb::ReadTransaction) -> Result<Option<#struct_name>, DbEngineError> {
+                pub fn #last_fn_name(read_tx: &::redb::ReadTransaction) -> Result<Option<#struct_name>, AppError> {
                     let table_pk_8 = read_tx.open_table(#table_ident)?;
                     if let Some((k, _)) = table_pk_8.last()? {
                         return Self::compose(&read_tx, &k.value()).map(Some);
@@ -118,7 +118,7 @@ impl PkMacros {
         if pk_column.range {
             let range_fn_name = format_ident!("range");
             functions.push((range_fn_name.to_string(), quote! {
-                pub fn #range_fn_name(read_tx: &::redb::ReadTransaction, from: &#pk_type, until: &#pk_type) -> Result<Vec<#struct_name>, DbEngineError> {
+                pub fn #range_fn_name(read_tx: &::redb::ReadTransaction, from: &#pk_type, until: &#pk_type) -> Result<Vec<#struct_name>, AppError> {
                     let table_pk_9 = read_tx.open_table(#table_ident)?;
                     let range = from.clone()..until.clone();
                     let mut iter = table_pk_9.range(range)?;
@@ -132,7 +132,7 @@ impl PkMacros {
             }));
             let pk_range_fn_name = format_ident!("pk_range");
             functions.push((pk_range_fn_name.to_string(), quote! {
-                fn #pk_range_fn_name(write_tx: &::redb::WriteTransaction, from: &#pk_type, until: &#pk_type) -> Result<Vec<#pk_type>, DbEngineError> {
+                fn #pk_range_fn_name(write_tx: &::redb::WriteTransaction, from: &#pk_type, until: &#pk_type) -> Result<Vec<#pk_type>, AppError> {
                     let table_pk_10 = write_tx.open_table(#table_ident)?;
                     let range = from.clone()..until.clone();
                     let mut iter = table_pk_10.range(range)?;
