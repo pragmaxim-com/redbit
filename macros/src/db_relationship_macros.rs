@@ -6,13 +6,13 @@ pub struct TransientMacros {
     pub struct_initializer: TokenStream,
 }
 
-pub struct RelationshipMacros {
+pub struct DbRelationshipMacros {
     pub struct_initializer: TokenStream,
     pub store_statement: TokenStream,
     pub store_many_statement: TokenStream,
     pub delete_statement: TokenStream,
     pub delete_many_statement: TokenStream,
-    pub query_function: (String, TokenStream),
+    pub query_statement: (String, TokenStream),
 }
 
 impl TransientMacros {
@@ -30,11 +30,9 @@ impl TransientMacros {
     }
 }
 
-impl RelationshipMacros {
-    pub fn new(pk_column: &Pk, relationships: Vec<Relationship>) -> Vec<(Relationship, RelationshipMacros)> {
+impl DbRelationshipMacros {
+    pub fn new(pk_column: &Pk, rel: Relationship) -> DbRelationshipMacros {
         let pk_type = pk_column.field.tpe.clone();
-        let mut relationship_macros = Vec::new();
-        for rel in relationships {
             let field_name = &rel.field.name; // e.g., "transactions"
             let child_type = &rel.field.tpe; // e.g., the type `Transaction` from Vec<Transaction>
             let struct_initializer: TokenStream;
@@ -116,9 +114,7 @@ impl RelationshipMacros {
                         },
                     );
                 }
-            }
-            relationship_macros.push((rel, RelationshipMacros { struct_initializer, store_statement, store_many_statement, delete_statement, delete_many_statement, query_function }))
         }
-        relationship_macros
+        DbRelationshipMacros { struct_initializer, store_statement, store_many_statement, delete_statement, delete_many_statement, query_statement: query_function }
     }
 }

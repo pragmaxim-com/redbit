@@ -1,13 +1,16 @@
 extern crate proc_macro;
-mod column_macros;
+mod db_column_macros;
 mod entity_macros;
-mod pk_macros;
-mod relationship_macros;
+mod db_pk_macros;
+mod db_relationship_macros;
 mod macro_utils;
+mod http_column_macros;
+mod http_relationship_macro;
+mod http_pk_macros;
 
 use quote::quote;
 use crate::entity_macros::EntityMacros;
-use crate::pk_macros::{PkMacros, PointerType};
+use crate::db_pk_macros::{DbPkMacros, PointerType};
 use syn::{parse_macro_input, DeriveInput};
 use syn::spanned::Spanned;
 
@@ -16,21 +19,21 @@ pub fn derive_pk(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
     let struct_name = &ast.ident;
 
-    let pointer_type = match PkMacros::extract_pointer_type(&ast) {
+    let pointer_type = match DbPkMacros::extract_pointer_type(&ast) {
         Ok(t) => t,
         Err(e) => return e.to_compile_error().into(),
     };
 
-    let (parent_field, index_field) = match PkMacros::extract_fields(&ast, &pointer_type) {
+    let (parent_field, index_field) = match DbPkMacros::extract_fields(&ast, &pointer_type) {
         Ok(fields) => fields,
         Err(e) => return e.to_compile_error().into(),
     };
 
     match pointer_type {
-        PointerType::Root => PkMacros::generate_root_impls(struct_name, index_field).into(),
+        PointerType::Root => DbPkMacros::generate_root_impls(struct_name, index_field).into(),
         PointerType::Child =>
             match parent_field {
-                Some(parent_field) => PkMacros::generate_child_impls(struct_name, parent_field, index_field).into(),
+                Some(parent_field) => DbPkMacros::generate_child_impls(struct_name, parent_field, index_field).into(),
                 None => syn::Error::new(index_field.span(), "Parent field missing").to_compile_error().into(),
             }
     }

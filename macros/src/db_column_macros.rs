@@ -2,26 +2,18 @@ use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use syn::Type;
 
-#[derive(Clone)]
-pub struct EndpointMacro {
-    pub endpoint: String,
-    pub function_name: Ident,
-    pub handler: TokenStream,
-}
-
-pub struct ColumnMacros {
+pub struct DbColumnMacros {
     pub table_definitions: Vec<(String, TokenStream)>,
+    pub struct_initializer: TokenStream,
     pub store_statement: TokenStream,
     pub store_many_statement: TokenStream,
     pub delete_statement: TokenStream,
     pub delete_many_statement: TokenStream,
-    pub struct_initializer: TokenStream,
-    pub functions: Vec<(String, TokenStream)>,
-    pub endpoints: Vec<EndpointMacro>,
+    pub query_statements: Vec<(String, TokenStream)>,
 }
 
-impl ColumnMacros {
-    pub fn simple(struct_name: &Ident, pk_name: &Ident, pk_type: &Type, column_name: &Ident, column_type: &Type) -> ColumnMacros {
+impl DbColumnMacros {
+    pub fn plain(struct_name: &Ident, pk_name: &Ident, pk_type: &Type, column_name: &Ident, column_type: &Type) -> DbColumnMacros {
         let mut table_definitions: Vec<(String, TokenStream)> = Vec::new();
         let table_ident = format_ident!(
             "{}_{}_BY_{}",
@@ -68,10 +60,10 @@ impl ColumnMacros {
                 )?.value()
             }
         };
-        ColumnMacros { table_definitions, store_statement, store_many_statement, delete_statement, delete_many_statement, struct_initializer, functions: vec![], endpoints: vec![] }
+        DbColumnMacros { table_definitions, struct_initializer, store_statement, store_many_statement, delete_statement, delete_many_statement, query_statements: vec![] }
     }
 
-    pub fn indexed(struct_name: &Ident, pk_name: &Ident, pk_type: &Type, column_name: &Ident, column_type: &Type, range: bool) -> ColumnMacros {
+    pub fn indexed(struct_name: &Ident, pk_name: &Ident, pk_type: &Type, column_name: &Ident, column_type: &Type, range: bool) -> DbColumnMacros {
         let mut table_definitions: Vec<(String, TokenStream)> = Vec::new();
 
         let table_ident = format_ident!(
@@ -174,25 +166,6 @@ impl ColumnMacros {
             },
         ));
 
-        let handle_get_by_name = format_ident!("{}_handle_{}", struct_name.to_string().to_lowercase(), get_by_name);
-        let mut endpoints: Vec<EndpointMacro> = Vec::new();
-        endpoints.push(EndpointMacro {
-            endpoint: format!("/{}/{}", struct_name.to_string().to_lowercase(), get_by_name),
-            function_name: handle_get_by_name.clone(),
-            handler: quote! {
-                #[axum::debug_handler]
-                pub async fn #handle_get_by_name(
-                    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
-                    AppJson(params): AppJson<ByParams<#column_type>>,
-                ) -> Result<AppJson<Vec<#struct_name>>, AppError> {
-                    state.db.begin_read()
-                        .map_err(|err| err.into())
-                        .and_then(|read_tx| #struct_name::#get_by_name(&read_tx, &params.value))
-                        .map(|result| AppJson(result))
-                }
-           },
-        });
-
         if range {
             let range_by_name = format_ident!("range_by_{}", column_name);
             functions.push((
@@ -224,28 +197,11 @@ impl ColumnMacros {
                     }
                 },
             ));
-            let handle_range_by_name = format_ident!("{}_handle_{}", struct_name.to_string().to_lowercase(), range_by_name);
-            endpoints.push(EndpointMacro {
-                endpoint: format!("/{}/{}", struct_name.to_string().to_lowercase(), range_by_name),
-                function_name: handle_range_by_name.clone(),
-                handler: quote! {
-                    #[axum::debug_handler]
-                    pub async fn #handle_range_by_name(
-                        ::axum::extract::State(state): ::axum::extract::State<RequestState>,
-                        AppJson(params): AppJson<RangeParams<#column_type, #column_type>>,
-                    ) -> Result<AppJson<Vec<#struct_name>>, AppError> {
-                        state.db.begin_read()
-                            .map_err(|err| err.into())
-                            .and_then(|read_tx| #struct_name::#range_by_name(&read_tx, &params.from, &params.to))
-                            .map(|result| AppJson(result))
-                    }
-                }
-            });
         };
-        ColumnMacros { table_definitions, store_statement, store_many_statement, delete_statement, delete_many_statement, struct_initializer, functions, endpoints }
+        DbColumnMacros { table_definitions, struct_initializer, store_statement, store_many_statement, delete_statement, delete_many_statement, query_statements: functions }
     }
 
-    pub fn indexed_with_dict(struct_name: &Ident, pk_name: &Ident, pk_type: &Type, column_name: &Ident, column_type: &Type) -> ColumnMacros {
+    pub fn indexed_with_dict(struct_name: &Ident, pk_name: &Ident, pk_type: &Type, column_name: &Ident, column_type: &Type) -> DbColumnMacros {
         let mut table_definitions: Vec<(String, TokenStream)> = Vec::new();
 
         let table_dict_pk_by_pk_ident = format_ident!(
@@ -428,6 +384,6 @@ impl ColumnMacros {
                 }
             },
         ));
-        ColumnMacros { table_definitions, store_statement, store_many_statement, delete_statement, delete_many_statement, struct_initializer, functions, endpoints: vec![] }
+        DbColumnMacros { table_definitions, struct_initializer, store_statement, store_many_statement, delete_statement, delete_many_statement, query_statements: functions }
     }
 }

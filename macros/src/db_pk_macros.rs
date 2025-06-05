@@ -9,17 +9,17 @@ pub enum PointerType {
     Child,
 }
 
-pub struct PkMacros {
+pub struct DbPkMacros {
     pub table_name: String,
     pub table_definition: TokenStream,
     pub store_statement: TokenStream,
     pub store_many_statement: TokenStream,
     pub delete_statement: TokenStream,
     pub delete_many_statement: TokenStream,
-    pub functions: Vec<(String, TokenStream)>,
+    pub query_functions: Vec<(String, TokenStream)>,
 }
 
-impl PkMacros {
+impl DbPkMacros {
     pub fn new(struct_name: &Ident, pk_column: &Pk) -> Self {
         let table_ident = format_ident!("{}_{}", struct_name.to_string().to_uppercase(), pk_column.field.name.to_string().to_uppercase());
         let table_name = table_ident.to_string();
@@ -146,7 +146,7 @@ impl PkMacros {
             }))
         };
 
-        PkMacros { table_name, table_definition, store_statement, store_many_statement, delete_statement, delete_many_statement, functions }
+        DbPkMacros { table_name, table_definition, store_statement, store_many_statement, delete_statement, delete_many_statement, query_functions: functions }
     }
 
     /// Determines whether a struct is a `Root` or `Child` based on `#[parent]` attributes.

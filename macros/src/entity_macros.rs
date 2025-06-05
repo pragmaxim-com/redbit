@@ -1,13 +1,13 @@
-use crate::column_macros::{ColumnMacros};
-use crate::pk_macros::PkMacros;
-use crate::relationship_macros::{RelationshipMacros, TransientMacros};
+use crate::db_column_macros::{DbColumnMacros};
+use crate::db_pk_macros::DbPkMacros;
+use crate::db_relationship_macros::{DbRelationshipMacros, TransientMacros};
 
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::{spanned::Spanned, Data, DeriveInput, Fields, GenericArgument, PathArguments, Type};
 use syn::punctuated::Punctuated;
 use syn::token::Comma;
-use crate::macro_utils;
+use crate::{http_column_macros, http_pk_macros, http_relationship_macro, macro_utils};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Indexing {
@@ -39,6 +39,7 @@ pub struct Pk {
     pub range: bool,
 }
 
+#[derive(Clone)]
 pub struct Column {
     pub field: Field,
     pub indexing: Indexing,
@@ -54,11 +55,18 @@ pub struct Relationship {
     pub multiplicity: Multiplicity,
 }
 
+#[derive(Clone)]
+pub struct HttpEndpointMacro {
+    pub endpoint: String,
+    pub function_name: Ident,
+    pub handler: TokenStream,
+}
+
 pub struct EntityMacros {
     pub struct_name: Ident,
-    pub pk_column: (Pk, PkMacros),
-    pub columns: Vec<(Column, ColumnMacros)>,
-    pub relationships: Vec<(Relationship, RelationshipMacros)>,
+    pub pk: (Pk, DbPkMacros, Vec<HttpEndpointMacro>),
+    pub columns: Vec<(Column, DbColumnMacros, Vec<HttpEndpointMacro>)>,
+    pub relationships: Vec<(Relationship, DbRelationshipMacros, Vec<HttpEndpointMacro>)>,
     pub transients: Vec<(Transient, TransientMacros)>,
 }
 
@@ -74,32 +82,50 @@ impl EntityMacros {
         let FieldMacros { pk, columns, relationships, transients } = field_macros;
         let pk_name = &pk.field.name;
         let pk_type = &pk.field.tpe;
-        let mut column_macros: Vec<(Column, ColumnMacros)> = Vec::new();
+        let mut column_macros: Vec<(Column, DbColumnMacros, Vec<HttpEndpointMacro>)> = Vec::new();
         for struct_column in columns.into_iter() {
             let column_name = &struct_column.field.name.clone();
             let column_type = &struct_column.field.tpe.clone();
             match struct_column.indexing {
                 Indexing::Off => {
-                    column_macros.push((struct_column, ColumnMacros::simple(&struct_name, pk_name, pk_type, column_name, column_type)));
+                    column_macros.push((
+                        struct_column.clone(),
+                        DbColumnMacros::plain(&struct_name, pk_name, pk_type, column_name, column_type),
+                        http_column_macros::plain(&struct_name, pk_name, pk_type, column_name, column_type)
+                    ));
                 }
                 Indexing::On { dictionary: false, range } => {
-                    column_macros.push((struct_column, ColumnMacros::indexed(&struct_name, pk_name, pk_type, column_name, column_type, range)));
+                    column_macros.push((
+                        struct_column.clone(),
+                        DbColumnMacros::indexed(&struct_name, pk_name, pk_type, column_name, column_type, range),
+                        http_column_macros::indexed(&struct_name, pk_name, pk_type, column_name, column_type, range)
+                    ));
                 }
                 Indexing::On { dictionary: true, range: false } => {
-                    column_macros.push((struct_column, ColumnMacros::indexed_with_dict(&struct_name, pk_name, pk_type, column_name, column_type)));
+                    column_macros.push((
+                        struct_column.clone(),
+                        DbColumnMacros::indexed_with_dict(&struct_name, pk_name, pk_type, column_name, column_type),
+                        http_column_macros::indexed_with_dict(&struct_name, pk_name, pk_type, column_name, column_type)
+                    ));
                 }
                 Indexing::On { dictionary: true, range: true } => {
                     return Err(syn::Error::new(column_name.span(), "Range indexing on dictionary columns is not supported"))
                 }
             }
         }
-        // println!("Tables for {}:\n{}\n{}\n", struct_name, table_name_str, table_names.join("\n"));
-        let pk_macros = PkMacros::new(&struct_name, &pk);
-        let relationship_macros = RelationshipMacros::new(&pk, relationships);
+
+        let db_pk_macro = DbPkMacros::new(&struct_name, &pk);
+        let http_pk_macros = http_pk_macros::new(&struct_name, &pk);
+        let mut relationship_macros: Vec<(Relationship, DbRelationshipMacros, Vec<HttpEndpointMacro>)> = Vec::new();
+        for rel in relationships.iter() {
+            let db_relationship_macros = DbRelationshipMacros::new(&pk, rel.clone());
+            let http_relationship_macros = http_relationship_macro::new(&pk, rel.clone());
+            relationship_macros.push((rel.clone(), db_relationship_macros, http_relationship_macros));
+        }
         let transient_macros = TransientMacros::new(transients);
         Ok(EntityMacros {
             struct_name,
-            pk_column: (pk, pk_macros),
+            pk: (pk, db_pk_macro, http_pk_macros),
             columns: column_macros,
             relationships: relationship_macros,
             transients: transient_macros
@@ -108,15 +134,15 @@ impl EntityMacros {
 
     pub fn expand(&self) -> TokenStream {
         let struct_ident = &self.struct_name;
-        let (pk_column, pk_column_macros) = &self.pk_column;
+        let (pk_column, db_pk_macros, http_pk_macros) = &self.pk;
         let pk_ident = pk_column.field.name.clone();
         let pk_type = pk_column.field.tpe.clone();
-        let pk_table_name = pk_column_macros.table_name.clone();
-        let pk_table_definition = pk_column_macros.table_definition.clone();
-        let pk_store_statement = pk_column_macros.store_statement.clone();
-        let pk_store_many_statement = pk_column_macros.store_many_statement.clone();
-        let pk_delete_statement = pk_column_macros.delete_statement.clone();
-        let pk_delete_many_statement = pk_column_macros.delete_many_statement.clone();
+        let pk_table_name = db_pk_macros.table_name.clone();
+        let pk_table_definition = db_pk_macros.table_definition.clone();
+        let pk_store_statement = db_pk_macros.store_statement.clone();
+        let pk_store_many_statement = db_pk_macros.store_many_statement.clone();
+        let pk_delete_statement = db_pk_macros.delete_statement.clone();
+        let pk_delete_many_statement = db_pk_macros.delete_many_statement.clone();
 
         let mut table_definitions = Vec::new();
         let mut store_statements = Vec::new();
@@ -124,34 +150,36 @@ impl EntityMacros {
         let mut struct_initializers = Vec::new();
         let mut delete_statements = Vec::new();
         let mut delete_many_statements = Vec::new();
-        let mut functions = Vec::new();
-        functions.extend(pk_column_macros.functions.clone());
+        let mut query_statements = Vec::new();
         let mut endpoints = Vec::new();
+        query_statements.extend(db_pk_macros.query_functions.clone());
+        endpoints.extend(http_pk_macros.clone());
 
-        for (_, macros) in &self.columns {
-            table_definitions.extend(macros.table_definitions.clone());
-            store_statements.push(macros.store_statement.clone());
-            store_many_statements.push(macros.store_many_statement.clone());
-            struct_initializers.push(macros.struct_initializer.clone());
-            functions.extend(macros.functions.clone());
-            endpoints.extend(macros.endpoints.clone());
-            delete_statements.push(macros.delete_statement.clone());
-            delete_many_statements.push(macros.delete_many_statement.clone());
+        for (_, db_column_macros, http_column_macros) in &self.columns {
+            table_definitions.extend(db_column_macros.table_definitions.clone());
+            struct_initializers.push(db_column_macros.struct_initializer.clone());
+            store_statements.push(db_column_macros.store_statement.clone());
+            store_many_statements.push(db_column_macros.store_many_statement.clone());
+            query_statements.extend(db_column_macros.query_statements.clone());
+            endpoints.extend(http_column_macros.clone());
+            delete_statements.push(db_column_macros.delete_statement.clone());
+            delete_many_statements.push(db_column_macros.delete_many_statement.clone());
         }
 
-        for (_, macros) in &self.relationships {
-            store_statements.push(macros.store_statement.clone());
-            store_many_statements.push(macros.store_many_statement.clone());
-            struct_initializers.push(macros.struct_initializer.clone());
-            functions.push(macros.query_function.clone()); //TODO endpoints
-            delete_statements.push(macros.delete_statement.clone());
-            delete_many_statements.push(macros.delete_many_statement.clone());
+        for (_, db_relationship_macros, http_relationship_macros) in &self.relationships {
+            struct_initializers.push(db_relationship_macros.struct_initializer.clone());
+            store_statements.push(db_relationship_macros.store_statement.clone());
+            store_many_statements.push(db_relationship_macros.store_many_statement.clone());
+            query_statements.push(db_relationship_macros.query_statement.clone());
+            endpoints.extend(http_relationship_macros.clone());
+            delete_statements.push(db_relationship_macros.delete_statement.clone());
+            delete_many_statements.push(db_relationship_macros.delete_many_statement.clone());
         }
 
         for (_, macros) in &self.transients {
             struct_initializers.push(macros.struct_initializer.clone());
         }
-        let function_macros: Vec<TokenStream> = functions.into_iter().map(|f| f.1).collect::<Vec<_>>();
+        let query_statement_macros: Vec<TokenStream> = query_statements.into_iter().map(|f| f.1).collect::<Vec<_>>();
         let table_definition_names: Vec<String> = table_definitions.iter().map(|(name, _)| name.to_string()).collect();
         let table_definition_streams: Vec<TokenStream> = table_definitions.into_iter().map(|(_, stream)| stream).collect();
 
@@ -184,7 +212,7 @@ impl EntityMacros {
 
             impl #struct_ident {
 
-                #(#function_macros)*
+                #(#query_statement_macros)*
 
                 fn compose(read_tx: &::redb::ReadTransaction, pk: &#pk_type) -> Result<#struct_ident, AppError> {
                     Ok(#struct_ident {
@@ -349,5 +377,4 @@ impl EntityMacros {
             transients,
         })
     }
-
 }
