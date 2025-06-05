@@ -217,6 +217,11 @@ pub struct RequestState {
     pub db: Arc<Database>
 }
 
+impl RequestState {
+    pub fn new(db: Arc<Database>) -> Self {
+        Self { db }
+    }}
+
 pub struct EntityInfo {
     pub name: &'static str,
     pub routes_fn: fn() -> axum::Router<RequestState>,
@@ -224,13 +229,17 @@ pub struct EntityInfo {
 
 inventory::collect!(EntityInfo);
 
-pub async fn serve(state: RequestState, socket_addr: SocketAddr) -> () {
+pub async fn build_router(state: RequestState) -> Router<()> {
     let mut router = Router::new();
     for reg in inventory::iter::<EntityInfo> {
         router = router.merge((reg.routes_fn)());
     }
-    let router_with_state: Router<()> = router.with_state(state);
+    router.with_state(state)
+}
+
+pub async fn serve(state: RequestState, socket_addr: SocketAddr) -> () {
+    let router: Router<()> = build_router(state).await;
     println!("Starting server on {}", socket_addr);
     let tcp = TcpListener::bind(socket_addr).await.unwrap();
-    axum::serve(tcp, router_with_state).await.unwrap();
+    axum::serve(tcp, router).await.unwrap();
 }

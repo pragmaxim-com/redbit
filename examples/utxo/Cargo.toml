@@ -11,14 +11,15 @@ name = "utxo"
 harness = false
 
 [dev-dependencies]
-rand = "0.9.0"
 criterion = "0.6.0"
 
 [dependencies]
+rand = "0.9.0"
 redbit = { path = "../../redbit" }
 serde = { version = "1.0.217", features = ["derive"] }
 tokio = { version = "1.45.1", features = ["full"] }
 # redb and axum deps are needed because macros depends on them
 redb = "2.6.0"
 axum = {  version = "0.8.4", features = ["default", "macros"] }
+axum-test = "17.3.0"
 inventory = "0.3.20"

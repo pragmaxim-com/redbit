@@ -1,4 +1,23 @@
+use std::env;
+use rand::random;
+use redb::Database;
 use crate::*;
+
+pub fn empty_temp_db(name: &str) -> Database {
+    let dir = env::temp_dir().join("redbit");
+    if !dir.exists() {
+        std::fs::create_dir_all(dir.clone()).unwrap();
+    }
+    let db_path = dir.join(format!("{}_{}.redb", name, random::<u64>()));
+    Database::create(db_path).expect("Failed to create database")
+}
+
+pub fn init_temp_db(name: &str) -> (Vec<Block>, Database) {
+    let db = empty_temp_db(name);
+    let blocks = get_blocks(Height(4), 4, 4, 4);
+    blocks.iter().for_each(|block| Block::store_and_commit(&db, &block).expect("Failed to persist blocks"));
+    (blocks, db)
+}
 
 pub fn get_blocks(block_count: Height, tx_count: TxIndex, utxo_count: UtxoIndex, asset_count: AssetIndex) -> Vec<Block> {
     let timestamp = 1678296000;
@@ -44,3 +63,5 @@ pub fn get_blocks(block_count: Height, tx_count: TxIndex, utxo_count: UtxoIndex,
         })
         .collect()
 }
+
+// make a singleton instance that will hold get_blocks data

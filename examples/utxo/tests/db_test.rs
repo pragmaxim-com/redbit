@@ -1,23 +1,24 @@
 use std::collections::HashSet;
-use std::env;
 use utxo::*;
 
-fn create_test_db() -> (Vec<Block>, redb::Database) {
-    let random_number = rand::random::<u64>();
-    let dir = env::temp_dir().join("redbit");
-    if !dir.exists() {
-        std::fs::create_dir_all(dir.clone()).unwrap();
-    }
+#[test]
+fn it_should_commit_multiple_blocks_in_a_single_tx() {
+    let (blocks, multi_tx_db) = init_temp_db("db_test");
 
-    let db = redb::Database::create(dir.join(format!("test_db_{}.redb", random_number))).unwrap();
-    let blocks = get_blocks(Height(4), 4, 4, 4);
-    blocks.iter().for_each(|block| Block::store_and_commit(&db, &block).expect("Failed to persist blocks"));
-    (blocks, db)
+    let single_tx_db = empty_temp_db("db_test");
+    let write_tx = single_tx_db.begin_write().expect("Failed to begin write transaction");
+    blocks.iter().for_each(|block| Block::store(&write_tx, block).expect("Failed to persist blocks"));
+    write_tx.commit().unwrap();
+
+    let multi_tx_blocks = Block::all(&multi_tx_db.begin_read().unwrap()).unwrap();
+    let single_tx_blocks = Block::all(&single_tx_db.begin_read().unwrap()).unwrap();
+
+    assert_eq!(multi_tx_blocks.len(), single_tx_blocks.len());
 }
 
 #[test]
 fn it_should_get_entity_by_unique_id() {
-    let (blocks, db) = create_test_db();
+    let (blocks, db) = init_temp_db("db_test");
     let block = blocks.first().unwrap();
     let found_by_id = Block::get(&db.begin_read().unwrap(), &block.id).expect("Failed to query by ID").unwrap();
     assert_eq!(found_by_id.id, block.id);
@@ -27,7 +28,7 @@ fn it_should_get_entity_by_unique_id() {
 
 #[test]
 fn it_should_delete_entity_by_unique_id() {
-    let (blocks, db) = create_test_db();
+    let (blocks, db) = init_temp_db("db_test");
     let block = blocks.first().unwrap();
     let found_by_id = Block::get(&db.begin_read().unwrap(), &block.id).expect("Failed to query by ID").unwrap();
     assert_eq!(found_by_id.id, block.id);
@@ -57,7 +58,7 @@ fn it_should_delete_entity_by_unique_id() {
 
 #[test]
 fn it_should_get_entities_by_index() {
-    let (blocks, db) = create_test_db();
+    let (blocks, db) = init_temp_db("db_test");
 
     let read_tx = db.begin_read().unwrap();
     let transaction = blocks.first().unwrap().transactions.first().unwrap();
@@ -70,7 +71,7 @@ fn it_should_get_entities_by_index() {
 
 #[test]
 fn it_should_get_entities_by_index_with_dict() {
-    let (blocks, db) = create_test_db();
+    let (blocks, db) = init_temp_db("db_test");
 
     let read_tx = db.begin_read().unwrap();
     let utxo = blocks.first().unwrap().transactions.first().unwrap().utxos.first().unwrap();
@@ -83,7 +84,7 @@ fn it_should_get_entities_by_index_with_dict() {
 
 #[test]
 fn it_should_get_entities_by_range_on_index() {
-    let (blocks, db) = create_test_db();
+    let (blocks, db) = init_temp_db("db_test");
 
     let read_tx = db.begin_read().unwrap();
 
@@ -100,7 +101,7 @@ fn it_should_get_entities_by_range_on_index() {
 
 #[test]
 fn it_should_get_entities_by_range_on_pk() {
-    let (blocks, db) = create_test_db();
+    let (blocks, db) = init_temp_db("db_test");
 
     let read_tx = db.begin_read().unwrap();
 
@@ -129,7 +130,7 @@ fn it_should_get_entities_by_range_on_pk() {
 
 #[test]
 fn it_should_get_related_one_to_many_entities() {
-    let (blocks, db) = create_test_db();
+    let (blocks, db) = init_temp_db("db_test");
     let read_tx = db.begin_read().unwrap();
     let block = blocks.first().unwrap();
 
@@ -153,7 +154,7 @@ fn it_should_get_related_one_to_many_entities() {
 
 #[test]
 fn it_should_get_related_one_to_one_entity() {
-    let (blocks, db) = create_test_db();
+    let (blocks, db) = init_temp_db("db_test");
     let read_tx = db.begin_read().unwrap();
     let block = blocks.first().unwrap();
 
@@ -165,7 +166,7 @@ fn it_should_get_related_one_to_one_entity() {
 
 #[test]
 fn it_should_override_entity() {
-    let (blocks, db) = create_test_db();
+    let (blocks, db) = init_temp_db("db_test");
     let read_tx = db.begin_read().unwrap();
     let block = blocks.first().unwrap();
 
@@ -181,7 +182,7 @@ fn it_should_override_entity() {
 
 #[test]
 fn it_should_get_first_and_last_entity() {
-    let (blocks, db) = create_test_db();
+    let (blocks, db) = init_temp_db("db_test");
 
     let read_tx = db.begin_read().unwrap();
     let first_block = Block::first(&read_tx).expect("Failed to get first block").unwrap();

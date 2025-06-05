@@ -1,6 +1,4 @@
-use std::env;
 use utxo::*;
-use redb::Database;
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 
 fn configure_criterion() -> Criterion {
@@ -10,17 +8,8 @@ fn configure_criterion() -> Criterion {
         .sample_size(10)
 }
 
-fn setup_db() -> Database {
-    let dir = env::temp_dir().join("redbit");
-    if !dir.exists() {
-        std::fs::create_dir_all(dir.clone()).unwrap();
-    }
-    let db_path = dir.join("benchmark_db.redb");
-    Database::create(db_path).expect("Failed to create database")
-}
-
 fn benchmark_blocks(c: &mut Criterion) {
-    let db = setup_db();
+    let db = empty_temp_db("benchmark");
     let blocks = get_blocks(Height(3), 10, 20, 3);
 
     let mut group = c.benchmark_group("Block");
@@ -53,7 +42,7 @@ fn benchmark_blocks(c: &mut Criterion) {
 }
 
 fn benchmark_block_headers(c: &mut Criterion) {
-    let db = setup_db();
+    let db = empty_temp_db("benchmark");
     let read_tx = db.begin_read().unwrap();
     let first = BlockHeader::first(&read_tx).unwrap().unwrap();
     let last = BlockHeader::last(&read_tx).unwrap().unwrap();
@@ -83,7 +72,7 @@ fn benchmark_block_headers(c: &mut Criterion) {
 }
 
 fn benchmark_transactions(c: &mut Criterion) {
-    let db = setup_db();
+    let db = empty_temp_db("benchmark");
     let read_tx = db.begin_read().unwrap();
     let first = Transaction::first(&read_tx).unwrap().unwrap();
     let last = Transaction::last(&read_tx).unwrap().unwrap();
@@ -107,7 +96,7 @@ fn benchmark_transactions(c: &mut Criterion) {
 }
 
 fn benchmark_utxos(c: &mut Criterion) {
-    let db = setup_db();
+    let db = empty_temp_db("benchmark");
     let read_tx = db.begin_read().unwrap();
     let first = Utxo::first(&read_tx).unwrap().unwrap();
     let last = Utxo::last(&read_tx).unwrap().unwrap();
@@ -132,7 +121,7 @@ fn benchmark_utxos(c: &mut Criterion) {
 }
 
 fn benchmark_assets(c: &mut Criterion) {
-    let db = setup_db();
+    let db = empty_temp_db("benchmark");
     let read_tx = db.begin_read().unwrap();
     let first = Asset::first(&read_tx).unwrap().unwrap();
     let last = Asset::last(&read_tx).unwrap().unwrap();

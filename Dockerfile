@@ -30,7 +30,7 @@ ENV RUSTFLAGS="-C link-arg=-fuse-ld=lld"
 # Build dependencies so they can be cached in a docker layer
 COPY Cargo.toml Cargo.lock ./
 RUN mkdir src \
-  && echo 'fn main() {}' > src/db_demo \
+  && echo 'fn main() {}' > src/main.rs \
   && cargo fetch \
   && cargo build --release || true \
   && rm -rf src
