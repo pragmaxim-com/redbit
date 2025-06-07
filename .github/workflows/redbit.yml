@@ -99,8 +99,9 @@ jobs:
           ' README.md > README.md.tmp && mv README.md.tmp README.md
 
           # Prepare formatted benchmark lines
-          FORMATTED_BENCH=$(tail -n +2 benchmarks.csv | awk -F, '{ printf "%-45s %10s\n", $1, $2 }')
-          FORMATTED_BENCH=$(printf "%-45s %10s\n" "function" "ops/s")
+          HEADER=$(printf "%-45s %10s\n" "function" "ops/s")
+          BODY=$(tail -n +2 benchmarks.csv | awk -F, '{ printf "%-45s %10s\n", $1, $2 }')
+          FORMATTED_BENCH="$HEADER\n$BODY"
 
           # Escape double quotes and backslashes
           ESCAPED_BENCH=$(echo -e "$FORMATTED_BENCH" | sed 's/\\/\\\\/g; s/"/\\"/g')

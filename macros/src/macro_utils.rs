@@ -4,7 +4,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 
 pub fn write_to_local_file(lines: Vec<String>, dir_name: &str, entity: &Ident) {
-    let dir_path = env::current_dir().unwrap().join("target/debug/examples").join(dir_name);
+    let dir_path = env::temp_dir().join("redbit").join(dir_name);
     if let Err(e) = std::fs::create_dir_all(&dir_path) {
         eprintln!("Failed to create directory {:?}: {}", dir_path, e);
         return;

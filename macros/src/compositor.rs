@@ -80,72 +80,72 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
     let pk_type = pk_column.field.tpe.clone();
 
     let expanded = quote! {
-            // table definitions are not in the impl object because they are accessed globally with semantic meaning
-            #pk_table_definition
-            #(#table_definition_streams)*
-            // axum endpoints cannot be in the impl object https://docs.rs/axum/latest/axum/attr.debug_handler.html#limitations
-            #(#endpoint_macros)*
+        // table definitions are not in the impl object because they are accessed globally with semantic meaning
+        #pk_table_definition
+        #(#table_definition_streams)*
+        // axum endpoints cannot be in the impl object https://docs.rs/axum/latest/axum/attr.debug_handler.html#limitations
+        #(#endpoint_macros)*
 
-            impl #struct_ident {
+        impl #struct_ident {
 
-                #(#function_streams)*
+            #(#function_streams)*
 
-                fn compose(read_tx: &::redb::ReadTransaction, pk: &#pk_type) -> Result<#struct_ident, AppError> {
-                    Ok(#struct_ident {
-                        #pk_ident: pk.clone(),
-                        #(#struct_initializers),*
-                    })
-                }
+            fn compose(read_tx: &::redb::ReadTransaction, pk: &#pk_type) -> Result<#struct_ident, AppError> {
+                Ok(#struct_ident {
+                    #pk_ident: pk.clone(),
+                    #(#struct_initializers),*
+                })
+            }
 
-                pub fn delete(write_tx: &::redb::WriteTransaction, pk: &#pk_type) -> Result<(), AppError> {
+            pub fn delete(write_tx: &::redb::WriteTransaction, pk: &#pk_type) -> Result<(), AppError> {
+                #pk_delete_statement
+                #(#delete_statements)*
+                Ok(())
+            }
+
+            pub fn delete_many(write_tx: &::redb::WriteTransaction, pks: &Vec<#pk_type>) -> Result<(), AppError> {
+                #pk_delete_many_statement
+                #(#delete_many_statements)*
+                Ok(())
+            }
+
+            pub fn delete_and_commit(db: &::redb::Database, pk: &#pk_type) -> Result<(), AppError> {
+                let write_tx = db.begin_write()?;
+                {
                     #pk_delete_statement
                     #(#delete_statements)*
-                    Ok(())
                 }
+                write_tx.commit()?;
+                Ok(())
+            }
 
-                pub fn delete_many(write_tx: &::redb::WriteTransaction, pks: &Vec<#pk_type>) -> Result<(), AppError> {
-                    #pk_delete_many_statement
-                    #(#delete_many_statements)*
-                    Ok(())
-                }
+            pub fn store_many(write_tx: &::redb::WriteTransaction, instances: &Vec<#struct_ident>) -> Result<(), AppError> {
+                #pk_store_many_statement
+                #(#store_many_statements)*
+                Ok(())
+            }
 
-                pub fn delete_and_commit(db: &::redb::Database, pk: &#pk_type) -> Result<(), AppError> {
-                    let write_tx = db.begin_write()?;
-                    {
-                        #pk_delete_statement
-                        #(#delete_statements)*
-                    }
-                    write_tx.commit()?;
-                    Ok(())
-                }
-
-                pub fn store_many(write_tx: &::redb::WriteTransaction, instances: &Vec<#struct_ident>) -> Result<(), AppError> {
-                    #pk_store_many_statement
-                    #(#store_many_statements)*
-                    Ok(())
-                }
-
-                pub fn store(write_tx: &::redb::WriteTransaction, instance: &#struct_ident) -> Result<(), AppError> {
+            pub fn store(write_tx: &::redb::WriteTransaction, instance: &#struct_ident) -> Result<(), AppError> {
+                #pk_store_statement
+                #(#store_statements)*
+                Ok(())
+            }
+            pub fn store_and_commit(db: &::redb::Database, instance: &#struct_ident) -> Result<(), AppError> {
+                let write_tx = db.begin_write()?;
+                {
                     #pk_store_statement
                     #(#store_statements)*
-                    Ok(())
                 }
-                pub fn store_and_commit(db: &::redb::Database, instance: &#struct_ident) -> Result<(), AppError> {
-                    let write_tx = db.begin_write()?;
-                    {
-                        #pk_store_statement
-                        #(#store_statements)*
-                    }
-                    write_tx.commit()?;
-                    Ok(())
-                }
-
-                pub fn routes() -> axum::Router<RequestState> {
-                    axum::Router::new()
-                        #(#route_chains)*
-                }
+                write_tx.commit()?;
+                Ok(())
             }
-        };
+
+            pub fn routes() -> axum::Router<RequestState> {
+                axum::Router::new()
+                    #(#route_chains)*
+            }
+        }
+    };
     eprintln!("----------------------------------------------------------");
     macro_utils::write_stream_and_return(expanded, &struct_ident)
 }
