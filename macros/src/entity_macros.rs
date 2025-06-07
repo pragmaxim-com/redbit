@@ -178,7 +178,9 @@ impl EntityMacros {
 
         let mut entity_lines = Vec::new();
         for endpoint in &endpoints {
-            entity_lines.push(format!("| Endpoint      |  {}", endpoint.endpoint));
+            let line = format!("| Endpoint      |  {}", endpoint.endpoint);
+            eprintln!("{}", line);
+            entity_lines.push(line);
         }
         macro_utils::write_to_local_file(entity_lines, "endpoints", &struct_ident);
 

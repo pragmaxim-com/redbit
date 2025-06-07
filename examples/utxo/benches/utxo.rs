@@ -8,8 +8,8 @@ fn configure_criterion() -> Criterion {
         .sample_size(10)
 }
 
-fn benchmark_blocks(c: &mut Criterion) {
-    let db = empty_temp_db("benchmark");
+fn benchmark_persistence(c: &mut Criterion) {
+    let db = open_or_create_db("benchmark");
     let blocks = get_blocks(Height(3), 10, 20, 3);
 
     let mut group = c.benchmark_group("Block");
@@ -23,6 +23,13 @@ fn benchmark_blocks(c: &mut Criterion) {
             }
         })
     });
+}
+
+fn benchmark_blocks(c: &mut Criterion) {
+    let db = open_or_create_db("benchmark");
+
+    let mut group = c.benchmark_group("Block");
+    group.throughput(Throughput::Elements(1));
 
     let read_tx = db.begin_read().unwrap();
     let first_block = Block::first(&read_tx).unwrap().unwrap();
@@ -42,7 +49,7 @@ fn benchmark_blocks(c: &mut Criterion) {
 }
 
 fn benchmark_block_headers(c: &mut Criterion) {
-    let db = empty_temp_db("benchmark");
+    let db = open_or_create_db("benchmark");
     let read_tx = db.begin_read().unwrap();
     let first = BlockHeader::first(&read_tx).unwrap().unwrap();
     let last = BlockHeader::last(&read_tx).unwrap().unwrap();
@@ -72,7 +79,7 @@ fn benchmark_block_headers(c: &mut Criterion) {
 }
 
 fn benchmark_transactions(c: &mut Criterion) {
-    let db = empty_temp_db("benchmark");
+    let db = open_or_create_db("benchmark");
     let read_tx = db.begin_read().unwrap();
     let first = Transaction::first(&read_tx).unwrap().unwrap();
     let last = Transaction::last(&read_tx).unwrap().unwrap();
@@ -96,7 +103,7 @@ fn benchmark_transactions(c: &mut Criterion) {
 }
 
 fn benchmark_utxos(c: &mut Criterion) {
-    let db = empty_temp_db("benchmark");
+    let db = open_or_create_db("benchmark");
     let read_tx = db.begin_read().unwrap();
     let first = Utxo::first(&read_tx).unwrap().unwrap();
     let last = Utxo::last(&read_tx).unwrap().unwrap();
@@ -121,7 +128,7 @@ fn benchmark_utxos(c: &mut Criterion) {
 }
 
 fn benchmark_assets(c: &mut Criterion) {
-    let db = empty_temp_db("benchmark");
+    let db = open_or_create_db("benchmark");
     let read_tx = db.begin_read().unwrap();
     let first = Asset::first(&read_tx).unwrap().unwrap();
     let last = Asset::last(&read_tx).unwrap().unwrap();
@@ -145,6 +152,6 @@ fn benchmark_assets(c: &mut Criterion) {
 criterion_group!(
     name = benches;
     config = configure_criterion();
-    targets = benchmark_blocks, benchmark_block_headers, benchmark_transactions, benchmark_utxos, benchmark_assets
+    targets = benchmark_persistence, benchmark_blocks, benchmark_block_headers, benchmark_transactions, benchmark_utxos, benchmark_assets
 );
 criterion_main!(benches);

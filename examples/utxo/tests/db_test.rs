@@ -188,6 +188,12 @@ fn it_should_get_first_and_last_entity() {
     let first_block = Block::first(&read_tx).expect("Failed to get first block").unwrap();
     let last_block = Block::last(&read_tx).expect("Failed to get last block").unwrap();
 
+    let first_block_header = BlockHeader::first(&read_tx).expect("Failed to get first header").unwrap();
+    let last_block_header = BlockHeader::last(&read_tx).expect("Failed to get last header").unwrap();
+
     assert_eq!(blocks.first().unwrap().id, first_block.id);
     assert_eq!(blocks.last().unwrap().id, last_block.id);
+    
+    assert_eq!(blocks.first().unwrap().header, first_block_header);
+    assert_eq!(blocks.last().unwrap().header, last_block_header);
 }

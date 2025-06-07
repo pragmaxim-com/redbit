@@ -3,6 +3,15 @@ use rand::random;
 use redb::Database;
 use crate::*;
 
+pub fn open_or_create_db(name: &str) -> Database {
+    let dir = env::temp_dir().join("redbit");
+    if !dir.exists() {
+        std::fs::create_dir_all(dir.clone()).unwrap();
+    }
+    let db_path = dir.join(format!("{}.redb", name));
+    Database::create(db_path).expect("Failed to create database")
+}
+
 pub fn empty_temp_db(name: &str) -> Database {
     let dir = env::temp_dir().join("redbit");
     if !dir.exists() {
