@@ -1,6 +1,6 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
-use crate::entity_macros::{Multiplicity, Pk, Relationship, Transient};
+use crate::field_parser::*;
 use crate::http_macros::{Endpoint, FunctionDef, Params, ReturnValue};
 
 pub struct TransientMacros {

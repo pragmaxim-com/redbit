@@ -5,6 +5,9 @@ mod db_pk_macros;
 mod db_relationship_macros;
 mod macro_utils;
 mod http_macros;
+mod field_parser;
+mod compositor;
+
 use std::sync::Once;
 use quote::quote;
 use crate::entity_macros::EntityMacros;
@@ -42,7 +45,7 @@ pub fn derive_entity(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
     let ast: DeriveInput = parse_macro_input!(input as DeriveInput);
     let entity_ident = &ast.ident;
 
-    
+
     static PRINT_ONCE: Once = Once::new();
     PRINT_ONCE.call_once(|| {
         eprintln!("----------------------------------------------------------");
@@ -57,14 +60,14 @@ pub fn derive_entity(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
         }
     };
 
-    let stream = EntityMacros::get_named_fields(&ast)
+    let stream = field_parser::get_named_fields(&ast)
         .and_then(|named_fields| {
-            EntityMacros::get_field_macros(&named_fields, &ast)
+            field_parser::get_field_macros(&named_fields, &ast)
         })
         .and_then(|field_macros| {
             EntityMacros::new(entity_ident.clone(), field_macros)
         })
-        .map(|entity_macros| entity_macros.expand()).unwrap_or_else(|e| e.to_compile_error().into());
+        .map(|entity_macros| compositor::expand(entity_macros)).unwrap_or_else(|e| e.to_compile_error().into());
 
     // Combine both parts
     let expanded = quote! {

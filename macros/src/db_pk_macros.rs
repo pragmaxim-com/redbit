@@ -1,7 +1,7 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use syn::{DeriveInput, Data, Fields, Attribute};
-use crate::entity_macros::Pk;
+use crate::field_parser::Pk;
 use crate::http_macros::{Endpoint, FunctionDef, Params, ReturnValue};
 use crate::macro_utils;
 
