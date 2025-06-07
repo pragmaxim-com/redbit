@@ -19,52 +19,15 @@ Let's say we want to persist Utxo into Redb using Redbit, declare annotated Stru
 
 <!-- BEGIN_LIB -->
 ```rust
-    mod data;
+    pub mod data;
+    pub mod types;
+    pub mod db_demo;
     
     pub use data::*;
     pub use redbit::*;
+    pub use types::*;
     
     use serde::{Deserialize, Serialize};
-    use std::fmt::Debug;
-    use std::ops::Add;
-    
-    #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
-    pub struct Height(pub u32);
-    
-    impl Default for Height {
-        fn default() -> Self {
-            Height(0)
-        }
-    }
-    impl Add<u32> for Height {
-        type Output = Self;
-    
-        fn add(self, other: u32) -> Self {
-            Height(self.0 + other)
-        }
-    }
-    impl Add for Height {
-        type Output = Self;
-    
-        fn add(self, other: Self) -> Self {
-            Height(self.0 + other.0)
-        }
-    }
-    
-    #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
-    pub struct Timestamp(pub u32);
-    
-    pub type Amount = u64;
-    pub type Nonce = u32;
-    
-    pub type TxIndex = u16;
-    pub type UtxoIndex = u16;
-    pub type AssetIndex = u16;
-    pub type Datum = String;
-    pub type Address = String;
-    pub type AssetName = String;
-    pub type PolicyId = String;
-    pub type Hash = String;
     
     #[derive(Entity, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
     pub struct Block {
@@ -173,12 +136,12 @@ And R/W entire instances efficiently using indexes and dictionaries `examples/ut
 
 <!-- BEGIN_MAIN -->
 ```rust
-    use std::env;
-    use utxo::*;
+    use std::sync::Arc;
+    use redb::Database;
+    use redbit::AppError;
+    use crate::*;
     
-    fn demo() -> Result<(), AppError> {
-        let dir = env::temp_dir().join("redbit");
-        let db = redb::Database::create(dir.join("my_db.redb"))?;
+    pub fn run(db: Arc<Database>) -> Result<(), AppError> {
         let blocks = get_blocks(Height(1), 10, 10, 3);
     
         println!("Persisting blocks:");
@@ -192,7 +155,7 @@ And R/W entire instances efficiently using indexes and dictionaries `examples/ut
         let first_block = Block::first(&read_tx)?.unwrap();
         let last_block = Block::last(&read_tx)?.unwrap();
     
-        Block::take(&read_tx)?;
+        Block::take(&read_tx, 1000)?;
         Block::get(&read_tx, &first_block.id)?;
         Block::range(&read_tx, &first_block.id, &last_block.id)?;
         Block::get_transactions(&read_tx, &first_block.id)?;
@@ -202,7 +165,7 @@ And R/W entire instances efficiently using indexes and dictionaries `examples/ut
         let first_block_header = BlockHeader::first(&read_tx)?.unwrap();
         let last_block_header = BlockHeader::last(&read_tx)?.unwrap();
     
-        BlockHeader::take(&read_tx)?;
+        BlockHeader::take(&read_tx, 1000)?;
         BlockHeader::get(&read_tx, &first_block_header.id)?;
         BlockHeader::range(&read_tx, &first_block_header.id, &last_block_header.id)?;
         BlockHeader::range_by_timestamp(&read_tx, &first_block_header.timestamp, &last_block_header.timestamp)?;
@@ -214,7 +177,7 @@ And R/W entire instances efficiently using indexes and dictionaries `examples/ut
         let first_transaction = Transaction::first(&read_tx)?.unwrap();
         let last_transaction = Transaction::last(&read_tx)?.unwrap();
     
-        Transaction::take(&read_tx)?;
+        Transaction::take(&read_tx, 1000)?;
         Transaction::get(&read_tx, &first_transaction.id)?;
         Transaction::get_by_hash(&read_tx, &first_transaction.hash)?;
         Transaction::range(&read_tx, &first_transaction.id, &last_transaction.id)?;
@@ -225,7 +188,7 @@ And R/W entire instances efficiently using indexes and dictionaries `examples/ut
         let first_utxo = Utxo::first(&read_tx)?.unwrap();
         let last_utxo = Utxo::last(&read_tx)?.unwrap();
     
-        Utxo::take(&read_tx)?;
+        Utxo::take(&read_tx, 1000)?;
         Utxo::get(&read_tx, &first_utxo.id)?;
         Utxo::get_by_address(&read_tx, &first_utxo.address)?;
         Utxo::get_by_datum(&read_tx, &first_utxo.datum)?;
@@ -236,7 +199,7 @@ And R/W entire instances efficiently using indexes and dictionaries `examples/ut
         let first_asset = Asset::first(&read_tx)?.unwrap();
         let last_asset = Asset::last(&read_tx)?.unwrap();
     
-        Asset::take(&read_tx)?;
+        Asset::take(&read_tx, 1000)?;
         Asset::get(&read_tx, &first_asset.id)?;
         Asset::get_by_name(&read_tx, &first_asset.name)?;
         Asset::get_by_policy_id(&read_tx, &first_asset.policy_id)?;
@@ -247,10 +210,6 @@ And R/W entire instances efficiently using indexes and dictionaries `examples/ut
             Block::delete_and_commit(&db, &block.id)?
         }
         Ok(())
-    }
-    
-    fn main() {
-        demo().unwrap();
     }
 ```
 <!-- END_MAIN -->
@@ -270,35 +229,35 @@ Which means indexing `Bitcoin` is way faster than Bitcoin Core syncs itself.
 
 <!-- BEGIN_BENCH -->
 ```
-function,ops/s
-Block__store_and_commit                               43
-Block__all                                            84
-Transaction__all                                      84
-Utxo__all                                             85
-Utxo__range                                           86
-Transaction__range                                    87
-Asset__range                                         122
-Asset__all                                           123
-Block__range                                         123
-Block__get                                           251
-Block__get_transactions                              251
-Asset__get_by_policy_id                              367
-Transaction__get_by_hash                             846
-Utxo__get_by_address                                 852
-Asset__get_by_name                                  1214
-Utxo__get_by_datum                                  1685
-Transaction__get_utxos                              2568
-Transaction__get                                    2576
-Utxo__get                                          50268
-Utxo__get_assets                                   67286
-BlockHeader__all                                   98777
-BlockHeader__get_by_merkle_root                    99148
-BlockHeader__get_by_hash                           99656
-BlockHeader__range_by_timestamp                   131814
-BlockHeader__range                                141273
-Asset__get                                        190000
-BlockHeader__get_by_timestamp                     257552
-Block__get_header                                 277993
-BlockHeader__get                                  280582
+function                                           ops/s
+Block__store_and_commit                               42
+Block__all                                            81
+Transaction__all                                      81
+Utxo__all                                             82
+Utxo__range                                           82
+Transaction__range                                    84
+Asset__range                                         112
+Block__range                                         121
+Asset__all                                           195
+Block__get                                           241
+Block__get_transactions                              242
+Asset__get_by_policy_id                              331
+Transaction__get_by_hash                             809
+Utxo__get_by_address                                 814
+Asset__get_by_name                                  1073
+Utxo__get_by_datum                                  1628
+Transaction__get_utxos                              2442
+Transaction__get                                    2495
+Utxo__get                                          50149
+Utxo__get_assets                                   64579
+BlockHeader__all                                   90536
+BlockHeader__get_by_hash                           94823
+BlockHeader__get_by_merkle_root                    95478
+BlockHeader__range_by_timestamp                   122901
+BlockHeader__range                                136249
+Asset__get                                        187310
+BlockHeader__get_by_timestamp                     246737
+Block__get_header                                 269794
+BlockHeader__get                                  275461
 ```
 <!-- END_BENCH -->
