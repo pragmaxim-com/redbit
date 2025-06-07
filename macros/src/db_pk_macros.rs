@@ -2,6 +2,7 @@ use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use syn::{DeriveInput, Data, Fields, Attribute};
 use crate::entity_macros::Pk;
+use crate::http_macros::{Endpoint, FunctionDef, Params, ReturnValue};
 use crate::macro_utils;
 
 pub enum PointerType {
@@ -16,7 +17,7 @@ pub struct DbPkMacros {
     pub store_many_statement: TokenStream,
     pub delete_statement: TokenStream,
     pub delete_many_statement: TokenStream,
-    pub query_functions: Vec<(String, TokenStream)>,
+    pub function_defs: Vec<FunctionDef>,
 }
 
 impl DbPkMacros {
@@ -54,10 +55,9 @@ impl DbPkMacros {
             }
         };
 
-        let mut functions: Vec<(String, TokenStream)> = Vec::new();
+        let mut function_defs: Vec<FunctionDef> = Vec::new();
         let get_fn_name = format_ident!("get");
-        functions.push((
-            get_fn_name.to_string(),
+        let get_fn =
             quote! {
                 pub fn #get_fn_name(read_tx: &::redb::ReadTransaction, pk: &#pk_type) -> Result<Option<#struct_name>, AppError> {
                     let table_pk_5 = read_tx.open_table(#table_ident)?;
@@ -67,71 +67,105 @@ impl DbPkMacros {
                         Ok(None)
                     }
                 }
-            },
-        ));
+            };
+        function_defs.push(FunctionDef {
+            entity: struct_name.clone(),
+            name: get_fn_name.clone(),
+            stream: get_fn.clone(),
+            return_value: ReturnValue { value_name: struct_name.clone(), value_type: syn::parse_quote!(Option<#struct_name>) },
+            endpoint: Some(Endpoint::GetBy(Params { column_name: pk_name.clone(), column_type: pk_type.clone()})),
+        });
 
-        let all_fn_name = format_ident!("all");
-        functions.push((
-            all_fn_name.to_string(),
-            quote! {
-                pub fn #all_fn_name(read_tx: &::redb::ReadTransaction) -> Result<Vec<#struct_name>, AppError> {
-                    let table_pk_6 = read_tx.open_table(#table_ident)?;
-                    let mut iter = table_pk_6.iter()?;
-                    let mut results = Vec::new();
-                    while let Some(entry_res) = iter.next() {
-                        let pk = entry_res?.0.value();
-                        results.push(Self::compose(&read_tx, &pk)?);
+        let all_fn_name = format_ident!("take"); // TODO rewrite to really return some kind of latest results
+        let all_fn = quote! {
+            pub fn #all_fn_name(read_tx: &::redb::ReadTransaction, n: u32) -> Result<Vec<#struct_name>, AppError> {
+                let table_pk_6 = read_tx.open_table(#table_ident)?;
+                let mut iter = table_pk_6.iter()?;
+                let mut results = Vec::new();
+                let mut count = 0;
+
+                while let Some(entry_res) = iter.next() {
+                    if count >= n {
+                        break;
                     }
-                    Ok(results)
+                    let pk = entry_res?.0.value();
+                    results.push(Self::compose(&read_tx, &pk)?);
+                    count += 1;
                 }
-            },
-        ));
+
+                Ok(results)
+            }
+        };
+
+        function_defs.push(FunctionDef {
+            entity: struct_name.clone(),
+            name: all_fn_name.clone(),
+            stream: all_fn.clone(),
+            return_value: ReturnValue{ value_name: struct_name.clone(), value_type: syn::parse_quote!(Vec<#struct_name>) },
+            endpoint: Some(Endpoint::Take),
+        });
 
         let first_fn_name = format_ident!("first");
-        functions.push((
-            first_fn_name.to_string(),
-            quote! {
-                pub fn #first_fn_name(read_tx: &::redb::ReadTransaction) -> Result<Option<#struct_name>, AppError> {
-                    let table_pk_7 = read_tx.open_table(#table_ident)?;
-                    if let Some((k, _)) = table_pk_7.first()? {
-                        return Self::compose(&read_tx, &k.value()).map(Some);
-                    }
-                    Ok(None)
+        let first_fm = quote! {
+            pub fn #first_fn_name(read_tx: &::redb::ReadTransaction) -> Result<Option<#struct_name>, AppError> {
+                let table_pk_7 = read_tx.open_table(#table_ident)?;
+                if let Some((k, _)) = table_pk_7.first()? {
+                    return Self::compose(&read_tx, &k.value()).map(Some);
                 }
-            },
-        ));
+                Ok(None)
+            }
+        };
+        function_defs.push(FunctionDef{
+            entity: struct_name.clone(),
+            name: first_fn_name.clone(),
+            stream: first_fm.clone(),
+            return_value: ReturnValue{ value_name: struct_name.clone(), value_type: syn::parse_quote!(Option<#struct_name>) },
+            endpoint: Some(Endpoint::First),
+        });
 
         let last_fn_name = format_ident!("last");
-        functions.push((
-            last_fn_name.to_string(),
-            quote! {
-                pub fn #last_fn_name(read_tx: &::redb::ReadTransaction) -> Result<Option<#struct_name>, AppError> {
-                    let table_pk_8 = read_tx.open_table(#table_ident)?;
-                    if let Some((k, _)) = table_pk_8.last()? {
-                        return Self::compose(&read_tx, &k.value()).map(Some);
-                    }
-                    Ok(None)
+        let last_fn = quote! {
+            pub fn #last_fn_name(read_tx: &::redb::ReadTransaction) -> Result<Option<#struct_name>, AppError> {
+                let table_pk_8 = read_tx.open_table(#table_ident)?;
+                if let Some((k, _)) = table_pk_8.last()? {
+                    return Self::compose(&read_tx, &k.value()).map(Some);
                 }
-            },
-        ));
+                Ok(None)
+            }
+        };
+        function_defs.push(FunctionDef {
+            entity: struct_name.clone(),
+            name: last_fn_name.clone(),
+            stream: last_fn.clone(),
+            return_value: ReturnValue{ value_name: struct_name.clone(), value_type: syn::parse_quote!(Option<#struct_name>) },
+            endpoint: Some(Endpoint::Last),
+        });
 
         if pk_column.range {
             let range_fn_name = format_ident!("range");
-            functions.push((range_fn_name.to_string(), quote! {
-                pub fn #range_fn_name(read_tx: &::redb::ReadTransaction, from: &#pk_type, until: &#pk_type) -> Result<Vec<#struct_name>, AppError> {
-                    let table_pk_9 = read_tx.open_table(#table_ident)?;
-                    let range = from.clone()..until.clone();
-                    let mut iter = table_pk_9.range(range)?;
-                    let mut results = Vec::new();
-                    while let Some(entry_res) = iter.next() {
-                        let pk = entry_res?.0.value();
-                        results.push(Self::compose(&read_tx, &pk)?);
+            let range_fn =
+                quote! {
+                    pub fn #range_fn_name(read_tx: &::redb::ReadTransaction, from: &#pk_type, until: &#pk_type) -> Result<Vec<#struct_name>, AppError> {
+                        let table_pk_9 = read_tx.open_table(#table_ident)?;
+                        let range = from.clone()..until.clone();
+                        let mut iter = table_pk_9.range(range)?;
+                        let mut results = Vec::new();
+                        while let Some(entry_res) = iter.next() {
+                            let pk = entry_res?.0.value();
+                            results.push(Self::compose(&read_tx, &pk)?);
+                        }
+                        Ok(results)
                     }
-                    Ok(results)
-                }
-            }));
+                };
+            function_defs.push(FunctionDef {
+                entity: struct_name.clone(),
+                name: range_fn_name.clone(),
+                stream: range_fn.clone(),
+                return_value: ReturnValue{ value_name: struct_name.clone(), value_type: syn::parse_quote!(Vec<#struct_name>) },
+                endpoint: Some(Endpoint::RangeBy(Params { column_name: pk_name.clone(), column_type: pk_type.clone()})),
+            });
             let pk_range_fn_name = format_ident!("pk_range");
-            functions.push((pk_range_fn_name.to_string(), quote! {
+            let pk_range_fn = quote! {
                 fn #pk_range_fn_name(write_tx: &::redb::WriteTransaction, from: &#pk_type, until: &#pk_type) -> Result<Vec<#pk_type>, AppError> {
                     let table_pk_10 = write_tx.open_table(#table_ident)?;
                     let range = from.clone()..until.clone();
@@ -143,10 +177,25 @@ impl DbPkMacros {
                     }
                     Ok(results)
                 }
-            }))
+            };
+            function_defs.push(FunctionDef {
+                entity: struct_name.clone(),
+                name: pk_range_fn_name.clone(),
+                stream: pk_range_fn.clone(),
+                return_value: ReturnValue{ value_name: pk_name.clone(), value_type: syn::parse_quote!(Vec<#pk_type>) },
+                endpoint: None,
+            });
         };
 
-        DbPkMacros { table_name, table_definition, store_statement, store_many_statement, delete_statement, delete_many_statement, query_functions: functions }
+        DbPkMacros {
+            table_name,
+            table_definition,
+            store_statement,
+            store_many_statement,
+            delete_statement,
+            delete_many_statement,
+            function_defs
+        }
     }
 
     /// Determines whether a struct is a `Root` or `Child` based on `#[parent]` attributes.
@@ -227,7 +276,7 @@ impl DbPkMacros {
             impl RootPointer for #struct_name {}
 
         };
-        macro_utils::write_stream_and_return(expanded, &struct_name.to_string())
+        macro_utils::write_stream_and_return(expanded, &struct_name)
     }
 
     /// Generates trait implementations for **Child Pointers**.
@@ -268,7 +317,7 @@ impl DbPkMacros {
                 }
 
             };
-        macro_utils::write_stream_and_return(expanded, &struct_name.to_string())
+        macro_utils::write_stream_and_return(expanded, &struct_name)
     }
 
     /// Checks if a field has the `#[parent]` attribute.

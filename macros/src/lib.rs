@@ -4,10 +4,8 @@ mod entity_macros;
 mod db_pk_macros;
 mod db_relationship_macros;
 mod macro_utils;
-mod http_column_macros;
-mod http_relationship_macro;
-mod http_pk_macros;
-
+mod http_macros;
+use std::sync::Once;
 use quote::quote;
 use crate::entity_macros::EntityMacros;
 use crate::db_pk_macros::{DbPkMacros, PointerType};
@@ -42,13 +40,19 @@ pub fn derive_pk(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 #[proc_macro_derive(Entity, attributes(pk, column, one2many, one2one, transient))]
 pub fn derive_entity(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let ast: DeriveInput = parse_macro_input!(input as DeriveInput);
-    let struct_name = &ast.ident;
+    let entity_ident = &ast.ident;
+
+    
+    static PRINT_ONCE: Once = Once::new();
+    PRINT_ONCE.call_once(|| {
+        eprintln!("----------------------------------------------------------");
+    });
 
     let register = quote! {
         inventory::submit! {
             EntityInfo {
-                name: stringify!(#struct_name),
-                routes_fn: #struct_name::routes,
+                name: stringify!(#entity_ident),
+                routes_fn: #entity_ident::routes,
             }
         }
     };
@@ -58,7 +62,7 @@ pub fn derive_entity(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
             EntityMacros::get_field_macros(&named_fields, &ast)
         })
         .and_then(|field_macros| {
-            EntityMacros::new(struct_name.clone(), field_macros)
+            EntityMacros::new(entity_ident.clone(), field_macros)
         })
         .map(|entity_macros| entity_macros.expand()).unwrap_or_else(|e| e.to_compile_error().into());
 

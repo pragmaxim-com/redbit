@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use redbit::*;
 
-#[derive(Entity, Debug, Clone, PartialEq, Eq)]
+#[derive(Entity, Serialize, Debug, Clone, PartialEq, Eq)]
 struct MinimalStruct {
     #[pk(range)]
     pub id: ChildPK,
@@ -16,16 +16,12 @@ struct ParentPK {
     pub id: u32,
 }
 
+#[derive(Default, Debug, Clone, Serialize)]
 struct Key {
     pub key: u32,
 }
-impl Default for Key {
-    fn default() -> Self {
-        Key { key: 0 }
-    }
-}
 
-#[derive(Entity)]
+#[derive(Entity, Debug, Clone, Serialize)]
 struct TransientAnnotationStruct {
     #[pk]
     id: u32,
@@ -48,7 +44,7 @@ struct StructWithPersistedEntityField {
     persisted_indexed_no_dict: i32,
 }
 
-#[derive(Entity)]
+#[derive(Entity, Serialize)]
 struct StructWithPersistedEntityFieldWithDict {
     #[pk]
     id: u32,
@@ -68,7 +64,7 @@ pub struct FullStruct {
     pub address: String,
 }
 
-#[derive(Entity, Debug, Clone, PartialEq, Eq)]
+#[derive(Entity, Serialize)]
 struct MultipleOne2ManyAnnotationsStruct {
     #[pk(range)]
     id: ParentPK,
@@ -78,7 +74,7 @@ struct MultipleOne2ManyAnnotationsStruct {
     bars: Vec<MinimalStruct>,
 }
 
-#[derive(Entity)]
+#[derive(Entity, Serialize)]
 struct MissingColumnsStruct {
     #[pk]
     id: u32,

@@ -17,7 +17,7 @@ pub fn run(db: Arc<Database>) -> Result<(), AppError> {
     let first_block = Block::first(&read_tx)?.unwrap();
     let last_block = Block::last(&read_tx)?.unwrap();
 
-    Block::all(&read_tx)?;
+    Block::take(&read_tx, 1000)?;
     Block::get(&read_tx, &first_block.id)?;
     Block::range(&read_tx, &first_block.id, &last_block.id)?;
     Block::get_transactions(&read_tx, &first_block.id)?;
@@ -27,7 +27,7 @@ pub fn run(db: Arc<Database>) -> Result<(), AppError> {
     let first_block_header = BlockHeader::first(&read_tx)?.unwrap();
     let last_block_header = BlockHeader::last(&read_tx)?.unwrap();
 
-    BlockHeader::all(&read_tx)?;
+    BlockHeader::take(&read_tx, 1000)?;
     BlockHeader::get(&read_tx, &first_block_header.id)?;
     BlockHeader::range(&read_tx, &first_block_header.id, &last_block_header.id)?;
     BlockHeader::range_by_timestamp(&read_tx, &first_block_header.timestamp, &last_block_header.timestamp)?;
@@ -39,7 +39,7 @@ pub fn run(db: Arc<Database>) -> Result<(), AppError> {
     let first_transaction = Transaction::first(&read_tx)?.unwrap();
     let last_transaction = Transaction::last(&read_tx)?.unwrap();
 
-    Transaction::all(&read_tx)?;
+    Transaction::take(&read_tx, 1000)?;
     Transaction::get(&read_tx, &first_transaction.id)?;
     Transaction::get_by_hash(&read_tx, &first_transaction.hash)?;
     Transaction::range(&read_tx, &first_transaction.id, &last_transaction.id)?;
@@ -50,7 +50,7 @@ pub fn run(db: Arc<Database>) -> Result<(), AppError> {
     let first_utxo = Utxo::first(&read_tx)?.unwrap();
     let last_utxo = Utxo::last(&read_tx)?.unwrap();
 
-    Utxo::all(&read_tx)?;
+    Utxo::take(&read_tx, 1000)?;
     Utxo::get(&read_tx, &first_utxo.id)?;
     Utxo::get_by_address(&read_tx, &first_utxo.address)?;
     Utxo::get_by_datum(&read_tx, &first_utxo.datum)?;
@@ -61,7 +61,7 @@ pub fn run(db: Arc<Database>) -> Result<(), AppError> {
     let first_asset = Asset::first(&read_tx)?.unwrap();
     let last_asset = Asset::last(&read_tx)?.unwrap();
 
-    Asset::all(&read_tx)?;
+    Asset::take(&read_tx, 1000)?;
     Asset::get(&read_tx, &first_asset.id)?;
     Asset::get_by_name(&read_tx, &first_asset.name)?;
     Asset::get_by_policy_id(&read_tx, &first_asset.policy_id)?;

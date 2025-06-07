@@ -1,6 +1,4 @@
 /.idea
 /target
 todo
-.aider.*
-!.aider.conf.yml
 Cargo.lock

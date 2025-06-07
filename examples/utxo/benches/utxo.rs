@@ -28,7 +28,7 @@ fn benchmark_blocks(c: &mut Criterion) {
     let first_block = Block::first(&read_tx).unwrap().unwrap();
     let last_block = Block::last(&read_tx).unwrap().unwrap();
 
-    group.bench_function("Block::all", |b| b.iter(|| Block::all(&read_tx).unwrap()));
+    group.bench_function("Block::all", |b| b.iter(|| Block::take(&read_tx, 1000).unwrap()));
     group.bench_function("Block::get", |b| b.iter(|| Block::get(&read_tx, &first_block.id).unwrap()));
     group.bench_function("Block::range", |b| {
         b.iter(|| Block::range(&read_tx, &first_block.id, &last_block.id).unwrap())
@@ -50,7 +50,7 @@ fn benchmark_block_headers(c: &mut Criterion) {
     let mut group = c.benchmark_group("BlockHeader");
     group.throughput(Throughput::Elements(1));
 
-    group.bench_function("BlockHeader::all", |b| b.iter(|| BlockHeader::all(&read_tx).unwrap()));
+    group.bench_function("BlockHeader::all", |b| b.iter(|| BlockHeader::take(&read_tx, 1000).unwrap()));
     group.bench_function("BlockHeader::get", |b| {
         b.iter(|| BlockHeader::get(&read_tx, &first.id).unwrap())
     });
@@ -80,7 +80,7 @@ fn benchmark_transactions(c: &mut Criterion) {
     let mut group = c.benchmark_group("Transaction");
     group.throughput(Throughput::Elements(1));
 
-    group.bench_function("Transaction::all", |b| b.iter(|| Transaction::all(&read_tx).unwrap()));
+    group.bench_function("Transaction::all", |b| b.iter(|| Transaction::take(&read_tx, 1000).unwrap()));
     group.bench_function("Transaction::get", |b| {
         b.iter(|| Transaction::get(&read_tx, &first.id).unwrap())
     });
@@ -104,7 +104,7 @@ fn benchmark_utxos(c: &mut Criterion) {
     let mut group = c.benchmark_group("Utxo");
     group.throughput(Throughput::Elements(1));
 
-    group.bench_function("Utxo::all", |b| b.iter(|| Utxo::all(&read_tx).unwrap()));
+    group.bench_function("Utxo::all", |b| b.iter(|| Utxo::take(&read_tx, 1000).unwrap()));
     group.bench_function("Utxo::get", |b| b.iter(|| Utxo::get(&read_tx, &first.id).unwrap()));
     group.bench_function("Utxo::get_by_address", |b| {
         b.iter(|| Utxo::get_by_address(&read_tx, &first.address).unwrap())
@@ -129,7 +129,7 @@ fn benchmark_assets(c: &mut Criterion) {
     let mut group = c.benchmark_group("Asset");
     group.throughput(Throughput::Elements(1));
 
-    group.bench_function("Asset::all", |b| b.iter(|| Asset::all(&read_tx).unwrap()));
+    group.bench_function("Asset::all", |b| b.iter(|| Asset::take(&read_tx, 1000).unwrap()));
     group.bench_function("Asset::get", |b| b.iter(|| Asset::get(&read_tx, &first.id).unwrap()));
     group.bench_function("Asset::get_by_name", |b| {
         b.iter(|| Asset::get_by_name(&read_tx, &first.name).unwrap())
