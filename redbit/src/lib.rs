@@ -44,17 +44,17 @@ pub trait ChildPointer: IndexedPointer {
     fn from_parent(parent: Self::Parent) -> Self;
 }
 
-pub trait ForeignKey<T: ChildPointer> {
-    fn fk_range(&self) -> (T, T);
+pub trait ForeignKey<CH: ChildPointer> {
+    fn fk_range(&self) -> (CH, CH);
 }
 
-impl<T> ForeignKey<T> for T::Parent
+impl<CH> ForeignKey<CH> for CH::Parent
 where
-    T: ChildPointer + Clone,
-    T::Parent: IndexedPointer + Clone,
+    CH: ChildPointer + Clone,
+    CH::Parent: IndexedPointer + Clone,
 {
-    fn fk_range(&self) -> (T, T) {
-        (T::from_parent(self.clone()), T::from_parent(self.clone().next()))
+    fn fk_range(&self) -> (CH, CH) {
+        (CH::from_parent(self.clone()), CH::from_parent(self.clone().next()))
     }
 }
 

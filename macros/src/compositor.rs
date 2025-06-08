@@ -17,7 +17,8 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
     let mut table_definitions = Vec::new();
     let mut store_statements = Vec::new();
     let mut store_many_statements = Vec::new();
-    let mut struct_initializers = Vec::new();
+    let mut struct_inits = Vec::new();
+    let mut struct_default_inits = Vec::new();
     let mut delete_statements = Vec::new();
     let mut delete_many_statements = Vec::new();
     let mut function_defs: Vec<FunctionDef> = Vec::new();
@@ -25,7 +26,8 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
 
     for (_, db_column_macros) in &entity_macros.columns {
         table_definitions.extend(db_column_macros.table_definitions.clone());
-        struct_initializers.push(db_column_macros.struct_initializer.clone());
+        struct_inits.push(db_column_macros.struct_init.clone());
+        struct_default_inits.push(db_column_macros.struct_default_init.clone());
         store_statements.push(db_column_macros.store_statement.clone());
         store_many_statements.push(db_column_macros.store_many_statement.clone());
         function_defs.extend(db_column_macros.function_defs.clone());
@@ -34,7 +36,8 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
     }
 
     for (_, db_relationship_macros) in &entity_macros.relationships {
-        struct_initializers.push(db_relationship_macros.struct_initializer.clone());
+        struct_inits.push(db_relationship_macros.struct_init.clone());
+        struct_default_inits.push(db_relationship_macros.struct_default_init.clone());
         store_statements.push(db_relationship_macros.store_statement.clone());
         store_many_statements.push(db_relationship_macros.store_many_statement.clone());
         function_defs.push(db_relationship_macros.function_def.clone());
@@ -43,7 +46,8 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
     }
 
     for (_, macros) in &entity_macros.transients {
-        struct_initializers.push(macros.struct_initializer.clone());
+        struct_inits.push(macros.struct_default_init.clone());
+        struct_default_inits.push(macros.struct_default_init.clone());
     }
     let function_streams: Vec<TokenStream> = function_defs.iter().map(|f| f.stream.clone()).collect::<Vec<_>>();
     let table_definition_streams: Vec<TokenStream> = table_definitions.iter().map(|(_, stream)| stream.clone()).collect();
@@ -90,10 +94,17 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
 
             #(#function_streams)*
 
+            pub fn sample(pk: &#pk_type) -> Self {
+                #struct_ident {
+                    #pk_ident: pk.clone(),
+                    #(#struct_default_inits),*
+                }
+            }
+
             fn compose(read_tx: &::redb::ReadTransaction, pk: &#pk_type) -> Result<#struct_ident, AppError> {
                 Ok(#struct_ident {
                     #pk_ident: pk.clone(),
-                    #(#struct_initializers),*
+                    #(#struct_inits),*
                 })
             }
 

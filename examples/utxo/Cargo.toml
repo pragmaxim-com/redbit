@@ -23,3 +23,4 @@ redb = "2.6.0"
 axum = {  version = "0.8.4", features = ["default", "macros"] }
 axum-test = "17.3.0"
 inventory = "0.3.20"
+derive_more = { version = "2.0.1", features = ["from", "add"] }

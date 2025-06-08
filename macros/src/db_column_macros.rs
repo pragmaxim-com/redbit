@@ -5,7 +5,8 @@ use crate::http_macros::*;
 
 pub struct DbColumnMacros {
     pub table_definitions: Vec<(String, TokenStream)>,
-    pub struct_initializer: TokenStream,
+    pub struct_init: TokenStream,
+    pub struct_default_init: TokenStream,
     pub store_statement: TokenStream,
     pub store_many_statement: TokenStream,
     pub delete_statement: TokenStream,
@@ -49,7 +50,7 @@ impl DbColumnMacros {
                 table_col_4.remove(pk)?;
             }
         };
-        let struct_initializer = quote! {
+        let struct_init = quote! {
             #column_name: {
                 let table_col_5 = read_tx.open_table(#table_ident)?;
                 let guard = table_col_5.get(pk)?;
@@ -61,9 +62,13 @@ impl DbColumnMacros {
                 )?.value()
             }
         };
+        let struct_default_init = quote! {
+            #column_name: #column_type::default()
+        };
         DbColumnMacros {
             table_definitions,
-            struct_initializer,
+            struct_init,
+            struct_default_init,
             store_statement,
             store_many_statement,
             delete_statement,
@@ -135,7 +140,7 @@ impl DbColumnMacros {
                 }
             }
         };
-        let struct_initializer = quote! {
+        let struct_init = quote! {
             #column_name: {
                 let table_col_10 = read_tx.open_table(#table_ident)?;
                 let guard = table_col_10.get(pk)?;
@@ -146,6 +151,9 @@ impl DbColumnMacros {
                     ))
                 )?.value()
             }
+        };
+        let struct_default_init = quote! {
+            #column_name: #column_type::default()
         };
         let mut function_defs: Vec<FunctionDef> = Vec::new();
         let get_by_name = format_ident!("get_by_{}", column_name);
@@ -217,7 +225,8 @@ impl DbColumnMacros {
         };
         DbColumnMacros {
             table_definitions,
-            struct_initializer,
+            struct_init,
+            struct_default_init,
             store_statement,
             store_many_statement,
             delete_statement,
@@ -356,7 +365,7 @@ impl DbColumnMacros {
                 }
             }
         };
-        let struct_initializer = quote! {
+        let struct_init = quote! {
             #column_name: {
                 let pk2birth = read_tx.open_table(#table_dict_pk_by_pk_ident)?;
                 let birth_guard = pk2birth.get(pk)?;
@@ -375,6 +384,9 @@ impl DbColumnMacros {
                     ))
                 )?.value()
             }
+        };
+        let struct_default_init = quote! {
+            #column_name: #column_type::default()
         };
         let mut function_defs: Vec<FunctionDef> = Vec::new();
         let get_by_name = format_ident!("get_by_{}", column_name);
@@ -415,7 +427,8 @@ impl DbColumnMacros {
         });
         DbColumnMacros {
             table_definitions,
-            struct_initializer,
+            struct_init,
+            struct_default_init,
             store_statement,
             store_many_statement,
             delete_statement,

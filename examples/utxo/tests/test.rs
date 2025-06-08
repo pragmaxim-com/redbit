@@ -2,6 +2,28 @@ use std::collections::HashSet;
 use utxo::*;
 
 #[test]
+fn each_entity_should_have_a_default_sample() {
+    let block = Block::sample(&Height(0).into());
+    assert_eq!(block.id.height, Height(0));
+    assert_eq!(block.header.timestamp, Timestamp(0));
+    assert_eq!(block.transactions.len(), 3);
+    for (idx, tx) in block.transactions.iter().enumerate() {
+        assert_eq!(tx.id.tx_index as usize, idx);
+        assert_eq!(tx.id.block_pointer, Height(0).into());
+        assert_eq!(tx.utxos.len(), 3);
+        for (idx, utxo) in tx.utxos.iter().enumerate() {
+            assert_eq!(utxo.id.utxo_index as usize, idx);
+            assert_eq!(utxo.id.tx_pointer, tx.id);
+            assert_eq!(utxo.assets.len(), 3);
+            for (idx, asset) in utxo.assets.iter().enumerate() {
+                assert_eq!(asset.id.asset_index as usize, idx);
+                assert_eq!(asset.id.utxo_pointer, utxo.id);
+            }
+        }
+    }
+}
+
+#[test]
 fn it_should_commit_multiple_blocks_in_a_single_tx() {
     let (blocks, multi_tx_db) = init_temp_db("db_test");
 

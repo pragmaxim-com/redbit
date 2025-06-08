@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use redbit::*;
 
-#[derive(Entity, Serialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Entity, Default, Serialize, Debug, Clone, PartialEq, Eq)]
 struct MinimalStruct {
     #[pk(range)]
     pub id: ChildPK,
@@ -11,7 +11,7 @@ struct MinimalStruct {
     pub persisted_no_index_no_dict: i32,
 }
 
-#[derive(PK, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(PK, Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 struct ParentPK {
     pub id: u32,
 }
@@ -21,7 +21,7 @@ struct Key {
     pub key: u32,
 }
 
-#[derive(Entity, Debug, Clone, Serialize)]
+#[derive(Entity, Default, Debug, Clone, Serialize)]
 struct TransientAnnotationStruct {
     #[pk]
     id: u32,
@@ -29,7 +29,7 @@ struct TransientAnnotationStruct {
     name: Key
 }
 
-#[derive(PK, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(PK, Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 struct ChildPK {
     #[parent]
     pub parent_pointer: ParentPK,

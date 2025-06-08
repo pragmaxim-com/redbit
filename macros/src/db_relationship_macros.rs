@@ -4,11 +4,12 @@ use crate::field_parser::*;
 use crate::http_macros::{Endpoint, FunctionDef, Params, ReturnValue};
 
 pub struct TransientMacros {
-    pub struct_initializer: TokenStream,
+    pub struct_default_init: TokenStream,
 }
 
 pub struct DbRelationshipMacros {
-    pub struct_initializer: TokenStream,
+    pub struct_init: TokenStream,
+    pub struct_default_init: TokenStream,
     pub store_statement: TokenStream,
     pub store_many_statement: TokenStream,
     pub delete_statement: TokenStream,
@@ -22,10 +23,10 @@ impl TransientMacros {
         for transient in transients {
             let field_name = &transient.field.name;
             let field_type = &transient.field.tpe;
-            let struct_initializer = quote! {
-                #field_name: <#field_type as Default>::default()
+            let struct_default_init = quote! {
+                #field_name: #field_type::default()
             };
-            transient_macros.push((transient, TransientMacros { struct_initializer}))
+            transient_macros.push((transient, TransientMacros { struct_default_init}))
         }
         transient_macros
     }
@@ -33,11 +34,12 @@ impl TransientMacros {
 
 impl DbRelationshipMacros {
     pub fn new(entity_ident: &Ident, pk_column: &Pk, rel: Relationship) -> DbRelationshipMacros {
-        let pk_type = pk_column.field.tpe.clone();
+        let pk_type = pk_column.field.tpe.clone(); // BlockPointer
         let pk_name = pk_column.field.name.clone();
         let child_name = &rel.field.name; // e.g., "transactions"
         let child_type = &rel.field.tpe; // e.g., the type `Transaction` from Vec<Transaction>
-        let struct_initializer: TokenStream;
+        let struct_default_init: TokenStream;
+        let struct_init: TokenStream;
         let store_statement: TokenStream;
         let store_many_statement: TokenStream;
         let delete_statement: TokenStream;
@@ -46,8 +48,11 @@ impl DbRelationshipMacros {
         let query_fn_name = format_ident!("get_{}", child_name);
         match rel.multiplicity {
             Multiplicity::OneToOne => {
-                struct_initializer = quote! {
+                struct_init = quote! {
                     #child_name: #child_type::get(read_tx, pk)?.ok_or_else(|| AppError::NotFound(format!("Missing one-to-one child {:?}", pk)))?
+                };
+                struct_default_init = quote! {
+                    #child_name: #child_type::default()
                 };
                 store_statement = quote! {
                     let child = &instance.#child_name;
@@ -78,10 +83,19 @@ impl DbRelationshipMacros {
                 };
             }
             Multiplicity::OneToMany => {
-                struct_initializer = quote! {
+                struct_init = quote! {
                     #child_name: {
                         let (from, to) = pk.fk_range();
                         #child_type::range(read_tx, &from, &to)?
+                    }
+                };
+                struct_default_init = quote! {
+                    #child_name:  {
+                        let (from, to) = pk.fk_range();
+                        let sample_0 = #child_type::sample(&from);
+                        let sample_1 = #child_type::sample(&from.next());
+                        let sample_2 = #child_type::sample(&from.next().next());
+                        vec![sample_0, sample_1, sample_2]
                     }
                 };
                 store_statement = quote! {
@@ -123,7 +137,8 @@ impl DbRelationshipMacros {
             }
         }
         DbRelationshipMacros {
-            struct_initializer,
+            struct_init,
+            struct_default_init,
             store_statement,
             store_many_statement,
             delete_statement,

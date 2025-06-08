@@ -11,6 +11,6 @@ async fn main() {
             redb::Database::create(dir.join("my_db.redb"))
                 .expect("Failed to create database")
         );
-    db_demo::run(Arc::clone(&db)).expect("Db demo failed");
+    demo::run(Arc::clone(&db)).expect("Db demo failed");
     serve(RequestState { db: Arc::clone(&db) }, SocketAddr::from(([127,0,0,1], 8000))).await
 }
