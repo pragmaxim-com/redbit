@@ -1,7 +1,7 @@
 use proc_macro2::TokenStream;
 use quote::quote;
-use crate::entity_macros::EntityMacros;
-use crate::http_macros::{to_http_endpoint, FunctionDef, HttpEndpointMacro};
+use crate::entity::EntityMacros;
+use crate::http::{to_http_endpoint, FunctionDef, HttpEndpointMacro};
 use crate::macro_utils;
 
 pub fn expand(entity_macros: EntityMacros) -> TokenStream {

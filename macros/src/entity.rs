@@ -1,6 +1,6 @@
-use crate::db_column_macros::{DbColumnMacros};
-use crate::db_pk_macros::DbPkMacros;
-use crate::db_relationship_macros::{DbRelationshipMacros, TransientMacros};
+use crate::column::{DbColumnMacros};
+use crate::pk::DbPkMacros;
+use crate::relationship::{DbRelationshipMacros, TransientMacros};
 use crate::field_parser::*;
 use proc_macro2::Ident;
 
@@ -37,7 +37,7 @@ impl EntityMacros {
                 Indexing::On { dictionary: true, range: false } => {
                     column_macros.push((
                         entity_column.clone(),
-                        DbColumnMacros::indexed_with_dict(&entity_ident, pk_name, pk_type, column_name, column_type),
+                        DbColumnMacros::dictionary(&entity_ident, pk_name, pk_type, column_name, column_type),
                     ));
                 }
                 Indexing::On { dictionary: true, range: true } => {

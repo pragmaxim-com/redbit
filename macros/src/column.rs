@@ -1,7 +1,7 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use syn::Type;
-use crate::http_macros::*;
+use crate::http::*;
 
 pub struct DbColumnMacros {
     pub table_definitions: Vec<(String, TokenStream)>,
@@ -235,7 +235,7 @@ impl DbColumnMacros {
         }
     }
 
-    pub fn indexed_with_dict(struct_name: &Ident, pk_name: &Ident, pk_type: &Type, column_name: &Ident, column_type: &Type) -> DbColumnMacros {
+    pub fn dictionary(struct_name: &Ident, pk_name: &Ident, pk_type: &Type, column_name: &Ident, column_type: &Type) -> DbColumnMacros {
         let mut table_definitions: Vec<(String, TokenStream)> = Vec::new();
 
         let table_dict_pk_by_pk_ident = format_ident!(

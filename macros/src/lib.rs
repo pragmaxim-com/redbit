@@ -1,17 +1,17 @@
 extern crate proc_macro;
-mod db_column_macros;
-mod entity_macros;
-mod db_pk_macros;
-mod db_relationship_macros;
+mod column;
+mod entity;
+mod pk;
+mod relationship;
 mod macro_utils;
-mod http_macros;
+mod http;
 mod field_parser;
 mod compositor;
 
 use std::sync::Once;
 use quote::quote;
-use crate::entity_macros::EntityMacros;
-use crate::db_pk_macros::{DbPkMacros, PointerType};
+use crate::entity::EntityMacros;
+use crate::pk::{DbPkMacros, PointerType};
 use syn::{parse_macro_input, DeriveInput};
 use syn::spanned::Spanned;
 

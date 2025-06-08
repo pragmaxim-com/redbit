@@ -1,7 +1,7 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use crate::field_parser::*;
-use crate::http_macros::{Endpoint, FunctionDef, Params, ReturnValue};
+use crate::http::{Endpoint, FunctionDef, Params, ReturnValue};
 
 pub struct TransientMacros {
     pub struct_default_init: TokenStream,
