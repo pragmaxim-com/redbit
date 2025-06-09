@@ -7,12 +7,13 @@ mod macro_utils;
 mod http;
 mod field_parser;
 mod compositor;
+mod table;
 
 use std::sync::Once;
 use quote::quote;
 use crate::entity::EntityMacros;
 use crate::pk::{DbPkMacros, PointerType};
-use syn::{parse_macro_input, DeriveInput};
+use syn::{parse_macro_input, parse_quote, DeriveInput};
 use syn::spanned::Spanned;
 
 #[proc_macro_derive(PK, attributes(parent))]
@@ -44,11 +45,11 @@ pub fn derive_pk(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 pub fn derive_entity(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let ast: DeriveInput = parse_macro_input!(input as DeriveInput);
     let entity_ident = &ast.ident;
-
+    let entity_type: syn::Type = parse_quote! { #entity_ident };
 
     static PRINT_ONCE: Once = Once::new();
     PRINT_ONCE.call_once(|| {
-        eprintln!("----------------------------------------------------------");
+        // eprintln!("----------------------------------------------------------");
     });
 
     let register = quote! {
@@ -65,7 +66,7 @@ pub fn derive_entity(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
             field_parser::get_field_macros(&named_fields, &ast)
         })
         .and_then(|field_macros| {
-            EntityMacros::new(entity_ident.clone(), field_macros)
+            EntityMacros::new(entity_ident, &entity_type, field_macros)
         })
         .map(|entity_macros| compositor::expand(entity_macros)).unwrap_or_else(|e| e.to_compile_error().into());
 

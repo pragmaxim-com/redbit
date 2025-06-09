@@ -40,6 +40,25 @@ pub struct Params { // currently only params of one type are supported
     pub column_type: Type,
 }
 
+
+fn to_route_chain(endpoints: Vec<HttpEndpointMacro>) -> Vec<TokenStream> {
+    endpoints
+        .into_iter()
+        .map(|e| (e.endpoint, e.fn_name))
+        .map(|(endpoint, function_name)| {
+            quote! {
+                        .route(#endpoint, ::axum::routing::get(#function_name))
+                    }
+        })
+        .collect()
+}
+
+pub fn to_http_endpoints(defs: Vec<FunctionDef>) -> (Vec<HttpEndpointMacro>, Vec<TokenStream>) {
+    let endpoints: Vec<HttpEndpointMacro> = defs.iter().filter_map(|fn_def| to_http_endpoint(fn_def)).collect();
+    let route_chains = to_route_chain(endpoints.clone());
+    (endpoints, route_chains)
+}
+
 pub fn to_http_endpoint(def: &FunctionDef) -> Option<HttpEndpointMacro> {
     if let Some(endpoint_type) = &def.endpoint {
         let entity_snake = def.entity.to_string().to_lowercase();
@@ -105,17 +124,17 @@ pub fn to_http_endpoint(def: &FunctionDef) -> Option<HttpEndpointMacro> {
         };
 
         let handler = quote! {
-        #[axum::debug_handler]
-        pub async fn #fn_name(
-            ::axum::extract::State(state): ::axum::extract::State<RequestState>,
-            #param_binding,
-        ) -> Result<AppJson<#return_type>, AppError> {
-            state.db.begin_read()
-                .map_err(AppError::from)
-                .and_then(|read_tx| #db_call)
-                .map(AppJson)
-        }
-    };
+            #[axum::debug_handler]
+            pub async fn #fn_name(
+                ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+                #param_binding,
+            ) -> Result<AppJson<#return_type>, AppError> {
+                state.db.begin_read()
+                    .map_err(AppError::from)
+                    .and_then(|read_tx| #db_call)
+                    .map(AppJson)
+            }
+        };
 
         Some(HttpEndpointMacro {
             endpoint,

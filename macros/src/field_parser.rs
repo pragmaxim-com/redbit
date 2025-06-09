@@ -17,44 +17,45 @@ pub enum Multiplicity {
 }
 
 pub enum ParsingResult {
-    Pk(Pk),
-    Column(Column),
-    RelationShip(Relationship),
-    Transient(Transient),
+    Pk(PkDef),
+    Column(ColumnDef),
+    RelationShip(RelationshipDef),
+    Transient(TransientDef),
 }
 
 #[derive(Clone)]
-pub struct Field {
+pub struct FieldDef {
     pub name: Ident,
     pub tpe: Type,
 }
 
-pub struct Pk {
-    pub field: Field,
+#[derive(Clone)]
+pub struct PkDef {
+    pub field: FieldDef,
     pub range: bool,
 }
 
 #[derive(Clone)]
-pub struct Column {
-    pub field: Field,
+pub struct ColumnDef {
+    pub field: FieldDef,
     pub indexing: Indexing,
 }
 
-pub struct Transient {
-    pub field: Field,
+pub struct TransientDef {
+    pub field: FieldDef,
 }
 
 #[derive(Clone)]
-pub struct Relationship {
-    pub field: Field,
+pub struct RelationshipDef {
+    pub field: FieldDef,
     pub multiplicity: Multiplicity,
 }
 
 pub struct FieldDefs {
-    pub pk: Pk,
-    pub columns: Vec<Column>,
-    pub relationships: Vec<Relationship>,
-    pub transients: Vec<Transient>
+    pub pk: PkDef,
+    pub columns: Vec<ColumnDef>,
+    pub relationships: Vec<RelationshipDef>,
+    pub transients: Vec<TransientDef>
 }
 
 pub fn get_named_fields(ast: &DeriveInput) -> Result<Punctuated<syn::Field, Comma>, syn::Error> {
@@ -81,8 +82,8 @@ fn parse_entity_field(field: &syn::Field) -> Result<ParsingResult, syn::Error> {
                         }
                         Ok(())
                     });
-                    let field = Field { name: column_name.clone(), tpe: column_type.clone() };
-                    return Ok(ParsingResult::Pk(Pk { field, range }));
+                    let field = FieldDef { name: column_name.clone(), tpe: column_type.clone() };
+                    return Ok(ParsingResult::Pk(PkDef { field, range }));
                 } else if attr.path().is_ident("column") {
                     let mut indexing = Indexing::Off;
                     let _ = attr.parse_nested_meta(|nested| {
@@ -96,11 +97,11 @@ fn parse_entity_field(field: &syn::Field) -> Result<ParsingResult, syn::Error> {
                         }
                         Ok(())
                     });
-                    let field = Field { name: column_name.clone(), tpe: column_type.clone() };
-                    return Ok(ParsingResult::Column(Column { field, indexing }));
+                    let field = FieldDef { name: column_name.clone(), tpe: column_type.clone() };
+                    return Ok(ParsingResult::Column(ColumnDef { field, indexing }));
                 } else if attr.path().is_ident("transient") {
-                    let field = Field { name: column_name.clone(), tpe: column_type.clone() };
-                    return Ok(ParsingResult::Transient(Transient{field}))
+                    let field = FieldDef { name: column_name.clone(), tpe: column_type.clone() };
+                    return Ok(ParsingResult::Transient(TransientDef {field}))
                 } else if let Type::Path(type_path) = &column_type {
                     if let Some(segment) = type_path.path.segments.last() {
                         if attr.path().is_ident("one2many") && segment.ident == "Vec" {
@@ -110,15 +111,15 @@ fn parse_entity_field(field: &syn::Field) -> Result<ParsingResult, syn::Error> {
                                         &inner_type_path.path.segments.last()
                                             .ok_or_else(|| syn::Error::new(field.span(), "Parent field missing"))?.ident;
                                     let type_path = Type::Path(syn::TypePath { qself: None, path: syn::Path::from(inner_type.clone()) });
-                                    let field = Field { name: column_name.clone(), tpe: type_path };
-                                    return Ok(ParsingResult::RelationShip(Relationship { field, multiplicity: Multiplicity::OneToMany }));
+                                    let field = FieldDef { name: column_name.clone(), tpe: type_path };
+                                    return Ok(ParsingResult::RelationShip(RelationshipDef { field, multiplicity: Multiplicity::OneToMany }));
                                 }
                             }
                         } else if attr.path().is_ident("one2one") && segment.arguments.is_empty() {
                             let struct_type = &segment.ident;
                             let type_path = Type::Path(syn::TypePath { qself: None, path: syn::Path::from(struct_type.clone()) });
-                            let field = Field { name: column_name.clone(), tpe: type_path };
-                            return Ok(ParsingResult::RelationShip(Relationship { field, multiplicity: Multiplicity::OneToOne }));
+                            let field = FieldDef { name: column_name.clone(), tpe: type_path };
+                            return Ok(ParsingResult::RelationShip(RelationshipDef { field, multiplicity: Multiplicity::OneToOne }));
                         }
                     }
                 }
@@ -132,10 +133,10 @@ fn parse_entity_field(field: &syn::Field) -> Result<ParsingResult, syn::Error> {
 }
 
 pub fn get_field_macros(fields: &Punctuated<syn::Field, Comma>, ast: &DeriveInput) -> Result<FieldDefs, syn::Error> {
-    let mut pk_column: Option<Pk> = None;
-    let mut columns: Vec<Column> = Vec::new();
-    let mut relationships: Vec<Relationship> = Vec::new();
-    let mut transients: Vec<Transient> = Vec::new();
+    let mut pk_column: Option<PkDef> = None;
+    let mut columns: Vec<ColumnDef> = Vec::new();
+    let mut relationships: Vec<RelationshipDef> = Vec::new();
+    let mut transients: Vec<TransientDef> = Vec::new();
 
     for field in fields.iter() {
         match parse_entity_field(field)? {

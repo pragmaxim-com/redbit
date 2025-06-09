@@ -3,62 +3,35 @@ use crate::pk::DbPkMacros;
 use crate::relationship::{DbRelationshipMacros, TransientMacros};
 use crate::field_parser::*;
 use proc_macro2::Ident;
+use syn::Type;
 
 pub struct EntityMacros {
-    pub struct_name: Ident,
-    pub pk: (Pk, DbPkMacros),
-    pub columns: Vec<(Column, DbColumnMacros)>,
-    pub relationships: Vec<(Relationship, DbRelationshipMacros)>,
-    pub transients: Vec<(Transient, TransientMacros)>,
+    pub entity_name: Ident,
+    pub entity_type: Type,
+    pub pk: DbPkMacros,
+    pub columns: Vec<DbColumnMacros>,
+    pub relationships: Vec<DbRelationshipMacros>,
+    pub transients: Vec<TransientMacros>,
 }
 
 impl EntityMacros {
-    pub fn new(entity_ident: Ident, field_defs: FieldDefs) -> Result<EntityMacros, syn::Error> {
+    pub fn new(entity_ident: &Ident, entity_type: &Type, field_defs: FieldDefs) -> Result<EntityMacros, syn::Error> {
         let FieldDefs { pk, columns, relationships, transients } = field_defs;
-        let pk_name = &pk.field.name;
-        let pk_type = &pk.field.tpe;
-        let mut column_macros: Vec<(Column, DbColumnMacros)> = Vec::new();
-        for entity_column in columns.into_iter() {
-            let column_name = &entity_column.field.name.clone();
-            let column_type = &entity_column.field.tpe.clone();
-            match entity_column.indexing {
-                Indexing::Off => {
-                    column_macros.push((
-                        entity_column.clone(),
-                        DbColumnMacros::plain(&entity_ident, pk_name, pk_type, column_name, column_type),
-                    ));
-                }
-                Indexing::On { dictionary: false, range } => {
-                    column_macros.push((
-                        entity_column.clone(),
-                        DbColumnMacros::indexed(&entity_ident, pk_name, pk_type, column_name, column_type, range),
-                    ));
-                }
-                Indexing::On { dictionary: true, range: false } => {
-                    column_macros.push((
-                        entity_column.clone(),
-                        DbColumnMacros::dictionary(&entity_ident, pk_name, pk_type, column_name, column_type),
-                    ));
-                }
-                Indexing::On { dictionary: true, range: true } => {
-                    return Err(syn::Error::new(column_name.span(), "Range indexing on dictionary columns is not supported"))
-                }
-            }
-        }
-
-        let db_pk_macro = DbPkMacros::new(&entity_ident, &pk);
-        let mut relationship_macros: Vec<(Relationship, DbRelationshipMacros)> = Vec::new();
-        for rel in relationships.iter() {
-            let db_relationship_macros = DbRelationshipMacros::new(&entity_ident, &pk, rel.clone());
-            relationship_macros.push((rel.clone(), db_relationship_macros));
-        }
-        let transient_macros = TransientMacros::new(transients);
+        let column_macros =
+            columns.into_iter()
+                .map(|entity_column| DbColumnMacros::new(entity_column, entity_ident, entity_type, &pk.field.name, &pk.field.tpe))
+                .collect::<Result<Vec<DbColumnMacros>, syn::Error>>()?;
+        let relationship_macros =
+            relationships.into_iter()
+                .map(|rel| DbRelationshipMacros::new(rel, entity_ident, &pk))
+                .collect();
         Ok(EntityMacros {
-            struct_name: entity_ident,
-            pk: (pk, db_pk_macro),
+            entity_name: entity_ident.clone(),
+            entity_type: entity_type.clone(),
+            pk: DbPkMacros::new(entity_ident, entity_type, &pk),
             columns: column_macros,
             relationships: relationship_macros,
-            transients: transient_macros
+            transients: TransientMacros::new(transients)
         })
     }
 }

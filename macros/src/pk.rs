@@ -1,9 +1,19 @@
+mod get;
+mod take;
+mod first;
+mod last;
+mod range;
+mod pk_range;
+mod store;
+mod delete;
+
 use proc_macro2::{Ident, TokenStream};
-use quote::{format_ident, quote};
-use syn::{DeriveInput, Data, Fields, Attribute};
-use crate::field_parser::Pk;
-use crate::http::{Endpoint, FunctionDef, Params, ReturnValue};
+use quote::quote;
+use syn::{Attribute, Data, DeriveInput, Fields, Type};
+use crate::field_parser::PkDef;
+use crate::http::FunctionDef;
 use crate::macro_utils;
+use crate::table::TableDef;
 
 pub enum PointerType {
     Root,
@@ -11,8 +21,8 @@ pub enum PointerType {
 }
 
 pub struct DbPkMacros {
-    pub table_name: String,
-    pub table_definition: TokenStream,
+    pub definition: PkDef,
+    pub table_def: TableDef,
     pub store_statement: TokenStream,
     pub store_many_statement: TokenStream,
     pub delete_statement: TokenStream,
@@ -21,179 +31,29 @@ pub struct DbPkMacros {
 }
 
 impl DbPkMacros {
-    pub fn new(struct_name: &Ident, pk_column: &Pk) -> Self {
-        let table_ident = format_ident!("{}_{}", struct_name.to_string().to_uppercase(), pk_column.field.name.to_string().to_uppercase());
-        let table_name = table_ident.to_string();
-        let pk_name: Ident = pk_column.field.name.clone();
-        let pk_type = pk_column.field.tpe.clone();
-
-        let table_definition = quote! {
-            pub const #table_ident: ::redb::TableDefinition<'static, Bincode<#pk_type>, ()> = ::redb::TableDefinition::new(#table_name);
-        };
-
-        let store_statement = quote! {
-            let mut table_pk_1 = write_tx.open_table(#table_ident)?;
-            table_pk_1.insert(&instance.#pk_name, ())?;
-        };
-
-        let store_many_statement = quote! {
-            let mut table_pk_2 = write_tx.open_table(#table_ident)?;
-            for instance in instances.iter() {
-                table_pk_2.insert(&instance.#pk_name, ())?;
-            };
-        };
-
-        let delete_statement = quote! {
-            let mut table_pk_3 = write_tx.open_table(#table_ident)?;
-            let _ = table_pk_3.remove(pk)?;
-        };
-
-        let delete_many_statement = quote! {
-            let mut table_pk_4 = write_tx.open_table(#table_ident)?;
-            for pk in pks.iter() {
-                table_pk_4.remove(pk)?;
-            }
-        };
+    pub fn new(entity_name: &Ident, entity_type: &Type, pk_def: &PkDef) -> Self {
+        let pk_name: Ident = pk_def.field.name.clone();
+        let pk_type = pk_def.field.tpe.clone();
+        let table_def = TableDef::pk(entity_name, &pk_name, &pk_type);
 
         let mut function_defs: Vec<FunctionDef> = Vec::new();
-        let get_fn_name = format_ident!("get");
-        let get_fn =
-            quote! {
-                pub fn #get_fn_name(read_tx: &::redb::ReadTransaction, pk: &#pk_type) -> Result<Option<#struct_name>, AppError> {
-                    let table_pk_5 = read_tx.open_table(#table_ident)?;
-                    if table_pk_5.get(pk)?.is_some() {
-                        Ok(Some(Self::compose(&read_tx, pk)?))
-                    } else {
-                        Ok(None)
-                    }
-                }
-            };
-        function_defs.push(FunctionDef {
-            entity: struct_name.clone(),
-            name: get_fn_name.clone(),
-            stream: get_fn.clone(),
-            return_value: ReturnValue { value_name: struct_name.clone(), value_type: syn::parse_quote!(Option<#struct_name>) },
-            endpoint: Some(Endpoint::GetBy(Params { column_name: pk_name.clone(), column_type: pk_type.clone()})),
-        });
+        function_defs.push(get::fn_def(entity_name, entity_type, &pk_name, &pk_type, &table_def.name));
+        function_defs.push(take::fn_def(entity_name, entity_type, &table_def.name));
+        function_defs.push(first::fn_def(entity_name, entity_type, &table_def.name));
+        function_defs.push(last::fn_def(entity_name, entity_type, &table_def.name));
 
-        let all_fn_name = format_ident!("take"); // TODO rewrite to really return some kind of latest results
-        let all_fn = quote! {
-            pub fn #all_fn_name(read_tx: &::redb::ReadTransaction, n: u32) -> Result<Vec<#struct_name>, AppError> {
-                let table_pk_6 = read_tx.open_table(#table_ident)?;
-                let mut iter = table_pk_6.iter()?;
-                let mut results = Vec::new();
-                let mut count = 0;
-
-                while let Some(entry_res) = iter.next() {
-                    if count >= n {
-                        break;
-                    }
-                    let pk = entry_res?.0.value();
-                    results.push(Self::compose(&read_tx, &pk)?);
-                    count += 1;
-                }
-
-                Ok(results)
-            }
-        };
-
-        function_defs.push(FunctionDef {
-            entity: struct_name.clone(),
-            name: all_fn_name.clone(),
-            stream: all_fn.clone(),
-            return_value: ReturnValue{ value_name: struct_name.clone(), value_type: syn::parse_quote!(Vec<#struct_name>) },
-            endpoint: Some(Endpoint::Take),
-        });
-
-        let first_fn_name = format_ident!("first");
-        let first_fm = quote! {
-            pub fn #first_fn_name(read_tx: &::redb::ReadTransaction) -> Result<Option<#struct_name>, AppError> {
-                let table_pk_7 = read_tx.open_table(#table_ident)?;
-                if let Some((k, _)) = table_pk_7.first()? {
-                    return Self::compose(&read_tx, &k.value()).map(Some);
-                }
-                Ok(None)
-            }
-        };
-        function_defs.push(FunctionDef{
-            entity: struct_name.clone(),
-            name: first_fn_name.clone(),
-            stream: first_fm.clone(),
-            return_value: ReturnValue{ value_name: struct_name.clone(), value_type: syn::parse_quote!(Option<#struct_name>) },
-            endpoint: Some(Endpoint::First),
-        });
-
-        let last_fn_name = format_ident!("last");
-        let last_fn = quote! {
-            pub fn #last_fn_name(read_tx: &::redb::ReadTransaction) -> Result<Option<#struct_name>, AppError> {
-                let table_pk_8 = read_tx.open_table(#table_ident)?;
-                if let Some((k, _)) = table_pk_8.last()? {
-                    return Self::compose(&read_tx, &k.value()).map(Some);
-                }
-                Ok(None)
-            }
-        };
-        function_defs.push(FunctionDef {
-            entity: struct_name.clone(),
-            name: last_fn_name.clone(),
-            stream: last_fn.clone(),
-            return_value: ReturnValue{ value_name: struct_name.clone(), value_type: syn::parse_quote!(Option<#struct_name>) },
-            endpoint: Some(Endpoint::Last),
-        });
-
-        if pk_column.range {
-            let range_fn_name = format_ident!("range");
-            let range_fn =
-                quote! {
-                    pub fn #range_fn_name(read_tx: &::redb::ReadTransaction, from: &#pk_type, until: &#pk_type) -> Result<Vec<#struct_name>, AppError> {
-                        let table_pk_9 = read_tx.open_table(#table_ident)?;
-                        let range = from.clone()..until.clone();
-                        let mut iter = table_pk_9.range(range)?;
-                        let mut results = Vec::new();
-                        while let Some(entry_res) = iter.next() {
-                            let pk = entry_res?.0.value();
-                            results.push(Self::compose(&read_tx, &pk)?);
-                        }
-                        Ok(results)
-                    }
-                };
-            function_defs.push(FunctionDef {
-                entity: struct_name.clone(),
-                name: range_fn_name.clone(),
-                stream: range_fn.clone(),
-                return_value: ReturnValue{ value_name: struct_name.clone(), value_type: syn::parse_quote!(Vec<#struct_name>) },
-                endpoint: Some(Endpoint::RangeBy(Params { column_name: pk_name.clone(), column_type: pk_type.clone()})),
-            });
-            let pk_range_fn_name = format_ident!("pk_range");
-            let pk_range_fn = quote! {
-                fn #pk_range_fn_name(write_tx: &::redb::WriteTransaction, from: &#pk_type, until: &#pk_type) -> Result<Vec<#pk_type>, AppError> {
-                    let table_pk_10 = write_tx.open_table(#table_ident)?;
-                    let range = from.clone()..until.clone();
-                    let mut iter = table_pk_10.range(range)?;
-                    let mut results = Vec::new();
-                    while let Some(entry_res) = iter.next() {
-                        let pk = entry_res?.0.value();
-                        results.push(pk);
-                    }
-                    Ok(results)
-                }
-            };
-            function_defs.push(FunctionDef {
-                entity: struct_name.clone(),
-                name: pk_range_fn_name.clone(),
-                stream: pk_range_fn.clone(),
-                return_value: ReturnValue{ value_name: pk_name.clone(), value_type: syn::parse_quote!(Vec<#pk_type>) },
-                endpoint: None,
-            });
+        if pk_def.range {
+            function_defs.push(range::fn_def(entity_name, entity_type, &pk_name, &pk_type, &table_def.name));
+            function_defs.push(pk_range::fn_def(entity_name, &pk_name, &pk_type, &table_def.name));
         };
 
         DbPkMacros {
-            table_name,
-            table_definition,
-            store_statement,
-            store_many_statement,
-            delete_statement,
-            delete_many_statement,
+            definition: pk_def.clone(),
+            table_def: table_def.clone(),
+            store_statement: store::store_statement(&pk_name, &table_def.name),
+            store_many_statement: store::store_many_statement(&pk_name, &table_def.name),
+            delete_statement: delete::delete_statement(&table_def.name),
+            delete_many_statement: delete::delete_many_statement(&table_def.name),
             function_defs
         }
     }
