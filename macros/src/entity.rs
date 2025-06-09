@@ -19,7 +19,7 @@ impl EntityMacros {
         let FieldDefs { pk, columns, relationships, transients } = field_defs;
         let column_macros =
             columns.into_iter()
-                .map(|entity_column| DbColumnMacros::new(entity_column, entity_ident, entity_type, &pk.field.name, &pk.field.tpe))
+                .map(|entity_column| DbColumnMacros::new(entity_column, entity_ident, entity_type, &pk))
                 .collect::<Result<Vec<DbColumnMacros>, syn::Error>>()?;
         let relationship_macros =
             relationships.into_iter()

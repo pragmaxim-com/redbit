@@ -133,7 +133,11 @@ impl DbPkMacros {
                     #struct_name { #index_name: self.#index_name + 1 }
                 }
             }
-            impl RootPointer for #struct_name {}
+            impl RootPointer for #struct_name {
+                fn is_child(&self) -> bool {
+                    false
+                }
+            }
 
         };
         macro_utils::write_stream_and_return(expanded, &struct_name)
@@ -164,8 +168,8 @@ impl DbPkMacros {
                 impl ChildPointer for #struct_name {
                     type Parent = #parent_type;
 
-                    fn parent(&self) -> &Self::Parent {
-                        &self.#parent_name
+                    fn is_child(&self) -> bool {
+                        true
                     }
 
                     fn from_parent(parent: Self::Parent) -> Self {
@@ -175,7 +179,6 @@ impl DbPkMacros {
                         }
                     }
                 }
-
             };
         macro_utils::write_stream_and_return(expanded, &struct_name)
     }

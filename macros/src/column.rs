@@ -6,7 +6,7 @@ mod init;
 
 use proc_macro2::{Ident, TokenStream};
 use syn::Type;
-use crate::field_parser::{ColumnDef, Indexing};
+use crate::field_parser::{ColumnDef, Indexing, PkDef};
 use crate::http::*;
 use crate::table::TableDef;
 
@@ -23,16 +23,18 @@ pub struct DbColumnMacros {
 }
 
 impl DbColumnMacros {
-    pub fn new(definition: ColumnDef, entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type: &Type) -> Result<DbColumnMacros, syn::Error> {
-        let column_name = &definition.field.name.clone();
-        let column_type = &definition.field.tpe.clone();
-        match definition.indexing {
+    pub fn new(column_def: ColumnDef, entity_name: &Ident, entity_type: &Type, pk_def: &PkDef) -> Result<DbColumnMacros, syn::Error> {
+        let column_name = &column_def.field.name.clone();
+        let column_type = &column_def.field.tpe.clone();
+        let pk_name = &pk_def.field.name;
+        let pk_type = &pk_def.field.tpe;
+        match column_def.indexing {
             Indexing::Off =>
-                Ok(DbColumnMacros::plain(definition, entity_name, pk_name, pk_type, column_name, column_type)),
+                Ok(DbColumnMacros::plain(column_def, entity_name, pk_name, pk_type, column_name, column_type)),
             Indexing::On { dictionary: false, range } =>
-                Ok(DbColumnMacros::index(definition, entity_name, entity_type, pk_name, pk_type, column_name, column_type, range)),
+                Ok(DbColumnMacros::index(column_def, entity_name, entity_type, pk_name, pk_type, column_name, column_type, range)),
             Indexing::On { dictionary: true, range: false } =>
-                Ok(DbColumnMacros::dictionary(definition, entity_name, entity_type, pk_name, pk_type, column_name, column_type)),
+                Ok(DbColumnMacros::dictionary(column_def, entity_name, entity_type, pk_name, pk_type, column_name, column_type)),
             Indexing::On { dictionary: true, range: true } =>
                 Err(syn::Error::new(column_name.span(), "Range indexing on dictionary columns is not supported"))
         }

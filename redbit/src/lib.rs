@@ -36,11 +36,13 @@ pub trait IndexedPointer: Clone {
     fn next(&self) -> Self;
 }
 
-pub trait RootPointer: IndexedPointer {}
+pub trait RootPointer: IndexedPointer {
+    fn is_child(&self) -> bool;
+}
 
 pub trait ChildPointer: IndexedPointer {
     type Parent: IndexedPointer;
-    fn parent(&self) -> &Self::Parent;
+    fn is_child(&self) -> bool;
     fn from_parent(parent: Self::Parent) -> Self;
 }
 

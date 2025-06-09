@@ -27,7 +27,7 @@ pub fn store_index_def(column_name: &Ident, pk_name: &Ident, table: &Ident, inde
     }
 }
 
-pub fn store_many_index_def(column_name: &Ident, pk_name: &Ident, table: &Ident, index_table: &Ident) -> TokenStream{
+pub fn store_many_index_def(column_name: &Ident, pk_name: &Ident, table: &Ident, index_table: &Ident) -> TokenStream {
     quote! {
         let mut table_col_7 = write_tx.open_table(#table)?;
         let mut mm = write_tx.open_multimap_table(#index_table)?;
