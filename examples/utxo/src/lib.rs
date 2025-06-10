@@ -20,7 +20,7 @@ pub struct Block {
 
 #[derive(Entity, Default, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct BlockHeader {
-    #[pk(range)]
+    #[fk(one2one, range)]
     pub id: BlockPointer,
     #[column(index)]
     pub hash: Hash,
@@ -34,7 +34,7 @@ pub struct BlockHeader {
 
 #[derive(Entity, Default, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Transaction {
-    #[pk(range)]
+    #[fk(one2many, range)]
     pub id: TxPointer,
     #[column(index)]
     pub hash: Hash,
@@ -46,7 +46,7 @@ pub struct Transaction {
 
 #[derive(Entity, Default, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Utxo {
-    #[pk(range)]
+    #[fk(one2many, range)]
     pub id: UtxoPointer,
     #[column]
     pub amount: Amount,
@@ -59,8 +59,14 @@ pub struct Utxo {
 }
 
 #[derive(Entity, Default, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct InputRef {
+    #[fk(one2many, range)]
+    pub id: InputPointer,
+}
+
+#[derive(Entity, Default, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Asset {
-    #[pk(range)]
+    #[fk(one2many, range)]
     pub id: AssetPointer,
     #[column]
     pub amount: Amount,
@@ -94,12 +100,6 @@ pub struct InputPointer {
     #[parent]
     pub tx_pointer: TxPointer,
     pub utxo_index: UtxoIndex,
-}
-
-#[derive(Entity, Default, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct InputRef {
-    #[pk(range)]
-    pub id: InputPointer,
 }
 
 #[derive(PK, Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]

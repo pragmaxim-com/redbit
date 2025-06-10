@@ -43,6 +43,7 @@ pub trait RootPointer: IndexedPointer {
 pub trait ChildPointer: IndexedPointer {
     type Parent: IndexedPointer;
     fn is_child(&self) -> bool;
+    fn parent(&self) -> &Self::Parent;
     fn from_parent(parent: Self::Parent) -> Self;
 }
 

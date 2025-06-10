@@ -2,10 +2,11 @@ Redbit reads struct annotations and derives code necessary for persisting and qu
 [Redb](https://github.com/cberner/redb) using secondary indexes and dictionaries, served by [axum](https://github.com/tokio-rs/axum)
 through auto-generated REST API.
 
-### Main motivations
-- ✅ Achieving more advanced querying capabilities with embedded KV stores is non-trivial  
-- ✅ Absence of any existing db & http higher-level layer for structured data in embedded KV stores
-- ✅ Handwriting custom codecs on byte-level is tedious and painful
+### Main motivation is a research
+
+- ✅ Rust type and macro system and db engines at the byte level
+- ✅ decentralized persistence options to maximize indexing speed and minimize data size
+- ✅ meta space : self-tested and self-documented db & http layers of code derived from annotated structs
 
 ### Major Out-of-the-Box Features
 
@@ -183,7 +184,7 @@ And R/W entire instances efficiently using indexes and dictionaries `examples/ut
     
         println!("Persisting blocks:");
         for block in blocks.iter() {
-            Block::store_and_commit(&db, block)?
+            Block::store_unsafe_and_commit(&db, block)?
         }
     
         let read_tx = db.begin_read()?;
@@ -302,3 +303,66 @@ Block__get_header                                 277993
 BlockHeader__get                                  280582
 ```
 <!-- END_BENCH -->
+
+### Http Endpoints generated
+```
+Endpoint       /block/id/{value}
+Endpoint       /block?take=
+Endpoint       /block?first=
+Endpoint       /block?last=
+Endpoint       /block/id/{value}
+Endpoint       /block/id?from=&until=
+Endpoint       /block/{value}/header
+Endpoint       /block/{value}/transactions
+
+Endpoint       /blockheader/id/{value}
+Endpoint       /blockheader?take=
+Endpoint       /blockheader?first=
+Endpoint       /blockheader?last=
+Endpoint       /blockheader/id/{value}
+Endpoint       /blockheader/id?from=&until=
+Endpoint       /blockheader/hash/{value}
+Endpoint       /blockheader/timestamp/{value}
+Endpoint       /blockheader/timestamp?from=&until=
+Endpoint       /blockheader/merkle_root/{value}
+
+Endpoint       /transaction/id/{value}
+Endpoint       /transaction?take=
+Endpoint       /transaction?first=
+Endpoint       /transaction?last=
+Endpoint       /transaction/id/{value}
+Endpoint       /transaction/id/{value}/parent_pk
+Endpoint       /transaction/id?from=&until=
+Endpoint       /transaction/hash/{value}
+Endpoint       /transaction/{value}/utxos
+Endpoint       /transaction/{value}/inputs
+
+Endpoint       /utxo/id/{value}
+Endpoint       /utxo?take=
+Endpoint       /utxo?first=
+Endpoint       /utxo?last=
+Endpoint       /utxo/id/{value}
+Endpoint       /utxo/id/{value}/parent_pk
+Endpoint       /utxo/id?from=&until=
+Endpoint       /utxo/datum/{value}
+Endpoint       /utxo/address/{value}
+Endpoint       /utxo/{value}/assets
+
+Endpoint       /inputref/id/{value}
+Endpoint       /inputref?take=
+Endpoint       /inputref?first=
+Endpoint       /inputref?last=
+Endpoint       /inputref/id/{value}
+Endpoint       /inputref/id/{value}/parent_pk
+Endpoint       /inputref/id?from=&until=
+
+Endpoint       /asset/id/{value}
+Endpoint       /asset?take=
+Endpoint       /asset?first=
+Endpoint       /asset?last=
+Endpoint       /asset/id/{value}
+Endpoint       /asset/id/{value}/parent_pk
+Endpoint       /asset/id?from=&until=
+Endpoint       /asset/name/{value}
+Endpoint       /asset/policy_id/{value}
+```

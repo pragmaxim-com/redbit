@@ -1,0 +1,355 @@
+pub const BLOCK_ID: ::redb::TableDefinition<'static, Bincode<BlockPointer>, ()> = ::redb::TableDefinition::new(
+    "BLOCK_ID",
+);
+#[axum::debug_handler]
+pub async fn block_get(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Path(params): ::axum::extract::Path<RequestByParams<BlockPointer>>,
+) -> Result<AppJson<Option<Block>>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| Block::get(&read_tx, &params.value))
+        .map(AppJson)
+}
+#[axum::debug_handler]
+pub async fn block_take(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Query(params): ::axum::extract::Query<TakeParams>,
+) -> Result<AppJson<Vec<Block>>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| Block::take(&read_tx, params.take))
+        .map(AppJson)
+}
+#[axum::debug_handler]
+pub async fn block_first(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Query(params): ::axum::extract::Query<FirstParams>,
+) -> Result<AppJson<Option<Block>>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| Block::first(&read_tx))
+        .map(AppJson)
+}
+#[axum::debug_handler]
+pub async fn block_last(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Query(params): ::axum::extract::Query<LastParams>,
+) -> Result<AppJson<Option<Block>>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| Block::last(&read_tx))
+        .map(AppJson)
+}
+#[axum::debug_handler]
+pub async fn block_exists(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Path(params): ::axum::extract::Path<RequestByParams<BlockPointer>>,
+) -> Result<AppJson<bool>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| Block::exists(&read_tx, &params.value))
+        .map(AppJson)
+}
+#[axum::debug_handler]
+pub async fn block_range(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Query(
+        params,
+    ): ::axum::extract::Query<RequestRangeParams<BlockPointer, BlockPointer>>,
+) -> Result<AppJson<Vec<Block>>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| Block::range(&read_tx, &params.from, &params.until))
+        .map(AppJson)
+}
+#[axum::debug_handler]
+pub async fn block_get_header(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Path(params): ::axum::extract::Path<RequestByParams<BlockPointer>>,
+) -> Result<AppJson<BlockHeader>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| Block::get_header(&read_tx, &params.value))
+        .map(AppJson)
+}
+#[axum::debug_handler]
+pub async fn block_get_transactions(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Path(params): ::axum::extract::Path<RequestByParams<BlockPointer>>,
+) -> Result<AppJson<Vec<Transaction>>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| Block::get_transactions(&read_tx, &params.value))
+        .map(AppJson)
+}
+impl Block {
+    pub fn get(
+        read_tx: &::redb::ReadTransaction,
+        pk: &BlockPointer,
+    ) -> Result<Option<Block>, AppError> {
+        let table_pk_5 = read_tx.open_table(BLOCK_ID)?;
+        if table_pk_5.get(pk)?.is_some() {
+            Ok(Some(Self::compose(&read_tx, pk)?))
+        } else {
+            Ok(None)
+        }
+    }
+    pub fn take(
+        read_tx: &::redb::ReadTransaction,
+        n: u32,
+    ) -> Result<Vec<Block>, AppError> {
+        let table_pk_6 = read_tx.open_table(BLOCK_ID)?;
+        let mut iter = table_pk_6.iter()?;
+        let mut results = Vec::new();
+        let mut count = 0;
+        while let Some(entry_res) = iter.next() {
+            if count >= n {
+                break;
+            }
+            let pk = entry_res?.0.value();
+            results.push(Self::compose(&read_tx, &pk)?);
+            count += 1;
+        }
+        Ok(results)
+    }
+    pub fn first(read_tx: &::redb::ReadTransaction) -> Result<Option<Block>, AppError> {
+        let table_pk_7 = read_tx.open_table(BLOCK_ID)?;
+        if let Some((k, _)) = table_pk_7.first()? {
+            return Self::compose(&read_tx, &k.value()).map(Some);
+        }
+        Ok(None)
+    }
+    pub fn last(read_tx: &::redb::ReadTransaction) -> Result<Option<Block>, AppError> {
+        let table_pk_8 = read_tx.open_table(BLOCK_ID)?;
+        if let Some((k, _)) = table_pk_8.last()? {
+            return Self::compose(&read_tx, &k.value()).map(Some);
+        }
+        Ok(None)
+    }
+    pub fn exists(
+        read_tx: &::redb::ReadTransaction,
+        pk: &BlockPointer,
+    ) -> Result<bool, AppError> {
+        let table_pk_11 = read_tx.open_table(BLOCK_ID)?;
+        if table_pk_11.get(pk)?.is_some() { Ok(true) } else { Ok(false) }
+    }
+    pub fn range(
+        read_tx: &::redb::ReadTransaction,
+        from: &BlockPointer,
+        until: &BlockPointer,
+    ) -> Result<Vec<Block>, AppError> {
+        let table_pk_9 = read_tx.open_table(BLOCK_ID)?;
+        let range = from.clone()..until.clone();
+        let mut iter = table_pk_9.range(range)?;
+        let mut results = Vec::new();
+        while let Some(entry_res) = iter.next() {
+            let pk = entry_res?.0.value();
+            results.push(Self::compose(&read_tx, &pk)?);
+        }
+        Ok(results)
+    }
+    fn pk_range(
+        write_tx: &::redb::WriteTransaction,
+        from: &BlockPointer,
+        until: &BlockPointer,
+    ) -> Result<Vec<BlockPointer>, AppError> {
+        let table_pk_10 = write_tx.open_table(BLOCK_ID)?;
+        let range = from.clone()..until.clone();
+        let mut iter = table_pk_10.range(range)?;
+        let mut results = Vec::new();
+        while let Some(entry_res) = iter.next() {
+            let pk = entry_res?.0.value();
+            results.push(pk);
+        }
+        Ok(results)
+    }
+    pub fn get_header(
+        read_tx: &::redb::ReadTransaction,
+        pk: &BlockPointer,
+    ) -> Result<BlockHeader, AppError> {
+        BlockHeader::get(&read_tx, &pk)
+            .and_then(|opt| {
+                opt.ok_or_else(|| AppError::Internal(
+                    format!("No child found for pk: {:?}", pk),
+                ))
+            })
+    }
+    pub fn get_transactions(
+        read_tx: &::redb::ReadTransaction,
+        pk: &BlockPointer,
+    ) -> Result<Vec<Transaction>, AppError> {
+        let (from, to) = pk.fk_range();
+        Transaction::range(&read_tx, &from, &to)
+    }
+    pub fn sample(pk: &BlockPointer) -> Self {
+        Block {
+            id: pk.clone(),
+            header: BlockHeader::default(),
+            transactions: {
+                let (from, _) = pk.fk_range();
+                let sample_0 = Transaction::sample(&from);
+                let sample_1 = Transaction::sample(&from.next());
+                let sample_2 = Transaction::sample(&from.next().next());
+                vec![sample_0, sample_1, sample_2]
+            },
+        }
+    }
+    fn compose(
+        read_tx: &::redb::ReadTransaction,
+        pk: &BlockPointer,
+    ) -> Result<Block, AppError> {
+        Ok(Block {
+            id: pk.clone(),
+            header: BlockHeader::get(read_tx, pk)?
+                .ok_or_else(|| AppError::NotFound(
+                    format!("Missing one-to-one child {:?}", pk),
+                ))?,
+            transactions: {
+                let (from, to) = pk.fk_range();
+                Transaction::range(read_tx, &from, &to)?
+            },
+        })
+    }
+    pub fn store(
+        write_tx: &::redb::WriteTransaction,
+        instance: &Block,
+    ) -> Result<(), AppError> {
+        if is_one_to_many_child && instance.exists(id.parent()) {
+            let mut table_pk_1 = write_tx.open_table(BLOCK_ID)?;
+            table_pk_1.insert(&instance.id, ())?;
+            let child = &instance.header;
+            BlockHeader::store(&write_tx, child)?;
+            Transaction::store_many(&write_tx, &instance.transactions)?;
+            Ok(())
+        } else {
+            Err(
+                AppError::InvalidPrimaryKey(
+                    format!("Cannot store {} with no primary key", stringify!(Block)),
+                ),
+            )
+        }
+    }
+    pub fn store(
+        write_tx: &::redb::WriteTransaction,
+        instance: &Block,
+    ) -> Result<(), AppError> {
+        let mut table_pk_1 = write_tx.open_table(BLOCK_ID)?;
+        table_pk_1.insert(&instance.id, ())?;
+        let child = &instance.header;
+        BlockHeader::store(&write_tx, child)?;
+        Transaction::store_many(&write_tx, &instance.transactions)?;
+        Ok(())
+    }
+    pub fn store_many(
+        write_tx: &::redb::WriteTransaction,
+        instances: &Vec<Block>,
+    ) -> Result<(), AppError> {
+        let mut table_pk_2 = write_tx.open_table(BLOCK_ID)?;
+        for instance in instances.iter() {
+            table_pk_2.insert(&instance.id, ())?;
+        }
+        let children = instances
+            .iter()
+            .map(|instance| instance.header.clone())
+            .collect();
+        BlockHeader::store_many(&write_tx, &children)?;
+        let mut children: Vec<Transaction> = Vec::new();
+        for instance in instances.iter() {
+            children.extend_from_slice(&instance.transactions)
+        }
+        Transaction::store_many(&write_tx, &children)?;
+        Ok(())
+    }
+    pub fn store_unsafe_and_commit(
+        db: &::redb::Database,
+        instance: &Block,
+    ) -> Result<(), AppError> {
+        let write_tx = db.begin_write()?;
+        {
+            let mut table_pk_1 = write_tx.open_table(BLOCK_ID)?;
+            table_pk_1.insert(&instance.id, ())?;
+            let child = &instance.header;
+            BlockHeader::store(&write_tx, child)?;
+            Transaction::store_many(&write_tx, &instance.transactions)?;
+        }
+        write_tx.commit()?;
+        Ok(())
+    }
+    pub fn delete(
+        write_tx: &::redb::WriteTransaction,
+        pk: &BlockPointer,
+    ) -> Result<(), AppError> {
+        let mut table_pk_3 = write_tx.open_table(BLOCK_ID)?;
+        let _ = table_pk_3.remove(pk)?;
+        BlockHeader::delete(&write_tx, pk)?;
+        let (from, to) = pk.fk_range();
+        let child_pks = Transaction::pk_range(&write_tx, &from, &to)?;
+        Transaction::delete_many(&write_tx, &child_pks)?;
+        Ok(())
+    }
+    pub fn delete_many(
+        write_tx: &::redb::WriteTransaction,
+        pks: &Vec<BlockPointer>,
+    ) -> Result<(), AppError> {
+        let mut table_pk_4 = write_tx.open_table(BLOCK_ID)?;
+        for pk in pks.iter() {
+            table_pk_4.remove(pk)?;
+        }
+        BlockHeader::delete_many(&write_tx, pks)?;
+        let mut children = Vec::new();
+        for pk in pks.iter() {
+            let (from, to) = pk.fk_range();
+            let child_pks = Transaction::pk_range(&write_tx, &from, &to)?;
+            children.extend_from_slice(&child_pks);
+        }
+        Transaction::delete_many(&write_tx, &children)?;
+        Ok(())
+    }
+    pub fn delete_and_commit(
+        db: &::redb::Database,
+        pk: &BlockPointer,
+    ) -> Result<(), AppError> {
+        let write_tx = db.begin_write()?;
+        {
+            let mut table_pk_3 = write_tx.open_table(BLOCK_ID)?;
+            let _ = table_pk_3.remove(pk)?;
+            BlockHeader::delete(&write_tx, pk)?;
+            let (from, to) = pk.fk_range();
+            let child_pks = Transaction::pk_range(&write_tx, &from, &to)?;
+            Transaction::delete_many(&write_tx, &child_pks)?;
+        }
+        write_tx.commit()?;
+        Ok(())
+    }
+    pub fn routes() -> axum::Router<RequestState> {
+        axum::Router::new()
+            .route("/block/id/{value}", ::axum::routing::get(block_get))
+            .route("/block?take=", ::axum::routing::get(block_take))
+            .route("/block?first=", ::axum::routing::get(block_first))
+            .route("/block?last=", ::axum::routing::get(block_last))
+            .route("/block/id/{value}", ::axum::routing::head(block_exists))
+            .route("/block/id?from=&until=", ::axum::routing::get(block_range))
+            .route("/block/{value}/header", ::axum::routing::get(block_get_header))
+            .route(
+                "/block/{value}/transactions",
+                ::axum::routing::get(block_get_transactions),
+            )
+    }
+}

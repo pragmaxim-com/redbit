@@ -1,0 +1,279 @@
+pub const INPUTREF_ID: ::redb::TableDefinition<'static, Bincode<InputPointer>, ()> = ::redb::TableDefinition::new(
+    "INPUTREF_ID",
+);
+#[axum::debug_handler]
+pub async fn inputref_get(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Path(params): ::axum::extract::Path<RequestByParams<InputPointer>>,
+) -> Result<AppJson<Option<InputRef>>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| InputRef::get(&read_tx, &params.value))
+        .map(AppJson)
+}
+#[axum::debug_handler]
+pub async fn inputref_take(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Query(params): ::axum::extract::Query<TakeParams>,
+) -> Result<AppJson<Vec<InputRef>>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| InputRef::take(&read_tx, params.take))
+        .map(AppJson)
+}
+#[axum::debug_handler]
+pub async fn inputref_first(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Query(params): ::axum::extract::Query<FirstParams>,
+) -> Result<AppJson<Option<InputRef>>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| InputRef::first(&read_tx))
+        .map(AppJson)
+}
+#[axum::debug_handler]
+pub async fn inputref_last(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Query(params): ::axum::extract::Query<LastParams>,
+) -> Result<AppJson<Option<InputRef>>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| InputRef::last(&read_tx))
+        .map(AppJson)
+}
+#[axum::debug_handler]
+pub async fn inputref_exists(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Path(params): ::axum::extract::Path<RequestByParams<InputPointer>>,
+) -> Result<AppJson<bool>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| InputRef::exists(&read_tx, &params.value))
+        .map(AppJson)
+}
+#[axum::debug_handler]
+pub async fn inputref_parent_pk(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Path(params): ::axum::extract::Path<RequestByParams<InputPointer>>,
+) -> Result<AppJson<<InputPointer as ChildPointer>::Parent>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| InputRef::parent_pk(&read_tx, &params.value))
+        .map(AppJson)
+}
+#[axum::debug_handler]
+pub async fn inputref_range(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Query(
+        params,
+    ): ::axum::extract::Query<RequestRangeParams<InputPointer, InputPointer>>,
+) -> Result<AppJson<Vec<InputRef>>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| InputRef::range(&read_tx, &params.from, &params.until))
+        .map(AppJson)
+}
+impl InputRef {
+    pub fn get(
+        read_tx: &::redb::ReadTransaction,
+        pk: &InputPointer,
+    ) -> Result<Option<InputRef>, AppError> {
+        let table_pk_5 = read_tx.open_table(INPUTREF_ID)?;
+        if table_pk_5.get(pk)?.is_some() {
+            Ok(Some(Self::compose(&read_tx, pk)?))
+        } else {
+            Ok(None)
+        }
+    }
+    pub fn take(
+        read_tx: &::redb::ReadTransaction,
+        n: u32,
+    ) -> Result<Vec<InputRef>, AppError> {
+        let table_pk_6 = read_tx.open_table(INPUTREF_ID)?;
+        let mut iter = table_pk_6.iter()?;
+        let mut results = Vec::new();
+        let mut count = 0;
+        while let Some(entry_res) = iter.next() {
+            if count >= n {
+                break;
+            }
+            let pk = entry_res?.0.value();
+            results.push(Self::compose(&read_tx, &pk)?);
+            count += 1;
+        }
+        Ok(results)
+    }
+    pub fn first(
+        read_tx: &::redb::ReadTransaction,
+    ) -> Result<Option<InputRef>, AppError> {
+        let table_pk_7 = read_tx.open_table(INPUTREF_ID)?;
+        if let Some((k, _)) = table_pk_7.first()? {
+            return Self::compose(&read_tx, &k.value()).map(Some);
+        }
+        Ok(None)
+    }
+    pub fn last(
+        read_tx: &::redb::ReadTransaction,
+    ) -> Result<Option<InputRef>, AppError> {
+        let table_pk_8 = read_tx.open_table(INPUTREF_ID)?;
+        if let Some((k, _)) = table_pk_8.last()? {
+            return Self::compose(&read_tx, &k.value()).map(Some);
+        }
+        Ok(None)
+    }
+    pub fn exists(
+        read_tx: &::redb::ReadTransaction,
+        pk: &InputPointer,
+    ) -> Result<bool, AppError> {
+        let table_pk_11 = read_tx.open_table(INPUTREF_ID)?;
+        if table_pk_11.get(pk)?.is_some() { Ok(true) } else { Ok(false) }
+    }
+    pub fn parent_pk(
+        read_tx: &::redb::ReadTransaction,
+        pk: &InputPointer,
+    ) -> Result<<InputPointer as ChildPointer>::Parent, AppError> {
+        Ok(pk.parent().clone())
+    }
+    pub fn range(
+        read_tx: &::redb::ReadTransaction,
+        from: &InputPointer,
+        until: &InputPointer,
+    ) -> Result<Vec<InputRef>, AppError> {
+        let table_pk_9 = read_tx.open_table(INPUTREF_ID)?;
+        let range = from.clone()..until.clone();
+        let mut iter = table_pk_9.range(range)?;
+        let mut results = Vec::new();
+        while let Some(entry_res) = iter.next() {
+            let pk = entry_res?.0.value();
+            results.push(Self::compose(&read_tx, &pk)?);
+        }
+        Ok(results)
+    }
+    fn pk_range(
+        write_tx: &::redb::WriteTransaction,
+        from: &InputPointer,
+        until: &InputPointer,
+    ) -> Result<Vec<InputPointer>, AppError> {
+        let table_pk_10 = write_tx.open_table(INPUTREF_ID)?;
+        let range = from.clone()..until.clone();
+        let mut iter = table_pk_10.range(range)?;
+        let mut results = Vec::new();
+        while let Some(entry_res) = iter.next() {
+            let pk = entry_res?.0.value();
+            results.push(pk);
+        }
+        Ok(results)
+    }
+    pub fn sample(pk: &InputPointer) -> Self {
+        InputRef { id: pk.clone() }
+    }
+    fn compose(
+        read_tx: &::redb::ReadTransaction,
+        pk: &InputPointer,
+    ) -> Result<InputRef, AppError> {
+        Ok(InputRef { id: pk.clone() })
+    }
+    pub fn store(
+        write_tx: &::redb::WriteTransaction,
+        instance: &InputRef,
+    ) -> Result<(), AppError> {
+        if is_one_to_many_child && instance.exists(id.parent()) {
+            let mut table_pk_1 = write_tx.open_table(INPUTREF_ID)?;
+            table_pk_1.insert(&instance.id, ())?;
+            Ok(())
+        } else {
+            Err(
+                AppError::InvalidPrimaryKey(
+                    format!("Cannot store {} with no primary key", stringify!(InputRef)),
+                ),
+            )
+        }
+    }
+    pub fn store(
+        write_tx: &::redb::WriteTransaction,
+        instance: &InputRef,
+    ) -> Result<(), AppError> {
+        let mut table_pk_1 = write_tx.open_table(INPUTREF_ID)?;
+        table_pk_1.insert(&instance.id, ())?;
+        Ok(())
+    }
+    pub fn store_many(
+        write_tx: &::redb::WriteTransaction,
+        instances: &Vec<InputRef>,
+    ) -> Result<(), AppError> {
+        let mut table_pk_2 = write_tx.open_table(INPUTREF_ID)?;
+        for instance in instances.iter() {
+            table_pk_2.insert(&instance.id, ())?;
+        }
+        Ok(())
+    }
+    pub fn store_unsafe_and_commit(
+        db: &::redb::Database,
+        instance: &InputRef,
+    ) -> Result<(), AppError> {
+        let write_tx = db.begin_write()?;
+        {
+            let mut table_pk_1 = write_tx.open_table(INPUTREF_ID)?;
+            table_pk_1.insert(&instance.id, ())?;
+        }
+        write_tx.commit()?;
+        Ok(())
+    }
+    pub fn delete(
+        write_tx: &::redb::WriteTransaction,
+        pk: &InputPointer,
+    ) -> Result<(), AppError> {
+        let mut table_pk_3 = write_tx.open_table(INPUTREF_ID)?;
+        let _ = table_pk_3.remove(pk)?;
+        Ok(())
+    }
+    pub fn delete_many(
+        write_tx: &::redb::WriteTransaction,
+        pks: &Vec<InputPointer>,
+    ) -> Result<(), AppError> {
+        let mut table_pk_4 = write_tx.open_table(INPUTREF_ID)?;
+        for pk in pks.iter() {
+            table_pk_4.remove(pk)?;
+        }
+        Ok(())
+    }
+    pub fn delete_and_commit(
+        db: &::redb::Database,
+        pk: &InputPointer,
+    ) -> Result<(), AppError> {
+        let write_tx = db.begin_write()?;
+        {
+            let mut table_pk_3 = write_tx.open_table(INPUTREF_ID)?;
+            let _ = table_pk_3.remove(pk)?;
+        }
+        write_tx.commit()?;
+        Ok(())
+    }
+    pub fn routes() -> axum::Router<RequestState> {
+        axum::Router::new()
+            .route("/inputref/id/{value}", ::axum::routing::get(inputref_get))
+            .route("/inputref?take=", ::axum::routing::get(inputref_take))
+            .route("/inputref?first=", ::axum::routing::get(inputref_first))
+            .route("/inputref?last=", ::axum::routing::get(inputref_last))
+            .route("/inputref/id/{value}", ::axum::routing::head(inputref_exists))
+            .route(
+                "/inputref/id/{value}/parent_pk",
+                ::axum::routing::get(inputref_parent_pk),
+            )
+            .route("/inputref/id?from=&until=", ::axum::routing::get(inputref_range))
+    }
+}

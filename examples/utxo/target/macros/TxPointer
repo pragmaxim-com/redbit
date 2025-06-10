@@ -1,0 +1,27 @@
+impl IndexedPointer for TxPointer {
+    type Index = TxIndex;
+    fn index(&self) -> Self::Index {
+        self.tx_index
+    }
+    fn next(&self) -> Self {
+        TxPointer {
+            block_pointer: self.block_pointer.clone(),
+            tx_index: self.tx_index + 1,
+        }
+    }
+}
+impl ChildPointer for TxPointer {
+    type Parent = BlockPointer;
+    fn is_child(&self) -> bool {
+        true
+    }
+    fn parent(&self) -> &Self::Parent {
+        &self.block_pointer
+    }
+    fn from_parent(parent: Self::Parent) -> Self {
+        TxPointer {
+            block_pointer: parent,
+            tx_index: <TxIndex as Default>::default(),
+        }
+    }
+}

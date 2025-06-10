@@ -8,7 +8,7 @@ pub fn run(db: Arc<Database>) -> Result<(), AppError> {
 
     println!("Persisting blocks:");
     for block in blocks.iter() {
-        Block::store_and_commit(&db, block)?
+        Block::store_unsafe_and_commit(&db, block)?
     }
 
     let read_tx = db.begin_read()?;

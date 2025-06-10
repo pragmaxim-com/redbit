@@ -1,0 +1,27 @@
+impl IndexedPointer for InputPointer {
+    type Index = UtxoIndex;
+    fn index(&self) -> Self::Index {
+        self.utxo_index
+    }
+    fn next(&self) -> Self {
+        InputPointer {
+            tx_pointer: self.tx_pointer.clone(),
+            utxo_index: self.utxo_index + 1,
+        }
+    }
+}
+impl ChildPointer for InputPointer {
+    type Parent = TxPointer;
+    fn is_child(&self) -> bool {
+        true
+    }
+    fn parent(&self) -> &Self::Parent {
+        &self.tx_pointer
+    }
+    fn from_parent(parent: Self::Parent) -> Self {
+        InputPointer {
+            tx_pointer: parent,
+            utxo_index: <UtxoIndex as Default>::default(),
+        }
+    }
+}

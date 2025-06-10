@@ -1,0 +1,16 @@
+impl IndexedPointer for BlockPointer {
+    type Index = Height;
+    fn index(&self) -> Self::Index {
+        self.height
+    }
+    fn next(&self) -> Self {
+        BlockPointer {
+            height: self.height + 1,
+        }
+    }
+}
+impl RootPointer for BlockPointer {
+    fn is_child(&self) -> bool {
+        false
+    }
+}

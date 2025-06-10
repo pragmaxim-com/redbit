@@ -1,0 +1,7 @@
+| Endpoint      |  GET:/inputref/id/{value}                          inputref_get
+| Endpoint      |  GET:/inputref?take=                               inputref_take
+| Endpoint      |  GET:/inputref?first=                              inputref_first
+| Endpoint      |  GET:/inputref?last=                               inputref_last
+| Endpoint      |  HEAD:/inputref/id/{value}                         inputref_exists
+| Endpoint      |  GET:/inputref/id/{value}/parent_pk                inputref_parent_pk
+| Endpoint      |  GET:/inputref/id?from=&until=                     inputref_range

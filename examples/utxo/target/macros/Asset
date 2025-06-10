@@ -1,0 +1,744 @@
+pub const ASSET_ID: ::redb::TableDefinition<'static, Bincode<AssetPointer>, ()> = ::redb::TableDefinition::new(
+    "ASSET_ID",
+);
+pub const ASSET_AMOUNT_BY_ID: ::redb::TableDefinition<
+    'static,
+    Bincode<AssetPointer>,
+    Bincode<Amount>,
+> = ::redb::TableDefinition::new("ASSET_AMOUNT_BY_ID");
+pub const ASSET_NAME_DICT_INDEX: ::redb::MultimapTableDefinition<
+    'static,
+    Bincode<AssetPointer>,
+    Bincode<AssetPointer>,
+> = ::redb::MultimapTableDefinition::new("ASSET_NAME_DICT_INDEX");
+pub const ASSET_NAME_BY_DICT_PK: ::redb::TableDefinition<
+    'static,
+    Bincode<AssetPointer>,
+    Bincode<AssetName>,
+> = ::redb::TableDefinition::new("ASSET_NAME_BY_DICT_PK");
+pub const ASSET_NAME_TO_DICT_PK: ::redb::TableDefinition<
+    'static,
+    Bincode<AssetName>,
+    Bincode<AssetPointer>,
+> = ::redb::TableDefinition::new("ASSET_NAME_TO_DICT_PK");
+pub const ASSET_NAME_DICT_PK_BY_ID: ::redb::TableDefinition<
+    'static,
+    Bincode<AssetPointer>,
+    Bincode<AssetPointer>,
+> = ::redb::TableDefinition::new("ASSET_NAME_DICT_PK_BY_ID");
+pub const ASSET_POLICY_ID_DICT_INDEX: ::redb::MultimapTableDefinition<
+    'static,
+    Bincode<AssetPointer>,
+    Bincode<AssetPointer>,
+> = ::redb::MultimapTableDefinition::new("ASSET_POLICY_ID_DICT_INDEX");
+pub const ASSET_POLICY_ID_BY_DICT_PK: ::redb::TableDefinition<
+    'static,
+    Bincode<AssetPointer>,
+    Bincode<PolicyId>,
+> = ::redb::TableDefinition::new("ASSET_POLICY_ID_BY_DICT_PK");
+pub const ASSET_POLICY_ID_TO_DICT_PK: ::redb::TableDefinition<
+    'static,
+    Bincode<PolicyId>,
+    Bincode<AssetPointer>,
+> = ::redb::TableDefinition::new("ASSET_POLICY_ID_TO_DICT_PK");
+pub const ASSET_POLICY_ID_DICT_PK_BY_ID: ::redb::TableDefinition<
+    'static,
+    Bincode<AssetPointer>,
+    Bincode<AssetPointer>,
+> = ::redb::TableDefinition::new("ASSET_POLICY_ID_DICT_PK_BY_ID");
+#[axum::debug_handler]
+pub async fn asset_get(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Path(params): ::axum::extract::Path<RequestByParams<AssetPointer>>,
+) -> Result<AppJson<Option<Asset>>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| Asset::get(&read_tx, &params.value))
+        .map(AppJson)
+}
+#[axum::debug_handler]
+pub async fn asset_take(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Query(params): ::axum::extract::Query<TakeParams>,
+) -> Result<AppJson<Vec<Asset>>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| Asset::take(&read_tx, params.take))
+        .map(AppJson)
+}
+#[axum::debug_handler]
+pub async fn asset_first(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Query(params): ::axum::extract::Query<FirstParams>,
+) -> Result<AppJson<Option<Asset>>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| Asset::first(&read_tx))
+        .map(AppJson)
+}
+#[axum::debug_handler]
+pub async fn asset_last(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Query(params): ::axum::extract::Query<LastParams>,
+) -> Result<AppJson<Option<Asset>>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| Asset::last(&read_tx))
+        .map(AppJson)
+}
+#[axum::debug_handler]
+pub async fn asset_exists(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Path(params): ::axum::extract::Path<RequestByParams<AssetPointer>>,
+) -> Result<AppJson<bool>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| Asset::exists(&read_tx, &params.value))
+        .map(AppJson)
+}
+#[axum::debug_handler]
+pub async fn asset_parent_pk(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Path(params): ::axum::extract::Path<RequestByParams<AssetPointer>>,
+) -> Result<AppJson<<AssetPointer as ChildPointer>::Parent>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| Asset::parent_pk(&read_tx, &params.value))
+        .map(AppJson)
+}
+#[axum::debug_handler]
+pub async fn asset_range(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Query(
+        params,
+    ): ::axum::extract::Query<RequestRangeParams<AssetPointer, AssetPointer>>,
+) -> Result<AppJson<Vec<Asset>>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| Asset::range(&read_tx, &params.from, &params.until))
+        .map(AppJson)
+}
+#[axum::debug_handler]
+pub async fn asset_get_by_name(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Path(params): ::axum::extract::Path<RequestByParams<AssetName>>,
+) -> Result<AppJson<Vec<Asset>>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| Asset::get_by_name(&read_tx, &params.value))
+        .map(AppJson)
+}
+#[axum::debug_handler]
+pub async fn asset_get_by_policy_id(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Path(params): ::axum::extract::Path<RequestByParams<PolicyId>>,
+) -> Result<AppJson<Vec<Asset>>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| Asset::get_by_policy_id(&read_tx, &params.value))
+        .map(AppJson)
+}
+impl Asset {
+    pub fn get(
+        read_tx: &::redb::ReadTransaction,
+        pk: &AssetPointer,
+    ) -> Result<Option<Asset>, AppError> {
+        let table_pk_5 = read_tx.open_table(ASSET_ID)?;
+        if table_pk_5.get(pk)?.is_some() {
+            Ok(Some(Self::compose(&read_tx, pk)?))
+        } else {
+            Ok(None)
+        }
+    }
+    pub fn take(
+        read_tx: &::redb::ReadTransaction,
+        n: u32,
+    ) -> Result<Vec<Asset>, AppError> {
+        let table_pk_6 = read_tx.open_table(ASSET_ID)?;
+        let mut iter = table_pk_6.iter()?;
+        let mut results = Vec::new();
+        let mut count = 0;
+        while let Some(entry_res) = iter.next() {
+            if count >= n {
+                break;
+            }
+            let pk = entry_res?.0.value();
+            results.push(Self::compose(&read_tx, &pk)?);
+            count += 1;
+        }
+        Ok(results)
+    }
+    pub fn first(read_tx: &::redb::ReadTransaction) -> Result<Option<Asset>, AppError> {
+        let table_pk_7 = read_tx.open_table(ASSET_ID)?;
+        if let Some((k, _)) = table_pk_7.first()? {
+            return Self::compose(&read_tx, &k.value()).map(Some);
+        }
+        Ok(None)
+    }
+    pub fn last(read_tx: &::redb::ReadTransaction) -> Result<Option<Asset>, AppError> {
+        let table_pk_8 = read_tx.open_table(ASSET_ID)?;
+        if let Some((k, _)) = table_pk_8.last()? {
+            return Self::compose(&read_tx, &k.value()).map(Some);
+        }
+        Ok(None)
+    }
+    pub fn exists(
+        read_tx: &::redb::ReadTransaction,
+        pk: &AssetPointer,
+    ) -> Result<bool, AppError> {
+        let table_pk_11 = read_tx.open_table(ASSET_ID)?;
+        if table_pk_11.get(pk)?.is_some() { Ok(true) } else { Ok(false) }
+    }
+    pub fn parent_pk(
+        read_tx: &::redb::ReadTransaction,
+        pk: &AssetPointer,
+    ) -> Result<<AssetPointer as ChildPointer>::Parent, AppError> {
+        Ok(pk.parent().clone())
+    }
+    pub fn range(
+        read_tx: &::redb::ReadTransaction,
+        from: &AssetPointer,
+        until: &AssetPointer,
+    ) -> Result<Vec<Asset>, AppError> {
+        let table_pk_9 = read_tx.open_table(ASSET_ID)?;
+        let range = from.clone()..until.clone();
+        let mut iter = table_pk_9.range(range)?;
+        let mut results = Vec::new();
+        while let Some(entry_res) = iter.next() {
+            let pk = entry_res?.0.value();
+            results.push(Self::compose(&read_tx, &pk)?);
+        }
+        Ok(results)
+    }
+    fn pk_range(
+        write_tx: &::redb::WriteTransaction,
+        from: &AssetPointer,
+        until: &AssetPointer,
+    ) -> Result<Vec<AssetPointer>, AppError> {
+        let table_pk_10 = write_tx.open_table(ASSET_ID)?;
+        let range = from.clone()..until.clone();
+        let mut iter = table_pk_10.range(range)?;
+        let mut results = Vec::new();
+        while let Some(entry_res) = iter.next() {
+            let pk = entry_res?.0.value();
+            results.push(pk);
+        }
+        Ok(results)
+    }
+    pub fn get_by_name(
+        read_tx: &::redb::ReadTransaction,
+        val: &AssetName,
+    ) -> Result<Vec<Asset>, AppError> {
+        let val2birth = read_tx.open_table(ASSET_NAME_TO_DICT_PK)?;
+        let birth_guard = val2birth.get(val)?;
+        let birth_id = match birth_guard {
+            Some(g) => g.value().clone(),
+            None => return Ok(Vec::new()),
+        };
+        let birth2pks = read_tx.open_multimap_table(ASSET_NAME_DICT_INDEX)?;
+        let mut iter = birth2pks.get(&birth_id)?;
+        let mut results = Vec::new();
+        while let Some(x) = iter.next() {
+            let pk = x?.value();
+            match Self::compose(&read_tx, &pk) {
+                Ok(item) => {
+                    results.push(item);
+                }
+                Err(err) => {
+                    return Err(AppError::Internal(err.to_string()));
+                }
+            }
+        }
+        Ok(results)
+    }
+    pub fn get_by_policy_id(
+        read_tx: &::redb::ReadTransaction,
+        val: &PolicyId,
+    ) -> Result<Vec<Asset>, AppError> {
+        let val2birth = read_tx.open_table(ASSET_POLICY_ID_TO_DICT_PK)?;
+        let birth_guard = val2birth.get(val)?;
+        let birth_id = match birth_guard {
+            Some(g) => g.value().clone(),
+            None => return Ok(Vec::new()),
+        };
+        let birth2pks = read_tx.open_multimap_table(ASSET_POLICY_ID_DICT_INDEX)?;
+        let mut iter = birth2pks.get(&birth_id)?;
+        let mut results = Vec::new();
+        while let Some(x) = iter.next() {
+            let pk = x?.value();
+            match Self::compose(&read_tx, &pk) {
+                Ok(item) => {
+                    results.push(item);
+                }
+                Err(err) => {
+                    return Err(AppError::Internal(err.to_string()));
+                }
+            }
+        }
+        Ok(results)
+    }
+    pub fn sample(pk: &AssetPointer) -> Self {
+        Asset {
+            id: pk.clone(),
+            amount: Amount::default(),
+            name: AssetName::default(),
+            policy_id: PolicyId::default(),
+        }
+    }
+    fn compose(
+        read_tx: &::redb::ReadTransaction,
+        pk: &AssetPointer,
+    ) -> Result<Asset, AppError> {
+        Ok(Asset {
+            id: pk.clone(),
+            amount: {
+                let table_col_5 = read_tx.open_table(ASSET_AMOUNT_BY_ID)?;
+                let guard = table_col_5.get(pk)?;
+                guard
+                    .ok_or_else(|| AppError::NotFound(
+                        format!(
+                            "table `{}`: no row for primary key {:?}",
+                            stringify!(ASSET_AMOUNT_BY_ID), pk
+                        ),
+                    ))?
+                    .value()
+            },
+            name: {
+                let pk2birth = read_tx.open_table(ASSET_NAME_DICT_PK_BY_ID)?;
+                let birth_guard = pk2birth.get(pk)?;
+                let birth_id = birth_guard
+                    .ok_or_else(|| AppError::NotFound(
+                        format!(
+                            "table_dict_pk_by_pk_ident `{}`: no row for primary key {:?}",
+                            stringify!(ASSET_NAME_DICT_PK_BY_ID), pk
+                        ),
+                    ))?
+                    .value();
+                let birth2val = read_tx.open_table(ASSET_NAME_BY_DICT_PK)?;
+                let val_guard = birth2val.get(&birth_id)?;
+                val_guard
+                    .ok_or_else(|| AppError::NotFound(
+                        format!(
+                            "table_value_by_dict_pk `{}`: no row for birth id {:?}",
+                            stringify!(ASSET_NAME_BY_DICT_PK), birth_id
+                        ),
+                    ))?
+                    .value()
+            },
+            policy_id: {
+                let pk2birth = read_tx.open_table(ASSET_POLICY_ID_DICT_PK_BY_ID)?;
+                let birth_guard = pk2birth.get(pk)?;
+                let birth_id = birth_guard
+                    .ok_or_else(|| AppError::NotFound(
+                        format!(
+                            "table_dict_pk_by_pk_ident `{}`: no row for primary key {:?}",
+                            stringify!(ASSET_POLICY_ID_DICT_PK_BY_ID), pk
+                        ),
+                    ))?
+                    .value();
+                let birth2val = read_tx.open_table(ASSET_POLICY_ID_BY_DICT_PK)?;
+                let val_guard = birth2val.get(&birth_id)?;
+                val_guard
+                    .ok_or_else(|| AppError::NotFound(
+                        format!(
+                            "table_value_by_dict_pk `{}`: no row for birth id {:?}",
+                            stringify!(ASSET_POLICY_ID_BY_DICT_PK), birth_id
+                        ),
+                    ))?
+                    .value()
+            },
+        })
+    }
+    pub fn store(
+        write_tx: &::redb::WriteTransaction,
+        instance: &Asset,
+    ) -> Result<(), AppError> {
+        if is_one_to_many_child && instance.exists(id.parent()) {
+            let mut table_pk_1 = write_tx.open_table(ASSET_ID)?;
+            table_pk_1.insert(&instance.id, ())?;
+            let mut table_col_1 = write_tx.open_table(ASSET_AMOUNT_BY_ID)?;
+            table_col_1.insert(&instance.id, &instance.amount)?;
+            let mut dict_pk_by_pk = write_tx.open_table(ASSET_NAME_DICT_PK_BY_ID)?;
+            let mut value_to_dict_pk = write_tx.open_table(ASSET_NAME_TO_DICT_PK)?;
+            let mut value_by_dict_pk = write_tx.open_table(ASSET_NAME_BY_DICT_PK)?;
+            let mut dict_index = write_tx.open_multimap_table(ASSET_NAME_DICT_INDEX)?;
+            let (birth_id, newly_created) = {
+                if let Some(guard) = value_to_dict_pk.get(&instance.name)? {
+                    (guard.value().clone(), false)
+                } else {
+                    let new_birth = instance.id.clone();
+                    (new_birth, true)
+                }
+            };
+            if newly_created {
+                value_to_dict_pk.insert(&instance.name, &birth_id)?;
+                value_by_dict_pk.insert(&birth_id, &instance.name)?;
+            }
+            dict_pk_by_pk.insert(&instance.id, &birth_id)?;
+            dict_index.insert(&birth_id, &instance.id)?;
+            let mut dict_pk_by_pk = write_tx.open_table(ASSET_POLICY_ID_DICT_PK_BY_ID)?;
+            let mut value_to_dict_pk = write_tx.open_table(ASSET_POLICY_ID_TO_DICT_PK)?;
+            let mut value_by_dict_pk = write_tx.open_table(ASSET_POLICY_ID_BY_DICT_PK)?;
+            let mut dict_index = write_tx
+                .open_multimap_table(ASSET_POLICY_ID_DICT_INDEX)?;
+            let (birth_id, newly_created) = {
+                if let Some(guard) = value_to_dict_pk.get(&instance.policy_id)? {
+                    (guard.value().clone(), false)
+                } else {
+                    let new_birth = instance.id.clone();
+                    (new_birth, true)
+                }
+            };
+            if newly_created {
+                value_to_dict_pk.insert(&instance.policy_id, &birth_id)?;
+                value_by_dict_pk.insert(&birth_id, &instance.policy_id)?;
+            }
+            dict_pk_by_pk.insert(&instance.id, &birth_id)?;
+            dict_index.insert(&birth_id, &instance.id)?;
+            Ok(())
+        } else {
+            Err(
+                AppError::InvalidPrimaryKey(
+                    format!("Cannot store {} with no primary key", stringify!(Asset)),
+                ),
+            )
+        }
+    }
+    pub fn store(
+        write_tx: &::redb::WriteTransaction,
+        instance: &Asset,
+    ) -> Result<(), AppError> {
+        let mut table_pk_1 = write_tx.open_table(ASSET_ID)?;
+        table_pk_1.insert(&instance.id, ())?;
+        let mut table_col_1 = write_tx.open_table(ASSET_AMOUNT_BY_ID)?;
+        table_col_1.insert(&instance.id, &instance.amount)?;
+        let mut dict_pk_by_pk = write_tx.open_table(ASSET_NAME_DICT_PK_BY_ID)?;
+        let mut value_to_dict_pk = write_tx.open_table(ASSET_NAME_TO_DICT_PK)?;
+        let mut value_by_dict_pk = write_tx.open_table(ASSET_NAME_BY_DICT_PK)?;
+        let mut dict_index = write_tx.open_multimap_table(ASSET_NAME_DICT_INDEX)?;
+        let (birth_id, newly_created) = {
+            if let Some(guard) = value_to_dict_pk.get(&instance.name)? {
+                (guard.value().clone(), false)
+            } else {
+                let new_birth = instance.id.clone();
+                (new_birth, true)
+            }
+        };
+        if newly_created {
+            value_to_dict_pk.insert(&instance.name, &birth_id)?;
+            value_by_dict_pk.insert(&birth_id, &instance.name)?;
+        }
+        dict_pk_by_pk.insert(&instance.id, &birth_id)?;
+        dict_index.insert(&birth_id, &instance.id)?;
+        let mut dict_pk_by_pk = write_tx.open_table(ASSET_POLICY_ID_DICT_PK_BY_ID)?;
+        let mut value_to_dict_pk = write_tx.open_table(ASSET_POLICY_ID_TO_DICT_PK)?;
+        let mut value_by_dict_pk = write_tx.open_table(ASSET_POLICY_ID_BY_DICT_PK)?;
+        let mut dict_index = write_tx.open_multimap_table(ASSET_POLICY_ID_DICT_INDEX)?;
+        let (birth_id, newly_created) = {
+            if let Some(guard) = value_to_dict_pk.get(&instance.policy_id)? {
+                (guard.value().clone(), false)
+            } else {
+                let new_birth = instance.id.clone();
+                (new_birth, true)
+            }
+        };
+        if newly_created {
+            value_to_dict_pk.insert(&instance.policy_id, &birth_id)?;
+            value_by_dict_pk.insert(&birth_id, &instance.policy_id)?;
+        }
+        dict_pk_by_pk.insert(&instance.id, &birth_id)?;
+        dict_index.insert(&birth_id, &instance.id)?;
+        Ok(())
+    }
+    pub fn store_many(
+        write_tx: &::redb::WriteTransaction,
+        instances: &Vec<Asset>,
+    ) -> Result<(), AppError> {
+        let mut table_pk_2 = write_tx.open_table(ASSET_ID)?;
+        for instance in instances.iter() {
+            table_pk_2.insert(&instance.id, ())?;
+        }
+        let mut table_col_2 = write_tx.open_table(ASSET_AMOUNT_BY_ID)?;
+        for instance in instances.iter() {
+            table_col_2.insert(&instance.id, &instance.amount)?;
+        }
+        let mut dict_pk_by_pk = write_tx.open_table(ASSET_NAME_DICT_PK_BY_ID)?;
+        let mut value_to_dict_pk = write_tx.open_table(ASSET_NAME_TO_DICT_PK)?;
+        let mut value_by_dict_pk = write_tx.open_table(ASSET_NAME_BY_DICT_PK)?;
+        let mut dict_index = write_tx.open_multimap_table(ASSET_NAME_DICT_INDEX)?;
+        for instance in instances.iter() {
+            let (birth_id, newly_created) = {
+                if let Some(guard) = value_to_dict_pk.get(&instance.name)? {
+                    (guard.value().clone(), false)
+                } else {
+                    let new_birth = instance.id.clone();
+                    (new_birth, true)
+                }
+            };
+            if newly_created {
+                value_to_dict_pk.insert(&instance.name, &birth_id)?;
+                value_by_dict_pk.insert(&birth_id, &instance.name)?;
+            }
+            dict_pk_by_pk.insert(&instance.id, &birth_id)?;
+            dict_index.insert(&birth_id, &instance.id)?;
+        }
+        let mut dict_pk_by_pk = write_tx.open_table(ASSET_POLICY_ID_DICT_PK_BY_ID)?;
+        let mut value_to_dict_pk = write_tx.open_table(ASSET_POLICY_ID_TO_DICT_PK)?;
+        let mut value_by_dict_pk = write_tx.open_table(ASSET_POLICY_ID_BY_DICT_PK)?;
+        let mut dict_index = write_tx.open_multimap_table(ASSET_POLICY_ID_DICT_INDEX)?;
+        for instance in instances.iter() {
+            let (birth_id, newly_created) = {
+                if let Some(guard) = value_to_dict_pk.get(&instance.policy_id)? {
+                    (guard.value().clone(), false)
+                } else {
+                    let new_birth = instance.id.clone();
+                    (new_birth, true)
+                }
+            };
+            if newly_created {
+                value_to_dict_pk.insert(&instance.policy_id, &birth_id)?;
+                value_by_dict_pk.insert(&birth_id, &instance.policy_id)?;
+            }
+            dict_pk_by_pk.insert(&instance.id, &birth_id)?;
+            dict_index.insert(&birth_id, &instance.id)?;
+        }
+        Ok(())
+    }
+    pub fn store_unsafe_and_commit(
+        db: &::redb::Database,
+        instance: &Asset,
+    ) -> Result<(), AppError> {
+        let write_tx = db.begin_write()?;
+        {
+            let mut table_pk_1 = write_tx.open_table(ASSET_ID)?;
+            table_pk_1.insert(&instance.id, ())?;
+            let mut table_col_1 = write_tx.open_table(ASSET_AMOUNT_BY_ID)?;
+            table_col_1.insert(&instance.id, &instance.amount)?;
+            let mut dict_pk_by_pk = write_tx.open_table(ASSET_NAME_DICT_PK_BY_ID)?;
+            let mut value_to_dict_pk = write_tx.open_table(ASSET_NAME_TO_DICT_PK)?;
+            let mut value_by_dict_pk = write_tx.open_table(ASSET_NAME_BY_DICT_PK)?;
+            let mut dict_index = write_tx.open_multimap_table(ASSET_NAME_DICT_INDEX)?;
+            let (birth_id, newly_created) = {
+                if let Some(guard) = value_to_dict_pk.get(&instance.name)? {
+                    (guard.value().clone(), false)
+                } else {
+                    let new_birth = instance.id.clone();
+                    (new_birth, true)
+                }
+            };
+            if newly_created {
+                value_to_dict_pk.insert(&instance.name, &birth_id)?;
+                value_by_dict_pk.insert(&birth_id, &instance.name)?;
+            }
+            dict_pk_by_pk.insert(&instance.id, &birth_id)?;
+            dict_index.insert(&birth_id, &instance.id)?;
+            let mut dict_pk_by_pk = write_tx.open_table(ASSET_POLICY_ID_DICT_PK_BY_ID)?;
+            let mut value_to_dict_pk = write_tx.open_table(ASSET_POLICY_ID_TO_DICT_PK)?;
+            let mut value_by_dict_pk = write_tx.open_table(ASSET_POLICY_ID_BY_DICT_PK)?;
+            let mut dict_index = write_tx
+                .open_multimap_table(ASSET_POLICY_ID_DICT_INDEX)?;
+            let (birth_id, newly_created) = {
+                if let Some(guard) = value_to_dict_pk.get(&instance.policy_id)? {
+                    (guard.value().clone(), false)
+                } else {
+                    let new_birth = instance.id.clone();
+                    (new_birth, true)
+                }
+            };
+            if newly_created {
+                value_to_dict_pk.insert(&instance.policy_id, &birth_id)?;
+                value_by_dict_pk.insert(&birth_id, &instance.policy_id)?;
+            }
+            dict_pk_by_pk.insert(&instance.id, &birth_id)?;
+            dict_index.insert(&birth_id, &instance.id)?;
+        }
+        write_tx.commit()?;
+        Ok(())
+    }
+    pub fn delete(
+        write_tx: &::redb::WriteTransaction,
+        pk: &AssetPointer,
+    ) -> Result<(), AppError> {
+        let mut table_pk_3 = write_tx.open_table(ASSET_ID)?;
+        let _ = table_pk_3.remove(pk)?;
+        let mut table_col_3 = write_tx.open_table(ASSET_AMOUNT_BY_ID)?;
+        let _ = table_col_3.remove(pk)?;
+        let mut dict_pk_by_pk = write_tx.open_table(ASSET_NAME_DICT_PK_BY_ID)?;
+        let mut value_to_dict_pk = write_tx.open_table(ASSET_NAME_TO_DICT_PK)?;
+        let mut value_by_dict_pk = write_tx.open_table(ASSET_NAME_BY_DICT_PK)?;
+        let mut dict_index = write_tx.open_multimap_table(ASSET_NAME_DICT_INDEX)?;
+        let birth_id_opt = dict_pk_by_pk.remove(pk)?.map(|guard| guard.value().clone());
+        if let Some(birth_id) = birth_id_opt {
+            let value_opt = value_by_dict_pk
+                .get(&birth_id)?
+                .map(|guard| guard.value().clone());
+            if let Some(value) = value_opt {
+                dict_index.remove(&birth_id, pk)?;
+                if dict_index.get(&birth_id)?.is_empty() {
+                    value_to_dict_pk.remove(&value)?;
+                    value_by_dict_pk.remove(&birth_id)?;
+                }
+            }
+        }
+        let mut dict_pk_by_pk = write_tx.open_table(ASSET_POLICY_ID_DICT_PK_BY_ID)?;
+        let mut value_to_dict_pk = write_tx.open_table(ASSET_POLICY_ID_TO_DICT_PK)?;
+        let mut value_by_dict_pk = write_tx.open_table(ASSET_POLICY_ID_BY_DICT_PK)?;
+        let mut dict_index = write_tx.open_multimap_table(ASSET_POLICY_ID_DICT_INDEX)?;
+        let birth_id_opt = dict_pk_by_pk.remove(pk)?.map(|guard| guard.value().clone());
+        if let Some(birth_id) = birth_id_opt {
+            let value_opt = value_by_dict_pk
+                .get(&birth_id)?
+                .map(|guard| guard.value().clone());
+            if let Some(value) = value_opt {
+                dict_index.remove(&birth_id, pk)?;
+                if dict_index.get(&birth_id)?.is_empty() {
+                    value_to_dict_pk.remove(&value)?;
+                    value_by_dict_pk.remove(&birth_id)?;
+                }
+            }
+        }
+        Ok(())
+    }
+    pub fn delete_many(
+        write_tx: &::redb::WriteTransaction,
+        pks: &Vec<AssetPointer>,
+    ) -> Result<(), AppError> {
+        let mut table_pk_4 = write_tx.open_table(ASSET_ID)?;
+        for pk in pks.iter() {
+            table_pk_4.remove(pk)?;
+        }
+        let mut table_col_4 = write_tx.open_table(ASSET_AMOUNT_BY_ID)?;
+        for pk in pks.iter() {
+            table_col_4.remove(pk)?;
+        }
+        let mut dict_pk_by_pk = write_tx.open_table(ASSET_NAME_DICT_PK_BY_ID)?;
+        let mut value_to_dict_pk = write_tx.open_table(ASSET_NAME_TO_DICT_PK)?;
+        let mut value_by_dict_pk = write_tx.open_table(ASSET_NAME_BY_DICT_PK)?;
+        let mut dict_index = write_tx.open_multimap_table(ASSET_NAME_DICT_INDEX)?;
+        for pk in pks.iter() {
+            let birth_id_opt = dict_pk_by_pk
+                .remove(pk)?
+                .map(|guard| guard.value().clone());
+            if let Some(birth_id) = birth_id_opt {
+                let value_opt = value_by_dict_pk
+                    .get(&birth_id)?
+                    .map(|guard| guard.value().clone());
+                if let Some(value) = value_opt {
+                    dict_index.remove(&birth_id, pk)?;
+                    if dict_index.get(&birth_id)?.is_empty() {
+                        value_to_dict_pk.remove(&value)?;
+                        value_by_dict_pk.remove(&birth_id)?;
+                    }
+                }
+            }
+        }
+        let mut dict_pk_by_pk = write_tx.open_table(ASSET_POLICY_ID_DICT_PK_BY_ID)?;
+        let mut value_to_dict_pk = write_tx.open_table(ASSET_POLICY_ID_TO_DICT_PK)?;
+        let mut value_by_dict_pk = write_tx.open_table(ASSET_POLICY_ID_BY_DICT_PK)?;
+        let mut dict_index = write_tx.open_multimap_table(ASSET_POLICY_ID_DICT_INDEX)?;
+        for pk in pks.iter() {
+            let birth_id_opt = dict_pk_by_pk
+                .remove(pk)?
+                .map(|guard| guard.value().clone());
+            if let Some(birth_id) = birth_id_opt {
+                let value_opt = value_by_dict_pk
+                    .get(&birth_id)?
+                    .map(|guard| guard.value().clone());
+                if let Some(value) = value_opt {
+                    dict_index.remove(&birth_id, pk)?;
+                    if dict_index.get(&birth_id)?.is_empty() {
+                        value_to_dict_pk.remove(&value)?;
+                        value_by_dict_pk.remove(&birth_id)?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+    pub fn delete_and_commit(
+        db: &::redb::Database,
+        pk: &AssetPointer,
+    ) -> Result<(), AppError> {
+        let write_tx = db.begin_write()?;
+        {
+            let mut table_pk_3 = write_tx.open_table(ASSET_ID)?;
+            let _ = table_pk_3.remove(pk)?;
+            let mut table_col_3 = write_tx.open_table(ASSET_AMOUNT_BY_ID)?;
+            let _ = table_col_3.remove(pk)?;
+            let mut dict_pk_by_pk = write_tx.open_table(ASSET_NAME_DICT_PK_BY_ID)?;
+            let mut value_to_dict_pk = write_tx.open_table(ASSET_NAME_TO_DICT_PK)?;
+            let mut value_by_dict_pk = write_tx.open_table(ASSET_NAME_BY_DICT_PK)?;
+            let mut dict_index = write_tx.open_multimap_table(ASSET_NAME_DICT_INDEX)?;
+            let birth_id_opt = dict_pk_by_pk
+                .remove(pk)?
+                .map(|guard| guard.value().clone());
+            if let Some(birth_id) = birth_id_opt {
+                let value_opt = value_by_dict_pk
+                    .get(&birth_id)?
+                    .map(|guard| guard.value().clone());
+                if let Some(value) = value_opt {
+                    dict_index.remove(&birth_id, pk)?;
+                    if dict_index.get(&birth_id)?.is_empty() {
+                        value_to_dict_pk.remove(&value)?;
+                        value_by_dict_pk.remove(&birth_id)?;
+                    }
+                }
+            }
+            let mut dict_pk_by_pk = write_tx.open_table(ASSET_POLICY_ID_DICT_PK_BY_ID)?;
+            let mut value_to_dict_pk = write_tx.open_table(ASSET_POLICY_ID_TO_DICT_PK)?;
+            let mut value_by_dict_pk = write_tx.open_table(ASSET_POLICY_ID_BY_DICT_PK)?;
+            let mut dict_index = write_tx
+                .open_multimap_table(ASSET_POLICY_ID_DICT_INDEX)?;
+            let birth_id_opt = dict_pk_by_pk
+                .remove(pk)?
+                .map(|guard| guard.value().clone());
+            if let Some(birth_id) = birth_id_opt {
+                let value_opt = value_by_dict_pk
+                    .get(&birth_id)?
+                    .map(|guard| guard.value().clone());
+                if let Some(value) = value_opt {
+                    dict_index.remove(&birth_id, pk)?;
+                    if dict_index.get(&birth_id)?.is_empty() {
+                        value_to_dict_pk.remove(&value)?;
+                        value_by_dict_pk.remove(&birth_id)?;
+                    }
+                }
+            }
+        }
+        write_tx.commit()?;
+        Ok(())
+    }
+    pub fn routes() -> axum::Router<RequestState> {
+        axum::Router::new()
+            .route("/asset/id/{value}", ::axum::routing::get(asset_get))
+            .route("/asset?take=", ::axum::routing::get(asset_take))
+            .route("/asset?first=", ::axum::routing::get(asset_first))
+            .route("/asset?last=", ::axum::routing::get(asset_last))
+            .route("/asset/id/{value}", ::axum::routing::head(asset_exists))
+            .route("/asset/id/{value}/parent_pk", ::axum::routing::get(asset_parent_pk))
+            .route("/asset/id?from=&until=", ::axum::routing::get(asset_range))
+            .route("/asset/name/{value}", ::axum::routing::get(asset_get_by_name))
+            .route(
+                "/asset/policy_id/{value}",
+                ::axum::routing::get(asset_get_by_policy_id),
+            )
+    }
+}

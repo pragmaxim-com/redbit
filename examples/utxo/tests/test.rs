@@ -24,6 +24,19 @@ fn each_entity_should_have_a_default_sample() {
 }
 
 #[test]
+fn spike() {
+    let blocks = get_blocks(Height(1), 10, 10, 3);
+    let db = empty_temp_db("trolo");
+    let tx = blocks.first().unwrap().transactions.first().unwrap();
+
+    Transaction::store_unsafe_and_commit(&db, tx).unwrap();
+    let read_tx = db.begin_read().unwrap();
+    Transaction::get(&read_tx, &tx.id).unwrap().unwrap();
+
+    Block::get(&read_tx, &blocks.first().unwrap().id).unwrap().unwrap();
+}
+
+#[test]
 fn it_should_commit_multiple_blocks_in_a_single_tx() {
     let (blocks, multi_tx_db) = init_temp_db("db_test");
 
@@ -196,7 +209,7 @@ fn it_should_override_entity() {
 
     assert_eq!(block, &loaded_block);
 
-    Block::store_and_commit(&db, &block).expect("Failed to delete by ID");
+    Block::store_unsafe_and_commit(&db, &block).expect("Failed to delete by ID");
     let loaded_block2 = Block::get(&read_tx, &block.id).expect("Failed to get by ID").unwrap();
 
     assert_eq!(block, &loaded_block2);

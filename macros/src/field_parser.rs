@@ -32,6 +32,7 @@ pub struct FieldDef {
 #[derive(Clone)]
 pub struct PkDef {
     pub field: FieldDef,
+    pub fk: Option<Multiplicity>,
     pub range: bool,
 }
 
@@ -83,7 +84,26 @@ fn parse_entity_field(field: &syn::Field) -> Result<ParsingResult, syn::Error> {
                         Ok(())
                     });
                     let field = FieldDef { name: column_name.clone(), tpe: column_type.clone() };
-                    return Ok(ParsingResult::Pk(PkDef { field, range }));
+                    return Ok(ParsingResult::Pk(PkDef { field, fk: None, range }));
+                } else if attr.path().is_ident("fk") {
+                    let mut range = false;
+                    let mut fk = None;
+                    let _ = attr.parse_nested_meta(|nested| {
+                        if nested.path.is_ident("range") {
+                            range = true;
+                        }
+                        if nested.path.is_ident("one2many") {
+                            fk = Some(Multiplicity::OneToMany);
+                        } else if nested.path.is_ident("one2one") {
+                            fk = Some(Multiplicity::OneToOne);
+                        }
+                        Ok(())
+                    });
+                    if fk.is_none() {
+                        return Err(syn::Error::new(attr.span(), "Foreign key must specify either `one2many` or `one2one`"));
+                    }
+                    let field = FieldDef { name: column_name.clone(), tpe: column_type.clone() };
+                    return Ok(ParsingResult::Pk(PkDef { field, fk, range }));
                 } else if attr.path().is_ident("column") {
                     let mut indexing = Indexing::Off;
                     let _ = attr.parse_nested_meta(|nested| {
@@ -126,7 +146,7 @@ fn parse_entity_field(field: &syn::Field) -> Result<ParsingResult, syn::Error> {
             }
             Err(syn::Error::new(
                 field.span(),
-                "Field must have one of #[pk(...)] / #[column(...)] / #[one2one] / #[one2many] / #[transient] annotations of expected underlying types",
+                "Field must have one of #[pk(...)] / #[fk(...)] / #[column(...)] / #[one2one] / #[one2many] / #[transient] annotations of expected underlying types",
             ))
         }
     }

@@ -1,0 +1,507 @@
+pub const TRANSACTION_ID: ::redb::TableDefinition<'static, Bincode<TxPointer>, ()> = ::redb::TableDefinition::new(
+    "TRANSACTION_ID",
+);
+pub const TRANSACTION_HASH_BY_ID: ::redb::TableDefinition<
+    'static,
+    Bincode<TxPointer>,
+    Bincode<Hash>,
+> = ::redb::TableDefinition::new("TRANSACTION_HASH_BY_ID");
+pub const TRANSACTION_HASH_INDEX: ::redb::MultimapTableDefinition<
+    'static,
+    Bincode<Hash>,
+    Bincode<TxPointer>,
+> = ::redb::MultimapTableDefinition::new("TRANSACTION_HASH_INDEX");
+#[axum::debug_handler]
+pub async fn transaction_get(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Path(params): ::axum::extract::Path<RequestByParams<TxPointer>>,
+) -> Result<AppJson<Option<Transaction>>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| Transaction::get(&read_tx, &params.value))
+        .map(AppJson)
+}
+#[axum::debug_handler]
+pub async fn transaction_take(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Query(params): ::axum::extract::Query<TakeParams>,
+) -> Result<AppJson<Vec<Transaction>>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| Transaction::take(&read_tx, params.take))
+        .map(AppJson)
+}
+#[axum::debug_handler]
+pub async fn transaction_first(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Query(params): ::axum::extract::Query<FirstParams>,
+) -> Result<AppJson<Option<Transaction>>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| Transaction::first(&read_tx))
+        .map(AppJson)
+}
+#[axum::debug_handler]
+pub async fn transaction_last(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Query(params): ::axum::extract::Query<LastParams>,
+) -> Result<AppJson<Option<Transaction>>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| Transaction::last(&read_tx))
+        .map(AppJson)
+}
+#[axum::debug_handler]
+pub async fn transaction_exists(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Path(params): ::axum::extract::Path<RequestByParams<TxPointer>>,
+) -> Result<AppJson<bool>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| Transaction::exists(&read_tx, &params.value))
+        .map(AppJson)
+}
+#[axum::debug_handler]
+pub async fn transaction_parent_pk(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Path(params): ::axum::extract::Path<RequestByParams<TxPointer>>,
+) -> Result<AppJson<<TxPointer as ChildPointer>::Parent>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| Transaction::parent_pk(&read_tx, &params.value))
+        .map(AppJson)
+}
+#[axum::debug_handler]
+pub async fn transaction_range(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Query(
+        params,
+    ): ::axum::extract::Query<RequestRangeParams<TxPointer, TxPointer>>,
+) -> Result<AppJson<Vec<Transaction>>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| Transaction::range(&read_tx, &params.from, &params.until))
+        .map(AppJson)
+}
+#[axum::debug_handler]
+pub async fn transaction_get_by_hash(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Path(params): ::axum::extract::Path<RequestByParams<Hash>>,
+) -> Result<AppJson<Vec<Transaction>>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| Transaction::get_by_hash(&read_tx, &params.value))
+        .map(AppJson)
+}
+#[axum::debug_handler]
+pub async fn transaction_get_utxos(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Path(params): ::axum::extract::Path<RequestByParams<TxPointer>>,
+) -> Result<AppJson<Vec<Utxo>>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| Transaction::get_utxos(&read_tx, &params.value))
+        .map(AppJson)
+}
+#[axum::debug_handler]
+pub async fn transaction_get_inputs(
+    ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+    ::axum::extract::Path(params): ::axum::extract::Path<RequestByParams<TxPointer>>,
+) -> Result<AppJson<Vec<InputRef>>, AppError> {
+    state
+        .db
+        .begin_read()
+        .map_err(AppError::from)
+        .and_then(|read_tx| Transaction::get_inputs(&read_tx, &params.value))
+        .map(AppJson)
+}
+impl Transaction {
+    pub fn get(
+        read_tx: &::redb::ReadTransaction,
+        pk: &TxPointer,
+    ) -> Result<Option<Transaction>, AppError> {
+        let table_pk_5 = read_tx.open_table(TRANSACTION_ID)?;
+        if table_pk_5.get(pk)?.is_some() {
+            Ok(Some(Self::compose(&read_tx, pk)?))
+        } else {
+            Ok(None)
+        }
+    }
+    pub fn take(
+        read_tx: &::redb::ReadTransaction,
+        n: u32,
+    ) -> Result<Vec<Transaction>, AppError> {
+        let table_pk_6 = read_tx.open_table(TRANSACTION_ID)?;
+        let mut iter = table_pk_6.iter()?;
+        let mut results = Vec::new();
+        let mut count = 0;
+        while let Some(entry_res) = iter.next() {
+            if count >= n {
+                break;
+            }
+            let pk = entry_res?.0.value();
+            results.push(Self::compose(&read_tx, &pk)?);
+            count += 1;
+        }
+        Ok(results)
+    }
+    pub fn first(
+        read_tx: &::redb::ReadTransaction,
+    ) -> Result<Option<Transaction>, AppError> {
+        let table_pk_7 = read_tx.open_table(TRANSACTION_ID)?;
+        if let Some((k, _)) = table_pk_7.first()? {
+            return Self::compose(&read_tx, &k.value()).map(Some);
+        }
+        Ok(None)
+    }
+    pub fn last(
+        read_tx: &::redb::ReadTransaction,
+    ) -> Result<Option<Transaction>, AppError> {
+        let table_pk_8 = read_tx.open_table(TRANSACTION_ID)?;
+        if let Some((k, _)) = table_pk_8.last()? {
+            return Self::compose(&read_tx, &k.value()).map(Some);
+        }
+        Ok(None)
+    }
+    pub fn exists(
+        read_tx: &::redb::ReadTransaction,
+        pk: &TxPointer,
+    ) -> Result<bool, AppError> {
+        let table_pk_11 = read_tx.open_table(TRANSACTION_ID)?;
+        if table_pk_11.get(pk)?.is_some() { Ok(true) } else { Ok(false) }
+    }
+    pub fn parent_pk(
+        read_tx: &::redb::ReadTransaction,
+        pk: &TxPointer,
+    ) -> Result<<TxPointer as ChildPointer>::Parent, AppError> {
+        Ok(pk.parent().clone())
+    }
+    pub fn range(
+        read_tx: &::redb::ReadTransaction,
+        from: &TxPointer,
+        until: &TxPointer,
+    ) -> Result<Vec<Transaction>, AppError> {
+        let table_pk_9 = read_tx.open_table(TRANSACTION_ID)?;
+        let range = from.clone()..until.clone();
+        let mut iter = table_pk_9.range(range)?;
+        let mut results = Vec::new();
+        while let Some(entry_res) = iter.next() {
+            let pk = entry_res?.0.value();
+            results.push(Self::compose(&read_tx, &pk)?);
+        }
+        Ok(results)
+    }
+    fn pk_range(
+        write_tx: &::redb::WriteTransaction,
+        from: &TxPointer,
+        until: &TxPointer,
+    ) -> Result<Vec<TxPointer>, AppError> {
+        let table_pk_10 = write_tx.open_table(TRANSACTION_ID)?;
+        let range = from.clone()..until.clone();
+        let mut iter = table_pk_10.range(range)?;
+        let mut results = Vec::new();
+        while let Some(entry_res) = iter.next() {
+            let pk = entry_res?.0.value();
+            results.push(pk);
+        }
+        Ok(results)
+    }
+    pub fn get_by_hash(
+        read_tx: &::redb::ReadTransaction,
+        val: &Hash,
+    ) -> Result<Vec<Transaction>, AppError> {
+        let mm_table = read_tx.open_multimap_table(TRANSACTION_HASH_INDEX)?;
+        let mut iter = mm_table.get(val)?;
+        let mut results = Vec::new();
+        while let Some(x) = iter.next() {
+            let pk = x?.value();
+            match Self::compose(&read_tx, &pk) {
+                Ok(item) => {
+                    results.push(item);
+                }
+                Err(err) => {
+                    return Err(AppError::Internal(err.to_string()));
+                }
+            }
+        }
+        Ok(results)
+    }
+    pub fn get_utxos(
+        read_tx: &::redb::ReadTransaction,
+        pk: &TxPointer,
+    ) -> Result<Vec<Utxo>, AppError> {
+        let (from, to) = pk.fk_range();
+        Utxo::range(&read_tx, &from, &to)
+    }
+    pub fn get_inputs(
+        read_tx: &::redb::ReadTransaction,
+        pk: &TxPointer,
+    ) -> Result<Vec<InputRef>, AppError> {
+        let (from, to) = pk.fk_range();
+        InputRef::range(&read_tx, &from, &to)
+    }
+    pub fn sample(pk: &TxPointer) -> Self {
+        Transaction {
+            id: pk.clone(),
+            hash: Hash::default(),
+            utxos: {
+                let (from, _) = pk.fk_range();
+                let sample_0 = Utxo::sample(&from);
+                let sample_1 = Utxo::sample(&from.next());
+                let sample_2 = Utxo::sample(&from.next().next());
+                vec![sample_0, sample_1, sample_2]
+            },
+            inputs: {
+                let (from, _) = pk.fk_range();
+                let sample_0 = InputRef::sample(&from);
+                let sample_1 = InputRef::sample(&from.next());
+                let sample_2 = InputRef::sample(&from.next().next());
+                vec![sample_0, sample_1, sample_2]
+            },
+        }
+    }
+    fn compose(
+        read_tx: &::redb::ReadTransaction,
+        pk: &TxPointer,
+    ) -> Result<Transaction, AppError> {
+        Ok(Transaction {
+            id: pk.clone(),
+            hash: {
+                let table_col_10 = read_tx.open_table(TRANSACTION_HASH_BY_ID)?;
+                let guard = table_col_10.get(pk)?;
+                guard
+                    .ok_or_else(|| AppError::NotFound(
+                        format!(
+                            "table `{}`: no row for primary key {:?}",
+                            stringify!(TRANSACTION_HASH_BY_ID), pk
+                        ),
+                    ))?
+                    .value()
+            },
+            utxos: {
+                let (from, to) = pk.fk_range();
+                Utxo::range(read_tx, &from, &to)?
+            },
+            inputs: {
+                let (from, to) = pk.fk_range();
+                InputRef::range(read_tx, &from, &to)?
+            },
+        })
+    }
+    pub fn store(
+        write_tx: &::redb::WriteTransaction,
+        instance: &Transaction,
+    ) -> Result<(), AppError> {
+        if is_one_to_many_child && instance.exists(id.parent()) {
+            let mut table_pk_1 = write_tx.open_table(TRANSACTION_ID)?;
+            table_pk_1.insert(&instance.id, ())?;
+            let mut table_col_6 = write_tx.open_table(TRANSACTION_HASH_BY_ID)?;
+            table_col_6.insert(&instance.id, &instance.hash)?;
+            let mut mm = write_tx.open_multimap_table(TRANSACTION_HASH_INDEX)?;
+            mm.insert(&instance.hash, &instance.id)?;
+            Utxo::store_many(&write_tx, &instance.utxos)?;
+            InputRef::store_many(&write_tx, &instance.inputs)?;
+            Ok(())
+        } else {
+            Err(
+                AppError::InvalidPrimaryKey(
+                    format!(
+                        "Cannot store {} with no primary key", stringify!(Transaction)
+                    ),
+                ),
+            )
+        }
+    }
+    pub fn store(
+        write_tx: &::redb::WriteTransaction,
+        instance: &Transaction,
+    ) -> Result<(), AppError> {
+        let mut table_pk_1 = write_tx.open_table(TRANSACTION_ID)?;
+        table_pk_1.insert(&instance.id, ())?;
+        let mut table_col_6 = write_tx.open_table(TRANSACTION_HASH_BY_ID)?;
+        table_col_6.insert(&instance.id, &instance.hash)?;
+        let mut mm = write_tx.open_multimap_table(TRANSACTION_HASH_INDEX)?;
+        mm.insert(&instance.hash, &instance.id)?;
+        Utxo::store_many(&write_tx, &instance.utxos)?;
+        InputRef::store_many(&write_tx, &instance.inputs)?;
+        Ok(())
+    }
+    pub fn store_many(
+        write_tx: &::redb::WriteTransaction,
+        instances: &Vec<Transaction>,
+    ) -> Result<(), AppError> {
+        let mut table_pk_2 = write_tx.open_table(TRANSACTION_ID)?;
+        for instance in instances.iter() {
+            table_pk_2.insert(&instance.id, ())?;
+        }
+        let mut table_col_7 = write_tx.open_table(TRANSACTION_HASH_BY_ID)?;
+        let mut mm = write_tx.open_multimap_table(TRANSACTION_HASH_INDEX)?;
+        for instance in instances.iter() {
+            table_col_7.insert(&instance.id, &instance.hash)?;
+            mm.insert(&instance.hash, &instance.id)?;
+        }
+        let mut children: Vec<Utxo> = Vec::new();
+        for instance in instances.iter() {
+            children.extend_from_slice(&instance.utxos)
+        }
+        Utxo::store_many(&write_tx, &children)?;
+        let mut children: Vec<InputRef> = Vec::new();
+        for instance in instances.iter() {
+            children.extend_from_slice(&instance.inputs)
+        }
+        InputRef::store_many(&write_tx, &children)?;
+        Ok(())
+    }
+    pub fn store_unsafe_and_commit(
+        db: &::redb::Database,
+        instance: &Transaction,
+    ) -> Result<(), AppError> {
+        let write_tx = db.begin_write()?;
+        {
+            let mut table_pk_1 = write_tx.open_table(TRANSACTION_ID)?;
+            table_pk_1.insert(&instance.id, ())?;
+            let mut table_col_6 = write_tx.open_table(TRANSACTION_HASH_BY_ID)?;
+            table_col_6.insert(&instance.id, &instance.hash)?;
+            let mut mm = write_tx.open_multimap_table(TRANSACTION_HASH_INDEX)?;
+            mm.insert(&instance.hash, &instance.id)?;
+            Utxo::store_many(&write_tx, &instance.utxos)?;
+            InputRef::store_many(&write_tx, &instance.inputs)?;
+        }
+        write_tx.commit()?;
+        Ok(())
+    }
+    pub fn delete(
+        write_tx: &::redb::WriteTransaction,
+        pk: &TxPointer,
+    ) -> Result<(), AppError> {
+        let mut table_pk_3 = write_tx.open_table(TRANSACTION_ID)?;
+        let _ = table_pk_3.remove(pk)?;
+        let mut table_col_8 = write_tx.open_table(TRANSACTION_HASH_BY_ID)?;
+        let maybe_value = {
+            if let Some(value_guard) = table_col_8.remove(pk)? {
+                Some(value_guard.value().clone())
+            } else {
+                None
+            }
+        };
+        if let Some(value) = maybe_value {
+            let mut mm = write_tx.open_multimap_table(TRANSACTION_HASH_INDEX)?;
+            mm.remove(&value, pk)?;
+        }
+        let (from, to) = pk.fk_range();
+        let child_pks = Utxo::pk_range(&write_tx, &from, &to)?;
+        Utxo::delete_many(&write_tx, &child_pks)?;
+        let (from, to) = pk.fk_range();
+        let child_pks = InputRef::pk_range(&write_tx, &from, &to)?;
+        InputRef::delete_many(&write_tx, &child_pks)?;
+        Ok(())
+    }
+    pub fn delete_many(
+        write_tx: &::redb::WriteTransaction,
+        pks: &Vec<TxPointer>,
+    ) -> Result<(), AppError> {
+        let mut table_pk_4 = write_tx.open_table(TRANSACTION_ID)?;
+        for pk in pks.iter() {
+            table_pk_4.remove(pk)?;
+        }
+        let mut table_col_9 = write_tx.open_table(TRANSACTION_HASH_BY_ID)?;
+        let mut mm = write_tx.open_multimap_table(TRANSACTION_HASH_INDEX)?;
+        for pk in pks.iter() {
+            if let Some(value_guard) = table_col_9.remove(pk)? {
+                let value = value_guard.value();
+                mm.remove(&value, pk)?;
+            }
+        }
+        let mut children = Vec::new();
+        for pk in pks.iter() {
+            let (from, to) = pk.fk_range();
+            let child_pks = Utxo::pk_range(&write_tx, &from, &to)?;
+            children.extend_from_slice(&child_pks);
+        }
+        Utxo::delete_many(&write_tx, &children)?;
+        let mut children = Vec::new();
+        for pk in pks.iter() {
+            let (from, to) = pk.fk_range();
+            let child_pks = InputRef::pk_range(&write_tx, &from, &to)?;
+            children.extend_from_slice(&child_pks);
+        }
+        InputRef::delete_many(&write_tx, &children)?;
+        Ok(())
+    }
+    pub fn delete_and_commit(
+        db: &::redb::Database,
+        pk: &TxPointer,
+    ) -> Result<(), AppError> {
+        let write_tx = db.begin_write()?;
+        {
+            let mut table_pk_3 = write_tx.open_table(TRANSACTION_ID)?;
+            let _ = table_pk_3.remove(pk)?;
+            let mut table_col_8 = write_tx.open_table(TRANSACTION_HASH_BY_ID)?;
+            let maybe_value = {
+                if let Some(value_guard) = table_col_8.remove(pk)? {
+                    Some(value_guard.value().clone())
+                } else {
+                    None
+                }
+            };
+            if let Some(value) = maybe_value {
+                let mut mm = write_tx.open_multimap_table(TRANSACTION_HASH_INDEX)?;
+                mm.remove(&value, pk)?;
+            }
+            let (from, to) = pk.fk_range();
+            let child_pks = Utxo::pk_range(&write_tx, &from, &to)?;
+            Utxo::delete_many(&write_tx, &child_pks)?;
+            let (from, to) = pk.fk_range();
+            let child_pks = InputRef::pk_range(&write_tx, &from, &to)?;
+            InputRef::delete_many(&write_tx, &child_pks)?;
+        }
+        write_tx.commit()?;
+        Ok(())
+    }
+    pub fn routes() -> axum::Router<RequestState> {
+        axum::Router::new()
+            .route("/transaction/id/{value}", ::axum::routing::get(transaction_get))
+            .route("/transaction?take=", ::axum::routing::get(transaction_take))
+            .route("/transaction?first=", ::axum::routing::get(transaction_first))
+            .route("/transaction?last=", ::axum::routing::get(transaction_last))
+            .route("/transaction/id/{value}", ::axum::routing::head(transaction_exists))
+            .route(
+                "/transaction/id/{value}/parent_pk",
+                ::axum::routing::get(transaction_parent_pk),
+            )
+            .route(
+                "/transaction/id?from=&until=",
+                ::axum::routing::get(transaction_range),
+            )
+            .route(
+                "/transaction/hash/{value}",
+                ::axum::routing::get(transaction_get_by_hash),
+            )
+            .route(
+                "/transaction/{value}/utxos",
+                ::axum::routing::get(transaction_get_utxos),
+            )
+            .route(
+                "/transaction/{value}/inputs",
+                ::axum::routing::get(transaction_get_inputs),
+            )
+    }
+}

@@ -1,0 +1,27 @@
+impl IndexedPointer for AssetPointer {
+    type Index = AssetIndex;
+    fn index(&self) -> Self::Index {
+        self.asset_index
+    }
+    fn next(&self) -> Self {
+        AssetPointer {
+            utxo_pointer: self.utxo_pointer.clone(),
+            asset_index: self.asset_index + 1,
+        }
+    }
+}
+impl ChildPointer for AssetPointer {
+    type Parent = UtxoPointer;
+    fn is_child(&self) -> bool {
+        true
+    }
+    fn parent(&self) -> &Self::Parent {
+        &self.utxo_pointer
+    }
+    fn from_parent(parent: Self::Parent) -> Self {
+        AssetPointer {
+            utxo_pointer: parent,
+            asset_index: <AssetIndex as Default>::default(),
+        }
+    }
+}

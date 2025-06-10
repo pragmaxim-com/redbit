@@ -1,3 +1,4 @@
+mod exists;
 mod get;
 mod take;
 mod first;
@@ -6,11 +7,12 @@ mod range;
 mod pk_range;
 mod store;
 mod delete;
+mod parent_pk;
 
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::{Attribute, Data, DeriveInput, Fields, Type};
-use crate::field_parser::PkDef;
+use crate::field_parser::{Multiplicity, PkDef};
 use crate::http::FunctionDef;
 use crate::macro_utils;
 use crate::table::TableDef;
@@ -41,6 +43,15 @@ impl DbPkMacros {
         function_defs.push(take::fn_def(entity_name, entity_type, &table_def.name));
         function_defs.push(first::fn_def(entity_name, entity_type, &table_def.name));
         function_defs.push(last::fn_def(entity_name, entity_type, &table_def.name));
+        function_defs.push(exists::fn_def(entity_name, &pk_name, &pk_type, &table_def.name));
+
+        match pk_def.fk {
+            Some(Multiplicity::OneToMany) => {
+                function_defs.push(parent_pk::fn_def(entity_name, &pk_name, &pk_type));
+            },
+            _ => {
+            }
+        };
 
         if pk_def.range {
             function_defs.push(range::fn_def(entity_name, entity_type, &pk_name, &pk_type, &table_def.name));
@@ -170,6 +181,9 @@ impl DbPkMacros {
 
                     fn is_child(&self) -> bool {
                         true
+                    }
+                    fn parent(&self) -> &Self::Parent {
+                        &self.#parent_name
                     }
 
                     fn from_parent(parent: Self::Parent) -> Self {

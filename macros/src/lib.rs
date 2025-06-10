@@ -41,7 +41,7 @@ pub fn derive_pk(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     }
 }
 
-#[proc_macro_derive(Entity, attributes(pk, column, one2many, one2one, transient))]
+#[proc_macro_derive(Entity, attributes(pk, fk, column, one2many, one2one, transient))]
 pub fn derive_entity(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let ast: DeriveInput = parse_macro_input!(input as DeriveInput);
     let entity_ident = &ast.ident;

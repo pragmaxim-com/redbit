@@ -24,7 +24,7 @@ pub fn empty_temp_db(name: &str) -> Database {
 pub fn init_temp_db(name: &str) -> (Vec<Block>, Database) {
     let db = empty_temp_db(name);
     let blocks = get_blocks(Height(4), 4, 4, 4);
-    blocks.iter().for_each(|block| Block::store_and_commit(&db, &block).expect("Failed to persist blocks"));
+    blocks.iter().for_each(|block| Block::store_unsafe_and_commit(&db, &block).expect("Failed to persist blocks"));
     (blocks, db)
 }
 

@@ -1,0 +1,9 @@
+| Endpoint      |  GET:/asset/id/{value}                             asset_get
+| Endpoint      |  GET:/asset?take=                                  asset_take
+| Endpoint      |  GET:/asset?first=                                 asset_first
+| Endpoint      |  GET:/asset?last=                                  asset_last
+| Endpoint      |  HEAD:/asset/id/{value}                            asset_exists
+| Endpoint      |  GET:/asset/id/{value}/parent_pk                   asset_parent_pk
+| Endpoint      |  GET:/asset/id?from=&until=                        asset_range
+| Endpoint      |  GET:/asset/name/{value}                           asset_get_by_name
+| Endpoint      |  GET:/asset/policy_id/{value}                      asset_get_by_policy_id

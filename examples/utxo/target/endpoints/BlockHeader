@@ -1,0 +1,10 @@
+| Endpoint      |  GET:/blockheader/id/{value}                       blockheader_get
+| Endpoint      |  GET:/blockheader?take=                            blockheader_take
+| Endpoint      |  GET:/blockheader?first=                           blockheader_first
+| Endpoint      |  GET:/blockheader?last=                            blockheader_last
+| Endpoint      |  HEAD:/blockheader/id/{value}                      blockheader_exists
+| Endpoint      |  GET:/blockheader/id?from=&until=                  blockheader_range
+| Endpoint      |  GET:/blockheader/hash/{value}                     blockheader_get_by_hash
+| Endpoint      |  GET:/blockheader/timestamp/{value}                blockheader_get_by_timestamp
+| Endpoint      |  GET:/blockheader/timestamp?from=&until=           blockheader_range_by_timestamp
+| Endpoint      |  GET:/blockheader/merkle_root/{value}              blockheader_get_by_merkle_root

@@ -5,7 +5,7 @@ use redbit::*;
 
 #[derive(Entity, Default, Serialize, Debug, Clone, PartialEq, Eq)]
 struct MinimalStruct {
-    #[pk(range)]
+    #[fk(one2many, range)]
     pub id: ChildPK,
     #[column]
     pub persisted_no_index_no_dict: i32,

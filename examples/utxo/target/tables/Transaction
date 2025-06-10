@@ -1,0 +1,3 @@
+| Table         |  TRANSACTION_ID
+| Table         |  TRANSACTION_HASH_BY_ID
+| Table         |  TRANSACTION_HASH_INDEX

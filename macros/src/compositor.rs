@@ -57,7 +57,7 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
 
     let table_lines = table_definitions.iter().map(|table_def| format!("| Table         |  {}", table_def.name)).collect();
     macro_utils::write_to_local_file(table_lines, "tables", &entity_name);
-    let entity_lines = endpoints.iter().map(|endpoint| format!("| Endpoint      |  {}", endpoint.endpoint)).collect();
+    let entity_lines = endpoints.iter().map(|endpoint| format!("| Endpoint      |  {}", endpoint)).collect();
     macro_utils::write_to_local_file(entity_lines, "endpoints", &entity_name);
 
     let pk_ident = db_pk_macros.definition.field.name.clone();
@@ -66,11 +66,11 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
     let expanded = quote! {
         // table definitions are not in the impl object because they are accessed globally with semantic meaning
         #(#table_definition_streams)*
+
         // axum endpoints cannot be in the impl object https://docs.rs/axum/latest/axum/attr.debug_handler.html#limitations
         #(#endpoint_macros)*
 
         impl #entity_name {
-
             #(#function_streams)*
 
             pub fn sample(pk: &#pk_type) -> Self {
@@ -85,6 +85,28 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
                     #pk_ident: pk.clone(),
                     #(#struct_inits),*
                 })
+            }
+
+            pub fn store(write_tx: &::redb::WriteTransaction, instance: &#entity_type) -> Result<(), AppError> {
+                #pk_store_statement
+                #(#store_statements)*
+                Ok(())
+            }
+
+            pub fn store_many(write_tx: &::redb::WriteTransaction, instances: &Vec<#entity_type>) -> Result<(), AppError> {
+                #pk_store_many_statement
+                #(#store_many_statements)*
+                Ok(())
+            }
+
+            pub fn store_unsafe_and_commit(db: &::redb::Database, instance: &#entity_type) -> Result<(), AppError> {
+                let write_tx = db.begin_write()?;
+                {
+                    #pk_store_statement
+                    #(#store_statements)*
+                }
+                write_tx.commit()?;
+                Ok(())
             }
 
             pub fn delete(write_tx: &::redb::WriteTransaction, pk: &#pk_type) -> Result<(), AppError> {
@@ -104,27 +126,6 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
                 {
                     #pk_delete_statement
                     #(#delete_statements)*
-                }
-                write_tx.commit()?;
-                Ok(())
-            }
-
-            pub fn store_many(write_tx: &::redb::WriteTransaction, instances: &Vec<#entity_type>) -> Result<(), AppError> {
-                #pk_store_many_statement
-                #(#store_many_statements)*
-                Ok(())
-            }
-
-            pub fn store(write_tx: &::redb::WriteTransaction, instance: &#entity_type) -> Result<(), AppError> {
-                #pk_store_statement
-                #(#store_statements)*
-                Ok(())
-            }
-            pub fn store_and_commit(db: &::redb::Database, instance: &#entity_type) -> Result<(), AppError> {
-                let write_tx = db.begin_write()?;
-                {
-                    #pk_store_statement
-                    #(#store_statements)*
                 }
                 write_tx.commit()?;
                 Ok(())

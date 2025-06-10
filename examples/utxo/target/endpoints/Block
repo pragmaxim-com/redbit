@@ -1,0 +1,8 @@
+| Endpoint      |  GET:/block/id/{value}                             block_get
+| Endpoint      |  GET:/block?take=                                  block_take
+| Endpoint      |  GET:/block?first=                                 block_first
+| Endpoint      |  GET:/block?last=                                  block_last
+| Endpoint      |  HEAD:/block/id/{value}                            block_exists
+| Endpoint      |  GET:/block/id?from=&until=                        block_range
+| Endpoint      |  GET:/block/{value}/header                         block_get_header
+| Endpoint      |  GET:/block/{value}/transactions                   block_get_transactions

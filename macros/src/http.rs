@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use proc_macro2::{Ident, TokenStream};
 use syn::Type;
 use quote::{format_ident, quote};
@@ -6,7 +7,22 @@ use quote::{format_ident, quote};
 pub struct HttpEndpointMacro {
     pub endpoint: String,
     pub fn_name: Ident,
+    pub method_name: Ident,
     pub handler: TokenStream,
+}
+
+impl Display for HttpEndpointMacro {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let method = self.method_name.to_string().to_ascii_uppercase();
+        let prefix = format!("{}:{}", method, self.endpoint);
+        let indentation = 50;
+        let pad = if prefix.len() >= indentation {
+            1 // fallback spacing if prefix is too long
+        } else {
+            indentation - prefix.len()
+        };
+        write!(f, "{}{:pad$}{}", prefix, "", self.fn_name, pad = pad)
+    }
 }
 
 #[derive(Clone)]
@@ -25,13 +41,20 @@ pub struct ReturnValue {
 }
 
 #[derive(Clone)]
+pub enum GetByFlag {
+    Default,
+    Exists,
+    Parent
+}
+
+#[derive(Clone)]
 pub enum Endpoint {
-    GetBy(Params),    // `/entity/column/:column_name`
-    RangeBy(Params),  // `/entity/column?from=&to=`
-    Relation(Params), // `/entity/:pk/relation`
-    Take,   // `/entity?take=1000`
-    First,   // `/entity?first=true`
-    Last,   // `/entity?last=true`
+    GetBy(Params, GetByFlag),    // `GET:/entity/column/:column_name`
+    RangeBy(Params),  // `GET:/entity/column?from=&to=`
+    Relation(Params), // `GET:/entity/:pk/relation`
+    Take,   // `GET:/entity?take=1000`
+    First,   // `GET:/entity?first=true`
+    Last,   // `GET:/entity?last=true`
 }
 
 #[derive(Clone)]
@@ -40,15 +63,14 @@ pub struct Params { // currently only params of one type are supported
     pub column_type: Type,
 }
 
-
 fn to_route_chain(endpoints: Vec<HttpEndpointMacro>) -> Vec<TokenStream> {
     endpoints
         .into_iter()
-        .map(|e| (e.endpoint, e.fn_name))
-        .map(|(endpoint, function_name)| {
+        .map(|e| (e.endpoint, e.method_name, e.fn_name))
+        .map(|(endpoint, method_name, function_name)| {
             quote! {
-                        .route(#endpoint, ::axum::routing::get(#function_name))
-                    }
+                .route(#endpoint, ::axum::routing::#method_name(#function_name))
+            }
         })
         .collect()
 }
@@ -62,64 +84,92 @@ pub fn to_http_endpoints(defs: Vec<FunctionDef>) -> (Vec<HttpEndpointMacro>, Vec
 pub fn to_http_endpoint(def: &FunctionDef) -> Option<HttpEndpointMacro> {
     if let Some(endpoint_type) = &def.endpoint {
         let entity_snake = def.entity.to_string().to_lowercase();
-        let method = &def.name;
+        let function = &def.name;
         let entity = &def.entity;
         let return_type = &def.return_value.value_type;
 
-        let (endpoint, fn_name, param_binding, db_call) = match endpoint_type {
-            Endpoint::GetBy(p) => {
+        let (endpoint, fn_name, method_name, param_binding, db_call) = match endpoint_type {
+            Endpoint::GetBy(p, GetByFlag::Default) => {
                 let column = p.column_name.clone();
                 let column_type = p.column_type.clone();
-                let fn_name = format_ident!("{}_handle_by_{}", entity_snake, column);
+                let fn_name = format_ident!("{}_{}", entity_snake, function);
+                let method_name = format_ident!("get");
                 let path = format!("/{}/{}/{{value}}", entity_snake, column);
                 let param_type = quote! { RequestByParams<#column_type> };
                 let extract = quote! { ::axum::extract::Path(params): ::axum::extract::Path<#param_type> };
-                let db = quote! { #entity::#method(&read_tx, &params.value) };
-                (path, fn_name, extract, db)
+                let db = quote! { #entity::#function(&read_tx, &params.value) };
+                (path, fn_name, method_name, extract, db)
+            }
+            Endpoint::GetBy(p, GetByFlag::Exists) => {
+                let column = p.column_name.clone();
+                let column_type = p.column_type.clone();
+                let fn_name = format_ident!("{}_{}", entity_snake, function);
+                let method_name = format_ident!("head");
+                let path = format!("/{}/{}/{{value}}", entity_snake, column);
+                let param_type = quote! { RequestByParams<#column_type> };
+                let extract = quote! { ::axum::extract::Path(params): ::axum::extract::Path<#param_type> };
+                let db = quote! { #entity::#function(&read_tx, &params.value) };
+                (path, fn_name, method_name, extract, db)
+            }
+            Endpoint::GetBy(p, GetByFlag::Parent) => {
+                let column = p.column_name.clone();
+                let column_type = p.column_type.clone();
+                let fn_name = format_ident!("{}_{}", entity_snake, function);
+                let method_name = format_ident!("get");
+                let path = format!("/{}/{}/{{value}}/{}", entity_snake, column, function);
+                let param_type = quote! { RequestByParams<#column_type> };
+                let extract = quote! { ::axum::extract::Path(params): ::axum::extract::Path<#param_type> };
+                let db = quote! { #entity::#function(&read_tx, &params.value) };
+                (path, fn_name, method_name, extract, db)
             }
             Endpoint::RangeBy(p) => {
                 let column = p.column_name.clone();
                 let column_type = p.column_type.clone();
-                let fn_name = format_ident!("{}_handle_range_by_{}", entity_snake, column);
+                let fn_name = format_ident!("{}_{}", entity_snake, function);
+                let method_name = format_ident!("get");
                 let path = format!("/{}/{}?from=&until=", entity_snake, column);
                 let param_type = quote! { RequestRangeParams<#column_type, #column_type> };
                 let extract = quote! { ::axum::extract::Query(params): ::axum::extract::Query<#param_type> };
-                let db = quote! { #entity::#method(&read_tx, &params.from, &params.until) };
-                (path, fn_name, extract, db)
+                let db = quote! { #entity::#function(&read_tx, &params.from, &params.until) };
+                (path, fn_name, method_name, extract, db)
             }
             Endpoint::Relation(p) => {
                 let column_type = p.column_type.clone();
                 let relation_entity_name = &def.return_value.value_name;
-                let fn_name = format_ident!("{}_handle_relation_{}", entity_snake, relation_entity_name);
+                let fn_name = format_ident!("{}_{}", entity_snake, function);
+                let method_name = format_ident!("get");
                 let path = format!("/{}/{{value}}/{}", entity_snake, relation_entity_name);
                 let param_type = quote! { RequestByParams<#column_type> };
                 let extract = quote! { ::axum::extract::Path(params): ::axum::extract::Path<#param_type> };
-                let db = quote! { #entity::#method(&read_tx, &params.value) };
-                (path, fn_name, extract, db)
+                let db = quote! { #entity::#function(&read_tx, &params.value) };
+                (path, fn_name, method_name, extract, db)
             }
             Endpoint::Take => {
-                let fn_name = format_ident!("{}_handle_take", entity_snake);
+                let fn_name = format_ident!("{}_{}", entity_snake, function);
+                let method_name = format_ident!("get");
                 let path = format!("/{}?take=", entity_snake);
                 let param_type = quote! { TakeParams };
                 let extract = quote! { ::axum::extract::Query(params): ::axum::extract::Query<#param_type> };
-                let db = quote! { #entity::#method(&read_tx, params.take) };
-                (path, fn_name, extract, db)
+                let db = quote! { #entity::#function(&read_tx, params.take) };
+                (path, fn_name, method_name, extract, db)
             }
             Endpoint::First => {
-                let fn_name = format_ident!("{}_handle_first", entity_snake);
+                let fn_name = format_ident!("{}_{}", entity_snake, function);
+                let method_name = format_ident!("get");
                 let path = format!("/{}?first=", entity_snake);
                 let param_type = quote! { FirstParams };
                 let extract = quote! { ::axum::extract::Query(params): ::axum::extract::Query<#param_type> };
-                let db = quote! { #entity::#method(&read_tx) };
-                (path, fn_name, extract, db)
+                let db = quote! { #entity::#function(&read_tx) };
+                (path, fn_name, method_name, extract, db)
             }
             Endpoint::Last => {
-                let fn_name = format_ident!("{}_handle_last", entity_snake);
+                let fn_name = format_ident!("{}_{}", entity_snake, function);
+                let method_name = format_ident!("get");
                 let path = format!("/{}?last=", entity_snake);
                 let param_type = quote! { LastParams };
                 let extract = quote! { ::axum::extract::Query(params): ::axum::extract::Query<#param_type> };
-                let db = quote! { #entity::#method(&read_tx) };
-                (path, fn_name, extract, db)
+                let db = quote! { #entity::#function(&read_tx) };
+                (path, fn_name, method_name, extract, db)
             }
         };
 
@@ -139,6 +189,7 @@ pub fn to_http_endpoint(def: &FunctionDef) -> Option<HttpEndpointMacro> {
         Some(HttpEndpointMacro {
             endpoint,
             fn_name,
+            method_name,
             handler,
         })
     } else {
