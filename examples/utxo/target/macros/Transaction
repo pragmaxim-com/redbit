@@ -310,30 +310,6 @@ impl Transaction {
         write_tx: &::redb::WriteTransaction,
         instance: &Transaction,
     ) -> Result<(), AppError> {
-        if is_one_to_many_child && instance.exists(id.parent()) {
-            let mut table_pk_1 = write_tx.open_table(TRANSACTION_ID)?;
-            table_pk_1.insert(&instance.id, ())?;
-            let mut table_col_6 = write_tx.open_table(TRANSACTION_HASH_BY_ID)?;
-            table_col_6.insert(&instance.id, &instance.hash)?;
-            let mut mm = write_tx.open_multimap_table(TRANSACTION_HASH_INDEX)?;
-            mm.insert(&instance.hash, &instance.id)?;
-            Utxo::store_many(&write_tx, &instance.utxos)?;
-            InputRef::store_many(&write_tx, &instance.inputs)?;
-            Ok(())
-        } else {
-            Err(
-                AppError::InvalidPrimaryKey(
-                    format!(
-                        "Cannot store {} with no primary key", stringify!(Transaction)
-                    ),
-                ),
-            )
-        }
-    }
-    pub fn store(
-        write_tx: &::redb::WriteTransaction,
-        instance: &Transaction,
-    ) -> Result<(), AppError> {
         let mut table_pk_1 = write_tx.open_table(TRANSACTION_ID)?;
         table_pk_1.insert(&instance.id, ())?;
         let mut table_col_6 = write_tx.open_table(TRANSACTION_HASH_BY_ID)?;
@@ -370,7 +346,7 @@ impl Transaction {
         InputRef::store_many(&write_tx, &children)?;
         Ok(())
     }
-    pub fn store_unsafe_and_commit(
+    pub fn store_and_commit(
         db: &::redb::Database,
         instance: &Transaction,
     ) -> Result<(), AppError> {

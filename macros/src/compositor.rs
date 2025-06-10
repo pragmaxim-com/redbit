@@ -99,7 +99,7 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
                 Ok(())
             }
 
-            pub fn store_unsafe_and_commit(db: &::redb::Database, instance: &#entity_type) -> Result<(), AppError> {
+            pub fn store_and_commit(db: &::redb::Database, instance: &#entity_type) -> Result<(), AppError> {
                 let write_tx = db.begin_write()?;
                 {
                     #pk_store_statement

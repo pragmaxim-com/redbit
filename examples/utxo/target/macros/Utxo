@@ -375,47 +375,6 @@ impl Utxo {
         write_tx: &::redb::WriteTransaction,
         instance: &Utxo,
     ) -> Result<(), AppError> {
-        if is_one_to_many_child && instance.exists(id.parent()) {
-            let mut table_pk_1 = write_tx.open_table(UTXO_ID)?;
-            table_pk_1.insert(&instance.id, ())?;
-            let mut table_col_1 = write_tx.open_table(UTXO_AMOUNT_BY_ID)?;
-            table_col_1.insert(&instance.id, &instance.amount)?;
-            let mut table_col_6 = write_tx.open_table(UTXO_DATUM_BY_ID)?;
-            table_col_6.insert(&instance.id, &instance.datum)?;
-            let mut mm = write_tx.open_multimap_table(UTXO_DATUM_INDEX)?;
-            mm.insert(&instance.datum, &instance.id)?;
-            let mut dict_pk_by_pk = write_tx.open_table(UTXO_ADDRESS_DICT_PK_BY_ID)?;
-            let mut value_to_dict_pk = write_tx.open_table(UTXO_ADDRESS_TO_DICT_PK)?;
-            let mut value_by_dict_pk = write_tx.open_table(UTXO_ADDRESS_BY_DICT_PK)?;
-            let mut dict_index = write_tx.open_multimap_table(UTXO_ADDRESS_DICT_INDEX)?;
-            let (birth_id, newly_created) = {
-                if let Some(guard) = value_to_dict_pk.get(&instance.address)? {
-                    (guard.value().clone(), false)
-                } else {
-                    let new_birth = instance.id.clone();
-                    (new_birth, true)
-                }
-            };
-            if newly_created {
-                value_to_dict_pk.insert(&instance.address, &birth_id)?;
-                value_by_dict_pk.insert(&birth_id, &instance.address)?;
-            }
-            dict_pk_by_pk.insert(&instance.id, &birth_id)?;
-            dict_index.insert(&birth_id, &instance.id)?;
-            Asset::store_many(&write_tx, &instance.assets)?;
-            Ok(())
-        } else {
-            Err(
-                AppError::InvalidPrimaryKey(
-                    format!("Cannot store {} with no primary key", stringify!(Utxo)),
-                ),
-            )
-        }
-    }
-    pub fn store(
-        write_tx: &::redb::WriteTransaction,
-        instance: &Utxo,
-    ) -> Result<(), AppError> {
         let mut table_pk_1 = write_tx.open_table(UTXO_ID)?;
         table_pk_1.insert(&instance.id, ())?;
         let mut table_col_1 = write_tx.open_table(UTXO_AMOUNT_BY_ID)?;
@@ -490,7 +449,7 @@ impl Utxo {
         Asset::store_many(&write_tx, &children)?;
         Ok(())
     }
-    pub fn store_unsafe_and_commit(
+    pub fn store_and_commit(
         db: &::redb::Database,
         instance: &Utxo,
     ) -> Result<(), AppError> {

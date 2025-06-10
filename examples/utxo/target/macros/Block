@@ -231,25 +231,6 @@ impl Block {
         write_tx: &::redb::WriteTransaction,
         instance: &Block,
     ) -> Result<(), AppError> {
-        if is_one_to_many_child && instance.exists(id.parent()) {
-            let mut table_pk_1 = write_tx.open_table(BLOCK_ID)?;
-            table_pk_1.insert(&instance.id, ())?;
-            let child = &instance.header;
-            BlockHeader::store(&write_tx, child)?;
-            Transaction::store_many(&write_tx, &instance.transactions)?;
-            Ok(())
-        } else {
-            Err(
-                AppError::InvalidPrimaryKey(
-                    format!("Cannot store {} with no primary key", stringify!(Block)),
-                ),
-            )
-        }
-    }
-    pub fn store(
-        write_tx: &::redb::WriteTransaction,
-        instance: &Block,
-    ) -> Result<(), AppError> {
         let mut table_pk_1 = write_tx.open_table(BLOCK_ID)?;
         table_pk_1.insert(&instance.id, ())?;
         let child = &instance.header;
@@ -277,7 +258,7 @@ impl Block {
         Transaction::store_many(&write_tx, &children)?;
         Ok(())
     }
-    pub fn store_unsafe_and_commit(
+    pub fn store_and_commit(
         db: &::redb::Database,
         instance: &Block,
     ) -> Result<(), AppError> {

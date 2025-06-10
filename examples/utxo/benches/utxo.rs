@@ -19,7 +19,7 @@ fn benchmark_persistence(c: &mut Criterion) {
     group.bench_function("Block::store_and_commit", |b| {
         b.iter(|| {
             for block in blocks.iter() {
-                Block::store_unsafe_and_commit(&db, block).unwrap();
+                Block::store_and_commit(&db, block).unwrap();
             }
         })
     });

@@ -2,7 +2,6 @@ use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
 use crate::http::{Endpoint, FunctionDef, GetByFlag, Params, ReturnValue};
-use crate::http::GetByFlag::Default;
 
 pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type: &Type, table: &Ident) -> FunctionDef {
     let get_fn_name = format_ident!("get");

@@ -402,38 +402,6 @@ impl BlockHeader {
         write_tx: &::redb::WriteTransaction,
         instance: &BlockHeader,
     ) -> Result<(), AppError> {
-        if is_one_to_many_child && instance.exists(id.parent()) {
-            let mut table_pk_1 = write_tx.open_table(BLOCKHEADER_ID)?;
-            table_pk_1.insert(&instance.id, ())?;
-            let mut table_col_6 = write_tx.open_table(BLOCKHEADER_HASH_BY_ID)?;
-            table_col_6.insert(&instance.id, &instance.hash)?;
-            let mut mm = write_tx.open_multimap_table(BLOCKHEADER_HASH_INDEX)?;
-            mm.insert(&instance.hash, &instance.id)?;
-            let mut table_col_6 = write_tx.open_table(BLOCKHEADER_TIMESTAMP_BY_ID)?;
-            table_col_6.insert(&instance.id, &instance.timestamp)?;
-            let mut mm = write_tx.open_multimap_table(BLOCKHEADER_TIMESTAMP_INDEX)?;
-            mm.insert(&instance.timestamp, &instance.id)?;
-            let mut table_col_6 = write_tx.open_table(BLOCKHEADER_MERKLE_ROOT_BY_ID)?;
-            table_col_6.insert(&instance.id, &instance.merkle_root)?;
-            let mut mm = write_tx.open_multimap_table(BLOCKHEADER_MERKLE_ROOT_INDEX)?;
-            mm.insert(&instance.merkle_root, &instance.id)?;
-            let mut table_col_1 = write_tx.open_table(BLOCKHEADER_NONCE_BY_ID)?;
-            table_col_1.insert(&instance.id, &instance.nonce)?;
-            Ok(())
-        } else {
-            Err(
-                AppError::InvalidPrimaryKey(
-                    format!(
-                        "Cannot store {} with no primary key", stringify!(BlockHeader)
-                    ),
-                ),
-            )
-        }
-    }
-    pub fn store(
-        write_tx: &::redb::WriteTransaction,
-        instance: &BlockHeader,
-    ) -> Result<(), AppError> {
         let mut table_pk_1 = write_tx.open_table(BLOCKHEADER_ID)?;
         table_pk_1.insert(&instance.id, ())?;
         let mut table_col_6 = write_tx.open_table(BLOCKHEADER_HASH_BY_ID)?;
@@ -484,7 +452,7 @@ impl BlockHeader {
         }
         Ok(())
     }
-    pub fn store_unsafe_and_commit(
+    pub fn store_and_commit(
         db: &::redb::Database,
         instance: &BlockHeader,
     ) -> Result<(), AppError> {

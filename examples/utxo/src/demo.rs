@@ -8,7 +8,7 @@ pub fn run(db: Arc<Database>) -> Result<(), AppError> {
 
     println!("Persisting blocks:");
     for block in blocks.iter() {
-        Block::store_unsafe_and_commit(&db, block)?
+        Block::store_and_commit(&db, block)?
     }
 
     let read_tx = db.begin_read()?;
@@ -22,6 +22,9 @@ pub fn run(db: Arc<Database>) -> Result<(), AppError> {
     Block::range(&read_tx, &first_block.id, &last_block.id)?;
     Block::get_transactions(&read_tx, &first_block.id)?;
     Block::get_header(&read_tx, &first_block.id)?;
+    Block::exists(&read_tx, &first_block.id)?;
+    Block::first(&read_tx)?;
+    Block::last(&read_tx)?;
 
     println!("Querying block headers:");
     let first_block_header = BlockHeader::first(&read_tx)?.unwrap();
@@ -45,6 +48,7 @@ pub fn run(db: Arc<Database>) -> Result<(), AppError> {
     Transaction::range(&read_tx, &first_transaction.id, &last_transaction.id)?;
     Transaction::get_utxos(&read_tx, &first_transaction.id)?;
     Transaction::get_inputs(&read_tx, &first_transaction.id)?;
+    Transaction::parent_pk(&read_tx, &first_transaction.id)?;
 
     println!("Querying utxos:");
     let first_utxo = Utxo::first(&read_tx)?.unwrap();
@@ -56,6 +60,18 @@ pub fn run(db: Arc<Database>) -> Result<(), AppError> {
     Utxo::get_by_datum(&read_tx, &first_utxo.datum)?;
     Utxo::range(&read_tx, &first_utxo.id, &last_utxo.id)?;
     Utxo::get_assets(&read_tx, &first_utxo.id)?;
+    Utxo::parent_pk(&read_tx, &first_utxo.id)?;
+
+    println!("Querying input refs:");
+    let first_input_ref = InputRef::first(&read_tx)?.unwrap();
+    let last_input_ref = InputRef::last(&read_tx)?.unwrap();
+
+    InputRef::take(&read_tx, 1000)?;
+    InputRef::exists(&read_tx, &first_input_ref.id)?;
+    InputRef::get(&read_tx, &first_input_ref.id)?;
+    InputRef::range(&read_tx, &first_input_ref.id, &last_input_ref.id)?;
+    InputRef::parent_pk(&read_tx, &first_input_ref.id)?;
+
 
     println!("Querying assets:");
     let first_asset = Asset::first(&read_tx)?.unwrap();
@@ -66,6 +82,7 @@ pub fn run(db: Arc<Database>) -> Result<(), AppError> {
     Asset::get_by_name(&read_tx, &first_asset.name)?;
     Asset::get_by_policy_id(&read_tx, &first_asset.policy_id)?;
     Asset::range(&read_tx, &first_asset.id, &last_asset.id)?;
+    Asset::parent_pk(&read_tx, &first_asset.id)?;
 
     println!("Deleting blocks:");
     for block in blocks.iter() {

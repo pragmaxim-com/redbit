@@ -191,22 +191,6 @@ impl InputRef {
         write_tx: &::redb::WriteTransaction,
         instance: &InputRef,
     ) -> Result<(), AppError> {
-        if is_one_to_many_child && instance.exists(id.parent()) {
-            let mut table_pk_1 = write_tx.open_table(INPUTREF_ID)?;
-            table_pk_1.insert(&instance.id, ())?;
-            Ok(())
-        } else {
-            Err(
-                AppError::InvalidPrimaryKey(
-                    format!("Cannot store {} with no primary key", stringify!(InputRef)),
-                ),
-            )
-        }
-    }
-    pub fn store(
-        write_tx: &::redb::WriteTransaction,
-        instance: &InputRef,
-    ) -> Result<(), AppError> {
         let mut table_pk_1 = write_tx.open_table(INPUTREF_ID)?;
         table_pk_1.insert(&instance.id, ())?;
         Ok(())
@@ -221,7 +205,7 @@ impl InputRef {
         }
         Ok(())
     }
-    pub fn store_unsafe_and_commit(
+    pub fn store_and_commit(
         db: &::redb::Database,
         instance: &InputRef,
     ) -> Result<(), AppError> {

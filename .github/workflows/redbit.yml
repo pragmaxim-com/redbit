@@ -61,7 +61,6 @@ jobs:
       - name: Run Criterion Benchmarks
         run: |
           cargo bench --package utxo --bench utxo
-          echo "function,ops/s" > benchmarks.csv
           find target/criterion -path "*/base/estimates.json" -print0 | while IFS= read -r -d '' file; do
             FUNCTION=$(basename $(dirname $(dirname "$file")))
             if [[ "$FUNCTION" == "criterion" ]]; then
@@ -86,7 +85,7 @@ jobs:
       - name: Update README
         run: |
           LIB_CONTENT=$(cat examples/utxo/src/lib.rs | sed 's/^/    /')
-          MAIN_CONTENT=$(cat examples/utxo/src/db_demo.rs | sed 's/^/    /')
+          MAIN_CONTENT=$(cat examples/utxo/src/demo.rs | sed 's/^/    /')
 
           # Update BEGIN_LIB and BEGIN_MAIN sections
           awk -v lib_content="$LIB_CONTENT" -v main_content="$MAIN_CONTENT" '
@@ -101,7 +100,7 @@ jobs:
           # Prepare formatted benchmark lines
           HEADER=$(printf "%-45s %10s\n" "function" "ops/s")
           BODY=$(tail -n +2 benchmarks.csv | awk -F, '{ printf "%-45s %10s\n", $1, $2 }')
-          FORMATTED_BENCH="$HEADER\n$BODY"
+          FORMATTED_BENCH="$HEADER\n-------------------------------------------------------------\n$BODY"
 
           # Escape double quotes and backslashes
           ESCAPED_BENCH=$(echo -e "$FORMATTED_BENCH" | sed 's/\\/\\\\/g; s/"/\\"/g')

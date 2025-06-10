@@ -7,6 +7,7 @@ through auto-generated REST API.
 - ✅ Rust type and macro system and db engines at the byte level
 - ✅ decentralized persistence options to maximize indexing speed and minimize data size
 - ✅ meta space : self-tested and self-documented db & http layers of code derived from annotated structs
+- ✅ maximizing R/W speed while minimizing data size using hierarchical data structures of smart pointers
 
 ### Major Out-of-the-Box Features
 
@@ -170,7 +171,7 @@ Let's say we want to persist Utxo into Redb using Redbit, declare annotated Stru
 ```
 <!-- END_LIB -->
 
-And R/W entire instances efficiently using indexes and dictionaries `examples/utxo/src/main.rs`:  
+And R/W entire instances efficiently using indexes and dictionaries `examples/utxo/src/demo.rs`:
 
 <!-- BEGIN_MAIN -->
 ```rust
@@ -184,7 +185,7 @@ And R/W entire instances efficiently using indexes and dictionaries `examples/ut
     
         println!("Persisting blocks:");
         for block in blocks.iter() {
-            Block::store_unsafe_and_commit(&db, block)?
+            Block::store_and_commit(&db, block)?
         }
     
         let read_tx = db.begin_read()?;
@@ -306,63 +307,65 @@ BlockHeader__get                                  280582
 
 ### Http Endpoints generated
 ```
-Endpoint       /block/id/{value}
-Endpoint       /block?take=
-Endpoint       /block?first=
-Endpoint       /block?last=
-Endpoint       /block/id/{value}
-Endpoint       /block/id?from=&until=
-Endpoint       /block/{value}/header
-Endpoint       /block/{value}/transactions
+endpoint                                          description
+-------------------------------------------------------------
+GET:/block/id/{value}                             block_get
+GET:/block?take=                                  block_take
+GET:/block?first=                                 block_first
+GET:/block?last=                                  block_last
+HEAD:/block/id/{value}                            block_exists
+GET:/block/id?from=&until=                        block_range
+GET:/block/{value}/header                         block_get_header
+GET:/block/{value}/transactions                   block_get_transactions
 
-Endpoint       /blockheader/id/{value}
-Endpoint       /blockheader?take=
-Endpoint       /blockheader?first=
-Endpoint       /blockheader?last=
-Endpoint       /blockheader/id/{value}
-Endpoint       /blockheader/id?from=&until=
-Endpoint       /blockheader/hash/{value}
-Endpoint       /blockheader/timestamp/{value}
-Endpoint       /blockheader/timestamp?from=&until=
-Endpoint       /blockheader/merkle_root/{value}
+GET:/blockheader/id/{value}                       blockheader_get
+GET:/blockheader?take=                            blockheader_take
+GET:/blockheader?first=                           blockheader_first
+GET:/blockheader?last=                            blockheader_last
+HEAD:/blockheader/id/{value}                      blockheader_exists
+GET:/blockheader/id?from=&until=                  blockheader_range
+GET:/blockheader/hash/{value}                     blockheader_get_by_hash
+GET:/blockheader/timestamp/{value}                blockheader_get_by_timestamp
+GET:/blockheader/timestamp?from=&until=           blockheader_range_by_timestamp
+GET:/blockheader/merkle_root/{value}              blockheader_get_by_merkle_root
 
-Endpoint       /transaction/id/{value}
-Endpoint       /transaction?take=
-Endpoint       /transaction?first=
-Endpoint       /transaction?last=
-Endpoint       /transaction/id/{value}
-Endpoint       /transaction/id/{value}/parent_pk
-Endpoint       /transaction/id?from=&until=
-Endpoint       /transaction/hash/{value}
-Endpoint       /transaction/{value}/utxos
-Endpoint       /transaction/{value}/inputs
+GET:/transaction/id/{value}                       transaction_get
+GET:/transaction?take=                            transaction_take
+GET:/transaction?first=                           transaction_first
+GET:/transaction?last=                            transaction_last
+HEAD:/transaction/id/{value}                      transaction_exists
+GET:/transaction/id/{value}/parent_pk             transaction_parent_pk
+GET:/transaction/id?from=&until=                  transaction_range
+GET:/transaction/hash/{value}                     transaction_get_by_hash
+GET:/transaction/{value}/utxos                    transaction_get_utxos
+GET:/transaction/{value}/inputs                   transaction_get_inputs
 
-Endpoint       /utxo/id/{value}
-Endpoint       /utxo?take=
-Endpoint       /utxo?first=
-Endpoint       /utxo?last=
-Endpoint       /utxo/id/{value}
-Endpoint       /utxo/id/{value}/parent_pk
-Endpoint       /utxo/id?from=&until=
-Endpoint       /utxo/datum/{value}
-Endpoint       /utxo/address/{value}
-Endpoint       /utxo/{value}/assets
+GET:/utxo/id/{value}                              utxo_get
+GET:/utxo?take=                                   utxo_take
+GET:/utxo?first=                                  utxo_first
+GET:/utxo?last=                                   utxo_last
+HEAD:/utxo/id/{value}                             utxo_exists
+GET:/utxo/id/{value}/parent_pk                    utxo_parent_pk
+GET:/utxo/id?from=&until=                         utxo_range
+GET:/utxo/datum/{value}                           utxo_get_by_datum
+GET:/utxo/address/{value}                         utxo_get_by_address
+GET:/utxo/{value}/assets                          utxo_get_assets
 
-Endpoint       /inputref/id/{value}
-Endpoint       /inputref?take=
-Endpoint       /inputref?first=
-Endpoint       /inputref?last=
-Endpoint       /inputref/id/{value}
-Endpoint       /inputref/id/{value}/parent_pk
-Endpoint       /inputref/id?from=&until=
+GET:/inputref/id/{value}                          inputref_get
+GET:/inputref?take=                               inputref_take
+GET:/inputref?first=                              inputref_first
+GET:/inputref?last=                               inputref_last
+HEAD:/inputref/id/{value}                         inputref_exists
+GET:/inputref/id/{value}/parent_pk                inputref_parent_pk
+GET:/inputref/id?from=&until=                     inputref_range
 
-Endpoint       /asset/id/{value}
-Endpoint       /asset?take=
-Endpoint       /asset?first=
-Endpoint       /asset?last=
-Endpoint       /asset/id/{value}
-Endpoint       /asset/id/{value}/parent_pk
-Endpoint       /asset/id?from=&until=
-Endpoint       /asset/name/{value}
-Endpoint       /asset/policy_id/{value}
+GET:/asset/id/{value}                             asset_get
+GET:/asset?take=                                  asset_take
+GET:/asset?first=                                 asset_first
+GET:/asset?last=                                  asset_last
+HEAD:/asset/id/{value}                            asset_exists
+GET:/asset/id/{value}/parent_pk                   asset_parent_pk
+GET:/asset/id?from=&until=                        asset_range
+GET:/asset/name/{value}                           asset_get_by_name
+GET:/asset/policy_id/{value}                      asset_get_by_policy_id
 ```
