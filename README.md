@@ -1,13 +1,16 @@
-Redbit reads struct annotations and derives code necessary for persisting and querying structured data into/from 
+Built for blazing fast persistence of terra bytes of structured data on a single machine
+while offering rich querying capabilities, eg. bitcoin/blockchain data.
+
+Redbit reads struct annotations and derives code necessary for persisting and querying structured data into/from
 [Redb](https://github.com/cberner/redb) using secondary indexes and dictionaries, served by [axum](https://github.com/tokio-rs/axum)
 through auto-generated REST API.
 
 ### Main motivation is a research
 
-- ✅ Rust type and macro system and db engines at the byte level
-- ✅ decentralized persistence options to maximize indexing speed and minimize data size
-- ✅ meta space : self-tested and self-documented db & http layers of code derived from annotated structs
-- ✅ maximizing R/W speed while minimizing data size using hierarchical data structures of smart pointers
+- Rust type and macro system and db engines at the byte level
+- decentralized persistence options to maximize indexing speed and minimize data size
+- meta space : self-tested and self-documented db & http layers of code derived from annotated structs
+- maximizing R/W speed while minimizing data size using hierarchical data structures of smart pointers
 
 ### Major Out-of-the-Box Features
 

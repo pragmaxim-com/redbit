@@ -1,13 +1,14 @@
-use crate::http::{Endpoint, FunctionDef, ReturnValue};
+use crate::http::ParamExtraction::FromQuery;
+use crate::http::{EndpointDef, FunctionDef};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
 
 pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> FunctionDef {
-    let take_fn_name = format_ident!("take");
-    let stream =
+    let fn_name = format_ident!("take");
+    let fn_stream =
         quote! {
-            pub fn #take_fn_name(read_tx: &::redb::ReadTransaction, n: u32) -> Result<Vec<#entity_type>, AppError> {
+            pub fn #fn_name(read_tx: &::redb::ReadTransaction, n: u32) -> Result<Vec<#entity_type>, AppError> {
                 let table_pk_6 = read_tx.open_table(#table)?;
                 let mut iter = table_pk_6.iter()?;
                 let mut results = Vec::new();
@@ -25,11 +26,18 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
                 Ok(results)
             }
         };
+
     FunctionDef {
-        entity: entity_name.clone(),
-        name: take_fn_name.clone(),
-        stream,
-        return_value: ReturnValue{ value_name: entity_name.clone(), value_type: syn::parse_quote!(Vec<#entity_type>) },
-        endpoint: Some(Endpoint::Take),
+        entity_name: entity_name.clone(),
+        fn_name: fn_name.clone(),
+        return_type: syn::parse_quote!(Vec<#entity_type>),
+        fn_stream,
+        endpoint_def: Some(EndpointDef {
+            param_extraction: FromQuery(syn::parse_quote!(TakeParams)),
+            method: format_ident!("get"),
+            endpoint: format!("/{}?take=", entity_name.to_string().to_lowercase()),
+            fn_call: quote! { #entity_name::#fn_name(&read_tx, params.take) },
+        })
     }
+
 }

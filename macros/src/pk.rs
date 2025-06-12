@@ -55,7 +55,7 @@ impl DbPkMacros {
 
         if pk_def.range {
             function_defs.push(range::fn_def(entity_name, entity_type, &pk_name, &pk_type, &table_def.name));
-            function_defs.push(pk_range::fn_def(entity_name, &pk_name, &pk_type, &table_def.name));
+            function_defs.push(pk_range::fn_def(entity_name, &pk_type, &table_def.name));
         };
 
         DbPkMacros {

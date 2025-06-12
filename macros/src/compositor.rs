@@ -49,7 +49,7 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
         struct_inits.push(transient_macros.struct_default_init.clone());
         struct_default_inits.push(transient_macros.struct_default_init.clone());
     }
-    let function_streams: Vec<TokenStream> = function_defs.iter().map(|f| f.stream.clone()).collect::<Vec<_>>();
+    let function_streams: Vec<TokenStream> = function_defs.iter().map(|f| f.fn_stream.clone()).collect::<Vec<_>>();
     let table_definition_streams: Vec<TokenStream> = table_definitions.iter().map(|table_def| table_def.definition.clone()).collect();
 
     let (endpoints, route_chains) = to_http_endpoints(function_defs);
@@ -60,7 +60,7 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
     let entity_lines = endpoints.iter().map(|endpoint| format!("| Endpoint      |  {}", endpoint)).collect();
     macro_utils::write_to_local_file(entity_lines, "endpoints", &entity_name);
 
-    let pk_ident = db_pk_macros.definition.field.name.clone();
+    let pk_name = db_pk_macros.definition.field.name.clone();
     let pk_type = db_pk_macros.definition.field.tpe.clone();
 
     let expanded = quote! {
@@ -75,14 +75,14 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
 
             pub fn sample(pk: &#pk_type) -> Self {
                 #entity_name {
-                    #pk_ident: pk.clone(),
+                    #pk_name: pk.clone(),
                     #(#struct_default_inits),*
                 }
             }
 
             fn compose(read_tx: &::redb::ReadTransaction, pk: &#pk_type) -> Result<#entity_type, AppError> {
                 Ok(#entity_name {
-                    #pk_ident: pk.clone(),
+                    #pk_name: pk.clone(),
                     #(#struct_inits),*
                 })
             }
