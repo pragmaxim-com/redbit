@@ -1,5 +1,5 @@
 use crate::http::ParamExtraction::FromQuery;
-use crate::http::{EndpointDef, FunctionDef};
+use crate::http::{EndpointDef, FunctionDef, HttpMethod};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
@@ -8,18 +8,18 @@ pub fn range_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: 
     let fn_name = format_ident!("range_by_{}", column_name);
     let fn_stream = quote! {
         pub fn #fn_name(
-            read_tx: &::redb::ReadTransaction,
+            tx: &::redb::ReadTransaction,
             from: &#column_type,
             until: &#column_type
         ) -> Result<Vec<#entity_type>, AppError> {
-            let mm_table = read_tx.open_multimap_table(#table)?;
+            let mm_table = tx.open_multimap_table(#table)?;
             let range_iter = mm_table.range(from.clone()..until.clone())?;
             let mut results = Vec::new();
             for entry_res in range_iter {
                 let (col_key, mut multi_iter) = entry_res?;
                 while let Some(x) = multi_iter.next() {
                     let pk = x?.value();
-                    match Self::compose(&read_tx, &pk) {
+                    match Self::compose(&tx, &pk) {
                         Ok(item) => {
                             results.push(item);
                         }
@@ -39,9 +39,9 @@ pub fn range_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: 
         fn_stream,
         endpoint_def: Some(EndpointDef {
             param_extraction: FromQuery(syn::parse_quote!(RequestRangeParams<#column_type, #column_type>)),
-            method: format_ident!("get"),
+            method: HttpMethod::GET,
             endpoint: format!("/{}/{}?from=&until=", entity_name.to_string().to_lowercase(), column_name.clone()),
-            fn_call: quote! { #entity_name::#fn_name(&read_tx, &params.from, &params.until) },
+            fn_call: quote! { #entity_name::#fn_name(&tx, &params.from, &params.until) },
         })
     }
 }

@@ -1,5 +1,5 @@
 use crate::http::ParamExtraction::FromPath;
-use crate::http::{EndpointDef, FunctionDef};
+use crate::http::{EndpointDef, FunctionDef, HttpMethod};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
@@ -8,21 +8,21 @@ pub fn get_by_dict_def(entity_name: &Ident, entity_type: &Type, column_name: &Id
     let fn_name = format_ident!("get_by_{}", column_name);
     let fn_stream = quote! {
         pub fn #fn_name(
-            read_tx: &::redb::ReadTransaction,
+            tx: &::redb::ReadTransaction,
             val: &#column_type
         ) -> Result<Vec<#entity_type>, AppError> {
-            let val2birth = read_tx.open_table(#value_to_dict_pk)?;
+            let val2birth = tx.open_table(#value_to_dict_pk)?;
             let birth_guard = val2birth.get(val)?;
             let birth_id = match birth_guard {
                 Some(g) => g.value().clone(),
                 None => return Ok(Vec::new()),
             };
-            let birth2pks = read_tx.open_multimap_table(#dict_index_table)?;
+            let birth2pks = tx.open_multimap_table(#dict_index_table)?;
             let mut iter = birth2pks.get(&birth_id)?;
             let mut results = Vec::new();
             while let Some(x) = iter.next() {
                 let pk = x?.value();
-                match Self::compose(&read_tx, &pk) {
+                match Self::compose(&tx, &pk) {
                     Ok(item) => {
                         results.push(item);
                     }
@@ -41,9 +41,9 @@ pub fn get_by_dict_def(entity_name: &Ident, entity_type: &Type, column_name: &Id
         fn_stream,
         endpoint_def: Some(EndpointDef {
             param_extraction: FromPath(syn::parse_quote!(RequestByParams<#column_type>)),
-            method: format_ident!("get"),
+            method: HttpMethod::GET,
             endpoint: format!("/{}/{}/{{value}}", entity_name.to_string().to_lowercase(), column_name.clone()),
-            fn_call: quote! { #entity_name::#fn_name(&read_tx, &params.value) },
+            fn_call: quote! { #entity_name::#fn_name(&tx, &params.value) },
         })
     }
 }
@@ -52,15 +52,15 @@ pub fn get_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &I
     let fn_name = format_ident!("get_by_{}", column_name);
     let fn_stream = quote! {
         pub fn #fn_name(
-            read_tx: &::redb::ReadTransaction,
+            tx: &::redb::ReadTransaction,
             val: &#column_type
         ) -> Result<Vec<#entity_type>, AppError> {
-            let mm_table = read_tx.open_multimap_table(#table)?;
+            let mm_table = tx.open_multimap_table(#table)?;
             let mut iter = mm_table.get(val)?;
             let mut results = Vec::new();
             while let Some(x) = iter.next() {
                 let pk = x?.value();
-                match Self::compose(&read_tx, &pk) {
+                match Self::compose(&tx, &pk) {
                     Ok(item) => {
                         results.push(item);
                     }
@@ -79,9 +79,9 @@ pub fn get_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &I
         fn_stream,
         endpoint_def: Some(EndpointDef {
             param_extraction: FromPath(syn::parse_quote!(RequestByParams<#column_type>)),
-            method: format_ident!("get"),
+            method: HttpMethod::GET,
             endpoint: format!("/{}/{}/{{value}}", entity_name.to_string().to_lowercase(), column_name.clone()),
-            fn_call: quote! { #entity_name::#fn_name(&read_tx, &params.value) },
+            fn_call: quote! { #entity_name::#fn_name(&tx, &params.value) },
         })
     }
 

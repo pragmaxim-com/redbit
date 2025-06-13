@@ -8,47 +8,17 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
     let entity_name = &entity_macros.entity_name;
     let entity_type = &entity_macros.entity_type;
     let db_pk_macros = &entity_macros.pk;
-    let pk_store_statement = db_pk_macros.store_statement.clone();
-    let pk_store_many_statement = db_pk_macros.store_many_statement.clone();
-    let pk_delete_statement = db_pk_macros.delete_statement.clone();
-    let pk_delete_many_statement = db_pk_macros.delete_many_statement.clone();
 
-    let mut table_definitions = Vec::new();
-    let mut struct_inits = Vec::new();
-    let mut struct_default_inits = Vec::new();
-    let mut store_statements = Vec::new();
-    let mut store_many_statements = Vec::new();
-    let mut delete_statements = Vec::new();
-    let mut delete_many_statements = Vec::new();
-    let mut function_defs: Vec<FunctionDef> = Vec::new();
-    function_defs.extend(db_pk_macros.function_defs.clone());
-    table_definitions.push(db_pk_macros.table_def.clone());
+    let table_definitions = entity_macros.table_definitions();
+    let struct_inits = entity_macros.struct_inits();
+    let struct_default_inits = entity_macros.struct_default_inits();
+    let function_defs: Vec<FunctionDef> = entity_macros.function_defs();
+    
+    let store_statements = entity_macros.store_statements();
+    let store_many_statements = entity_macros.store_many_statements();
+    let delete_statements = entity_macros.delete_statements();
+    let delete_many_statements = entity_macros.delete_many_statements();
 
-    for db_column_macros in &entity_macros.columns {
-        table_definitions.extend(db_column_macros.table_definitions.clone());
-        struct_inits.push(db_column_macros.struct_init.clone());
-        struct_default_inits.push(db_column_macros.struct_default_init.clone());
-        store_statements.push(db_column_macros.store_statement.clone());
-        store_many_statements.push(db_column_macros.store_many_statement.clone());
-        delete_statements.push(db_column_macros.delete_statement.clone());
-        delete_many_statements.push(db_column_macros.delete_many_statement.clone());
-        function_defs.extend(db_column_macros.function_defs.clone());
-    }
-
-    for db_relationship_macros in &entity_macros.relationships {
-        struct_inits.push(db_relationship_macros.struct_init.clone());
-        struct_default_inits.push(db_relationship_macros.struct_default_init.clone());
-        store_statements.push(db_relationship_macros.store_statement.clone());
-        store_many_statements.push(db_relationship_macros.store_many_statement.clone());
-        delete_statements.push(db_relationship_macros.delete_statement.clone());
-        delete_many_statements.push(db_relationship_macros.delete_many_statement.clone());
-        function_defs.push(db_relationship_macros.function_def.clone());
-    }
-
-    for transient_macros in &entity_macros.transients {
-        struct_inits.push(transient_macros.struct_default_init.clone());
-        struct_default_inits.push(transient_macros.struct_default_init.clone());
-    }
     let function_streams: Vec<TokenStream> = function_defs.iter().map(|f| f.fn_stream.clone()).collect::<Vec<_>>();
     let table_definition_streams: Vec<TokenStream> = table_definitions.iter().map(|table_def| table_def.definition.clone()).collect();
 
@@ -80,54 +50,30 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
                 }
             }
 
-            fn compose(read_tx: &::redb::ReadTransaction, pk: &#pk_type) -> Result<#entity_type, AppError> {
+            fn compose(tx: &::redb::ReadTransaction, pk: &#pk_type) -> Result<#entity_type, AppError> {
                 Ok(#entity_name {
                     #pk_name: pk.clone(),
                     #(#struct_inits),*
                 })
             }
 
-            pub fn store(write_tx: &::redb::WriteTransaction, instance: &#entity_type) -> Result<(), AppError> {
-                #pk_store_statement
+            pub fn store(tx: &::redb::WriteTransaction, instance: &#entity_type) -> Result<(), AppError> {
                 #(#store_statements)*
                 Ok(())
             }
 
-            pub fn store_many(write_tx: &::redb::WriteTransaction, instances: &Vec<#entity_type>) -> Result<(), AppError> {
-                #pk_store_many_statement
+            pub fn store_many(tx: &::redb::WriteTransaction, instances: &Vec<#entity_type>) -> Result<(), AppError> {
                 #(#store_many_statements)*
                 Ok(())
             }
 
-            pub fn store_and_commit(db: &::redb::Database, instance: &#entity_type) -> Result<(), AppError> {
-                let write_tx = db.begin_write()?;
-                {
-                    #pk_store_statement
-                    #(#store_statements)*
-                }
-                write_tx.commit()?;
-                Ok(())
-            }
-
-            pub fn delete(write_tx: &::redb::WriteTransaction, pk: &#pk_type) -> Result<(), AppError> {
-                #pk_delete_statement
+            pub fn delete(tx: &::redb::WriteTransaction, pk: &#pk_type) -> Result<(), AppError> {
                 #(#delete_statements)*
                 Ok(())
             }
 
-            pub fn delete_many(write_tx: &::redb::WriteTransaction, pks: &Vec<#pk_type>) -> Result<(), AppError> {
-                #pk_delete_many_statement
+            pub fn delete_many(tx: &::redb::WriteTransaction, pks: &Vec<#pk_type>) -> Result<(), AppError> {
                 #(#delete_many_statements)*
-                Ok(())
-            }
-
-            pub fn delete_and_commit(db: &::redb::Database, pk: &#pk_type) -> Result<(), AppError> {
-                let write_tx = db.begin_write()?;
-                {
-                    #pk_delete_statement
-                    #(#delete_statements)*
-                }
-                write_tx.commit()?;
                 Ok(())
             }
 

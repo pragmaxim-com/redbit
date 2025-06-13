@@ -5,7 +5,7 @@ use syn::Type;
 pub fn plain_init(column_name: &Ident, table: &Ident) -> TokenStream {
     quote! {
         #column_name: {
-            let table_col_5 = read_tx.open_table(#table)?;
+            let table_col_5 = tx.open_table(#table)?;
             let guard = table_col_5.get(pk)?;
             guard.ok_or_else(|| AppError::NotFound(format!(
                     "table `{}`: no row for primary key {:?}",
@@ -27,7 +27,7 @@ pub fn plain_default_init(column_name: &Ident, column_type: &Type) -> TokenStrea
 pub fn index_init(column_name: &Ident, table: &Ident) -> TokenStream {
     quote! {
         #column_name: {
-            let table_col_10 = read_tx.open_table(#table)?;
+            let table_col_10 = tx.open_table(#table)?;
             let guard = table_col_10.get(pk)?;
             guard.ok_or_else(|| AppError::NotFound(format!(
                     "table `{}`: no row for primary key {:?}",
@@ -48,7 +48,7 @@ pub fn index_default_init(column_name: &Ident, column_type: &Type) -> TokenStrea
 pub fn dict_init_statement(column_name: &Ident, table_dict_pk_by_pk: &Ident, table_value_by_dict_pk: &Ident) -> TokenStream {
     quote! {
         #column_name: {
-            let pk2birth = read_tx.open_table(#table_dict_pk_by_pk)?;
+            let pk2birth = tx.open_table(#table_dict_pk_by_pk)?;
             let birth_guard = pk2birth.get(pk)?;
             let birth_id = birth_guard.ok_or_else(|| AppError::NotFound(format!(
                     "table_dict_pk_by_pk_ident `{}`: no row for primary key {:?}",
@@ -56,7 +56,7 @@ pub fn dict_init_statement(column_name: &Ident, table_dict_pk_by_pk: &Ident, tab
                     pk
                 ))
             )?.value();
-            let birth2val = read_tx.open_table(#table_value_by_dict_pk)?;
+            let birth2val = tx.open_table(#table_value_by_dict_pk)?;
             let val_guard = birth2val.get(&birth_id)?;
             val_guard.ok_or_else(|| AppError::NotFound(format!(
                     "table_value_by_dict_pk `{}`: no row for birth id {:?}",

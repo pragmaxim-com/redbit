@@ -4,7 +4,7 @@ use syn::Type;
 
 pub fn o2o_relation_init(child_name: &Ident, child_type: &Type) -> TokenStream { 
     quote! {
-        #child_name: #child_type::get(read_tx, pk)?.ok_or_else(|| AppError::NotFound(format!("Missing one-to-one child {:?}", pk)))?
+        #child_name: #child_type::get(tx, pk)?.ok_or_else(|| AppError::NotFound(format!("Missing one-to-one child {:?}", pk)))?
     }
 }
 
@@ -18,7 +18,7 @@ pub fn o2m_relation_init(child_name: &Ident, child_type: &Type) -> TokenStream {
     quote! {
         #child_name: {
             let (from, to) = pk.fk_range();
-            #child_type::range(read_tx, &from, &to)?
+            #child_type::range(tx, &from, &to)?
         }
     }
 }

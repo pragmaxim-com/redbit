@@ -37,13 +37,33 @@ pub struct FunctionDef {
 pub enum ParamExtraction {
     FromPath(Type),
     FromQuery(Type),
+    FromBody(Type),
+}
+
+#[derive(Clone, Debug)]
+pub enum HttpMethod {
+    GET,
+    POST,
+    DELETE,
+    HEAD
+}
+
+impl Display for HttpMethod {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            HttpMethod::GET => write!(f, "get"),
+            HttpMethod::POST => write!(f, "post"),
+            HttpMethod::DELETE => write!(f, "delete"),
+            HttpMethod::HEAD => write!(f, "head"),
+        }
+    }
 }
 
 #[derive(Clone)]
 pub struct EndpointDef {
     pub param_extraction: ParamExtraction,
     pub endpoint: String,
-    pub method: Ident,
+    pub method: HttpMethod,
     pub fn_call: TokenStream,
 }
 
@@ -71,24 +91,36 @@ pub fn to_http_endpoint(fn_def: &FunctionDef, endpoint_def: &EndpointDef) -> Htt
     let fn_call = endpoint_def.fn_call.clone();
     let param_binding = match endpoint_def.param_extraction.clone() {
         ParamExtraction::FromPath(ty) => quote! { ::axum::extract::Path(params): ::axum::extract::Path<#ty> },
-        ParamExtraction::FromQuery(ty) => quote! { ::axum::extract::Query(params): ::axum::extract::Query<#ty> }
+        ParamExtraction::FromQuery(ty) => quote! { ::axum::extract::Query(params): ::axum::extract::Query<#ty> },
+        ParamExtraction::FromBody(ty) => quote! { AppJson(params): AppJson<#ty> },
     };
     let endpoint_name = fn_def.entity_name.to_string();
     let endpoint_ident = fn_def.entity_name.clone();
     let endpoint_path = endpoint_def.endpoint.clone();
-    let method = endpoint_def.method.clone();
+    let method_ident = format_ident!("{}", endpoint_def.method.to_string().to_lowercase());
+    let db_call = match endpoint_def.method {
+        HttpMethod::GET | HttpMethod::HEAD =>
+            quote! {
+                state.db.begin_read()
+                    .map_err(AppError::from)
+                    .and_then(|tx| #fn_call)
+                    .map(AppJson)
+            },
+        HttpMethod::POST | HttpMethod::DELETE =>
+            quote! {
+                let db = state.db;
+                let result = #fn_call?;
+                Ok(AppJson(result))
+            },
+    };
 
     let handler = quote! {
-        #[utoipa::path(#method, path = #endpoint_path, responses((status = OK, body = #endpoint_ident)), tag = #endpoint_name)]
+        #[utoipa::path(#method_ident, path = #endpoint_path, responses((status = OK, body = #endpoint_ident)), tag = #endpoint_name)]
         #[axum::debug_handler]
         pub async fn #handler_fn_name(
-            ::axum::extract::State(state): ::axum::extract::State<RequestState>,
-            #param_binding,
+            ::axum::extract::State(state): ::axum::extract::State<RequestState>, #param_binding
         ) -> Result<AppJson<#return_type>, AppError> {
-            state.db.begin_read()
-                .map_err(AppError::from)
-                .and_then(|read_tx| #fn_call)
-                .map(AppJson)
+            #db_call
         }
     };
 
