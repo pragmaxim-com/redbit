@@ -31,10 +31,7 @@ Let's say we want to persist Utxo into Redb using Redbit, declare annotated Stru
     pub use redbit::*;
     pub use types::*;
     
-    use derive_more::From;
-    use serde::{Deserialize, Serialize};
-    
-    #[derive(Entity, Default, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+    #[entity]
     pub struct Block {
         #[pk(range)]
         pub id: BlockPointer,
@@ -44,7 +41,7 @@ Let's say we want to persist Utxo into Redb using Redbit, declare annotated Stru
         pub transactions: Vec<Transaction>,
     }
     
-    #[derive(Entity, Default, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+    #[entity]
     pub struct BlockHeader {
         #[fk(one2one, range)]
         pub id: BlockPointer,
@@ -58,7 +55,7 @@ Let's say we want to persist Utxo into Redb using Redbit, declare annotated Stru
         pub nonce: Nonce,
     }
     
-    #[derive(Entity, Default, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+    #[entity]
     pub struct Transaction {
         #[fk(one2many, range)]
         pub id: TxPointer,
@@ -70,7 +67,7 @@ Let's say we want to persist Utxo into Redb using Redbit, declare annotated Stru
         pub inputs: Vec<InputRef>,
     }
     
-    #[derive(Entity, Default, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+    #[entity]
     pub struct Utxo {
         #[fk(one2many, range)]
         pub id: UtxoPointer,
@@ -84,13 +81,13 @@ Let's say we want to persist Utxo into Redb using Redbit, declare annotated Stru
         pub assets: Vec<Asset>,
     }
     
-    #[derive(Entity, Default, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+    #[entity]
     pub struct InputRef {
         #[fk(one2many, range)]
         pub id: InputPointer,
     }
     
-    #[derive(Entity, Default, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+    #[entity]
     pub struct Asset {
         #[fk(one2many, range)]
         pub id: AssetPointer,
@@ -102,33 +99,33 @@ Let's say we want to persist Utxo into Redb using Redbit, declare annotated Stru
         pub policy_id: PolicyId,
     }
     
-    #[derive(PK, Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, From)]
+    #[key]
     pub struct BlockPointer {
         pub height: Height,
     }
     
-    #[derive(PK, Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+    #[key]
     pub struct TxPointer {
         #[parent]
         pub block_pointer: BlockPointer,
         pub tx_index: TxIndex,
     }
     
-    #[derive(PK, Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+    #[key]
     pub struct UtxoPointer {
         #[parent]
         pub tx_pointer: TxPointer,
         pub utxo_index: UtxoIndex,
     }
     
-    #[derive(PK, Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+    #[key]
     pub struct InputPointer {
         #[parent]
         pub tx_pointer: TxPointer,
         pub utxo_index: UtxoIndex,
     }
     
-    #[derive(PK, Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+    #[key]
     pub struct AssetPointer {
         #[parent]
         pub utxo_pointer: UtxoPointer,
@@ -256,60 +253,60 @@ function                                           ops/s
 Block__store_and_commit                               35
 Block__store_and_commit                               44
 Utxo__all                                             70
-Block__all                                            80
 Transaction__all                                      82
-Transaction__all                                      82
-Utxo__all                                             85
+Transaction__all                                      83
+Block__all                                            84
 Block__all                                            86
-Transaction__range                                    86
+Utxo__all                                             86
 Utxo__range                                           86
+Transaction__range                                    87
 Utxo__range                                           90
 Transaction__range                                    91
 Asset__range                                         118
-Asset__range                                         119
-Block__range                                         123
+Asset__range                                         121
+Block__range                                         126
 Asset__all                                           127
 Block__range                                         130
-Asset__all                                           214
-Block__get_transactions                              246
-Block__get                                           247
+Asset__all                                           215
+Block__get_transactions                              248
+Block__get                                           249
 Block__get                                           256
 Block__get_transactions                              267
 Asset__get_by_policy_id                              285
-Asset__get_by_policy_id                              358
+Asset__get_by_policy_id                              359
 Utxo__get_by_address                                 411
 Asset__get_by_name                                   559
-Transaction__get_by_hash                             832
-Utxo__get_by_address                                 847
+Transaction__get_by_hash                             841
+Utxo__get_by_address                                 858
 Transaction__get_by_hash                             888
-Asset__get_by_name                                  1176
+Asset__get_by_name                                  1190
 Utxo__get_by_datum                                  1247
-Utxo__get_by_datum                                  1686
-Transaction__get                                    2516
-Transaction__get_utxos                              2539
+Utxo__get_by_datum                                  1694
+Transaction__get                                    2543
+Transaction__get_utxos                              2570
 Transaction__get                                    2695
 Transaction__get_utxos                              2702
-Utxo__get                                          50612
+Utxo__get                                          50728
 Utxo__get                                          53358
-Utxo__get_assets                                   66102
+Utxo__get_assets                                   67240
 Utxo__get_assets                                   70686
 BlockHeader__get_by_merkle_root                    91748
 BlockHeader__all                                   97561
-BlockHeader__all                                  100746
-BlockHeader__get_by_hash                          101181
-BlockHeader__get_by_merkle_root                   101723
+BlockHeader__all                                   98188
+BlockHeader__get_by_hash                           99337
+BlockHeader__get_by_merkle_root                    99638
 BlockHeader__get_by_hash                          106044
 BlockHeader__range_by_timestamp                   124057
-BlockHeader__range_by_timestamp                   136071
-BlockHeader__range                                144002
+BlockHeader__range_by_timestamp                   132954
+BlockHeader__range                                139259
 BlockHeader__range                                147597
-Asset__get                                        189053
+Asset__get                                        189147
 Asset__get                                        197572
 BlockHeader__get_by_timestamp                     219954
 BlockHeader__get                                  237630
-BlockHeader__get_by_timestamp                     265613
-BlockHeader__get                                  272544
-Block__get_header                                 277633
+BlockHeader__get_by_timestamp                     257492
+Block__get_header                                 274661
+BlockHeader__get                                  279157
 Block__get_header                                 299232
 ```
 <!-- END_BENCH -->
