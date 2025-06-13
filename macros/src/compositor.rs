@@ -131,8 +131,8 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
                 Ok(())
             }
 
-            pub fn routes() -> axum::Router<RequestState> {
-                axum::Router::new()
+            pub fn routes() -> utoipa_axum::router::OpenApiRouter<RequestState> {
+                utoipa_axum::router::OpenApiRouter::new()
                     #(#route_chains)*
             }
         }

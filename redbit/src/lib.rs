@@ -7,6 +7,7 @@
 //!
 pub use macros::Entity;
 pub use macros::PK;
+pub use redb;
 pub use redb::ReadableMultimapTable;
 pub use redb::ReadableTable;
 pub use inventory;
@@ -25,10 +26,13 @@ use axum::extract::FromRequest;
 use axum::extract::rejection::JsonRejection;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::Router;
 use tokio::net::TcpListener;
 use std::sync::Arc;
+use axum::Router;
 use redb::Database;
+use utoipa::OpenApi;
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_swagger_ui::SwaggerUi;
 
 pub trait IndexedPointer: Clone {
     type Index: Copy + Ord + Add<Output = Self::Index> + Default;
@@ -244,17 +248,23 @@ impl RequestState {
 
 pub struct EntityInfo {
     pub name: &'static str,
-    pub routes_fn: fn() -> axum::Router<RequestState>,
+    pub routes_fn: fn() -> OpenApiRouter<RequestState>,
 }
 
 inventory::collect!(EntityInfo);
 
+#[derive(OpenApi)]
+pub struct ApiDoc;
+
 pub async fn build_router(state: RequestState) -> Router<()> {
-    let mut router = Router::new();
+    let mut router: OpenApiRouter<RequestState> = OpenApiRouter::with_openapi(ApiDoc::openapi());
     for reg in inventory::iter::<EntityInfo> {
         router = router.merge((reg.routes_fn)());
     }
-    router.with_state(state)
+    let (r, api) = router.split_for_parts();
+
+    r.merge(SwaggerUi::new("/swagger-ui").url("/apidoc/openapi.json", api))
+        .with_state(state)
 }
 
 pub async fn serve(state: RequestState, socket_addr: SocketAddr) -> () {

@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use derive_more::{Add, From};
+use utoipa::ToSchema;
 
-#[derive(Debug, Default, Serialize, Deserialize, Clone, Copy, PartialOrd, Ord, PartialEq, Eq, Add, From)]
+#[derive(Debug, ToSchema, Default, Serialize, Deserialize, Clone, Copy, PartialOrd, Ord, PartialEq, Eq, Add, From)]
 pub struct Height(pub u32);
 
 impl std::ops::Add<u32> for Height {
@@ -13,7 +14,7 @@ impl std::ops::Add<u32> for Height {
     }
 }
 
-#[derive(Debug, Default, Serialize, Deserialize, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
+#[derive(Debug, ToSchema, Default, Serialize, Deserialize, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
 pub struct Timestamp(pub u32);
 
 pub type Amount = u64;

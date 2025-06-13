@@ -18,7 +18,7 @@ through auto-generated REST API.
 - ✅ Optional dictionaries for low cardinality fields
 - ✅ One-to-One and One-to-Many entities with cascade read/write/delete
 - ✅ All goodies including intuitive data ordering without writing custom codecs
-- ✅ Http server with REST API for all db operations auto-generated
+- ✅ Http server serves REST API at http://127.0.0.1:8000/swagger-ui/, each method has a corresponding endpoint
 
 Let's say we want to persist Utxo into Redb using Redbit, declare annotated Struct `examples/utxo/src/lib.rs`:
 

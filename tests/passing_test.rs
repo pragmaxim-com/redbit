@@ -1,9 +1,10 @@
 #![allow(warnings)]
 
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use redbit::*;
 
-#[derive(Entity, Default, Serialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Entity, ToSchema, Default, Serialize, Debug, Clone, PartialEq, Eq)]
 struct MinimalStruct {
     #[fk(one2many, range)]
     pub id: ChildPK,
@@ -11,17 +12,17 @@ struct MinimalStruct {
     pub persisted_no_index_no_dict: i32,
 }
 
-#[derive(PK, Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(PK, ToSchema, Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 struct ParentPK {
     pub id: u32,
 }
 
-#[derive(Default, Debug, Clone, Serialize)]
+#[derive(Default, ToSchema, Debug, Clone, Serialize)]
 struct Key {
     pub key: u32,
 }
 
-#[derive(Entity, Default, Debug, Clone, Serialize)]
+#[derive(Entity, ToSchema, Default, Debug, Clone, Serialize)]
 struct TransientAnnotationStruct {
     #[pk]
     id: u32,
@@ -29,14 +30,14 @@ struct TransientAnnotationStruct {
     name: Key
 }
 
-#[derive(PK, Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(PK, ToSchema, Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 struct ChildPK {
     #[parent]
     pub parent_pointer: ParentPK,
     pub index: u32,
 }
 
-#[derive(Entity, Serialize)]
+#[derive(Entity, ToSchema, Serialize)]
 struct StructWithPersistedEntityField {
     #[pk]
     id: u32,
@@ -44,7 +45,7 @@ struct StructWithPersistedEntityField {
     persisted_indexed_no_dict: i32,
 }
 
-#[derive(Entity, Serialize)]
+#[derive(Entity, ToSchema, Serialize)]
 struct StructWithPersistedEntityFieldWithDict {
     #[pk]
     id: u32,
@@ -52,7 +53,7 @@ struct StructWithPersistedEntityFieldWithDict {
     persisted_indexed_with_dict: i32,
 }
 
-#[derive(Entity, Serialize)]
+#[derive(Entity, ToSchema, Serialize)]
 pub struct FullStruct {
     #[pk]
     pub id: u32,
@@ -64,7 +65,7 @@ pub struct FullStruct {
     pub address: String,
 }
 
-#[derive(Entity, Serialize)]
+#[derive(Entity, ToSchema, Serialize)]
 struct MultipleOne2ManyAnnotationsStruct {
     #[pk(range)]
     id: ParentPK,
@@ -74,7 +75,7 @@ struct MultipleOne2ManyAnnotationsStruct {
     bars: Vec<MinimalStruct>,
 }
 
-#[derive(Entity, Serialize)]
+#[derive(Entity, ToSchema, Serialize)]
 struct MissingColumnsStruct {
     #[pk]
     id: u32,

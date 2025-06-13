@@ -14,3 +14,6 @@ serde = { version = "1.0.219", features = ["derive"] }
 axum = {  version = "0.8.4", features = ["default", "macros"] }
 tokio = { version = "1.45.1", features = ["full"] }
 inventory = "0.3.20"
+utoipa = { version = "5.3.1", features = ["axum_extras", "debug"] }
+utoipa-swagger-ui = { version = "9.0.2", features = ["axum"] }
+utoipa-axum = { version = "0.2.0" ,features = ["debug"] }

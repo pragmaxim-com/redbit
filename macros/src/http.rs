@@ -55,10 +55,10 @@ pub fn to_http_endpoints(defs: Vec<FunctionDef>) -> (Vec<HttpEndpointMacro>, Vec
     let route_chains =
         endpoints
             .iter()
-            .map(|e| (&e.endpoint_def.endpoint, &e.endpoint_def.method, &e.handler_fn_name))
-            .map(|(endpoint, method_name, function_name)| {
+            .map(|e| (&e.endpoint_def.endpoint, &e.handler_fn_name))
+            .map(|(endpoint, function_name)| {
                 quote! {
-                    .route(#endpoint, ::axum::routing::#method_name(#function_name))
+                   .nest(#endpoint, utoipa_axum::router::OpenApiRouter::new().routes(utoipa_axum::routes!(#function_name)))
                 }
             })
             .collect();
@@ -73,9 +73,13 @@ pub fn to_http_endpoint(fn_def: &FunctionDef, endpoint_def: &EndpointDef) -> Htt
         ParamExtraction::FromPath(ty) => quote! { ::axum::extract::Path(params): ::axum::extract::Path<#ty> },
         ParamExtraction::FromQuery(ty) => quote! { ::axum::extract::Query(params): ::axum::extract::Query<#ty> }
     };
+    let endpoint_name = fn_def.entity_name.to_string();
+    let endpoint_ident = fn_def.entity_name.clone();
+    let endpoint_path = endpoint_def.endpoint.clone();
+    let method = endpoint_def.method.clone();
 
     let handler = quote! {
-        #[axum::debug_handler]
+        #[utoipa::path(#method, path = #endpoint_path, responses((status = OK, body = #endpoint_ident)), tag = #endpoint_name)]
         pub async fn #handler_fn_name(
             ::axum::extract::State(state): ::axum::extract::State<RequestState>,
             #param_binding,
