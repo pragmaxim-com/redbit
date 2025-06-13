@@ -18,9 +18,9 @@ through auto-generated REST API.
 - ✅ Optional dictionaries for low cardinality fields
 - ✅ One-to-One and One-to-Many entities with cascade read/write/delete
 - ✅ All goodies including intuitive data ordering without writing custom codecs
-- ✅ Http server serves REST API at http://127.0.0.1:8000/swagger-ui/, each method has a corresponding endpoint
+- ✅ Http rest API at http://127.0.0.1:8000/swagger-ui/, each method has a corresponding endpoint
 
-Let's say we want to persist Utxo into Redb using Redbit, declare annotated Struct `examples/utxo/src/lib.rs`:
+Let's say we want to persist and query blockchain data using Redbit, declare annotated Structs `examples/utxo/src/lib.rs`:
 
 <!-- BEGIN_LIB -->
 ```rust
@@ -233,6 +233,8 @@ And R/W entire instances efficiently using indexes and dictionaries `examples/ut
 ```
 <!-- END_MAIN -->
 
+The same api is accessible through http endpoints at http://127.0.0.1:8000/swagger-ui/.
+
 Performance wise, check 🔥[flamegraph](https://rawcdn.githack.com/pragmaxim-com/redbit/refs/heads/master/flamegraph.svg).
 The demo example persists data into 30 tables to allow for rich querying.
 
@@ -310,68 +312,3 @@ BlockHeader__get                                  279157
 Block__get_header                                 299232
 ```
 <!-- END_BENCH -->
-
-### Http Endpoints generated
-```
-endpoint                                          description
--------------------------------------------------------------
-GET:/block/id/{value}                             block_get
-GET:/block?take=                                  block_take
-GET:/block?first=                                 block_first
-GET:/block?last=                                  block_last
-HEAD:/block/id/{value}                            block_exists
-GET:/block/id?from=&until=                        block_range
-GET:/block/{value}/header                         block_get_header
-GET:/block/{value}/transactions                   block_get_transactions
-
-GET:/blockheader/id/{value}                       blockheader_get
-GET:/blockheader?take=                            blockheader_take
-GET:/blockheader?first=                           blockheader_first
-GET:/blockheader?last=                            blockheader_last
-HEAD:/blockheader/id/{value}                      blockheader_exists
-GET:/blockheader/id?from=&until=                  blockheader_range
-GET:/blockheader/hash/{value}                     blockheader_get_by_hash
-GET:/blockheader/timestamp/{value}                blockheader_get_by_timestamp
-GET:/blockheader/timestamp?from=&until=           blockheader_range_by_timestamp
-GET:/blockheader/merkle_root/{value}              blockheader_get_by_merkle_root
-
-GET:/transaction/id/{value}                       transaction_get
-GET:/transaction?take=                            transaction_take
-GET:/transaction?first=                           transaction_first
-GET:/transaction?last=                            transaction_last
-HEAD:/transaction/id/{value}                      transaction_exists
-GET:/transaction/id/{value}/parent_pk             transaction_parent_pk
-GET:/transaction/id?from=&until=                  transaction_range
-GET:/transaction/hash/{value}                     transaction_get_by_hash
-GET:/transaction/{value}/utxos                    transaction_get_utxos
-GET:/transaction/{value}/inputs                   transaction_get_inputs
-
-GET:/utxo/id/{value}                              utxo_get
-GET:/utxo?take=                                   utxo_take
-GET:/utxo?first=                                  utxo_first
-GET:/utxo?last=                                   utxo_last
-HEAD:/utxo/id/{value}                             utxo_exists
-GET:/utxo/id/{value}/parent_pk                    utxo_parent_pk
-GET:/utxo/id?from=&until=                         utxo_range
-GET:/utxo/datum/{value}                           utxo_get_by_datum
-GET:/utxo/address/{value}                         utxo_get_by_address
-GET:/utxo/{value}/assets                          utxo_get_assets
-
-GET:/inputref/id/{value}                          inputref_get
-GET:/inputref?take=                               inputref_take
-GET:/inputref?first=                              inputref_first
-GET:/inputref?last=                               inputref_last
-HEAD:/inputref/id/{value}                         inputref_exists
-GET:/inputref/id/{value}/parent_pk                inputref_parent_pk
-GET:/inputref/id?from=&until=                     inputref_range
-
-GET:/asset/id/{value}                             asset_get
-GET:/asset?take=                                  asset_take
-GET:/asset?first=                                 asset_first
-GET:/asset?last=                                  asset_last
-HEAD:/asset/id/{value}                            asset_exists
-GET:/asset/id/{value}/parent_pk                   asset_parent_pk
-GET:/asset/id?from=&until=                        asset_range
-GET:/asset/name/{value}                           asset_get_by_name
-GET:/asset/policy_id/{value}                      asset_get_by_policy_id
-```
