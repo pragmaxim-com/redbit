@@ -1,8 +1,8 @@
 use proc_macro2::Ident;
-use syn::{Data, DeriveInput, Fields, GenericArgument, PathArguments, Type};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::Comma;
+use syn::{Fields, GenericArgument, ItemStruct, PathArguments, Type};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Indexing {
@@ -59,13 +59,10 @@ pub struct FieldDefs {
     pub transients: Vec<TransientDef>
 }
 
-pub fn get_named_fields(ast: &DeriveInput) -> Result<Punctuated<syn::Field, Comma>, syn::Error> {
-    match &ast.data {
-        Data::Struct(data_struct) => match &data_struct.fields {
-            Fields::Named(columns_named) => Ok(columns_named.named.clone()),
-            _ => Err(syn::Error::new(ast.span(), "`#[derive(Entity)]` only supports structs with named columns.")),
-        },
-        _ => Err(syn::Error::new(ast.span(), "`#[derive(Entity)]` can only be applied to structs.")),
+pub fn get_named_fields(ast: &ItemStruct) -> Result<Punctuated<syn::Field, Comma>, syn::Error> {
+    match &ast.fields {
+        Fields::Named(columns_named) => Ok(columns_named.named.clone()),
+        _ => Err(syn::Error::new(ast.span(), "`#[derive(Entity)]` only supports structs with named columns.")),
     }
 }
 
@@ -152,7 +149,7 @@ fn parse_entity_field(field: &syn::Field) -> Result<ParsingResult, syn::Error> {
     }
 }
 
-pub fn get_field_macros(fields: &Punctuated<syn::Field, Comma>, ast: &DeriveInput) -> Result<FieldDefs, syn::Error> {
+pub fn get_field_macros(fields: &Punctuated<syn::Field, Comma>, ast: &ItemStruct) -> Result<FieldDefs, syn::Error> {
     let mut pk_column: Option<PkDef> = None;
     let mut columns: Vec<ColumnDef> = Vec::new();
     let mut relationships: Vec<RelationshipDef> = Vec::new();

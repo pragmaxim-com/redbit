@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use redbit::*;
 
-#[derive(Entity, ToSchema, Default, Serialize, Debug, Clone, PartialEq, Eq)]
+#[entity]
 struct MinimalStruct {
     #[fk(one2many, range)]
     pub id: ChildPK,
@@ -12,17 +12,17 @@ struct MinimalStruct {
     pub persisted_no_index_no_dict: i32,
 }
 
-#[derive(PK, ToSchema, Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[key]
 struct ParentPK {
     pub id: u32,
 }
 
-#[derive(Default, ToSchema, Debug, Clone, Serialize)]
+#[key]
 struct Key {
     pub key: u32,
 }
 
-#[derive(Entity, ToSchema, Default, Debug, Clone, Serialize)]
+#[entity]
 struct TransientAnnotationStruct {
     #[pk]
     id: u32,
@@ -30,14 +30,14 @@ struct TransientAnnotationStruct {
     name: Key
 }
 
-#[derive(PK, ToSchema, Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[key]
 struct ChildPK {
     #[parent]
     pub parent_pointer: ParentPK,
     pub index: u32,
 }
 
-#[derive(Entity, ToSchema, Serialize)]
+#[entity]
 struct StructWithPersistedEntityField {
     #[pk]
     id: u32,
@@ -45,7 +45,7 @@ struct StructWithPersistedEntityField {
     persisted_indexed_no_dict: i32,
 }
 
-#[derive(Entity, ToSchema, Serialize)]
+#[entity]
 struct StructWithPersistedEntityFieldWithDict {
     #[pk]
     id: u32,
@@ -53,7 +53,7 @@ struct StructWithPersistedEntityFieldWithDict {
     persisted_indexed_with_dict: i32,
 }
 
-#[derive(Entity, ToSchema, Serialize)]
+#[entity]
 pub struct FullStruct {
     #[pk]
     pub id: u32,
@@ -65,7 +65,7 @@ pub struct FullStruct {
     pub address: String,
 }
 
-#[derive(Entity, ToSchema, Serialize)]
+#[entity]
 struct MultipleOne2ManyAnnotationsStruct {
     #[pk(range)]
     id: ParentPK,
@@ -75,7 +75,7 @@ struct MultipleOne2ManyAnnotationsStruct {
     bars: Vec<MinimalStruct>,
 }
 
-#[derive(Entity, ToSchema, Serialize)]
+#[entity]
 struct MissingColumnsStruct {
     #[pk]
     id: u32,

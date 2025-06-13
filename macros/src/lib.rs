@@ -9,15 +9,29 @@ mod field_parser;
 mod compositor;
 mod table;
 
-use std::sync::Once;
-use quote::quote;
 use crate::entity::EntityMacros;
 use crate::pk::{DbPkMacros, PointerType};
-use syn::{parse_macro_input, parse_quote, DeriveInput};
+
+use proc_macro::TokenStream;
+use std::sync::Once;
+use quote::quote;
+use syn::{parse_macro_input, parse_quote, DeriveInput, ItemStruct};
 use syn::spanned::Spanned;
 
-#[proc_macro_derive(PK, attributes(parent))]
-pub fn derive_pk(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+
+#[proc_macro_attribute]
+pub fn key(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let mut s = parse_macro_input!(item as ItemStruct);
+    s.attrs.retain(|a| !a.path().is_ident("derive"));
+    s.attrs.insert(0, parse_quote! {
+        #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, Eq, Ord, Pk, PartialEq, PartialOrd, utoipa::ToSchema)]
+    });
+    quote!(#s).into()
+}
+
+
+#[proc_macro_derive(Pk, attributes(parent))]
+pub fn derive_pk(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
     let struct_name = &ast.ident;
 
@@ -41,10 +55,20 @@ pub fn derive_pk(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     }
 }
 
+#[proc_macro_attribute]
+pub fn entity(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let mut s = parse_macro_input!(item as ItemStruct);
+    s.attrs.retain(|a| !a.path().is_ident("derive"));
+    s.attrs.insert(0, parse_quote! {
+        #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, Eq, Entity, PartialEq, utoipa::ToSchema)]
+    });
+    quote!(#s).into()
+}
+
 #[proc_macro_derive(Entity, attributes(pk, fk, column, one2many, one2one, transient))]
-pub fn derive_entity(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let ast: DeriveInput = parse_macro_input!(input as DeriveInput);
-    let entity_ident = &ast.ident;
+pub fn derive_entity(input: TokenStream) -> TokenStream {
+    let item_struct = parse_macro_input!(input as ItemStruct);
+    let entity_ident = &item_struct.ident;
     let entity_type: syn::Type = parse_quote! { #entity_ident };
 
     static PRINT_ONCE: Once = Once::new();
@@ -61,9 +85,9 @@ pub fn derive_entity(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
         }
     };
 
-    let stream = field_parser::get_named_fields(&ast)
+    let stream = field_parser::get_named_fields(&item_struct)
         .and_then(|named_fields| {
-            field_parser::get_field_macros(&named_fields, &ast)
+            field_parser::get_field_macros(&named_fields, &item_struct)
         })
         .and_then(|field_macros| {
             EntityMacros::new(entity_ident, &entity_type, field_macros)

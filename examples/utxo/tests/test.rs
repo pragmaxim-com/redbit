@@ -3,13 +3,13 @@ use utxo::*;
 
 #[test]
 fn each_entity_should_have_a_default_sample() {
-    let block = Block::sample(&Height(0).into());
+    let block = Block::sample(&BlockPointer { height: Height(0) });
     assert_eq!(block.id.height, Height(0));
     assert_eq!(block.header.timestamp, Timestamp(0));
     assert_eq!(block.transactions.len(), 3);
     for (idx, tx) in block.transactions.iter().enumerate() {
         assert_eq!(tx.id.tx_index as usize, idx);
-        assert_eq!(tx.id.block_pointer, Height(0).into());
+        assert_eq!(tx.id.block_pointer, BlockPointer { height: Height(0) });
         assert_eq!(tx.utxos.len(), 3);
         for (idx, utxo) in tx.utxos.iter().enumerate() {
             assert_eq!(utxo.id.utxo_index as usize, idx);

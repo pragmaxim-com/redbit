@@ -5,11 +5,7 @@ pub use data::*;
 pub use redbit::*;
 pub use types::*;
 
-use derive_more::From;
-use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
-
-#[derive(Entity, ToSchema, Default, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[entity]
 pub struct Block {
     #[pk(range)]
     pub id: BlockPointer,
@@ -19,7 +15,7 @@ pub struct Block {
     pub transactions: Vec<Transaction>,
 }
 
-#[derive(Entity, ToSchema, Default, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[entity]
 pub struct BlockHeader {
     #[fk(one2one, range)]
     pub id: BlockPointer,
@@ -33,7 +29,7 @@ pub struct BlockHeader {
     pub nonce: Nonce,
 }
 
-#[derive(Entity, ToSchema, Default, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[entity]
 pub struct Transaction {
     #[fk(one2many, range)]
     pub id: TxPointer,
@@ -45,7 +41,7 @@ pub struct Transaction {
     pub inputs: Vec<InputRef>,
 }
 
-#[derive(Entity, ToSchema, Default, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[entity]
 pub struct Utxo {
     #[fk(one2many, range)]
     pub id: UtxoPointer,
@@ -59,13 +55,13 @@ pub struct Utxo {
     pub assets: Vec<Asset>,
 }
 
-#[derive(Entity, ToSchema, Default, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[entity]
 pub struct InputRef {
     #[fk(one2many, range)]
     pub id: InputPointer,
 }
 
-#[derive(Entity, ToSchema, Default, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[entity]
 pub struct Asset {
     #[fk(one2many, range)]
     pub id: AssetPointer,
@@ -77,33 +73,33 @@ pub struct Asset {
     pub policy_id: PolicyId,
 }
 
-#[derive(PK, ToSchema, Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, From)]
+#[key]
 pub struct BlockPointer {
     pub height: Height,
 }
 
-#[derive(PK, ToSchema, Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[key]
 pub struct TxPointer {
     #[parent]
     pub block_pointer: BlockPointer,
     pub tx_index: TxIndex,
 }
 
-#[derive(PK, ToSchema, Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[key]
 pub struct UtxoPointer {
     #[parent]
     pub tx_pointer: TxPointer,
     pub utxo_index: UtxoIndex,
 }
 
-#[derive(PK, ToSchema, Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[key]
 pub struct InputPointer {
     #[parent]
     pub tx_pointer: TxPointer,
     pub utxo_index: UtxoIndex,
 }
 
-#[derive(PK, ToSchema, Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[key]
 pub struct AssetPointer {
     #[parent]
     pub utxo_pointer: UtxoPointer,

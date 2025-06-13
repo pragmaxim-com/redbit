@@ -6,12 +6,15 @@
 //! supporting one-to-one and one-to-many relationships.
 //!
 pub use macros::Entity;
-pub use macros::PK;
+pub use macros::Pk;
+pub use macros::entity;
+pub use macros::key;
 pub use redb;
 pub use redb::ReadableMultimapTable;
 pub use redb::ReadableTable;
 pub use inventory;
 pub use axum;
+pub use serde;
 
 use bincode::Options;
 use redb::{Key, TypeName, Value};

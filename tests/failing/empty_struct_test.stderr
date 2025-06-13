@@ -7,10 +7,10 @@ error: `#[pk]` attribute not found on any column. Exactly one column must have `
   | |_^
 
 error[E0599]: no function or associated item named `routes` found for struct `EmptyStruct` in the current scope
- --> tests/failing/empty_struct_test.rs:3:10
+ --> tests/failing/empty_struct_test.rs:3:1
   |
-3 | #[derive(Entity)]
-  |          ^^^^^^ function or associated item not found in `EmptyStruct`
+3 | #[entity]
+  | ^^^^^^^^^ function or associated item not found in `EmptyStruct`
 4 | struct EmptyStruct {
   | ------------------ function or associated item `routes` not found for this struct
   |

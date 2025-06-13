@@ -80,6 +80,7 @@ pub fn to_http_endpoint(fn_def: &FunctionDef, endpoint_def: &EndpointDef) -> Htt
 
     let handler = quote! {
         #[utoipa::path(#method, path = #endpoint_path, responses((status = OK, body = #endpoint_ident)), tag = #endpoint_name)]
+        #[axum::debug_handler]
         pub async fn #handler_fn_name(
             ::axum::extract::State(state): ::axum::extract::State<RequestState>,
             #param_binding,
