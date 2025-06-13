@@ -47,53 +47,49 @@ pub struct EndpointDef {
     pub fn_call: TokenStream,
 }
 
-fn to_route_chain(endpoints: Vec<HttpEndpointMacro>) -> Vec<TokenStream> {
-    endpoints
-        .into_iter()
-        .map(|e| (e.endpoint_def.endpoint, e.endpoint_def.method, e.handler_fn_name))
-        .map(|(endpoint, method_name, function_name)| {
-            quote! {
-                .route(#endpoint, ::axum::routing::#method_name(#function_name))
-            }
-        })
-        .collect()
-}
-
 pub fn to_http_endpoints(defs: Vec<FunctionDef>) -> (Vec<HttpEndpointMacro>, Vec<TokenStream>) {
-    let endpoints: Vec<HttpEndpointMacro> = defs.iter().filter_map(|fn_def| to_http_endpoint(fn_def)).collect();
-    let route_chains = to_route_chain(endpoints.clone());
+    let endpoints: Vec<HttpEndpointMacro> =
+        defs.iter()
+            .filter_map(|fn_def| fn_def.endpoint_def.clone().map(|e| to_http_endpoint(fn_def, &e)))
+            .collect();
+    let route_chains =
+        endpoints
+            .iter()
+            .map(|e| (&e.endpoint_def.endpoint, &e.endpoint_def.method, &e.handler_fn_name))
+            .map(|(endpoint, method_name, function_name)| {
+                quote! {
+                    .route(#endpoint, ::axum::routing::#method_name(#function_name))
+                }
+            })
+            .collect();
     (endpoints, route_chains)
 }
 
-pub fn to_http_endpoint(def: &FunctionDef) -> Option<HttpEndpointMacro> {
-    if let Some(endpoint_def) = &def.endpoint_def {
-        let handler_fn_name = format_ident!("{}_{}", def.entity_name.to_string().to_lowercase(), def.fn_name);
-        let return_type = &def.return_type;
-        let fn_call = endpoint_def.fn_call.clone();
-        let param_binding = match endpoint_def.param_extraction.clone() {
-            ParamExtraction::FromPath(ty) => quote! { ::axum::extract::Path(params): ::axum::extract::Path<#ty> },
-            ParamExtraction::FromQuery(ty) => quote! { ::axum::extract::Query(params): ::axum::extract::Query<#ty> }
-        };
+pub fn to_http_endpoint(fn_def: &FunctionDef, endpoint_def: &EndpointDef) -> HttpEndpointMacro {
+    let handler_fn_name = format_ident!("{}_{}", fn_def.entity_name.to_string().to_lowercase(), fn_def.fn_name);
+    let return_type = &fn_def.return_type;
+    let fn_call = endpoint_def.fn_call.clone();
+    let param_binding = match endpoint_def.param_extraction.clone() {
+        ParamExtraction::FromPath(ty) => quote! { ::axum::extract::Path(params): ::axum::extract::Path<#ty> },
+        ParamExtraction::FromQuery(ty) => quote! { ::axum::extract::Query(params): ::axum::extract::Query<#ty> }
+    };
 
-        let handler = quote! {
-            #[axum::debug_handler]
-            pub async fn #handler_fn_name(
-                ::axum::extract::State(state): ::axum::extract::State<RequestState>,
-                #param_binding,
-            ) -> Result<AppJson<#return_type>, AppError> {
-                state.db.begin_read()
-                    .map_err(AppError::from)
-                    .and_then(|read_tx| #fn_call)
-                    .map(AppJson)
-            }
-        };
+    let handler = quote! {
+        #[axum::debug_handler]
+        pub async fn #handler_fn_name(
+            ::axum::extract::State(state): ::axum::extract::State<RequestState>,
+            #param_binding,
+        ) -> Result<AppJson<#return_type>, AppError> {
+            state.db.begin_read()
+                .map_err(AppError::from)
+                .and_then(|read_tx| #fn_call)
+                .map(AppJson)
+        }
+    };
 
-        Some(HttpEndpointMacro {
-            endpoint_def: endpoint_def.clone(),
-            handler_fn_name,
-            handler,
-        })
-    } else {
-        None
+    HttpEndpointMacro {
+        endpoint_def: endpoint_def.clone(),
+        handler_fn_name,
+        handler,
     }
 }
