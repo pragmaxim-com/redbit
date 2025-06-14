@@ -24,7 +24,9 @@ pub fn empty_temp_db(name: &str) -> Database {
 pub fn init_temp_db(name: &str) -> (Vec<Block>, Database) {
     let db = empty_temp_db(name);
     let blocks = get_blocks(Height(4), 4, 4, 4);
-    blocks.iter().for_each(|block| Block::store_and_commit(&db, &block).expect("Failed to persist blocks"));
+    let write_tx = db.begin_write().expect("Failed to begin write transaction");
+    Block::store_many(&write_tx, &blocks).expect("Failed to persist blocks");
+    write_tx.commit().expect("Failed to commit transaction");
     (blocks, db)
 }
 

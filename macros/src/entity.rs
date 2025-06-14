@@ -91,24 +91,26 @@ impl EntityMacros {
     }
 
     pub fn store_fn_def(&self) -> FunctionDef {
+        let pk_name = &self.pk.definition.field.name;
+        let pk_type = &self.pk.definition.field.tpe;
         let entity_type = &self.entity_type;
         let entity_name = &self.entity_name;
         let fn_name = format_ident!("store_and_commit");
         let store_statements = self.store_statements();
         let fn_stream = quote! {
-             pub fn #fn_name(db: &::redb::Database, instance: &#entity_type) -> Result<(), AppError> {
+             pub fn #fn_name(db: &::redb::Database, instance: &#entity_type) -> Result<#pk_type, AppError> {
                 let tx = db.begin_write()?;
                 {
                     #(#store_statements)*
                 }
                 tx.commit()?;
-                Ok(())
+                Ok(instance.#pk_name.clone())
             }
          };
         FunctionDef {
             entity_name: entity_name.clone(),
             fn_name: fn_name.clone(),
-            return_type: syn::parse_quote!(()),
+            return_type: syn::parse_quote!(#pk_type),
             fn_stream,
             endpoint_def: Some(EndpointDef {
                 param_extraction: FromBody(entity_type.clone()),

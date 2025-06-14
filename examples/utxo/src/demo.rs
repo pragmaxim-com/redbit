@@ -7,10 +7,10 @@ pub fn run(db: Arc<Database>) -> Result<(), AppError> {
     let blocks = get_blocks(Height(1), 10, 10, 3);
 
     println!("Persisting blocks:");
-    for block in blocks.iter() {
-        Block::store_and_commit(&db, block)?
-    }
-
+    let write_tx = db.begin_write()?;
+    Block::store_many(&write_tx, &blocks)?;
+    write_tx.commit()?;
+    
     let read_tx = db.begin_read()?;
 
     println!("Querying blocks:");

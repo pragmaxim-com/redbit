@@ -75,11 +75,9 @@ pub fn to_http_endpoints(defs: Vec<FunctionDef>) -> (Vec<HttpEndpointMacro>, Vec
     let route_chains =
         endpoints
             .iter()
-            .map(|e| (&e.endpoint_def.endpoint, &e.handler_fn_name))
-            .map(|(endpoint, function_name)| {
-                quote! {
-                   .nest(#endpoint, utoipa_axum::router::OpenApiRouter::new().routes(utoipa_axum::routes!(#function_name)))
-                }
+            .map(|e| {
+                let function_name = &e.handler_fn_name;
+                quote! { .merge(utoipa_axum::router::OpenApiRouter::new().routes(utoipa_axum::routes!(#function_name))) }
             })
             .collect();
     (endpoints, route_chains)
@@ -97,7 +95,7 @@ pub fn to_http_endpoint(fn_def: &FunctionDef, endpoint_def: &EndpointDef) -> Htt
     let endpoint_name = fn_def.entity_name.to_string();
     let endpoint_ident = fn_def.entity_name.clone();
     let endpoint_path = endpoint_def.endpoint.clone();
-    let method_ident = format_ident!("{}", endpoint_def.method.to_string().to_lowercase());
+    let method_ident = format_ident!("{}", endpoint_def.method.to_string());
     let db_call = match endpoint_def.method {
         HttpMethod::GET | HttpMethod::HEAD =>
             quote! {
@@ -114,8 +112,14 @@ pub fn to_http_endpoint(fn_def: &FunctionDef, endpoint_def: &EndpointDef) -> Htt
             },
     };
 
+    let responses = match endpoint_def.method {
+        HttpMethod::GET => quote! { responses((status = OK, body = #endpoint_ident)) }, // GET can return Vec<T> better use #return_type
+        HttpMethod::POST => quote! { request_body(content = #endpoint_ident, content_type = "application/json"), responses((status = OK, body = #return_type)) },
+        HttpMethod::DELETE | HttpMethod::HEAD => quote! { responses((status = OK)) },
+    };
+
     let handler = quote! {
-        #[utoipa::path(#method_ident, path = #endpoint_path, responses((status = OK, body = #endpoint_ident)), tag = #endpoint_name)]
+        #[utoipa::path(#method_ident, path = #endpoint_path, #responses, tag = #endpoint_name)]
         #[axum::debug_handler]
         pub async fn #handler_fn_name(
             ::axum::extract::State(state): ::axum::extract::State<RequestState>, #param_binding
