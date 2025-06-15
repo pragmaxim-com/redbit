@@ -147,10 +147,10 @@ And R/W entire instances efficiently using indexes and dictionaries `examples/ut
         let blocks = get_blocks(Height(1), 10, 10, 3);
     
         println!("Persisting blocks:");
-        for block in blocks.iter() {
-            Block::store_and_commit(&db, block)?
-        }
-    
+        let write_tx = db.begin_write()?;
+        Block::store_many(&write_tx, &blocks)?;
+        write_tx.commit()?;
+        
         let read_tx = db.begin_read()?;
     
         println!("Querying blocks:");
@@ -253,62 +253,62 @@ Which means indexing `Bitcoin` is way faster than Bitcoin Core syncs itself.
 function                                           ops/s
 -------------------------------------------------------------
 Block__store_and_commit                               35
-Block__store_and_commit                               44
+Block__store_and_commit                               43
 Utxo__all                                             70
+Block__all                                            82
 Transaction__all                                      82
-Transaction__all                                      83
-Block__all                                            84
+Transaction__all                                      82
+Transaction__range                                    84
+Utxo__all                                             84
+Utxo__range                                           85
 Block__all                                            86
-Utxo__all                                             86
-Utxo__range                                           86
-Transaction__range                                    87
 Utxo__range                                           90
 Transaction__range                                    91
 Asset__range                                         118
-Asset__range                                         121
-Block__range                                         126
+Asset__range                                         119
+Block__range                                         122
 Asset__all                                           127
 Block__range                                         130
-Asset__all                                           215
-Block__get_transactions                              248
-Block__get                                           249
+Asset__all                                           213
+Block__get                                           238
+Block__get_transactions                              247
 Block__get                                           256
 Block__get_transactions                              267
 Asset__get_by_policy_id                              285
-Asset__get_by_policy_id                              359
+Asset__get_by_policy_id                              352
 Utxo__get_by_address                                 411
 Asset__get_by_name                                   559
-Transaction__get_by_hash                             841
-Utxo__get_by_address                                 858
+Transaction__get_by_hash                             823
+Utxo__get_by_address                                 839
 Transaction__get_by_hash                             888
-Asset__get_by_name                                  1190
+Asset__get_by_name                                  1162
 Utxo__get_by_datum                                  1247
-Utxo__get_by_datum                                  1694
-Transaction__get                                    2543
-Transaction__get_utxos                              2570
+Utxo__get_by_datum                                  1668
+Transaction__get                                    2486
+Transaction__get_utxos                              2541
 Transaction__get                                    2695
 Transaction__get_utxos                              2702
-Utxo__get                                          50728
+Utxo__get                                          51305
 Utxo__get                                          53358
-Utxo__get_assets                                   67240
+Utxo__get_assets                                   67708
 Utxo__get_assets                                   70686
 BlockHeader__get_by_merkle_root                    91748
 BlockHeader__all                                   97561
-BlockHeader__all                                   98188
-BlockHeader__get_by_hash                           99337
-BlockHeader__get_by_merkle_root                    99638
+BlockHeader__get_by_merkle_root                    99916
+BlockHeader__get_by_hash                          101425
+BlockHeader__all                                  101679
 BlockHeader__get_by_hash                          106044
 BlockHeader__range_by_timestamp                   124057
-BlockHeader__range_by_timestamp                   132954
-BlockHeader__range                                139259
+BlockHeader__range_by_timestamp                   134169
+BlockHeader__range                                144804
 BlockHeader__range                                147597
-Asset__get                                        189147
+Asset__get                                        191860
 Asset__get                                        197572
 BlockHeader__get_by_timestamp                     219954
 BlockHeader__get                                  237630
-BlockHeader__get_by_timestamp                     257492
-Block__get_header                                 274661
-BlockHeader__get                                  279157
+BlockHeader__get_by_timestamp                     264348
+Block__get_header                                 277703
+BlockHeader__get                                  287069
 Block__get_header                                 299232
 ```
 <!-- END_BENCH -->
