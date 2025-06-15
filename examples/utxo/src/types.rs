@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
-use derive_more::{Add, From};
+use derive_more::{Add, From, Display, FromStr};
 use utoipa::ToSchema;
 
-#[derive(Debug, ToSchema, Default, Serialize, Deserialize, Clone, Copy, PartialOrd, Ord, PartialEq, Eq, Add, From)]
+#[derive(Debug, Default, Display, FromStr, Serialize, Deserialize, Clone, Copy, PartialOrd, Ord, PartialEq, Eq, Add, From)]
 pub struct Height(pub u32);
 
 impl std::ops::Add<u32> for Height {

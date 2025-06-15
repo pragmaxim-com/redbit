@@ -8,6 +8,7 @@ name = "redbit"
 
 [dependencies]
 macros = { path = "../macros" }
+thiserror = "2.0.12"
 redb = "2.6.0"
 bincode = "1.3.3"
 serde = { version = "1.0.219", features = ["derive"] }

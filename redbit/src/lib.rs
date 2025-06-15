@@ -75,6 +75,14 @@ pub enum AppError {
     JsonRejection(JsonRejection),
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum ParsePointerError {
+    #[error("invalid pointer format")]
+    Format,
+    #[error("invalid integer: {0}")]
+    ParseInt(#[from] std::num::ParseIntError),
+}
+
 impl std::fmt::Display for AppError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

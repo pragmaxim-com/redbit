@@ -11,7 +11,7 @@ mod parent_pk;
 
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
-use syn::{Attribute, Data, DeriveInput, Fields, Type};
+use syn::{Attribute, Data, DeriveInput, Field, Fields, Type};
 use crate::field_parser::{Multiplicity, PkDef};
 use crate::http::FunctionDef;
 use crate::macro_utils;
@@ -48,9 +48,8 @@ impl DbPkMacros {
         match pk_def.fk {
             Some(Multiplicity::OneToMany) => {
                 function_defs.push(parent_pk::fn_def(entity_name, &pk_name, &pk_type));
-            },
-            _ => {
             }
+            _ => {}
         };
 
         if pk_def.range {
@@ -65,7 +64,7 @@ impl DbPkMacros {
             store_many_statement: store::store_many_statement(&pk_name, &table_def.name),
             delete_statement: delete::delete_statement(&table_def.name),
             delete_many_statement: delete::delete_many_statement(&table_def.name),
-            function_defs
+            function_defs,
         }
     }
 
@@ -89,7 +88,7 @@ impl DbPkMacros {
     }
 
     /// Extracts and validates the required fields (parent & index) for root or child structs.
-    pub fn extract_fields(input: &DeriveInput, pointer_type: &PointerType) -> Result<(Option<syn::Field>, syn::Field), syn::Error> {
+    pub fn extract_fields(input: &DeriveInput, pointer_type: &PointerType) -> Result<(Option<Field>, Field), syn::Error> {
         let data_struct = match input.data.clone() {
             Data::Struct(data_struct) => data_struct,
             _ => return Err(syn::Error::new_spanned(input, "Pk can only be derived for structs")),
@@ -126,75 +125,198 @@ impl DbPkMacros {
         }
     }
 
-    /// Generates trait implementations for **Root Pointers**.
-    pub fn generate_root_impls(struct_name: &Ident, index_field: syn::Field) -> TokenStream {
+    /// Generates trait implementations for **Root Pointers** (IndexedPointer + RootPointer)
+    /// and also derives Display, FromStr, Serialize, and Deserialize based on a dash-separated format.
+    pub fn generate_root_impls(struct_name: &Ident, index_field: Field) -> TokenStream {
         let index_type = &index_field.ty;
         let index_name = &index_field.ident;
 
-        let expanded =
-            quote! {
+        let expanded = quote! {
+            // Core traits
             impl IndexedPointer for #struct_name {
                 type Index = #index_type;
-
-                fn index(&self) -> Self::Index {
-                    self.#index_name
-                }
-
-                fn next(&self) -> Self {
-                    #struct_name { #index_name: self.#index_name + 1 }
-                }
+                fn index(&self) -> Self::Index { self.#index_name }
+                fn next(&self) -> Self { #struct_name { #index_name: self.#index_name + 1 } }
             }
             impl RootPointer for #struct_name {
-                fn is_child(&self) -> bool {
-                    false
+                fn is_child(&self) -> bool { false }
+            }
+
+            // Serde: human-readable = dash string, binary = raw field
+            impl serde::Serialize for #struct_name {
+                fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+                where S: serde::Serializer {
+                    if serializer.is_human_readable() {
+                        serializer.serialize_str(&self.to_string())
+                    } else {
+                        #[derive(serde::Serialize)]
+                        struct Helper {
+                            #index_name: #index_type,
+                        }
+                        let helper = Helper { #index_name: self.#index_name };
+                        helper.serialize(serializer)
+                    }
+                }
+            }
+            impl<'de> serde::Deserialize<'de> for #struct_name {
+                fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+                where D: serde::Deserializer<'de> {
+                    if deserializer.is_human_readable() {
+                        let s = String::deserialize(deserializer)?;
+                        // parse single int
+                        let idx = s.parse::<#index_type>().map_err(serde::de::Error::custom)?;
+                        Ok(#struct_name { #index_name: idx })
+                    } else {
+                        #[derive(serde::Deserialize)]
+                        struct Helper {
+                            #index_name: #index_type,
+                        }
+                        let helper = Helper::deserialize(deserializer)?;
+                        Ok(#struct_name { #index_name: helper.#index_name })
+                    }
                 }
             }
 
+            // HTTP path support
+            impl std::fmt::Display for #struct_name {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(f, "{}", self.#index_name)
+                }
+            }
+            impl std::str::FromStr for #struct_name {
+                type Err = ParsePointerError;
+                fn from_str(s: &str) -> Result<Self, Self::Err> {
+                    if s.contains('-') { return Err(ParsePointerError::Format); }
+                    let idx = s.parse::<#index_type>()?;
+                    Ok(#struct_name { #index_name: idx })
+                }
+            }
+
+            impl utoipa::PartialSchema for #struct_name {
+                fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
+                    use utoipa::openapi::schema::*;
+                    Schema::Object(
+                        ObjectBuilder::new()
+                            .schema_type(SchemaType::Type(Type::String))
+                            .examples(vec!["0"])
+                            .build()
+                    ).into()
+                }
+            }
+
+            impl utoipa::ToSchema for #struct_name {
+                fn schemas(schemas: &mut Vec<(String, utoipa::openapi::RefOr<utoipa::openapi::schema::Schema>)>) {
+                    schemas.push((stringify!(#struct_name).to_string(), <#struct_name as utoipa::PartialSchema>::schema()));
+                }
+            }
         };
-        macro_utils::write_stream_and_return(expanded, &struct_name)
+
+        macro_utils::write_stream_and_return(expanded, struct_name)
     }
 
-    /// Generates trait implementations for **Child Pointers**.
-    pub fn generate_child_impls(struct_name: &Ident, parent_field: syn::Field, index_field: syn::Field) -> TokenStream {
+    /// Generate impls for Child Pointer types
+    pub fn generate_child_impls(struct_name: &Ident, parent_field: Field, index_field: Field) -> TokenStream {
         let parent_name = &parent_field.ident;
         let parent_type = &parent_field.ty;
         let index_name = &index_field.ident;
         let index_type = &index_field.ty;
-        let expanded =
-            quote! {
-                impl IndexedPointer for #struct_name {
-                    type Index = #index_type;
 
-                    fn index(&self) -> Self::Index {
-                        self.#index_name
-                    }
+        let expanded = quote! {
+            // Core traits
+            impl IndexedPointer for #struct_name {
+                type Index = #index_type;
+                fn index(&self) -> Self::Index { self.#index_name }
+                fn next(&self) -> Self { #struct_name { #parent_name: self.#parent_name.clone(), #index_name: self.#index_name + 1 } }
+            }
+            impl ChildPointer for #struct_name {
+                type Parent = #parent_type;
+                fn is_child(&self) -> bool { true }
+                fn parent(&self) -> &Self::Parent { &self.#parent_name }
+                fn from_parent(parent: Self::Parent) -> Self { #struct_name { #parent_name: parent, #index_name: <#index_type as Default>::default() } }
+            }
 
-                    fn next(&self) -> Self {
-                        #struct_name {
-                            #parent_name: self.#parent_name.clone(),
-                            #index_name: self.#index_name + 1,
+            // Serde: human-readable = dash string, binary = raw fields
+            impl serde::Serialize for #struct_name {
+                fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+                where S: serde::Serializer {
+                    if serializer.is_human_readable() {
+                        serializer.serialize_str(&self.to_string())
+                    } else {
+                        #[derive(serde::Serialize)]
+                        struct Helper {
+                            #parent_name: #parent_type,
+                            #index_name: #index_type,
                         }
+                        let helper = Helper { #parent_name: self.#parent_name.clone(), #index_name: self.#index_name };
+                        helper.serialize(serializer)
                     }
                 }
-                impl ChildPointer for #struct_name {
-                    type Parent = #parent_type;
-
-                    fn is_child(&self) -> bool {
-                        true
-                    }
-                    fn parent(&self) -> &Self::Parent {
-                        &self.#parent_name
-                    }
-
-                    fn from_parent(parent: Self::Parent) -> Self {
-                        #struct_name {
-                            #parent_name: parent,
-                            #index_name: <#index_type as Default>::default(),
+            }
+            impl<'de> serde::Deserialize<'de> for #struct_name {
+                fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+                where D: serde::Deserializer<'de> {
+                    if deserializer.is_human_readable() {
+                        let s = String::deserialize(deserializer)?;
+                        // split on last dash
+                        let mut parts = s.rsplitn(2, '-');
+                        let idx_str = parts.next().ok_or_else(|| serde::de::Error::custom(ParsePointerError::Format))?;
+                        let parent_str = parts.next().ok_or_else(|| serde::de::Error::custom(ParsePointerError::Format))?;
+                        let parent = parent_str.parse::<#parent_type>().map_err(serde::de::Error::custom)?;
+                        let idx = idx_str.parse::<#index_type>().map_err(serde::de::Error::custom)?;
+                        Ok(#struct_name { #parent_name: parent, #index_name: idx })
+                    } else {
+                        #[derive(serde::Deserialize)]
+                        struct Helper {
+                            #parent_name: #parent_type,
+                            #index_name: #index_type,
                         }
+                        let helper = Helper::deserialize(deserializer)?;
+                        Ok(#struct_name { #parent_name: helper.#parent_name, #index_name: helper.#index_name })
                     }
                 }
-            };
-        macro_utils::write_stream_and_return(expanded, &struct_name)
+            }
+
+            // HTTP path support
+            impl std::fmt::Display for #struct_name {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(f, "{}-{}", self.#parent_name, self.#index_name)
+                }
+            }
+            impl std::str::FromStr for #struct_name {
+                type Err = ParsePointerError;
+                fn from_str(s: &str) -> Result<Self, Self::Err> {
+                    let mut parts = s.rsplitn(2, '-');
+                    let idx_str = parts.next().ok_or(ParsePointerError::Format)?;
+                    let parent_str = parts.next().ok_or(ParsePointerError::Format)?;
+                    let parent = parent_str.parse::<#parent_type>()?;
+                    let idx = idx_str.parse::<#index_type>()?;
+                    Ok(#struct_name { #parent_name: parent, #index_name: idx })
+                }
+            }
+
+            impl utoipa::PartialSchema for #struct_name {
+                fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
+                    use utoipa::openapi::schema::*;
+                    let example = format!("{}-{}", #parent_type::default(), "0");
+                    Schema::Object(
+                        ObjectBuilder::new()
+                            .schema_type(SchemaType::Type(Type::String))
+                            .examples(vec![example])
+                            .build()
+                    ).into()
+                }
+            }
+
+            impl utoipa::ToSchema for #struct_name {
+                fn schemas(schemas: &mut Vec<(String, utoipa::openapi::RefOr<utoipa::openapi::schema::Schema>)>) {
+                    use utoipa::ToSchema;
+                    schemas.push((stringify!(#struct_name).to_string(), <#struct_name as utoipa::PartialSchema>::schema()));
+                    <#parent_type as ToSchema>::schemas(schemas);
+                }
+            }
+        };
+
+        macro_utils::write_stream_and_return(expanded, struct_name)
     }
 
     /// Checks if a field has the `#[parent]` attribute.
