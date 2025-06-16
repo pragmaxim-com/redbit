@@ -1,5 +1,5 @@
 use crate::http::ParamExtraction::FromQuery;
-use crate::http::{EndpointDef, FunctionDef, HttpMethod};
+use crate::http::{EndpointDef, FunctionDef, HttpMethod, GetParam};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
@@ -33,10 +33,14 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
         return_type: syn::parse_quote!(Vec<#entity_type>),
         fn_stream,
         endpoint_def: Some(EndpointDef {
-            param_extraction: FromQuery(syn::parse_quote!(TakeParams)),
+            param_extraction: FromQuery(vec![GetParam {
+                name: format_ident!("take"),
+                ty: syn::parse_quote!(u32),
+                description: "Number of entities to return".to_string(),
+            }]),
             method: HttpMethod::GET,
             endpoint: format!("/{}?take=", entity_name.to_string().to_lowercase()),
-            fn_call: quote! { #entity_name::#fn_name(&tx, params.take) },
+            fn_call: quote! { #entity_name::#fn_name(&tx, take) },
         })
     }
 

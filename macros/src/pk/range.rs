@@ -1,5 +1,5 @@
 use crate::http::ParamExtraction::FromQuery;
-use crate::http::{EndpointDef, FunctionDef, HttpMethod};
+use crate::http::{EndpointDef, FunctionDef, HttpMethod, GetParam};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
@@ -26,10 +26,13 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
         return_type: syn::parse_quote!(Vec<#entity_type>),
         fn_stream,
         endpoint_def: Some(EndpointDef {
-            param_extraction: FromQuery(syn::parse_quote!(RequestRangeParams<#pk_type, #pk_type>)),
+            param_extraction: FromQuery(vec![
+                GetParam { name: format_ident!("from"), ty: pk_type.clone(), description: "Range from inclusive".to_string() },
+                GetParam { name: format_ident!("until"), ty: pk_type.clone(), description: "Range until exclusive".to_string() },
+            ]),
             method: HttpMethod::GET,
             endpoint: format!("/{}/{}?from=&until=", entity_name.to_string().to_lowercase(), pk_name.clone()),
-            fn_call: quote! { #entity_name::#fn_name(&tx, &params.from, &params.until) },
+            fn_call: quote! { #entity_name::#fn_name(&tx, &from, &until) },
         })
     }
 }

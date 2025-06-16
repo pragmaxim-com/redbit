@@ -1,13 +1,13 @@
-use crate::column::{DbColumnMacros};
+use crate::column::DbColumnMacros;
+use crate::field_parser::*;
+use crate::http::ParamExtraction::{FromBody, FromPath};
+use crate::http::{EndpointDef, FunctionDef, GetParam, HttpMethod, PostParam};
 use crate::pk::DbPkMacros;
 use crate::relationship::{DbRelationshipMacros, TransientMacros};
-use crate::field_parser::*;
+use crate::table::TableDef;
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use syn::Type;
-use crate::http::{EndpointDef, FunctionDef, HttpMethod};
-use crate::http::ParamExtraction::{FromBody, FromPath};
-use crate::table::TableDef;
 
 pub struct EntityMacros {
     pub entity_name: Ident,
@@ -21,21 +21,18 @@ pub struct EntityMacros {
 impl EntityMacros {
     pub fn new(entity_name: &Ident, entity_type: &Type, field_defs: FieldDefs) -> Result<EntityMacros, syn::Error> {
         let FieldDefs { pk, columns, relationships, transients } = field_defs;
-        let column_macros =
-            columns.into_iter()
-                .map(|entity_column| DbColumnMacros::new(entity_column, entity_name, entity_type, &pk))
-                .collect::<Result<Vec<DbColumnMacros>, syn::Error>>()?;
-        let relationship_macros =
-            relationships.into_iter()
-                .map(|rel| DbRelationshipMacros::new(rel, entity_name, &pk))
-                .collect();
+        let column_macros = columns
+            .into_iter()
+            .map(|entity_column| DbColumnMacros::new(entity_column, entity_name, entity_type, &pk))
+            .collect::<Result<Vec<DbColumnMacros>, syn::Error>>()?;
+        let relationship_macros = relationships.into_iter().map(|rel| DbRelationshipMacros::new(rel, entity_name, &pk)).collect();
         Ok(EntityMacros {
             entity_name: entity_name.clone(),
             entity_type: entity_type.clone(),
             pk: DbPkMacros::new(entity_name, entity_type, &pk),
             columns: column_macros,
             relationships: relationship_macros,
-            transients: TransientMacros::new(transients)
+            transients: TransientMacros::new(transients),
         })
     }
 
@@ -61,7 +58,7 @@ impl EntityMacros {
         }
         struct_inits
     }
-    
+
     pub fn struct_default_inits(&self) -> Vec<TokenStream> {
         let mut struct_default_inits = Vec::new();
         for column in &self.columns {
@@ -98,26 +95,30 @@ impl EntityMacros {
         let fn_name = format_ident!("store_and_commit");
         let store_statements = self.store_statements();
         let fn_stream = quote! {
-             pub fn #fn_name(db: &::redb::Database, instance: &#entity_type) -> Result<#pk_type, AppError> {
-                let tx = db.begin_write()?;
-                {
-                    #(#store_statements)*
-                }
-                tx.commit()?;
-                Ok(instance.#pk_name.clone())
-            }
-         };
+            pub fn #fn_name(db: &::redb::Database, instance: &#entity_type) -> Result<#pk_type, AppError> {
+               let tx = db.begin_write()?;
+               {
+                   #(#store_statements)*
+               }
+               tx.commit()?;
+               Ok(instance.#pk_name.clone())
+           }
+        };
         FunctionDef {
             entity_name: entity_name.clone(),
             fn_name: fn_name.clone(),
             return_type: syn::parse_quote!(#pk_type),
             fn_stream,
             endpoint_def: Some(EndpointDef {
-                param_extraction: FromBody(entity_type.clone()),
+                param_extraction: FromBody(PostParam {
+                    name: format_ident!("body"),
+                    ty: entity_type.clone(),
+                    content_type: "application/json".to_string(),
+                }),
                 method: HttpMethod::POST,
                 endpoint: format!("/{}", entity_name.to_string().to_lowercase()),
-                fn_call: quote! { #entity_name::#fn_name(&db, &params) },
-            })
+                fn_call: quote! { #entity_name::#fn_name(&db, &body) },
+            }),
         }
     }
 
@@ -132,7 +133,6 @@ impl EntityMacros {
         statements
     }
 
-
     pub fn delete_fn_def(&self) -> FunctionDef {
         let pk_type = &self.pk.definition.field.tpe;
         let pk_name = &self.pk.definition.field.name;
@@ -140,26 +140,26 @@ impl EntityMacros {
         let fn_name = format_ident!("delete_and_commit");
         let delete_statements = self.delete_statements();
         let fn_stream = quote! {
-             pub fn #fn_name(db: &::redb::Database, pk: &#pk_type) -> Result<(), AppError> {
-                let tx = db.begin_write()?;
-                {
-                    #(#delete_statements)*
-                }
-                tx.commit()?;
-                Ok(())
-            }
-         };
+            pub fn #fn_name(db: &::redb::Database, pk: &#pk_type) -> Result<(), AppError> {
+               let tx = db.begin_write()?;
+               {
+                   #(#delete_statements)*
+               }
+               tx.commit()?;
+               Ok(())
+           }
+        };
         FunctionDef {
             entity_name: entity_name.clone(),
             fn_name: fn_name.clone(),
             return_type: syn::parse_quote!(()),
             fn_stream,
             endpoint_def: Some(EndpointDef {
-                param_extraction: FromPath(syn::parse_quote!(RequestByParams<#pk_type>)),
+                param_extraction: FromPath(vec![GetParam { name: pk_name.clone(), ty: pk_type.clone(), description: "Primary key".to_string() }]),
                 method: HttpMethod::DELETE,
-                endpoint: format!("/{}/{}/{{value}}", entity_name.to_string().to_lowercase(), pk_name.clone()),
-                fn_call: quote! { #entity_name::#fn_name(&db, &params.value) },
-            })
+                endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), pk_name, pk_name),
+                fn_call: quote! { #entity_name::#fn_name(&db, &#pk_name) },
+            }),
         }
     }
 

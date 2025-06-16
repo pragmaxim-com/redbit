@@ -1,5 +1,8 @@
 Built for blazing fast persistence of terra bytes of structured data on a single machine
-while offering rich querying capabilities, eg. bitcoin/blockchain data.
+while offering rich querying capabilities, e.g. bitcoin/blockchain data. Blockchains need rich and often
+analytical queries which is done through explorers because indexing speed of even embedded/in-process (not through socket) 
+analytical db like [DuckDB](https://duckdb.org/) right on the node would be an order of magnitude slower than doing so with 
+[Redb](https://github.com/cberner/redb) or [RocksDb](https://rocksdb.org/).
 
 Redbit reads struct annotations and derives code necessary for persisting and querying structured data into/from
 [Redb](https://github.com/cberner/redb) using secondary indexes and dictionaries, served by [axum](https://github.com/tokio-rs/axum)
@@ -18,7 +21,7 @@ through auto-generated REST API.
 - ✅ Optional dictionaries for low cardinality fields
 - ✅ One-to-One and One-to-Many entities with cascade read/write/delete
 - ✅ All goodies including intuitive data ordering without writing custom codecs
-- ✅ Http rest API at http://127.0.0.1:8000/swagger-ui/, each method has a corresponding endpoint
+- ✅ auto-generated http rest API at http://127.0.0.1:8000/swagger-ui/
 
 Let's say we want to persist and query blockchain data using Redbit, declare annotated Structs `examples/utxo/src/lib.rs`:
 

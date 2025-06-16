@@ -182,34 +182,6 @@ where
     }
 }
 
-#[derive(Deserialize)]
-pub struct RequestRangeParams<F, T> {
-    pub from: F,
-    pub until: T,
-}
-
-#[derive(Deserialize)]
-pub struct RequestByParams<B> {
-    pub value: B,
-}
-
-#[derive(Deserialize)]
-pub struct TakeParams {
-    pub take: u32,
-}
-
-#[derive(Deserialize)]
-pub struct FirstParams {
-    pub first: bool,
-}
-
-#[derive(Deserialize)]
-pub struct LastParams {
-    pub last: bool,
-}
-
-
-
 // Create our own JSON extractor by wrapping `axum::Json`. This makes it easy to override the
 // rejection and provide our own which formats errors to match our application.
 //

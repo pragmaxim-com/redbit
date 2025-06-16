@@ -1,5 +1,5 @@
 use crate::http::ParamExtraction::FromQuery;
-use crate::http::{EndpointDef, FunctionDef, HttpMethod};
+use crate::http::{EndpointDef, FunctionDef, HttpMethod, GetParam};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
@@ -21,10 +21,14 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
         return_type: syn::parse_quote!(Option<#entity_type>),
         fn_stream,
         endpoint_def: Some(EndpointDef {
-            param_extraction: FromQuery(syn::parse_quote!(FirstParams)),
+            param_extraction: FromQuery(vec![GetParam {
+                name: format_ident!("first"),
+                ty: syn::parse_quote!(bool),
+                description: "Fetch the first entity".to_string(),
+            }]),
             method: HttpMethod::GET,
             endpoint: format!("/{}?first=", entity_name.to_string().to_lowercase()),
             fn_call: quote! { #entity_name::#fn_name(&tx) },
-        })
+        }),
     }
 }

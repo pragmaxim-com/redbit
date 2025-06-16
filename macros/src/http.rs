@@ -1,4 +1,4 @@
-use proc_macro2::{Ident, TokenStream};
+use proc_macro2::{Ident, Literal, TokenStream};
 use quote::{format_ident, quote};
 use std::fmt::Display;
 use syn::Type;
@@ -34,10 +34,24 @@ pub struct FunctionDef {
 }
 
 #[derive(Clone)]
+pub struct GetParam {
+    pub name: Ident,
+    pub ty: Type,
+    pub description: String
+}
+
+#[derive(Clone)]
+pub struct PostParam {
+    pub name: Ident,
+    pub ty: Type,
+    pub content_type: String
+}
+
+#[derive(Clone)]
 pub enum ParamExtraction {
-    FromPath(Type),
-    FromQuery(Type),
-    FromBody(Type),
+    FromPath(Vec<GetParam>),
+    FromQuery(Vec<GetParam>),
+    FromBody(PostParam),
 }
 
 #[derive(Clone, Debug)]
@@ -88,9 +102,35 @@ pub fn to_http_endpoint(fn_def: &FunctionDef, endpoint_def: &EndpointDef) -> Htt
     let return_type = &fn_def.return_type;
     let fn_call = endpoint_def.fn_call.clone();
     let param_binding = match endpoint_def.param_extraction.clone() {
-        ParamExtraction::FromPath(ty) => quote! { ::axum::extract::Path(params): ::axum::extract::Path<#ty> },
-        ParamExtraction::FromQuery(ty) => quote! { ::axum::extract::Query(params): ::axum::extract::Query<#ty> },
-        ParamExtraction::FromBody(ty) => quote! { AppJson(params): AppJson<#ty> },
+        ParamExtraction::FromPath(params) => {
+            match &params[..] {
+                [] => quote! {},
+                [GetParam { name, ty, description: _}] => {
+                    quote! { ::axum::extract::Path(#name): ::axum::extract::Path<#ty> }
+                }
+                _ => {
+                    let bindings: Vec<Ident> = params.iter().map(|p| p.name.clone()).collect();
+                    let types: Vec<&Type> = params.iter().map(|p| &p.ty).collect();
+                    quote! { ::axum::extract::Path((#(#bindings),*)): ::axum::extract::Path<(#(#types),*)> }
+                }
+            }
+        }
+        ParamExtraction::FromQuery(params) => {
+            match &params[..] {
+                [] => quote! {},
+                [GetParam { name, ty, description: _}] => {
+                    quote! { ::axum::extract::Query(#name): ::axum::extract::Query<#ty> }
+                }
+                _ => {
+                    let bindings: Vec<Ident> = params.iter().map(|p| p.name.clone()).collect();
+                    let types: Vec<&Type> = params.iter().map(|p| &p.ty).collect();
+                    quote! { ::axum::extract::Query((#(#bindings),*)): ::axum::extract::Query<(#(#types),*)> }
+                }
+            }
+        }
+        ParamExtraction::FromBody(PostParam {name, ty, content_type: _}) => {
+            quote! { AppJson(#name): AppJson<#ty> }
+        }
     };
     let endpoint_name = fn_def.entity_name.to_string();
     let endpoint_ident = fn_def.entity_name.clone();
@@ -114,12 +154,45 @@ pub fn to_http_endpoint(fn_def: &FunctionDef, endpoint_def: &EndpointDef) -> Htt
 
     let responses = match endpoint_def.method {
         HttpMethod::GET => quote! { responses((status = OK, body = #endpoint_ident)) }, // GET can return Vec<T> better use #return_type
-        HttpMethod::POST => quote! { request_body(content = #endpoint_ident, content_type = "application/json"), responses((status = OK, body = #return_type)) },
+        HttpMethod::POST => quote! { responses((status = OK, body = #return_type)) },
         HttpMethod::DELETE | HttpMethod::HEAD => quote! { responses((status = OK)) },
+    };
+    // params can be mapped also with IntoParams trait, but for now we use the explicit extraction
+
+    let params = match endpoint_def.param_extraction.clone() {
+        ParamExtraction::FromPath(params) => {
+            let param_tokens: Vec<TokenStream> = params.iter().map(|param| {
+                let name_str = Literal::string(&param.name.to_string());
+                let ty = &param.ty;
+                let desc = Literal::string(&param.description);
+                quote! { (#name_str = #ty, Path, description = #desc) }
+            }).collect();
+
+            quote! {
+                params( #(#param_tokens),* )
+            }
+        },
+        ParamExtraction::FromQuery(params) => {
+            let param_tokens: Vec<TokenStream> = params.iter().map(|param| {
+                let name_str = Literal::string(&param.name.to_string());
+                let ty = &param.ty;
+                let desc = Literal::string(&param.description);
+                quote! { (#name_str = #ty, Query, description = #desc) }
+            }).collect();
+
+            quote! {
+                params( #(#param_tokens),* )
+            }
+        },
+        ParamExtraction::FromBody(param) => {
+            let content_type = Literal::string(&param.content_type);
+            let param_type = param.ty;
+            quote! { request_body(content = #param_type, content_type = #content_type) }
+        },
     };
 
     let handler = quote! {
-        #[utoipa::path(#method_ident, path = #endpoint_path, #responses, tag = #endpoint_name)]
+        #[utoipa::path(#method_ident, path = #endpoint_path, #params, #responses, tag = #endpoint_name)]
         #[axum::debug_handler]
         pub async fn #handler_fn_name(
             ::axum::extract::State(state): ::axum::extract::State<RequestState>, #param_binding
