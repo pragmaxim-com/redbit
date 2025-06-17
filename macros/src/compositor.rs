@@ -43,11 +43,15 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
         impl #entity_name {
             #(#function_streams)*
 
-            pub fn sample(pk: &#pk_type) -> Self {
+            pub fn sample_with(pk: &#pk_type) -> Self {
                 #entity_name {
                     #pk_name: pk.clone(),
                     #(#struct_default_inits),*
                 }
+            }
+
+            pub fn sample() -> Self {
+                #entity_name::sample_with(&#pk_type::default())
             }
 
             fn compose(tx: &::redbit::redb::ReadTransaction, pk: &#pk_type) -> Result<#entity_type, AppError> {

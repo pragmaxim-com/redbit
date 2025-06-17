@@ -3,7 +3,7 @@ use utxo::*;
 
 #[test]
 fn each_entity_should_have_a_default_sample() {
-    let block = Block::sample(&BlockPointer { height: 0 });
+    let block = Block::sample();
     assert_eq!(block.id.height, 0);
     assert_eq!(block.header.timestamp, 0);
     assert_eq!(block.transactions.len(), 3);
@@ -113,7 +113,7 @@ fn it_should_get_entities_by_range_on_index() {
     let from_timestamp = blocks[1].header.timestamp;
     let until_timestamp = blocks[3].header.timestamp;
     let expected_blocks: Vec<BlockHeader> = vec![blocks[1].header.clone(), blocks[2].header.clone()];
-    let unique_timestamps: HashSet<u32> = BlockHeader::take(&read_tx, 1000).unwrap().iter().map(|h| h.timestamp.0).collect();
+    let unique_timestamps: HashSet<u32> = BlockHeader::take(&read_tx, 1000).unwrap().iter().map(|h| h.timestamp).collect();
     assert_eq!(unique_timestamps.len(), 4);
 
     let found_by_timestamp_range = BlockHeader::range_by_timestamp(&read_tx, &from_timestamp, &until_timestamp).expect("Failed to range by timestamp");

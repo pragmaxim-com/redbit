@@ -27,9 +27,9 @@ pub fn o2m_relation_default_init(child_name: &Ident, child_type: &Type) -> Token
     quote! {
         #child_name:  {
             let (from, _) = pk.fk_range();
-            let sample_0 = #child_type::sample(&from);
-            let sample_1 = #child_type::sample(&from.next());
-            let sample_2 = #child_type::sample(&from.next().next());
+            let sample_0 = #child_type::sample_with(&from);
+            let sample_1 = #child_type::sample_with(&from.next());
+            let sample_2 = #child_type::sample_with(&from.next().next());
             vec![sample_0, sample_1, sample_2]
         }
     }
