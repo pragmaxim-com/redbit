@@ -7,7 +7,7 @@ use syn::Type;
 pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> FunctionDef {
     let fn_name = format_ident!("last");
     let fn_stream = quote! {
-        pub fn #fn_name(tx: &::redb::ReadTransaction) -> Result<Option<#entity_type>, AppError> {
+        pub fn #fn_name(tx: &::redbit::redb::ReadTransaction) -> Result<Option<#entity_type>, AppError> {
             let table_pk_8 = tx.open_table(#table)?;
             if let Some((k, _)) = table_pk_8.last()? {
                 return Self::compose(&tx, &k.value()).map(Some);

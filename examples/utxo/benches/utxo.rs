@@ -10,7 +10,7 @@ fn configure_criterion() -> Criterion {
 
 fn benchmark_persistence(c: &mut Criterion) {
     let db = open_or_create_db("benchmark");
-    let blocks = get_blocks(Height(3), 10, 20, 3);
+    let blocks = get_blocks(3, 10, 20, 3);
 
     let mut group = c.benchmark_group("Block");
     group.throughput(Throughput::Elements(1));

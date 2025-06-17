@@ -3,13 +3,13 @@ use utxo::*;
 
 #[test]
 fn each_entity_should_have_a_default_sample() {
-    let block = Block::sample(&BlockPointer { height: Height(0) });
-    assert_eq!(block.id.height, Height(0));
-    assert_eq!(block.header.timestamp, Timestamp(0));
+    let block = Block::sample(&BlockPointer { height: 0 });
+    assert_eq!(block.id.height, 0);
+    assert_eq!(block.header.timestamp, 0);
     assert_eq!(block.transactions.len(), 3);
     for (idx, tx) in block.transactions.iter().enumerate() {
         assert_eq!(tx.id.tx_index as usize, idx);
-        assert_eq!(tx.id.block_pointer, BlockPointer { height: Height(0) });
+        assert_eq!(tx.id.block_pointer, BlockPointer { height: 0 });
         assert_eq!(tx.utxos.len(), 3);
         for (idx, utxo) in tx.utxos.iter().enumerate() {
             assert_eq!(utxo.id.utxo_index as usize, idx);
@@ -127,9 +127,9 @@ fn it_should_get_entities_by_range_on_pk() {
 
     let read_tx = db.begin_read().unwrap();
 
-    let block_pointer_1 = BlockPointer { height: Height(1) };
-    let block_pointer_2 = BlockPointer { height: Height(2) };
-    let block_pointer_3 = BlockPointer { height: Height(3) };
+    let block_pointer_1 = BlockPointer { height: 1 };
+    let block_pointer_2 = BlockPointer { height: 2 };
+    let block_pointer_3 = BlockPointer { height: 3 };
     let actual_blocks = Block::range(&read_tx, &block_pointer_1, &block_pointer_3).expect("Failed to range by PK");
     let expected_blocks: Vec<Block> = vec![blocks[1].clone(), blocks[2].clone()];
 

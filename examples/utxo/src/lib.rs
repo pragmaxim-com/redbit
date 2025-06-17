@@ -1,9 +1,20 @@
 pub mod data;
-pub mod types;
 pub mod demo;
 pub use data::*;
 pub use redbit::*;
-pub use types::*;
+
+pub type Timestamp = u32;
+pub type Height = u32;
+pub type Amount = u64;
+pub type Nonce = u32;
+pub type TxIndex = u16;
+pub type UtxoIndex = u16;
+pub type AssetIndex = u16;
+pub type Datum = String;
+pub type Address = String;
+pub type AssetName = String;
+pub type PolicyId = String;
+pub type Hash = String;
 
 #[entity]
 pub struct Block {

@@ -4,7 +4,7 @@ use redbit::AppError;
 use crate::*;
 
 pub fn run(db: Arc<Database>) -> Result<(), AppError> {
-    let blocks = get_blocks(Height(1), 10, 10, 3);
+    let blocks = get_blocks(1, 10, 10, 3);
 
     println!("Persisting blocks:");
     let write_tx = db.begin_write()?;

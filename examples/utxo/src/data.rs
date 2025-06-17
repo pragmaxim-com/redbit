@@ -23,7 +23,7 @@ pub fn empty_temp_db(name: &str) -> Database {
 
 pub fn init_temp_db(name: &str) -> (Vec<Block>, Database) {
     let db = empty_temp_db(name);
-    let blocks = get_blocks(Height(4), 4, 4, 4);
+    let blocks = get_blocks(4, 4, 4, 4);
     let write_tx = db.begin_write().expect("Failed to begin write transaction");
     Block::store_many(&write_tx, &blocks).expect("Failed to persist blocks");
     write_tx.commit().expect("Failed to commit transaction");
@@ -34,9 +34,9 @@ pub fn get_blocks(block_count: Height, tx_count: TxIndex, utxo_count: UtxoIndex,
     let timestamp = 1678296000;
     let block_hash = String::from("block_hash");
     let merkle_root = String::from("merkle_root");
-    (0..block_count.0)
+    (0..block_count)
         .map(|height| {
-            let block_id = BlockPointer { height: Height(height) };
+            let block_id = BlockPointer { height: 4 };
             let transactions: Vec<Transaction> = (0..tx_count)
                 .map(|tx_index| {
                     let tx_id = TxPointer { block_pointer: block_id.clone(), tx_index };
@@ -68,7 +68,7 @@ pub fn get_blocks(block_count: Height, tx_count: TxIndex, utxo_count: UtxoIndex,
 
             Block {
                 id: block_id.clone(),
-                header: BlockHeader { id: block_id, hash: block_hash.clone(), timestamp: Timestamp(timestamp + u32::from(height)), merkle_root: merkle_root.clone(), nonce: 0 },
+                header: BlockHeader { id: block_id, hash: block_hash.clone(), timestamp: timestamp + u32::from(height), merkle_root: merkle_root.clone(), nonce: 0 },
                 transactions,
             }
         })

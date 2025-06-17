@@ -50,35 +50,35 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
                 }
             }
 
-            fn compose(tx: &::redb::ReadTransaction, pk: &#pk_type) -> Result<#entity_type, AppError> {
+            fn compose(tx: &::redbit::redb::ReadTransaction, pk: &#pk_type) -> Result<#entity_type, AppError> {
                 Ok(#entity_name {
                     #pk_name: pk.clone(),
                     #(#struct_inits),*
                 })
             }
 
-            pub fn store(tx: &::redb::WriteTransaction, instance: &#entity_type) -> Result<(), AppError> {
+            pub fn store(tx: &::redbit::redb::WriteTransaction, instance: &#entity_type) -> Result<(), AppError> {
                 #(#store_statements)*
                 Ok(())
             }
 
-            pub fn store_many(tx: &::redb::WriteTransaction, instances: &Vec<#entity_type>) -> Result<(), AppError> {
+            pub fn store_many(tx: &::redbit::redb::WriteTransaction, instances: &Vec<#entity_type>) -> Result<(), AppError> {
                 #(#store_many_statements)*
                 Ok(())
             }
 
-            pub fn delete(tx: &::redb::WriteTransaction, pk: &#pk_type) -> Result<(), AppError> {
+            pub fn delete(tx: &::redbit::redb::WriteTransaction, pk: &#pk_type) -> Result<(), AppError> {
                 #(#delete_statements)*
                 Ok(())
             }
 
-            pub fn delete_many(tx: &::redb::WriteTransaction, pks: &Vec<#pk_type>) -> Result<(), AppError> {
+            pub fn delete_many(tx: &::redbit::redb::WriteTransaction, pks: &Vec<#pk_type>) -> Result<(), AppError> {
                 #(#delete_many_statements)*
                 Ok(())
             }
 
-            pub fn routes() -> utoipa_axum::router::OpenApiRouter<RequestState> {
-                utoipa_axum::router::OpenApiRouter::new()
+            pub fn routes() -> redbit::utoipa_axum::router::OpenApiRouter<RequestState> {
+                redbit::utoipa_axum::router::OpenApiRouter::new()
                     #(#route_chains)*
             }
         }

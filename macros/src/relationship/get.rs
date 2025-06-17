@@ -11,7 +11,7 @@ pub fn o2o_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, pk_na
         fn_name: fn_name.clone(),
         return_type: syn::parse_quote!(#child_type),
         fn_stream: quote! {
-            pub fn #fn_name(tx: &::redb::ReadTransaction, pk: &#pk_type) -> Result<#child_type, AppError> {
+            pub fn #fn_name(tx: &::redbit::redb::ReadTransaction, pk: &#pk_type) -> Result<#child_type, AppError> {
                 #child_type::get(&tx, &pk).and_then(|opt| {
                     opt.ok_or_else(|| AppError::Internal(format!("No child found for pk: {:?}", pk)))
                 })
@@ -33,7 +33,7 @@ pub fn o2m_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, pk_na
         fn_name: fn_name.clone(),
         return_type: syn::parse_quote!(Vec<#child_type>),
         fn_stream: quote! {
-            pub fn #fn_name(tx: &::redb::ReadTransaction, pk: &#pk_type) -> Result<Vec<#child_type>, AppError> {
+            pub fn #fn_name(tx: &::redbit::redb::ReadTransaction, pk: &#pk_type) -> Result<Vec<#child_type>, AppError> {
                 let (from, to) = pk.fk_range();
                 #child_type::range(&tx, &from, &to)
             }

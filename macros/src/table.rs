@@ -14,7 +14,7 @@ impl TableDef {
         let name_str = name.to_string();
         let definition =
             quote! {
-            pub const #name: ::redb::TableDefinition<'static, Bincode<#pk_type>, ()> = ::redb::TableDefinition::new(#name_str);
+            pub const #name: ::redbit::redb::TableDefinition<'static, Bincode<#pk_type>, ()> = ::redbit::redb::TableDefinition::new(#name_str);
         };
         TableDef {
             name,
@@ -31,7 +31,7 @@ impl TableDef {
     );
         let name_str = &name.to_string();
         let definition = quote! {
-        pub const #name: ::redb::TableDefinition<'static, Bincode<#pk_type>, Bincode<#column_type>> = ::redb::TableDefinition::new(#name_str);
+        pub const #name: ::redbit::redb::TableDefinition<'static, Bincode<#pk_type>, Bincode<#column_type>> = ::redbit::redb::TableDefinition::new(#name_str);
     };
         TableDef {
             name,
@@ -43,7 +43,7 @@ impl TableDef {
         let name = format_ident!("{}_{}_INDEX", entity_name.to_string().to_uppercase(), column_name.to_string().to_uppercase());
         let name_str = &name.to_string();
         let definition = quote! {
-        pub const #name: ::redb::MultimapTableDefinition<'static, Bincode<#column_type>, Bincode<#pk_type>> = ::redb::MultimapTableDefinition::new(#name_str);
+        pub const #name: ::redbit::redb::MultimapTableDefinition<'static, Bincode<#column_type>, Bincode<#pk_type>> = ::redbit::redb::MultimapTableDefinition::new(#name_str);
     };
         TableDef {
             name,
@@ -56,7 +56,7 @@ impl TableDef {
         let name_str = &name.to_string();
         let definition =
             quote! {
-            pub const #name: ::redb::MultimapTableDefinition<'static, Bincode<#pk_type>, Bincode<#pk_type>>= ::redb::MultimapTableDefinition::new(#name_str);
+            pub const #name: ::redbit::redb::MultimapTableDefinition<'static, Bincode<#pk_type>, Bincode<#pk_type>>= ::redbit::redb::MultimapTableDefinition::new(#name_str);
         };
         TableDef {
             name,
@@ -69,7 +69,7 @@ impl TableDef {
         let name_str = &name.to_string();
         let definition =
             quote! {
-            pub const #name: ::redb::TableDefinition<'static, Bincode<#pk_type>, Bincode<#column_type>> = ::redb::TableDefinition::new(#name_str);
+            pub const #name: ::redbit::redb::TableDefinition<'static, Bincode<#pk_type>, Bincode<#column_type>> = ::redbit::redb::TableDefinition::new(#name_str);
         };
         TableDef {
             name,
@@ -81,7 +81,7 @@ impl TableDef {
         let name = format_ident!("{}_{}_TO_DICT_PK", entity_name.to_string().to_uppercase(), column_name.to_string().to_uppercase());
         let name_str = &name.to_string();
         let definition = quote! {
-        pub const #name: ::redb::TableDefinition<'static, Bincode<#column_type>, Bincode<#pk_type>> = ::redb::TableDefinition::new(#name_str);
+        pub const #name: ::redbit::redb::TableDefinition<'static, Bincode<#column_type>, Bincode<#pk_type>> = ::redbit::redb::TableDefinition::new(#name_str);
     };
         TableDef {
             name,
@@ -98,7 +98,7 @@ impl TableDef {
         );
         let name_str = &name.to_string();
         let definition = quote! {
-        pub const #name: ::redb::TableDefinition<'static, Bincode<#pk_type>, Bincode<#pk_type>> = ::redb::TableDefinition::new(#name_str);
+        pub const #name: ::redbit::redb::TableDefinition<'static, Bincode<#pk_type>, Bincode<#pk_type>> = ::redbit::redb::TableDefinition::new(#name_str);
     };
         TableDef {
             name,

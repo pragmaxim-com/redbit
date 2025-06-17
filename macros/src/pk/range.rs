@@ -8,7 +8,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
     let fn_name = format_ident!("range");
     let fn_stream =
         quote! {
-            pub fn #fn_name(tx: &::redb::ReadTransaction, from: &#pk_type, until: &#pk_type) -> Result<Vec<#entity_type>, AppError> {
+            pub fn #fn_name(tx: &::redbit::redb::ReadTransaction, from: &#pk_type, until: &#pk_type) -> Result<Vec<#entity_type>, AppError> {
                 let table_pk_9 = tx.open_table(#table)?;
                 let range = from.clone()..until.clone();
                 let mut iter = table_pk_9.range(range)?;

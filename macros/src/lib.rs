@@ -60,7 +60,7 @@ pub fn entity(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut s = parse_macro_input!(item as ItemStruct);
     s.attrs.retain(|a| !a.path().is_ident("derive"));
     s.attrs.insert(0, parse_quote! {
-        #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, Eq, Entity, PartialEq, utoipa::ToSchema)]
+        #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, Eq, Entity, PartialEq, redbit::utoipa::ToSchema)]
     });
     quote!(#s).into()
 }

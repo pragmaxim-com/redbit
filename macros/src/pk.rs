@@ -192,9 +192,9 @@ impl DbPkMacros {
                 }
             }
 
-            impl utoipa::PartialSchema for #struct_name {
-                fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
-                    use utoipa::openapi::schema::*;
+            impl redbit::utoipa::PartialSchema for #struct_name {
+                fn schema() -> redbit::utoipa::openapi::RefOr<redbit::utoipa::openapi::schema::Schema> {
+                    use redbit::utoipa::openapi::schema::*;
                     Schema::Object(
                         ObjectBuilder::new()
                             .schema_type(SchemaType::Type(Type::String))
@@ -204,9 +204,9 @@ impl DbPkMacros {
                 }
             }
 
-            impl utoipa::ToSchema for #struct_name {
-                fn schemas(schemas: &mut Vec<(String, utoipa::openapi::RefOr<utoipa::openapi::schema::Schema>)>) {
-                    schemas.push((stringify!(#struct_name).to_string(), <#struct_name as utoipa::PartialSchema>::schema()));
+            impl redbit::utoipa::ToSchema for #struct_name {
+                fn schemas(schemas: &mut Vec<(String, redbit::utoipa::openapi::RefOr<redbit::utoipa::openapi::schema::Schema>)>) {
+                    schemas.push((stringify!(#struct_name).to_string(), <#struct_name as redbit::utoipa::PartialSchema>::schema()));
                 }
             }
         };
@@ -294,9 +294,9 @@ impl DbPkMacros {
                 }
             }
 
-            impl utoipa::PartialSchema for #struct_name {
-                fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
-                    use utoipa::openapi::schema::*;
+            impl redbit::utoipa::PartialSchema for #struct_name {
+                fn schema() -> redbit::utoipa::openapi::RefOr<redbit::utoipa::openapi::schema::Schema> {
+                    use redbit::utoipa::openapi::schema::*;
                     let example = format!("{}-{}", #parent_type::default(), "0");
                     Schema::Object(
                         ObjectBuilder::new()
@@ -307,10 +307,10 @@ impl DbPkMacros {
                 }
             }
 
-            impl utoipa::ToSchema for #struct_name {
-                fn schemas(schemas: &mut Vec<(String, utoipa::openapi::RefOr<utoipa::openapi::schema::Schema>)>) {
-                    use utoipa::ToSchema;
-                    schemas.push((stringify!(#struct_name).to_string(), <#struct_name as utoipa::PartialSchema>::schema()));
+            impl redbit::utoipa::ToSchema for #struct_name {
+                fn schemas(schemas: &mut Vec<(String, redbit::utoipa::openapi::RefOr<redbit::utoipa::openapi::schema::Schema>)>) {
+                    use redbit::utoipa::ToSchema;
+                    schemas.push((stringify!(#struct_name).to_string(), <#struct_name as redbit::utoipa::PartialSchema>::schema()));
                     <#parent_type as ToSchema>::schemas(schemas);
                 }
             }
