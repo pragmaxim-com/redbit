@@ -1,6 +1,6 @@
 use crate::column::DbColumnMacros;
 use crate::field_parser::*;
-use crate::http::ParamExtraction::{FromBody, FromPath};
+use crate::http::HttpParams::{FromBody, FromPath};
 use crate::http::{EndpointDef, FunctionDef, GetParam, HttpMethod, PostParam};
 use crate::pk::DbPkMacros;
 use crate::relationship::{DbRelationshipMacros, TransientMacros};
@@ -107,17 +107,17 @@ impl EntityMacros {
         FunctionDef {
             entity_name: entity_name.clone(),
             fn_name: fn_name.clone(),
-            return_type: syn::parse_quote!(#pk_type),
+            fn_return_type: syn::parse_quote!(#pk_type),
             fn_stream,
+            fn_call: quote! { #entity_name::#fn_name(&db, &body) },
             endpoint_def: Some(EndpointDef {
-                param_extraction: FromBody(PostParam {
+                params: FromBody(PostParam {
                     name: format_ident!("body"),
                     ty: entity_type.clone(),
                     content_type: "application/json".to_string(),
                 }),
-                method: HttpMethod::POST,
+                method: HttpMethod::POST(pk_type.clone()),
                 endpoint: format!("/{}", entity_name.to_string().to_lowercase()),
-                fn_call: quote! { #entity_name::#fn_name(&db, &body) },
             }),
         }
     }
@@ -152,13 +152,13 @@ impl EntityMacros {
         FunctionDef {
             entity_name: entity_name.clone(),
             fn_name: fn_name.clone(),
-            return_type: syn::parse_quote!(()),
+            fn_return_type: syn::parse_quote!(()),
             fn_stream,
+            fn_call: quote! { #entity_name::#fn_name(&db, &#pk_name) },
             endpoint_def: Some(EndpointDef {
-                param_extraction: FromPath(vec![GetParam { name: pk_name.clone(), ty: pk_type.clone(), description: "Primary key".to_string() }]),
+                params: FromPath(vec![GetParam { name: pk_name.clone(), ty: pk_type.clone(), description: "Primary key".to_string() }]),
                 method: HttpMethod::DELETE,
                 endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), pk_name, pk_name),
-                fn_call: quote! { #entity_name::#fn_name(&db, &#pk_name) },
             }),
         }
     }

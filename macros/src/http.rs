@@ -28,8 +28,9 @@ impl Display for HttpEndpointMacro {
 pub struct FunctionDef {
     pub entity_name: Ident,
     pub fn_name: Ident,
-    pub return_type: Type,
+    pub fn_return_type: Type,
     pub fn_stream: TokenStream,
+    pub fn_call: TokenStream,
     pub endpoint_def: Option<EndpointDef>,
 }
 
@@ -48,16 +49,16 @@ pub struct PostParam {
 }
 
 #[derive(Clone)]
-pub enum ParamExtraction {
+pub enum HttpParams {
     FromPath(Vec<GetParam>),
     FromQuery(Vec<GetParam>),
     FromBody(PostParam),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum HttpMethod {
-    GET,
-    POST,
+    GET(Type),
+    POST(Type),
     DELETE,
     HEAD
 }
@@ -65,8 +66,8 @@ pub enum HttpMethod {
 impl Display for HttpMethod {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            HttpMethod::GET => write!(f, "get"),
-            HttpMethod::POST => write!(f, "post"),
+            HttpMethod::GET(_) => write!(f, "get"),
+            HttpMethod::POST(_) => write!(f, "post"),
             HttpMethod::DELETE => write!(f, "delete"),
             HttpMethod::HEAD => write!(f, "head"),
         }
@@ -75,10 +76,9 @@ impl Display for HttpMethod {
 
 #[derive(Clone)]
 pub struct EndpointDef {
-    pub param_extraction: ParamExtraction,
+    pub params: HttpParams,
     pub endpoint: String,
     pub method: HttpMethod,
-    pub fn_call: TokenStream,
 }
 
 pub fn to_http_endpoints(defs: Vec<FunctionDef>) -> (Vec<HttpEndpointMacro>, Vec<TokenStream>) {
@@ -99,10 +99,10 @@ pub fn to_http_endpoints(defs: Vec<FunctionDef>) -> (Vec<HttpEndpointMacro>, Vec
 
 pub fn to_http_endpoint(fn_def: &FunctionDef, endpoint_def: &EndpointDef) -> HttpEndpointMacro {
     let handler_fn_name = format_ident!("{}_{}", fn_def.entity_name.to_string().to_lowercase(), fn_def.fn_name);
-    let return_type = &fn_def.return_type;
-    let fn_call = endpoint_def.fn_call.clone();
-    let param_binding = match endpoint_def.param_extraction.clone() {
-        ParamExtraction::FromPath(params) => {
+    let fn_return_type = &fn_def.fn_return_type;
+    let fn_call = fn_def.fn_call.clone();
+    let param_binding = match endpoint_def.params.clone() {
+        HttpParams::FromPath(params) => {
             match &params[..] {
                 [] => quote! {},
                 [GetParam { name, ty, description: _}] => {
@@ -115,7 +115,7 @@ pub fn to_http_endpoint(fn_def: &FunctionDef, endpoint_def: &EndpointDef) -> Htt
                 }
             }
         }
-        ParamExtraction::FromQuery(params) => {
+        HttpParams::FromQuery(params) => {
             match &params[..] {
                 [] => quote! {},
                 [GetParam { name, ty, description: _}] => {
@@ -128,23 +128,22 @@ pub fn to_http_endpoint(fn_def: &FunctionDef, endpoint_def: &EndpointDef) -> Htt
                 }
             }
         }
-        ParamExtraction::FromBody(PostParam {name, ty, content_type: _}) => {
+        HttpParams::FromBody(PostParam {name, ty, content_type: _}) => {
             quote! { AppJson(#name): AppJson<#ty> }
         }
     };
     let endpoint_name = fn_def.entity_name.to_string();
-    let endpoint_ident = fn_def.entity_name.clone();
     let endpoint_path = endpoint_def.endpoint.clone();
     let method_ident = format_ident!("{}", endpoint_def.method.to_string());
     let db_call = match endpoint_def.method {
-        HttpMethod::GET | HttpMethod::HEAD =>
+        HttpMethod::GET(_) | HttpMethod::HEAD =>
             quote! {
                 state.db.begin_read()
                     .map_err(AppError::from)
                     .and_then(|tx| #fn_call)
                     .map(AppJson)
             },
-        HttpMethod::POST | HttpMethod::DELETE =>
+        HttpMethod::POST(_) | HttpMethod::DELETE =>
             quote! {
                 let db = state.db;
                 let result = #fn_call?;
@@ -152,15 +151,15 @@ pub fn to_http_endpoint(fn_def: &FunctionDef, endpoint_def: &EndpointDef) -> Htt
             },
     };
 
-    let responses = match endpoint_def.method {
-        HttpMethod::GET => quote! { responses((status = OK, body = #endpoint_ident)) }, // GET can return Vec<T> better use #return_type
-        HttpMethod::POST => quote! { responses((status = OK, body = #return_type)) },
+    let responses = match endpoint_def.method.clone() {
+        HttpMethod::GET(return_ty) => quote! { responses((status = OK, body = #return_ty)) },
+        HttpMethod::POST(return_ty) => quote! { responses((status = OK, body = #return_ty)) },
         HttpMethod::DELETE | HttpMethod::HEAD => quote! { responses((status = OK)) },
     };
     // params can be mapped also with IntoParams trait, but for now we use the explicit extraction
 
-    let params = match endpoint_def.param_extraction.clone() {
-        ParamExtraction::FromPath(params) => {
+    let params = match endpoint_def.params.clone() {
+        HttpParams::FromPath(params) => {
             let param_tokens: Vec<TokenStream> = params.iter().map(|param| {
                 let name_str = Literal::string(&param.name.to_string());
                 let ty = &param.ty;
@@ -172,7 +171,7 @@ pub fn to_http_endpoint(fn_def: &FunctionDef, endpoint_def: &EndpointDef) -> Htt
                 params( #(#param_tokens),* )
             }
         },
-        ParamExtraction::FromQuery(params) => {
+        HttpParams::FromQuery(params) => {
             let param_tokens: Vec<TokenStream> = params.iter().map(|param| {
                 let name_str = Literal::string(&param.name.to_string());
                 let ty = &param.ty;
@@ -184,7 +183,7 @@ pub fn to_http_endpoint(fn_def: &FunctionDef, endpoint_def: &EndpointDef) -> Htt
                 params( #(#param_tokens),* )
             }
         },
-        ParamExtraction::FromBody(param) => {
+        HttpParams::FromBody(param) => {
             let content_type = Literal::string(&param.content_type);
             let param_type = param.ty;
             quote! { request_body(content = #param_type, content_type = #content_type) }
@@ -196,7 +195,7 @@ pub fn to_http_endpoint(fn_def: &FunctionDef, endpoint_def: &EndpointDef) -> Htt
         #[axum::debug_handler]
         pub async fn #handler_fn_name(
             axum::extract::State(state): axum::extract::State<RequestState>, #param_binding
-        ) -> Result<AppJson<#return_type>, AppError> {
+        ) -> Result<AppJson<#fn_return_type>, AppError> {
             #db_call
         }
     };

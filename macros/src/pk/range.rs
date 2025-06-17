@@ -1,4 +1,4 @@
-use crate::http::ParamExtraction::FromQuery;
+use crate::http::HttpParams::FromQuery;
 use crate::http::{EndpointDef, FunctionDef, HttpMethod, GetParam};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
@@ -23,16 +23,16 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
-        return_type: syn::parse_quote!(Vec<#entity_type>),
+        fn_return_type: syn::parse_quote!(Vec<#entity_type>),
         fn_stream,
+        fn_call: quote! { #entity_name::#fn_name(&tx, &from, &until) },
         endpoint_def: Some(EndpointDef {
-            param_extraction: FromQuery(vec![
+            params: FromQuery(vec![
                 GetParam { name: format_ident!("from"), ty: pk_type.clone(), description: "Range from inclusive".to_string() },
                 GetParam { name: format_ident!("until"), ty: pk_type.clone(), description: "Range until exclusive".to_string() },
             ]),
-            method: HttpMethod::GET,
+            method: HttpMethod::GET(syn::parse_quote!(Vec<#entity_type>)),
             endpoint: format!("/{}/{}?from=&until=", entity_name.to_string().to_lowercase(), pk_name.clone()),
-            fn_call: quote! { #entity_name::#fn_name(&tx, &from, &until) },
         })
     }
 }

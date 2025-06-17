@@ -1,4 +1,4 @@
-use crate::http::ParamExtraction::FromPath;
+use crate::http::HttpParams::FromPath;
 use crate::http::{EndpointDef, FunctionDef, HttpMethod, GetParam};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
@@ -14,17 +14,17 @@ pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type) -> FunctionD
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
-        return_type: syn::parse_quote!(<#pk_type as ChildPointer>::Parent),
+        fn_return_type: syn::parse_quote!(<#pk_type as ChildPointer>::Parent),
         fn_stream,
+        fn_call: quote! { #entity_name::#fn_name(&tx, &#pk_name) },
         endpoint_def: Some(EndpointDef {
-            param_extraction: FromPath(vec![GetParam {
+            params: FromPath(vec![GetParam {
                 name: pk_name.clone(),
                 ty: pk_type.clone(),
                 description: "Primary key of the owner entity".to_string(),
             }]),
-            method: HttpMethod::GET,
+            method: HttpMethod::GET(pk_type.clone()),
             endpoint: format!("/{}/{}/{{{}}}/{}", entity_name.to_string().to_lowercase(), pk_name, pk_name, fn_name),
-            fn_call: quote! { #entity_name::#fn_name(&tx, &#pk_name) },
         }),
     }
 }

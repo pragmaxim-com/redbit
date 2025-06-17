@@ -24,6 +24,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::any::type_name;
 use std::cmp::Ordering;
+use std::env;
 use std::fmt::Debug;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
@@ -259,4 +260,23 @@ pub async fn serve(state: RequestState, socket_addr: SocketAddr) -> () {
     println!("Starting server on {}", socket_addr);
     let tcp = TcpListener::bind(socket_addr).await.unwrap();
     crate::axum::serve(tcp, router).await.unwrap();
+}
+
+use axum_test::TestServer;
+
+#[tokio::test]
+async fn all_routes_should_work() {
+    let dir = env::temp_dir().join("redbit");
+    let db = Arc::new(Database::create(dir.join("my_db.redb")).expect("Failed to create database"));
+    let router = build_router(RequestState { db: Arc::clone(&db) }).await;
+    let server = TestServer::new(router).unwrap();
+
+    // Get the request.
+    let response = server
+        .get("/ping")
+        .await;
+
+    // Assertions.
+    response.assert_status_ok();
+    response.assert_text("pong!");
 }

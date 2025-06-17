@@ -1,4 +1,4 @@
-use crate::http::ParamExtraction::FromPath;
+use crate::http::HttpParams::FromPath;
 use crate::http::{EndpointDef, FunctionDef, HttpMethod, GetParam};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
@@ -44,17 +44,17 @@ pub fn get_by_dict_def(
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
-        return_type: syn::parse_quote!(Vec<#entity_type>),
+        fn_return_type: syn::parse_quote!(Vec<#entity_type>),
         fn_stream,
+        fn_call: quote! { #entity_name::#fn_name(&tx, &#column_name) },
         endpoint_def: Some(EndpointDef {
-            param_extraction: FromPath(vec![GetParam {
+            params: FromPath(vec![GetParam {
                 name: column_name.clone(),
                 ty: column_type.clone(),
                 description: "Secondary index column with dictionary".to_string(),
             }]),
-            method: HttpMethod::GET,
+            method: HttpMethod::GET(syn::parse_quote!(Vec<#entity_type>)),
             endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), column_name, column_name),
-            fn_call: quote! { #entity_name::#fn_name(&tx, &#column_name) },
         }),
     }
 }
@@ -86,17 +86,17 @@ pub fn get_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &I
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
-        return_type: syn::parse_quote!(Vec<#entity_type>),
+        fn_return_type: syn::parse_quote!(Vec<#entity_type>),
         fn_stream,
+        fn_call: quote! { #entity_name::#fn_name(&tx, &#column_name) },
         endpoint_def: Some(EndpointDef {
-            param_extraction: FromPath(vec![GetParam {
+            params: FromPath(vec![GetParam {
                 name: column_name.clone(),
                 ty: column_type.clone(),
                 description: "Secondary index column".to_string(),
             }]),
-            method: HttpMethod::GET,
+            method: HttpMethod::GET(syn::parse_quote!(Vec<#entity_type>)),
             endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), column_name, column_name),
-            fn_call: quote! { #entity_name::#fn_name(&tx, &#column_name) },
         }),
     }
 }
