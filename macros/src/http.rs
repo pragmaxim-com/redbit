@@ -106,12 +106,12 @@ pub fn to_http_endpoint(fn_def: &FunctionDef, endpoint_def: &EndpointDef) -> Htt
             match &params[..] {
                 [] => quote! {},
                 [GetParam { name, ty, description: _}] => {
-                    quote! { redbit::axum::extract::Path(#name): redbit::axum::extract::Path<#ty> }
+                    quote! { axum::extract::Path(#name): axum::extract::Path<#ty> }
                 }
                 _ => {
                     let bindings: Vec<Ident> = params.iter().map(|p| p.name.clone()).collect();
                     let types: Vec<&Type> = params.iter().map(|p| &p.ty).collect();
-                    quote! { redbit::axum::extract::Path((#(#bindings),*)): redbit::axum::extract::Path<(#(#types),*)> }
+                    quote! { axum::extract::Path((#(#bindings),*)): axum::extract::Path<(#(#types),*)> }
                 }
             }
         }
@@ -119,12 +119,12 @@ pub fn to_http_endpoint(fn_def: &FunctionDef, endpoint_def: &EndpointDef) -> Htt
             match &params[..] {
                 [] => quote! {},
                 [GetParam { name, ty, description: _}] => {
-                    quote! { redbit::axum::extract::Query(#name): redbit::axum::extract::Query<#ty> }
+                    quote! { axum::extract::Query(#name): axum::extract::Query<#ty> }
                 }
                 _ => {
                     let bindings: Vec<Ident> = params.iter().map(|p| p.name.clone()).collect();
                     let types: Vec<&Type> = params.iter().map(|p| &p.ty).collect();
-                    quote! { redbit::axum::extract::Query((#(#bindings),*)): redbit::axum::extract::Query<(#(#types),*)> }
+                    quote! { axum::extract::Query((#(#bindings),*)): axum::extract::Query<(#(#types),*)> }
                 }
             }
         }
@@ -193,9 +193,9 @@ pub fn to_http_endpoint(fn_def: &FunctionDef, endpoint_def: &EndpointDef) -> Htt
 
     let handler = quote! {
         #[redbit::utoipa::path(#method_ident, path = #endpoint_path, #params, #responses, tag = #endpoint_name)]
-        #[redbit::axum::debug_handler]
+        #[axum::debug_handler]
         pub async fn #handler_fn_name(
-            redbit::axum::extract::State(state): redbit::axum::extract::State<RequestState>, #param_binding
+            axum::extract::State(state): axum::extract::State<RequestState>, #param_binding
         ) -> Result<AppJson<#return_type>, AppError> {
             #db_call
         }
