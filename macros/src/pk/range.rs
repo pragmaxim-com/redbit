@@ -1,17 +1,17 @@
-use crate::http::HttpParams::FromQuery;
-use crate::http::{EndpointDef, FunctionDef, HttpMethod, GetParam};
+use crate::rest::HttpParams::FromQuery;
+use crate::rest::{EndpointDef, FunctionDef, HttpMethod};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
 
-pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type: &Type, table: &Ident) -> FunctionDef {
+pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type: &Type, table: &Ident, column_query: &Ident) -> FunctionDef {
     let fn_name = format_ident!("range");
     let fn_stream =
         quote! {
             pub fn #fn_name(tx: &::redbit::redb::ReadTransaction, from: &#pk_type, until: &#pk_type) -> Result<Vec<#entity_type>, AppError> {
                 let table_pk_9 = tx.open_table(#table)?;
-                let range = from.clone()..until.clone();
-                let mut iter = table_pk_9.range(range)?;
+                let range = from..until;
+                let mut iter = table_pk_9.range::<#pk_type>(range)?;
                 let mut results = Vec::new();
                 while let Some(entry_res) = iter.next() {
                     let pk = entry_res?.0.value();
@@ -25,14 +25,12 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
         fn_name: fn_name.clone(),
         fn_return_type: syn::parse_quote!(Vec<#entity_type>),
         fn_stream,
-        fn_call: quote! { #entity_name::#fn_name(&tx, &from, &until) },
+        fn_call: quote! { #entity_name::#fn_name(&tx, &query.from, &query.until) },
         endpoint_def: Some(EndpointDef {
-            params: FromQuery(vec![
-                GetParam { name: format_ident!("from"), ty: pk_type.clone(), description: "Range from inclusive".to_string() },
-                GetParam { name: format_ident!("until"), ty: pk_type.clone(), description: "Range until exclusive".to_string() },
-            ]),
-            method: HttpMethod::GET(syn::parse_quote!(Vec<#entity_type>)),
-            endpoint: format!("/{}/{}?from=&until=", entity_name.to_string().to_lowercase(), pk_name.clone()),
+            params: FromQuery(syn::parse_quote!(#column_query)),
+            method: HttpMethod::GET,
+            return_type: Some(syn::parse_quote!(Vec<#entity_type>)),
+            endpoint: format!("/{}/{}", entity_name.to_string().to_lowercase(), pk_name.clone()),
         })
     }
 }

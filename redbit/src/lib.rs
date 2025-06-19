@@ -18,19 +18,22 @@ pub use utoipa_axum;
 pub use utoipa;
 pub use serde;
 pub use utoipa_swagger_ui;
+pub use axum_test;
+pub use rand;
+pub use http;
+pub use serde_json;
+pub use serde_urlencoded;
 
 use bincode::Options;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::any::type_name;
 use std::cmp::Ordering;
-use std::env;
 use std::fmt::Debug;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use std::sync::Arc;
 use std::ops::Add;
-
 use crate::axum::response::{IntoResponse, Response};
 use crate::axum::extract::FromRequest;
 use crate::axum::extract::rejection::JsonRejection;
@@ -191,7 +194,7 @@ where
 // rejection and provide our own which formats errors to match our application.
 //
 // `axum::Json` responds with plain text if the input is invalid.
-#[derive(FromRequest)]
+#[derive(FromRequest, Deserialize)]
 #[from_request(via(crate::axum::Json), rejection(AppError))]
 pub struct AppJson<T>(pub T);
 
@@ -244,10 +247,30 @@ inventory::collect!(EntityInfo);
 #[derive(OpenApi)]
 pub struct ApiDoc;
 
+#[derive(utoipa::IntoParams, serde::Serialize, serde::Deserialize, Default)]
+pub struct LimitQuery {
+    #[param(required = false)]
+    pub take: Option<u32>,
+    #[param(required = false)]
+    pub last: Option<bool>,
+    #[param(required = false)]
+    pub first: Option<bool>,
+}
+
+impl LimitQuery {
+    pub fn sample() -> Vec<LimitQuery> {
+        vec![
+            LimitQuery { take: Some(1), last: None, first: None },
+            LimitQuery { take: None, last: Some(true), first: None },
+            LimitQuery { take: None, last: None, first: Some(true) },
+        ]
+    }
+}
+
 pub async fn build_router(state: RequestState) -> Router<()> {
     let mut router: OpenApiRouter<RequestState> = OpenApiRouter::with_openapi(ApiDoc::openapi());
-    for reg in inventory::iter::<EntityInfo> {
-        router = router.merge((reg.routes_fn)());
+    for info in inventory::iter::<EntityInfo> {
+        router = router.merge((info.routes_fn)());
     }
     let (r, api) = router.split_for_parts();
 
@@ -260,23 +283,4 @@ pub async fn serve(state: RequestState, socket_addr: SocketAddr) -> () {
     println!("Starting server on {}", socket_addr);
     let tcp = TcpListener::bind(socket_addr).await.unwrap();
     crate::axum::serve(tcp, router).await.unwrap();
-}
-
-use axum_test::TestServer;
-
-#[tokio::test]
-async fn all_routes_should_work() {
-    let dir = env::temp_dir().join("redbit");
-    let db = Arc::new(Database::create(dir.join("my_db.redb")).expect("Failed to create database"));
-    let router = build_router(RequestState { db: Arc::clone(&db) }).await;
-    let server = TestServer::new(router).unwrap();
-
-    // Get the request.
-    let response = server
-        .get("/ping")
-        .await;
-
-    // Assertions.
-    response.assert_status_ok();
-    response.assert_text("pong!");
 }

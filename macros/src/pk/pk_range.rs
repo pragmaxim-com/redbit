@@ -1,4 +1,4 @@
-use crate::http::FunctionDef;
+use crate::rest::FunctionDef;
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;

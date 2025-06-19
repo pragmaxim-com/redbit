@@ -4,7 +4,7 @@ mod store;
 mod delete;
 
 use crate::field_parser::*;
-use crate::http::FunctionDef;
+use crate::rest::FunctionDef;
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 

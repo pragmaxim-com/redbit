@@ -3,9 +3,13 @@ use utxo::*;
 
 #[test]
 fn each_entity_should_have_a_default_sample() {
+    let bp = BlockPointer { height: 5 };
+    let block = Block::sample_with(&bp);
+    assert_eq!(block.id, block.header.id);
+
     let block = Block::sample();
     assert_eq!(block.id.height, 0);
-    assert_eq!(block.header.timestamp, 0);
+    assert_eq!(block.header.id, block.id);
     assert_eq!(block.transactions.len(), 3);
     for (idx, tx) in block.transactions.iter().enumerate() {
         assert_eq!(tx.id.tx_index as usize, idx);
@@ -27,7 +31,7 @@ fn each_entity_should_have_a_default_sample() {
 fn it_should_commit_multiple_blocks_in_a_single_tx() {
     let (blocks, multi_tx_db) = init_temp_db("db_test");
 
-    let single_tx_db = empty_temp_db("db_test");
+    let single_tx_db = empty_temp_db("db_test_2");
     let write_tx = single_tx_db.begin_write().expect("Failed to begin write transaction");
     blocks.iter().for_each(|block| Block::store(&write_tx, block).expect("Failed to persist blocks"));
     write_tx.commit().unwrap();
@@ -86,7 +90,7 @@ fn it_should_get_entities_by_index() {
     let transaction = blocks.first().unwrap().transactions.first().unwrap();
 
     let found_by_hash = Transaction::get_by_hash(&read_tx, &transaction.hash).expect("Failed to query by hash");
-    assert_eq!(found_by_hash.len(), 4);
+    assert_eq!(found_by_hash.len(), 3*3);
     assert!(found_by_hash.iter().any(|tx| tx.id == transaction.id));
     assert!(found_by_hash.iter().any(|tx| tx.id == transaction.id));
 }
@@ -99,7 +103,7 @@ fn it_should_get_entities_by_index_with_dict() {
     let utxo = blocks.first().unwrap().transactions.first().unwrap().utxos.first().unwrap();
 
     let found_by_address = Utxo::get_by_address(&read_tx, &utxo.address).expect("Failed to query by address");
-    assert_eq!(found_by_address.len(), 16);
+    assert_eq!(found_by_address.len(), 3*3*3);
     assert!(found_by_address.iter().any(|tx| tx.id == utxo.id));
     assert!(found_by_address.iter().any(|tx| tx.id == utxo.id));
 }
@@ -110,14 +114,15 @@ fn it_should_get_entities_by_range_on_index() {
 
     let read_tx = db.begin_read().unwrap();
 
-    let from_timestamp = blocks[1].header.timestamp;
-    let until_timestamp = blocks[3].header.timestamp;
-    let expected_blocks: Vec<BlockHeader> = vec![blocks[1].header.clone(), blocks[2].header.clone()];
+    let from_timestamp = blocks[0].header.timestamp;
+    let until_timestamp = blocks[2].header.timestamp;
+    let expected_blocks: Vec<BlockHeader> = blocks.into_iter().map(|b|b.header).collect();
     let unique_timestamps: HashSet<u32> = BlockHeader::take(&read_tx, 1000).unwrap().iter().map(|h| h.timestamp).collect();
-    assert_eq!(unique_timestamps.len(), 4);
+    assert_eq!(unique_timestamps.len(), 1);
 
-    let found_by_timestamp_range = BlockHeader::range_by_timestamp(&read_tx, &from_timestamp, &until_timestamp).expect("Failed to range by timestamp");
-    assert_eq!(found_by_timestamp_range.len(), 2);
+    let found_by_timestamp_range = 
+        BlockHeader::range_by_timestamp(&read_tx, &from_timestamp, &(until_timestamp+1)).expect("Failed to range by timestamp");
+    assert_eq!(found_by_timestamp_range.len(), 3);
     assert_eq!(expected_blocks, found_by_timestamp_range);
 }
 
@@ -134,8 +139,8 @@ fn it_should_get_entities_by_range_on_pk() {
     let expected_blocks: Vec<Block> = vec![blocks[1].clone(), blocks[2].clone()];
 
     assert_eq!(expected_blocks.len(), actual_blocks.len());
-    assert_eq!(actual_blocks[0].transactions.len(), 4);
-    assert_eq!(actual_blocks[1].transactions.len(), 4);
+    assert_eq!(actual_blocks[0].transactions.len(), 3);
+    assert_eq!(actual_blocks[1].transactions.len(), 3);
     assert_eq!(expected_blocks, actual_blocks);
 
     let tx_pointer_1 = TxPointer { block_pointer: block_pointer_1, tx_index: 1 };
@@ -147,7 +152,7 @@ fn it_should_get_entities_by_range_on_pk() {
 
     assert_eq!(expected_transactions.len(), actual_transactions.len());
     assert_eq!(expected_transactions, actual_transactions);
-    assert!(actual_transactions.iter().all(|t| t.utxos.len() == 4));
+    assert!(actual_transactions.iter().all(|t| t.utxos.len() == 3));
 }
 
 #[test]

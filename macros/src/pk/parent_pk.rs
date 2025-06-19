@@ -1,5 +1,5 @@
-use crate::http::HttpParams::FromPath;
-use crate::http::{EndpointDef, FunctionDef, HttpMethod, GetParam};
+use crate::rest::HttpParams::FromPath;
+use crate::rest::{EndpointDef, FunctionDef, GetParam, HttpMethod};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
@@ -23,7 +23,8 @@ pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type) -> FunctionD
                 ty: pk_type.clone(),
                 description: "Primary key of the owner entity".to_string(),
             }]),
-            method: HttpMethod::GET(pk_type.clone()),
+            method: HttpMethod::GET,
+            return_type: Some(pk_type.clone()),
             endpoint: format!("/{}/{}/{{{}}}/{}", entity_name.to_string().to_lowercase(), pk_name, pk_name, fn_name),
         }),
     }

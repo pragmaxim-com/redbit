@@ -1,5 +1,4 @@
-use crate::http::HttpParams::FromQuery;
-use crate::http::{EndpointDef, FunctionDef, HttpMethod, GetParam};
+use crate::rest::FunctionDef;
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
@@ -21,14 +20,6 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
         fn_return_type: syn::parse_quote!(Option<#entity_type>),
         fn_stream,
         fn_call: quote! { #entity_name::#fn_name(&tx) },
-        endpoint_def: Some(EndpointDef {
-            params: FromQuery(vec![GetParam {
-                name: format_ident!("last"),
-                ty: syn::parse_quote!(bool),
-                description: "Fetch the last entity".to_string(),
-            }]),
-            method: HttpMethod::GET(entity_type.clone()),
-            endpoint: format!("/{}?last=", entity_name.to_string().to_lowercase()),
-        })
+        endpoint_def: None
     }
 }

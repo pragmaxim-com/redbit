@@ -8,12 +8,13 @@ mod pk_range;
 mod store;
 mod delete;
 mod parent_pk;
+mod limit;
 
 use proc_macro2::{Ident, TokenStream};
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::{Attribute, Data, DeriveInput, Field, Fields, Type};
 use crate::field_parser::{Multiplicity, PkDef};
-use crate::http::FunctionDef;
+use crate::rest::FunctionDef;
 use crate::macro_utils;
 use crate::table::TableDef;
 
@@ -25,6 +26,7 @@ pub enum PointerType {
 pub struct DbPkMacros {
     pub definition: PkDef,
     pub table_def: TableDef,
+    pub query: Option<TokenStream>,
     pub store_statement: TokenStream,
     pub store_many_statement: TokenStream,
     pub delete_statement: TokenStream,
@@ -43,6 +45,7 @@ impl DbPkMacros {
         function_defs.push(take::fn_def(entity_name, entity_type, &table_def.name));
         function_defs.push(first::fn_def(entity_name, entity_type, &table_def.name));
         function_defs.push(last::fn_def(entity_name, entity_type, &table_def.name));
+        function_defs.push(limit::limit_fn_def(entity_name, entity_type));
         function_defs.push(exists::fn_def(entity_name, &pk_name, &pk_type, &table_def.name));
 
         match pk_def.fk {
@@ -52,14 +55,32 @@ impl DbPkMacros {
             _ => {}
         };
 
+        let entity_range_query = format_ident!("{}Range", entity_name.to_string());
+        let mut range_query = None;
+
         if pk_def.range {
-            function_defs.push(range::fn_def(entity_name, entity_type, &pk_name, &pk_type, &table_def.name));
+            function_defs.push(range::fn_def(entity_name, entity_type, &pk_name, &pk_type, &table_def.name, &entity_range_query));
             function_defs.push(pk_range::fn_def(entity_name, &pk_type, &table_def.name));
+            range_query = Some(
+                quote! {
+                    #[derive(utoipa::IntoParams, serde::Serialize, serde::Deserialize, Default)]
+                    pub struct #entity_range_query {
+                        pub from: #pk_type,
+                        pub until: #pk_type,
+                    }
+                    impl #entity_range_query {
+                        pub fn sample() -> Vec<Self> {
+                            vec![Self { from: #pk_type::default(), until: #pk_type::default() }]
+                        }
+                    }
+                }
+            );
         };
 
         DbPkMacros {
             definition: pk_def.clone(),
             table_def: table_def.clone(),
+            query: range_query,
             store_statement: store::store_statement(&pk_name, &table_def.name),
             store_many_statement: store::store_many_statement(&pk_name, &table_def.name),
             delete_statement: delete::delete_statement(&table_def.name),

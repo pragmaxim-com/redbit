@@ -1,10 +1,10 @@
-use std::sync::Arc;
+use crate::*;
 use redb::Database;
 use redbit::AppError;
-use crate::*;
+use std::sync::Arc;
 
 pub fn run(db: Arc<Database>) -> Result<(), AppError> {
-    let blocks = get_blocks(1, 10, 10, 3);
+    let blocks = get_blocks(1);
 
     println!("Persisting blocks:");
     let write_tx = db.begin_write()?;

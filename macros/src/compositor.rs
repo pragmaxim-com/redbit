@@ -1,8 +1,8 @@
 use crate::entity::EntityMacros;
-use crate::http::{to_http_endpoints, FunctionDef};
+use crate::rest::{to_http_endpoints, FunctionDef};
 use crate::macro_utils;
-use proc_macro2::TokenStream;
-use quote::quote;
+use proc_macro2::{Literal, TokenStream};
+use quote::{format_ident, quote};
 
 pub fn expand(entity_macros: EntityMacros) -> TokenStream {
     let entity_name = &entity_macros.entity_name;
@@ -19,26 +19,30 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
     let delete_statements = entity_macros.delete_statements();
     let delete_many_statements = entity_macros.delete_many_statements();
 
+    let queries = entity_macros.queries();
+
     let function_streams: Vec<TokenStream> = function_defs.iter().map(|f| f.fn_stream.clone()).collect::<Vec<_>>();
     let table_definition_streams: Vec<TokenStream> = table_definitions.iter().map(|table_def| table_def.definition.clone()).collect();
 
-    let (endpoints, route_chains) = to_http_endpoints(function_defs);
-    let endpoint_macros: Vec<TokenStream> = endpoints.iter().map(|e| e.handler.clone()).collect();
+    let (endpoint_handlers, route_chains, route_tests) = to_http_endpoints(function_defs);
 
     let table_lines = table_definitions.iter().map(|table_def| format!("| Table         |  {}", table_def.name)).collect();
     macro_utils::write_to_local_file(table_lines, "tables", &entity_name);
-    let entity_lines = endpoints.iter().map(|endpoint| format!("| Endpoint      |  {}", endpoint)).collect();
-    macro_utils::write_to_local_file(entity_lines, "endpoints", &entity_name);
 
     let pk_name = db_pk_macros.definition.field.name.clone();
     let pk_type = db_pk_macros.definition.field.tpe.clone();
+    let entity_tests = format_ident!("{}_tests", entity_name.to_string().to_lowercase());
+    let entity_literal = Literal::string(&entity_name.to_string());
 
     let expanded = quote! {
         // table definitions are not in the impl object because they are accessed globally with semantic meaning
         #(#table_definition_streams)*
 
+        // utoipa and axum query structs to map query and path params into
+        #(#queries)*
+
         // axum endpoints cannot be in the impl object https://docs.rs/axum/latest/axum/attr.debug_handler.html#limitations
-        #(#endpoint_macros)*
+        #(#endpoint_handlers)*
 
         impl #entity_name {
             #(#function_streams)*
@@ -84,6 +88,25 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
             pub fn routes() -> redbit::utoipa_axum::router::OpenApiRouter<RequestState> {
                 redbit::utoipa_axum::router::OpenApiRouter::new()
                     #(#route_chains)*
+            }
+        }
+
+        #[cfg(test)]
+        mod #entity_tests {
+            use super::*;
+            use axum_test::TestServer;
+
+            #[tokio::test]
+            async fn all_routes_should_work() {
+                let dir = std::env::temp_dir().join("redbit").join(#entity_literal);
+                if !dir.exists() {
+                    std::fs::create_dir_all(dir.clone()).unwrap();
+                }
+                let db_path = dir.join(format!("{}_{}.redb", #entity_literal, rand::random::<u64>()));
+                let db = std::sync::Arc::new(redbit::redb::Database::create(db_path).expect("Failed to create database"));
+                let router = build_router(RequestState { db: std::sync::Arc::clone(&db) }).await;
+                let server = axum_test::TestServer::new(router).unwrap();
+                #(#route_tests)*
             }
         }
     };

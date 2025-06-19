@@ -1,7 +1,7 @@
 use crate::column::DbColumnMacros;
 use crate::field_parser::*;
-use crate::http::HttpParams::{FromBody, FromPath};
-use crate::http::{EndpointDef, FunctionDef, GetParam, HttpMethod, PostParam};
+use crate::rest::HttpParams::{FromBody, FromPath};
+use crate::rest::{EndpointDef, FunctionDef, GetParam, HttpMethod, PostParam};
 use crate::pk::DbPkMacros;
 use crate::relationship::{DbRelationshipMacros, TransientMacros};
 use crate::table::TableDef;
@@ -45,6 +45,19 @@ impl EntityMacros {
         table_definitions
     }
 
+    pub fn queries(&self) -> Vec<TokenStream> {
+        let mut column_queries = Vec::new();
+        if let Some(query) = &self.pk.query {
+            column_queries.push(query.clone());
+        }
+        for column in &self.columns {
+            if let Some(query) = &column.query {
+                column_queries.push(query.clone());
+            }
+        }
+        column_queries
+    }
+    
     pub fn struct_inits(&self) -> Vec<TokenStream> {
         let mut struct_inits = Vec::new();
         for column in &self.columns {
@@ -75,15 +88,15 @@ impl EntityMacros {
 
     pub fn function_defs(&self) -> Vec<FunctionDef> {
         let mut function_defs = vec![];
-        function_defs.extend(self.pk.function_defs.clone());
         function_defs.push(self.store_fn_def());
-        function_defs.push(self.delete_fn_def());
+        function_defs.extend(self.pk.function_defs.clone());
         for column in &self.columns {
             function_defs.extend(column.function_defs.clone());
         }
         for relationship in &self.relationships {
             function_defs.push(relationship.function_def.clone());
         }
+        function_defs.push(self.delete_fn_def());
         function_defs
     }
 
@@ -116,7 +129,8 @@ impl EntityMacros {
                     ty: entity_type.clone(),
                     content_type: "application/json".to_string(),
                 }),
-                method: HttpMethod::POST(pk_type.clone()),
+                method: HttpMethod::POST,
+                return_type: Some(pk_type.clone()),
                 endpoint: format!("/{}", entity_name.to_string().to_lowercase()),
             }),
         }
@@ -158,6 +172,7 @@ impl EntityMacros {
             endpoint_def: Some(EndpointDef {
                 params: FromPath(vec![GetParam { name: pk_name.clone(), ty: pk_type.clone(), description: "Primary key".to_string() }]),
                 method: HttpMethod::DELETE,
+                return_type: None,
                 endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), pk_name, pk_name),
             }),
         }

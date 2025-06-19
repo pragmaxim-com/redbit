@@ -10,7 +10,7 @@ pub fn o2o_relation_init(child_name: &Ident, child_type: &Type) -> TokenStream {
 
 pub fn o2o_relation_default_init(child_name: &Ident, child_type: &Type) -> TokenStream { 
     quote! {
-        #child_name: #child_type::default()
+        #child_name: #child_type::sample_with(pk)
     }
 }
 

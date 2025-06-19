@@ -4,7 +4,7 @@ mod entity;
 mod pk;
 mod relationship;
 mod macro_utils;
-mod http;
+mod rest;
 mod field_parser;
 mod compositor;
 mod table;

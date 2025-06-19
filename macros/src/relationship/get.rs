@@ -1,5 +1,5 @@
-use crate::http::HttpParams::FromPath;
-use crate::http::{EndpointDef, FunctionDef, HttpMethod, GetParam};
+use crate::rest::HttpParams::FromPath;
+use crate::rest::{EndpointDef, FunctionDef, GetParam, HttpMethod};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
@@ -20,7 +20,8 @@ pub fn o2o_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, pk_na
         fn_call: quote! { #entity_name::#fn_name(&tx, &#pk_name) },
         endpoint_def: Some(EndpointDef {
             params: FromPath(vec![GetParam { name: pk_name.clone(), ty: pk_type.clone(), description: "Primary key".to_string() }]),
-            method: HttpMethod::GET(child_type.clone()),
+            method: HttpMethod::GET,
+            return_type: Some(child_type.clone()),
             endpoint: format!("/{}/{{{}}}/{}", entity_name.to_string().to_lowercase(), pk_name, child_name),
         })
     }
@@ -41,7 +42,8 @@ pub fn o2m_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, pk_na
         fn_call: quote! { #entity_name::#fn_name(&tx, &#pk_name) },
         endpoint_def: Some(EndpointDef {
             params: FromPath(vec![GetParam { name: pk_name.clone(), ty: pk_type.clone(), description: "Primary key".to_string() }]),
-            method: HttpMethod::GET(syn::parse_quote!(Vec<#child_type>)),
+            method: HttpMethod::GET,
+            return_type: Some(syn::parse_quote!(Vec<#child_type>)),
             endpoint: format!("/{}/{{{}}}/{}", entity_name.to_string().to_lowercase(), pk_name, child_name),
         })
     }

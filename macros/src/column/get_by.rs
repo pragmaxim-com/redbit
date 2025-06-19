@@ -1,5 +1,5 @@
-use crate::http::HttpParams::FromPath;
-use crate::http::{EndpointDef, FunctionDef, HttpMethod, GetParam};
+use crate::rest::HttpParams::FromPath;
+use crate::rest::{EndpointDef, FunctionDef, GetParam, HttpMethod};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
@@ -53,7 +53,8 @@ pub fn get_by_dict_def(
                 ty: column_type.clone(),
                 description: "Secondary index column with dictionary".to_string(),
             }]),
-            method: HttpMethod::GET(syn::parse_quote!(Vec<#entity_type>)),
+            method: HttpMethod::GET,
+            return_type: Some(syn::parse_quote!(Vec<#entity_type>)),
             endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), column_name, column_name),
         }),
     }
@@ -95,7 +96,8 @@ pub fn get_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &I
                 ty: column_type.clone(),
                 description: "Secondary index column".to_string(),
             }]),
-            method: HttpMethod::GET(syn::parse_quote!(Vec<#entity_type>)),
+            method: HttpMethod::GET,
+            return_type: Some(syn::parse_quote!(Vec<#entity_type>)),
             endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), column_name, column_name),
         }),
     }
