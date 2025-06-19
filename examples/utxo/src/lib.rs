@@ -1,18 +1,19 @@
 pub mod data;
 pub mod demo;
-pub mod types;
 
 pub use data::*;
-pub use types::*;
 pub use redbit::*;
 
 pub type Timestamp = u32;
 pub type Height = u32;
 pub type Amount = u64;
 pub type Nonce = u32;
-pub type TxIndex = u16;
-pub type UtxoIndex = u16;
-pub type AssetIndex = u16;
+
+#[indexed_column] pub struct Hash(pub String);
+#[indexed_column] pub struct Address(pub String);
+#[indexed_column] pub struct Datum(pub String);
+#[indexed_column] pub struct PolicyId(pub String);
+#[indexed_column] pub struct AssetName(pub String);
 
 #[entity]
 pub struct Block {
@@ -87,30 +88,26 @@ pub struct BlockPointer {
     pub height: Height,
 }
 
-#[key]
+#[key(u16)]
 pub struct TxPointer {
     #[parent]
     pub block_pointer: BlockPointer,
-    pub tx_index: TxIndex,
 }
 
-#[key]
+#[key(u8)]
 pub struct UtxoPointer {
     #[parent]
     pub tx_pointer: TxPointer,
-    pub utxo_index: UtxoIndex,
 }
 
-#[key]
+#[key(u8)]
 pub struct InputPointer {
     #[parent]
     pub tx_pointer: TxPointer,
-    pub utxo_index: UtxoIndex,
 }
 
-#[key]
+#[key(u8)]
 pub struct AssetPointer {
     #[parent]
     pub utxo_pointer: UtxoPointer,
-    pub asset_index: AssetIndex,
 }

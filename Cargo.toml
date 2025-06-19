@@ -14,6 +14,7 @@ axum = { version = "0.8.4", features = ["default", "macros"] }
 utoipa = { version = "5.3.1", features = ["axum_extras", "debug"] }
 utoipa-axum = { version = "0.2.0" ,features = ["debug"] }
 serde = { version = "1.0.219", features = ["derive"] }
+tokio = { version = "1.45.1", features = ["full"] }
 
 [workspace]
 members = ["macros", "redbit", "examples/utxo"]

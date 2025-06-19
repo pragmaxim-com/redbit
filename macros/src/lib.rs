@@ -14,21 +14,129 @@ use crate::pk::{DbPkMacros, PointerType};
 
 use proc_macro::TokenStream;
 use std::sync::Once;
-use quote::quote;
-use syn::{parse_macro_input, parse_quote, DeriveInput, ItemStruct};
+use quote::{format_ident, quote};
+use syn::{parse_macro_input, parse_quote, DeriveInput, Fields, ItemStruct, Type};
+use syn::parse::Parse;
 use syn::spanned::Spanned;
 
+#[proc_macro_attribute]
+pub fn indexed_column(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let mut input = parse_macro_input!(item as ItemStruct);
+    let struct_ident = &input.ident;
+
+    let field_ty = match &input.fields {
+        Fields::Unnamed(fields) if fields.unnamed.len() == 1 => &fields.unnamed[0].ty,
+        _ => {
+            return quote! {
+                compile_error!("`#[column]` can only be used on tuple structs with a single field.");
+                #input
+            }
+                .into();
+        }
+    };
+
+    // Clean any existing derives and insert our own
+    input.attrs.retain(|a| !a.path().is_ident("derive"));
+    input.attrs.insert(0, syn::parse_quote! {
+        #[derive(Clone, Eq, Ord, PartialEq, PartialOrd, Debug, serde::Serialize, serde::Deserialize, redbit::utoipa::ToSchema)]
+    });
+
+    // Determine default value based on inner type
+    let default_expr = match quote!(#field_ty).to_string().as_str() {
+        "String" | "std :: string :: String" => {
+            quote! { Self("default-value".to_string()) }
+        },
+        "&str" => {
+            quote! { Self("default-value".into()) }
+        },
+        _ => {
+            quote! { Self(Default::default()) }
+        },
+    };
+
+    let display_impl = quote! {
+        impl std::fmt::Display for #struct_ident {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{}", self.0)
+            }
+        }
+    };
+
+    let default_impl = quote! {
+        impl Default for #struct_ident {
+            fn default() -> Self {
+                #default_expr
+            }
+        }
+    };
+
+    let expanded = quote! {
+        #input
+        #default_impl
+        #display_impl
+    };
+
+    expanded.into()
+}
+
+struct KeyAttr {
+    index_type: Option<Type>,
+}
+
+impl Parse for KeyAttr {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        if input.is_empty() {
+            Ok(KeyAttr { index_type: None })
+        } else {
+            let ty: Type = input.parse()?;
+            Ok(KeyAttr { index_type: Some(ty) })
+        }
+    }
+}
 
 #[proc_macro_attribute]
-pub fn key(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn key(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let attr_args = parse_macro_input!(attr as KeyAttr);
     let mut s = parse_macro_input!(item as ItemStruct);
+
     s.attrs.retain(|a| !a.path().is_ident("derive"));
     s.attrs.insert(0, parse_quote! {
         #[derive(Clone, Debug, Default, Eq, Ord, Pk, PartialEq, PartialOrd)]
     });
+
+    let fields_named = match &mut s.fields {
+        Fields::Named(fields_named) => fields_named,
+        _ => {
+            return syn::Error::new_spanned(&s.ident, "The #[key] macro only supports structs with named fields")
+                .to_compile_error()
+                .into();
+        }
+    };
+
+    let has_parent = fields_named.named.iter().any(|f| {
+        f.attrs.iter().any(|a| a.path().is_ident("parent"))
+    });
+
+    if has_parent {
+        let struct_ident = &s.ident;
+        let struct_ident_str = struct_ident.to_string();
+        let base_name_str = struct_ident_str.strip_suffix("Pointer").unwrap_or(&struct_ident_str);
+        let index_field = format_ident!("{}_index", base_name_str.to_lowercase());
+
+        // Use the index type specified or default to u16
+        let index_type = attr_args.index_type.unwrap_or_else(|| syn::parse_quote! { u16 });
+
+        // Check for duplicate index field
+        let exists = fields_named.named.iter().any(|f| f.ident.as_ref() == Some(&index_field));
+        if !exists {
+            fields_named.named.push(syn::parse_quote! {
+                pub #index_field: #index_type
+            });
+        }
+    }
+
     quote!(#s).into()
 }
-
 
 #[proc_macro_derive(Pk, attributes(parent))]
 pub fn derive_pk(input: TokenStream) -> TokenStream {

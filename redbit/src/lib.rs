@@ -9,6 +9,7 @@ pub use macros::Entity;
 pub use macros::Pk;
 pub use macros::entity;
 pub use macros::key;
+pub use macros::indexed_column;
 pub use redb;
 pub use redb::ReadableMultimapTable;
 pub use redb::ReadableTable;
