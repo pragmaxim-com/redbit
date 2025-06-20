@@ -10,13 +10,13 @@ mod delete;
 mod parent_pk;
 mod limit;
 
+use crate::field_parser::{Multiplicity, PkDef};
+use crate::macro_utils;
+use crate::rest::FunctionDef;
+use crate::table::TableDef;
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
-use syn::{Attribute, Data, DeriveInput, Field, Fields, Type};
-use crate::field_parser::{Multiplicity, PkDef};
-use crate::rest::FunctionDef;
-use crate::macro_utils;
-use crate::table::TableDef;
+use syn::{Data, DeriveInput, Field, Fields, Type};
 
 pub enum PointerType {
     Root,
@@ -90,22 +90,27 @@ impl DbPkMacros {
     }
 
     /// Determines whether a struct is a `Root` or `Child` based on `#[parent]` attributes.
-    pub fn extract_pointer_type(input: &DeriveInput) -> Result<PointerType, syn::Error> {
+    pub fn validate_pk(input: &DeriveInput) -> Result<(), syn::Error> {
+        match &input.data {
+            Data::Struct(_) => Ok(()),
+            _ => Err(syn::Error::new_spanned(input, "Pk can only be derived for structs")),
+        }
+    }
+
+    pub fn validate_fk(input: &DeriveInput) -> Result<(), syn::Error> {
         let data_struct = match &input.data {
             Data::Struct(data_struct) => data_struct,
-            _ => return Err(syn::Error::new_spanned(input, "Pk can only be derived for structs")),
+            _ => return Err(syn::Error::new_spanned(input, "Fk can only be derived for structs")),
         };
 
         let fields: Vec<_> = match &data_struct.fields {
             Fields::Named(fields) => fields.named.iter().collect(),
-            _ => return Err(syn::Error::new_spanned(input, "Pk can only be used with named fields")),
+            _ => return Err(syn::Error::new_spanned(input, "Fk can only be used with named fields")),
         };
-
-        if fields.iter().any(|f| Self::has_parent_attribute(&f.attrs)) {
-            Ok(PointerType::Child)
-        } else {
-            Ok(PointerType::Root)
+        if fields.len() != 2 {
+            return Err(syn::Error::new_spanned(input, "Fk must have exactly two fields (parent and index)"));
         }
+        Ok(())
     }
 
     /// Extracts and validates the required fields (parent & index) for root or child structs.
@@ -115,30 +120,35 @@ impl DbPkMacros {
             _ => return Err(syn::Error::new_spanned(input, "Pk can only be derived for structs")),
         };
 
-        let fields: Vec<_> = match data_struct.fields {
-            Fields::Named(fields) => fields.named.into_iter().collect(),
-            _ => return Err(syn::Error::new_spanned(input, "Pk can only be used with named fields")),
-        };
-
         match pointer_type {
             PointerType::Root => {
+                let fields: Vec<_> = match data_struct.fields {
+                    Fields::Named(fields) => fields.named.into_iter().collect(),
+                    Fields::Unnamed(fields) => fields.unnamed.into_iter().collect(),
+                    _ => return Err(syn::Error::new_spanned(input, "Pk must have exactly one field")),
+                };
+
                 if fields.len() != 1 {
-                    return Err(syn::Error::new_spanned(input, "Root struct must have exactly one field"));
+                    return Err(syn::Error::new_spanned(input, "Pk must have exactly one field"));
                 }
                 Ok((None, fields[0].clone())) // Root has only an index field
             }
             PointerType::Child => {
+                let fields: Vec<_> = match data_struct.fields {
+                    Fields::Named(fields) => fields.named.into_iter().collect(),
+                    _ => return Err(syn::Error::new_spanned(input, "Pk can only be used with named fields")),
+                };
                 if fields.len() != 2 {
                     return Err(syn::Error::new_spanned(input, "Child struct must have exactly two fields (parent and index)"));
                 }
 
-                let parent_field = match fields.iter().find(|f| Self::has_parent_attribute(&f.attrs)) {
-                    Some(f) => f.clone(),
-                    None => return Err(syn::Error::new_spanned(input, "Unable to find parent field")),
-                };
-                let index_field = match fields.iter().find(|f| !Self::has_parent_attribute(&f.attrs)) {
+                let index_field = match fields.iter().find(|f| Self::is_index_field(&f)) {
                     Some(f) => f.clone(),
                     None => return Err(syn::Error::new_spanned(input, "Unable to find index field")),
+                };
+                let parent_field = match fields.iter().find(|f| !Self::is_index_field(&f)) {
+                    Some(f) => f.clone(),
+                    None => return Err(syn::Error::new_spanned(input, "Unable to find parent field")),
                 };
 
                 Ok((Some(parent_field), index_field))
@@ -150,14 +160,13 @@ impl DbPkMacros {
     /// and also derives Display, FromStr, Serialize, and Deserialize based on a dash-separated format.
     pub fn generate_root_impls(struct_name: &Ident, index_field: Field) -> TokenStream {
         let index_type = &index_field.ty;
-        let index_name = &index_field.ident;
 
         let expanded = quote! {
             // Core traits
             impl IndexedPointer for #struct_name {
                 type Index = #index_type;
-                fn index(&self) -> Self::Index { self.#index_name }
-                fn next(&self) -> Self { #struct_name { #index_name: self.#index_name + 1 } }
+                fn index(&self) -> Self::Index { self.0 }
+                fn next(&self) -> Self { #struct_name(self.0 + 1) }
             }
             impl RootPointer for #struct_name {
                 fn is_child(&self) -> bool { false }
@@ -171,10 +180,8 @@ impl DbPkMacros {
                         serializer.serialize_str(&self.to_string())
                     } else {
                         #[derive(serde::Serialize)]
-                        struct Helper {
-                            #index_name: #index_type,
-                        }
-                        let helper = Helper { #index_name: self.#index_name };
+                        struct Helper(#index_type);
+                        let helper = Helper(self.0);
                         helper.serialize(serializer)
                     }
                 }
@@ -186,14 +193,12 @@ impl DbPkMacros {
                         let s = String::deserialize(deserializer)?;
                         // parse single int
                         let idx = s.parse::<#index_type>().map_err(serde::de::Error::custom)?;
-                        Ok(#struct_name { #index_name: idx })
+                        Ok(#struct_name(idx))
                     } else {
                         #[derive(serde::Deserialize)]
-                        struct Helper {
-                            #index_name: #index_type,
-                        }
+                        struct Helper(#index_type);
                         let helper = Helper::deserialize(deserializer)?;
-                        Ok(#struct_name { #index_name: helper.#index_name })
+                        Ok(#struct_name(helper.0))
                     }
                 }
             }
@@ -201,7 +206,7 @@ impl DbPkMacros {
             // HTTP path support
             impl std::fmt::Display for #struct_name {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    write!(f, "{}", self.#index_name)
+                    write!(f, "{}", self.0)
                 }
             }
             impl std::str::FromStr for #struct_name {
@@ -209,7 +214,7 @@ impl DbPkMacros {
                 fn from_str(s: &str) -> Result<Self, Self::Err> {
                     if s.contains('-') { return Err(ParsePointerError::Format); }
                     let idx = s.parse::<#index_type>()?;
-                    Ok(#struct_name { #index_name: idx })
+                    Ok(#struct_name(idx))
                 }
             }
 
@@ -340,8 +345,7 @@ impl DbPkMacros {
         macro_utils::write_stream_and_return(expanded, struct_name)
     }
 
-    /// Checks if a field has the `#[parent]` attribute.
-    fn has_parent_attribute(attrs: &[Attribute]) -> bool {
-        attrs.iter().any(|attr| attr.path().is_ident("parent"))
+    fn is_index_field(f: &Field) -> bool {
+        f.ident.as_ref().map_or(false, |name| name.to_string().eq("index"))
     }
 }

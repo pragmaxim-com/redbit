@@ -3,25 +3,25 @@ use utxo::*;
 
 #[test]
 fn each_entity_should_have_a_default_sample() {
-    let bp = BlockPointer { height: 5 };
+    let bp = BlockPointer(5);
     let block = Block::sample_with(&bp);
     assert_eq!(block.id, block.header.id);
 
     let block = Block::sample();
-    assert_eq!(block.id.height, 0);
+    assert_eq!(block.id.0, 0);
     assert_eq!(block.header.id, block.id);
     assert_eq!(block.transactions.len(), 3);
     for (idx, tx) in block.transactions.iter().enumerate() {
-        assert_eq!(tx.id.tx_index as usize, idx);
-        assert_eq!(tx.id.block_pointer, BlockPointer { height: 0 });
+        assert_eq!(tx.id.index as usize, idx);
+        assert_eq!(tx.id.parent, BlockPointer(0));
         assert_eq!(tx.utxos.len(), 3);
         for (idx, utxo) in tx.utxos.iter().enumerate() {
-            assert_eq!(utxo.id.utxo_index as usize, idx);
-            assert_eq!(utxo.id.tx_pointer, tx.id);
+            assert_eq!(utxo.id.index as usize, idx);
+            assert_eq!(utxo.id.parent, tx.id);
             assert_eq!(utxo.assets.len(), 3);
             for (idx, asset) in utxo.assets.iter().enumerate() {
-                assert_eq!(asset.id.asset_index as usize, idx);
-                assert_eq!(asset.id.utxo_pointer, utxo.id);
+                assert_eq!(asset.id.index as usize, idx);
+                assert_eq!(asset.id.parent, utxo.id);
             }
         }
     }
@@ -120,7 +120,7 @@ fn it_should_get_entities_by_range_on_index() {
     let unique_timestamps: HashSet<u32> = BlockHeader::take(&read_tx, 1000).unwrap().iter().map(|h| h.timestamp).collect();
     assert_eq!(unique_timestamps.len(), 1);
 
-    let found_by_timestamp_range = 
+    let found_by_timestamp_range =
         BlockHeader::range_by_timestamp(&read_tx, &from_timestamp, &(until_timestamp+1)).expect("Failed to range by timestamp");
     assert_eq!(found_by_timestamp_range.len(), 3);
     assert_eq!(expected_blocks, found_by_timestamp_range);
@@ -132,9 +132,9 @@ fn it_should_get_entities_by_range_on_pk() {
 
     let read_tx = db.begin_read().unwrap();
 
-    let block_pointer_1 = BlockPointer { height: 1 };
-    let block_pointer_2 = BlockPointer { height: 2 };
-    let block_pointer_3 = BlockPointer { height: 3 };
+    let block_pointer_1 = BlockPointer(1);
+    let block_pointer_2 = BlockPointer(2);
+    let block_pointer_3 = BlockPointer(3);
     let actual_blocks = Block::range(&read_tx, &block_pointer_1, &block_pointer_3).expect("Failed to range by PK");
     let expected_blocks: Vec<Block> = vec![blocks[1].clone(), blocks[2].clone()];
 
@@ -143,12 +143,12 @@ fn it_should_get_entities_by_range_on_pk() {
     assert_eq!(actual_blocks[1].transactions.len(), 3);
     assert_eq!(expected_blocks, actual_blocks);
 
-    let tx_pointer_1 = TxPointer { block_pointer: block_pointer_1, tx_index: 1 };
-    let tx_pointer_2 = TxPointer { block_pointer: block_pointer_2, tx_index: 3 };
+    let tx_pointer_1 = TxPointer::from_parent(block_pointer_1).next();
+    let tx_pointer_2 = TxPointer::from_parent(block_pointer_2).next().next().next();
     let actual_transactions = Transaction::range(&read_tx, &tx_pointer_1, &tx_pointer_2).expect("Failed to range by PK");
     let mut expected_transactions: Vec<Transaction> = Vec::new();
-    expected_transactions.extend(blocks[1].transactions.clone().into_iter().filter(|t| t.id.tx_index >= 1));
-    expected_transactions.extend(blocks[2].transactions.clone().into_iter().filter(|t| t.id.tx_index < 3));
+    expected_transactions.extend(blocks[1].transactions.clone().into_iter().filter(|t| t.id.index >= 1));
+    expected_transactions.extend(blocks[2].transactions.clone().into_iter().filter(|t| t.id.index < 3));
 
     assert_eq!(expected_transactions.len(), actual_transactions.len());
     assert_eq!(expected_transactions, actual_transactions);

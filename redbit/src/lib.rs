@@ -7,8 +7,10 @@
 //!
 pub use macros::Entity;
 pub use macros::Pk;
+pub use macros::Fk;
 pub use macros::entity;
-pub use macros::key;
+pub use macros::foreign_key;
+pub use macros::primary_key;
 pub use macros::indexed_column;
 pub use redb;
 pub use redb::ReadableMultimapTable;

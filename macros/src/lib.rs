@@ -13,11 +13,11 @@ use crate::entity::EntityMacros;
 use crate::pk::{DbPkMacros, PointerType};
 
 use proc_macro::TokenStream;
+use quote::quote;
 use std::sync::Once;
-use quote::{format_ident, quote};
-use syn::{parse_macro_input, parse_quote, DeriveInput, Fields, ItemStruct, Type};
 use syn::parse::Parse;
 use syn::spanned::Spanned;
+use syn::{parse_macro_input, parse_quote, DeriveInput, Fields, ItemStruct, Type};
 
 #[proc_macro_attribute]
 pub fn indexed_column(_attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -94,72 +94,87 @@ impl Parse for KeyAttr {
     }
 }
 
+
 #[proc_macro_attribute]
-pub fn key(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let attr_args = parse_macro_input!(attr as KeyAttr);
+pub fn primary_key(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut s = parse_macro_input!(item as ItemStruct);
 
     s.attrs.retain(|a| !a.path().is_ident("derive"));
     s.attrs.insert(0, parse_quote! {
-        #[derive(Clone, Debug, Default, Eq, Ord, Pk, PartialEq, PartialOrd)]
+        #[derive(Pk, Clone, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
     });
+    quote!(#s).into()
+}
 
-    let fields_named = match &mut s.fields {
-        Fields::Named(fields_named) => fields_named,
+#[proc_macro_attribute]
+pub fn foreign_key(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let attr_args = parse_macro_input!(attr as KeyAttr);
+    let s = parse_macro_input!(item as ItemStruct);
+
+    let struct_ident = &s.ident;
+    let vis = &s.vis;
+    let index_type = attr_args.index_type.unwrap_or_else(|| syn::parse_quote! { u16 });
+
+    // Validate tuple struct with one field
+    let parent_type = match &s.fields {
+        Fields::Unnamed(fields) if fields.unnamed.len() == 1 => {
+            &fields.unnamed[0].ty
+        }
         _ => {
-            return syn::Error::new_spanned(&s.ident, "The #[key] macro only supports structs with named fields")
+            return syn::Error::new_spanned(
+                &s.ident,
+                "#[foreign_key] must be applied to a tuple struct with one field (the parent)"
+            )
                 .to_compile_error()
                 .into();
         }
     };
 
-    let has_parent = fields_named.named.iter().any(|f| {
-        f.attrs.iter().any(|a| a.path().is_ident("parent"))
-    });
-
-    if has_parent {
-        let struct_ident = &s.ident;
-        let struct_ident_str = struct_ident.to_string();
-        let base_name_str = struct_ident_str.strip_suffix("Pointer").unwrap_or(&struct_ident_str);
-        let index_field = format_ident!("{}_index", base_name_str.to_lowercase());
-
-        // Use the index type specified or default to u16
-        let index_type = attr_args.index_type.unwrap_or_else(|| syn::parse_quote! { u16 });
-
-        // Check for duplicate index field
-        let exists = fields_named.named.iter().any(|f| f.ident.as_ref() == Some(&index_field));
-        if !exists {
-            fields_named.named.push(syn::parse_quote! {
-                pub #index_field: #index_type
-            });
+    let expanded = quote! {
+        #[derive(Fk, Clone, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
+        #vis struct #struct_ident {
+            pub parent: #parent_type,
+            pub index: #index_type,
         }
-    }
+    };
 
-    quote!(#s).into()
+    expanded.into()
 }
 
-#[proc_macro_derive(Pk, attributes(parent))]
-pub fn derive_pk(input: TokenStream) -> TokenStream {
+#[proc_macro_derive(Fk)]
+pub fn derive_fk(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
     let struct_name = &ast.ident;
 
-    let pointer_type = match DbPkMacros::extract_pointer_type(&ast) {
-        Ok(t) => t,
-        Err(e) => return e.to_compile_error().into(),
-    };
-
-    let (parent_field, index_field) = match DbPkMacros::extract_fields(&ast, &pointer_type) {
-        Ok(fields) => fields,
-        Err(e) => return e.to_compile_error().into(),
-    };
-
-    match pointer_type {
-        PointerType::Root => DbPkMacros::generate_root_impls(struct_name, index_field).into(),
-        PointerType::Child =>
+    match DbPkMacros::validate_fk(&ast) {
+        Ok(_) => {
+            let (parent_field, index_field) = match DbPkMacros::extract_fields(&ast, &PointerType::Child) {
+                Ok(fields) => fields,
+                Err(e) => return e.to_compile_error().into(),
+            };
             match parent_field {
                 Some(parent_field) => DbPkMacros::generate_child_impls(struct_name, parent_field, index_field).into(),
                 None => syn::Error::new(index_field.span(), "Parent field missing").to_compile_error().into(),
             }
+        },
+        Err(e) => e.to_compile_error().into(),
+    }
+}
+
+#[proc_macro_derive(Pk)]
+pub fn derive_pk(input: TokenStream) -> TokenStream {
+    let ast = parse_macro_input!(input as DeriveInput);
+    let struct_name = &ast.ident;
+
+    match DbPkMacros::validate_pk(&ast) {
+        Ok(_) => {
+            let (_, index_field) = match DbPkMacros::extract_fields(&ast, &PointerType::Root) {
+                Ok(fields) => fields,
+                Err(e) => return e.to_compile_error().into(),
+            };
+            DbPkMacros::generate_root_impls(struct_name, index_field).into()
+        },
+        Err(e) => e.to_compile_error().into(),
     }
 }
 

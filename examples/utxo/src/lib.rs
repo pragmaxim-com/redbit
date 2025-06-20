@@ -9,6 +9,13 @@ pub type Height = u32;
 pub type Amount = u64;
 pub type Nonce = u32;
 
+#[primary_key] pub struct BlockPointer(pub Height);
+
+#[foreign_key(u16)] pub struct TxPointer(BlockPointer);
+#[foreign_key(u16)] pub struct UtxoPointer(TxPointer);
+#[foreign_key(u16)] pub struct InputPointer(TxPointer);
+#[foreign_key(u8)] pub struct AssetPointer(UtxoPointer);
+
 #[indexed_column] pub struct Hash(pub String);
 #[indexed_column] pub struct Address(pub String);
 #[indexed_column] pub struct Datum(pub String);
@@ -81,33 +88,4 @@ pub struct Asset {
     pub name: AssetName,
     #[column(index, dictionary)]
     pub policy_id: PolicyId,
-}
-
-#[key]
-pub struct BlockPointer {
-    pub height: Height,
-}
-
-#[key(u16)]
-pub struct TxPointer {
-    #[parent]
-    pub block_pointer: BlockPointer,
-}
-
-#[key(u8)]
-pub struct UtxoPointer {
-    #[parent]
-    pub tx_pointer: TxPointer,
-}
-
-#[key(u8)]
-pub struct InputPointer {
-    #[parent]
-    pub tx_pointer: TxPointer,
-}
-
-#[key(u8)]
-pub struct AssetPointer {
-    #[parent]
-    pub utxo_pointer: UtxoPointer,
 }

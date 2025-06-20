@@ -32,6 +32,6 @@ pub fn init_temp_db(name: &str) -> (Vec<Block>, Database) {
 
 pub fn get_blocks(block_count: Height) -> Vec<Block> {
     (0..block_count)
-        .map(|height| Block::sample_with(&BlockPointer { height }))
+        .map(|height| Block::sample_with(&BlockPointer(height)))
         .collect::<Vec<_>>()
 }
