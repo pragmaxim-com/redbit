@@ -3,7 +3,7 @@ use utxo::*;
 
 #[test]
 fn each_entity_should_have_a_default_sample() {
-    let bp = BlockPointer(5);
+    let bp = Height(5);
     let block = Block::sample_with(&bp);
     assert_eq!(block.id, block.header.id);
 
@@ -13,7 +13,7 @@ fn each_entity_should_have_a_default_sample() {
     assert_eq!(block.transactions.len(), 3);
     for (idx, tx) in block.transactions.iter().enumerate() {
         assert_eq!(tx.id.index as usize, idx);
-        assert_eq!(tx.id.parent, BlockPointer(0));
+        assert_eq!(tx.id.parent, Height(0));
         assert_eq!(tx.utxos.len(), 3);
         for (idx, utxo) in tx.utxos.iter().enumerate() {
             assert_eq!(utxo.id.index as usize, idx);
@@ -132,9 +132,9 @@ fn it_should_get_entities_by_range_on_pk() {
 
     let read_tx = db.begin_read().unwrap();
 
-    let block_pointer_1 = BlockPointer(1);
-    let block_pointer_2 = BlockPointer(2);
-    let block_pointer_3 = BlockPointer(3);
+    let block_pointer_1 = Height(1);
+    let block_pointer_2 = Height(2);
+    let block_pointer_3 = Height(3);
     let actual_blocks = Block::range(&read_tx, &block_pointer_1, &block_pointer_3).expect("Failed to range by PK");
     let expected_blocks: Vec<Block> = vec![blocks[1].clone(), blocks[2].clone()];
 

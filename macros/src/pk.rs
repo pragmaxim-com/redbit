@@ -113,7 +113,7 @@ impl DbPkMacros {
         Ok(())
     }
 
-    /// Extracts and validates the required fields (parent & index) for root or child structs.
+    /// Extracts and validates the required fields (parent & index) for root or pointer.
     pub fn extract_fields(input: &DeriveInput, pointer_type: &PointerType) -> Result<(Option<Field>, Field), syn::Error> {
         let data_struct = match input.data.clone() {
             Data::Struct(data_struct) => data_struct,
@@ -169,7 +169,7 @@ impl DbPkMacros {
                 fn next(&self) -> Self { #struct_name(self.0 + 1) }
             }
             impl RootPointer for #struct_name {
-                fn is_child(&self) -> bool { false }
+                fn is_pointer(&self) -> bool { false }
             }
 
             // Serde: human-readable = dash string, binary = raw field
@@ -240,8 +240,7 @@ impl DbPkMacros {
         macro_utils::write_stream_and_return(expanded, struct_name)
     }
 
-    /// Generate impls for Child Pointer types
-    pub fn generate_child_impls(struct_name: &Ident, parent_field: Field, index_field: Field) -> TokenStream {
+    pub fn generate_pointer_impls(struct_name: &Ident, parent_field: Field, index_field: Field) -> TokenStream {
         let parent_name = &parent_field.ident;
         let parent_type = &parent_field.ty;
         let index_name = &index_field.ident;
@@ -256,7 +255,7 @@ impl DbPkMacros {
             }
             impl ChildPointer for #struct_name {
                 type Parent = #parent_type;
-                fn is_child(&self) -> bool { true }
+                fn is_pointer(&self) -> bool { true }
                 fn parent(&self) -> &Self::Parent { &self.#parent_name }
                 fn from_parent(parent: Self::Parent) -> Self { #struct_name { #parent_name: parent, #index_name: <#index_type as Default>::default() } }
             }

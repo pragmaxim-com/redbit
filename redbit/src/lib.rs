@@ -9,9 +9,9 @@ pub use macros::Entity;
 pub use macros::Pk;
 pub use macros::Fk;
 pub use macros::entity;
-pub use macros::foreign_key;
-pub use macros::primary_key;
-pub use macros::indexed_column;
+pub use macros::pointer_key;
+pub use macros::root_key;
+pub use macros::index;
 pub use redb;
 pub use redb::ReadableMultimapTable;
 pub use redb::ReadableTable;
@@ -55,12 +55,12 @@ pub trait IndexedPointer: Clone {
 }
 
 pub trait RootPointer: IndexedPointer {
-    fn is_child(&self) -> bool;
+    fn is_pointer(&self) -> bool;
 }
 
 pub trait ChildPointer: IndexedPointer {
     type Parent: IndexedPointer;
-    fn is_child(&self) -> bool;
+    fn is_pointer(&self) -> bool;
     fn parent(&self) -> &Self::Parent;
     fn from_parent(parent: Self::Parent) -> Self;
 }

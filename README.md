@@ -25,6 +25,7 @@ through auto-generated REST API.
 
 ```
 cargo run --package utxo                # to run the demo example
+cargo test --package utxo               # to let all the self-generated tests run (including http layer)
 ```
 
 Let's say we want to persist and query blockchain data using Redbit, declare annotated Structs `examples/utxo/src/lib.rs`:

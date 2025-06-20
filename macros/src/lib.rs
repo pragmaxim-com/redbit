@@ -20,7 +20,7 @@ use syn::spanned::Spanned;
 use syn::{parse_macro_input, parse_quote, DeriveInput, Fields, ItemStruct, Type};
 
 #[proc_macro_attribute]
-pub fn indexed_column(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn index(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut input = parse_macro_input!(item as ItemStruct);
     let struct_ident = &input.ident;
 
@@ -96,7 +96,7 @@ impl Parse for KeyAttr {
 
 
 #[proc_macro_attribute]
-pub fn primary_key(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn root_key(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut s = parse_macro_input!(item as ItemStruct);
 
     s.attrs.retain(|a| !a.path().is_ident("derive"));
@@ -107,7 +107,7 @@ pub fn primary_key(_attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
-pub fn foreign_key(attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn pointer_key(attr: TokenStream, item: TokenStream) -> TokenStream {
     let attr_args = parse_macro_input!(attr as KeyAttr);
     let s = parse_macro_input!(item as ItemStruct);
 
@@ -153,7 +153,7 @@ pub fn derive_fk(input: TokenStream) -> TokenStream {
                 Err(e) => return e.to_compile_error().into(),
             };
             match parent_field {
-                Some(parent_field) => DbPkMacros::generate_child_impls(struct_name, parent_field, index_field).into(),
+                Some(parent_field) => DbPkMacros::generate_pointer_impls(struct_name, parent_field, index_field).into(),
                 None => syn::Error::new(index_field.span(), "Parent field missing").to_compile_error().into(),
             }
         },

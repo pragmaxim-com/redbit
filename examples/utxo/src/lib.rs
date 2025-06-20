@@ -4,28 +4,23 @@ pub mod demo;
 pub use data::*;
 pub use redbit::*;
 
-pub type Timestamp = u32;
-pub type Height = u32;
-pub type Amount = u64;
-pub type Nonce = u32;
+#[root_key] pub struct Height(pub u32);
 
-#[primary_key] pub struct BlockPointer(pub Height);
+#[pointer_key(u16)] pub struct TxPointer(Height);
+#[pointer_key(u16)] pub struct UtxoPointer(TxPointer);
+#[pointer_key(u16)] pub struct InputPointer(TxPointer);
+#[pointer_key(u8)] pub struct AssetPointer(UtxoPointer);
 
-#[foreign_key(u16)] pub struct TxPointer(BlockPointer);
-#[foreign_key(u16)] pub struct UtxoPointer(TxPointer);
-#[foreign_key(u16)] pub struct InputPointer(TxPointer);
-#[foreign_key(u8)] pub struct AssetPointer(UtxoPointer);
-
-#[indexed_column] pub struct Hash(pub String);
-#[indexed_column] pub struct Address(pub String);
-#[indexed_column] pub struct Datum(pub String);
-#[indexed_column] pub struct PolicyId(pub String);
-#[indexed_column] pub struct AssetName(pub String);
+#[index] pub struct Hash(pub String);
+#[index] pub struct Address(pub String);
+#[index] pub struct Datum(pub String);
+#[index] pub struct PolicyId(pub String);
+#[index] pub struct AssetName(pub String);
 
 #[entity]
 pub struct Block {
     #[pk(range)]
-    pub id: BlockPointer,
+    pub id: Height,
     #[one2one]
     pub header: BlockHeader,
     #[one2many]
@@ -35,15 +30,15 @@ pub struct Block {
 #[entity]
 pub struct BlockHeader {
     #[fk(one2one, range)]
-    pub id: BlockPointer,
+    pub id: Height,
     #[column(index)]
     pub hash: Hash,
     #[column(index, range)]
-    pub timestamp: Timestamp,
+    pub timestamp: u32,
     #[column(index)]
     pub merkle_root: Hash,
     #[column]
-    pub nonce: Nonce,
+    pub nonce: u64,
 }
 
 #[entity]
@@ -63,7 +58,7 @@ pub struct Utxo {
     #[fk(one2many, range)]
     pub id: UtxoPointer,
     #[column]
-    pub amount: Amount,
+    pub amount: u64,
     #[column(index)]
     pub datum: Datum,
     #[column(index, dictionary)]
@@ -83,7 +78,7 @@ pub struct Asset {
     #[fk(one2many, range)]
     pub id: AssetPointer,
     #[column]
-    pub amount: Amount,
+    pub amount: u64,
     #[column(index, dictionary)]
     pub name: AssetName,
     #[column(index, dictionary)]
