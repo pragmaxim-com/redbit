@@ -227,14 +227,13 @@ Performance wise, check 🔥[flamegraph](https://rawcdn.githack.com/pragmaxim-co
 The demo example persists data into 30 tables to allow for rich querying.
 
 ### ⏱️ Benchmark Summary
-An operation on top of a 3 blocks of 10 transactions of 20 utxos of 3 assets, ie.
-`Block__store_and_commit` and `Block__all` operations write/read :
+The slowest `Block__all` operation in this context equals to reading 3 blocks of 3 transactions of 3 utxos of 3 assets, ie.
+the operations reads :
 - 3 blocks
-- 3 * 10 = 30 transactions
-- 3 * 10 * 20 = 600 utxos
-- 3 * 10 * 20 * 3 = 1800 assets
-
-Which means indexing `Bitcoin` is way faster than Bitcoin Core syncs itself.
+- 3 * 3 = 9 transactions
+- 3 * 3 * 3 = 27 inputs
+- 3 * 3 * 3 = 27 utxos
+- 3 * 3 * 3 * 3 = 81 assets
 
 <!-- BEGIN_BENCH -->
 ```
