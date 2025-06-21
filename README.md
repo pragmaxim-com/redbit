@@ -34,16 +34,28 @@ Let's say we want to persist and query blockchain data using Redbit, declare ann
 <!-- BEGIN_LIB -->
 ```rust
     pub mod data;
-    pub mod types;
     pub mod demo;
+    
     pub use data::*;
     pub use redbit::*;
-    pub use types::*;
+    
+    #[root_key] pub struct Height(pub u32);
+    
+    #[pointer_key(u16)] pub struct TxPointer(Height);
+    #[pointer_key(u16)] pub struct UtxoPointer(TxPointer);
+    #[pointer_key(u16)] pub struct InputPointer(TxPointer);
+    #[pointer_key(u8)] pub struct AssetPointer(UtxoPointer);
+    
+    #[index] pub struct Hash(pub String);
+    #[index] pub struct Address(pub String);
+    #[index] pub struct Datum(pub String);
+    #[index] pub struct PolicyId(pub String);
+    #[index] pub struct AssetName(pub String);
     
     #[entity]
     pub struct Block {
         #[pk(range)]
-        pub id: BlockPointer,
+        pub id: Height,
         #[one2one]
         pub header: BlockHeader,
         #[one2many]
@@ -53,15 +65,15 @@ Let's say we want to persist and query blockchain data using Redbit, declare ann
     #[entity]
     pub struct BlockHeader {
         #[fk(one2one, range)]
-        pub id: BlockPointer,
+        pub id: Height,
         #[column(index)]
         pub hash: Hash,
         #[column(index, range)]
-        pub timestamp: Timestamp,
+        pub timestamp: u32,
         #[column(index)]
         pub merkle_root: Hash,
         #[column]
-        pub nonce: Nonce,
+        pub nonce: u64,
     }
     
     #[entity]
@@ -81,7 +93,7 @@ Let's say we want to persist and query blockchain data using Redbit, declare ann
         #[fk(one2many, range)]
         pub id: UtxoPointer,
         #[column]
-        pub amount: Amount,
+        pub amount: u64,
         #[column(index)]
         pub datum: Datum,
         #[column(index, dictionary)]
@@ -101,44 +113,11 @@ Let's say we want to persist and query blockchain data using Redbit, declare ann
         #[fk(one2many, range)]
         pub id: AssetPointer,
         #[column]
-        pub amount: Amount,
+        pub amount: u64,
         #[column(index, dictionary)]
         pub name: AssetName,
         #[column(index, dictionary)]
         pub policy_id: PolicyId,
-    }
-    
-    #[key]
-    pub struct BlockPointer {
-        pub height: Height,
-    }
-    
-    #[key]
-    pub struct TxPointer {
-        #[parent]
-        pub block_pointer: BlockPointer,
-        pub tx_index: TxIndex,
-    }
-    
-    #[key]
-    pub struct UtxoPointer {
-        #[parent]
-        pub tx_pointer: TxPointer,
-        pub utxo_index: UtxoIndex,
-    }
-    
-    #[key]
-    pub struct InputPointer {
-        #[parent]
-        pub tx_pointer: TxPointer,
-        pub utxo_index: UtxoIndex,
-    }
-    
-    #[key]
-    pub struct AssetPointer {
-        #[parent]
-        pub utxo_pointer: UtxoPointer,
-        pub asset_index: AssetIndex,
     }
 ```
 <!-- END_LIB -->
@@ -147,13 +126,13 @@ And R/W entire instances efficiently using indexes and dictionaries `examples/ut
 
 <!-- BEGIN_MAIN -->
 ```rust
-    use std::sync::Arc;
+    use crate::*;
     use redb::Database;
     use redbit::AppError;
-    use crate::*;
+    use std::sync::Arc;
     
     pub fn run(db: Arc<Database>) -> Result<(), AppError> {
-        let blocks = get_blocks(Height(1), 10, 10, 3);
+        let blocks = Block::sample_many(2);
     
         println!("Persisting blocks:");
         let write_tx = db.begin_write()?;
@@ -261,63 +240,33 @@ Which means indexing `Bitcoin` is way faster than Bitcoin Core syncs itself.
 ```
 function                                           ops/s
 -------------------------------------------------------------
-Block__store_and_commit                               35
-Block__store_and_commit                               43
-Utxo__all                                             70
-Block__all                                            82
-Transaction__all                                      82
-Transaction__all                                      82
-Transaction__range                                    84
-Utxo__all                                             84
-Utxo__range                                           85
-Block__all                                            86
-Utxo__range                                           90
-Transaction__range                                    91
-Asset__range                                         118
-Asset__range                                         119
-Block__range                                         122
-Asset__all                                           127
-Block__range                                         130
-Asset__all                                           213
-Block__get                                           238
-Block__get_transactions                              247
-Block__get                                           256
-Block__get_transactions                              267
-Asset__get_by_policy_id                              285
-Asset__get_by_policy_id                              352
-Utxo__get_by_address                                 411
-Asset__get_by_name                                   559
-Transaction__get_by_hash                             823
-Utxo__get_by_address                                 839
-Transaction__get_by_hash                             888
-Asset__get_by_name                                  1162
-Utxo__get_by_datum                                  1247
-Utxo__get_by_datum                                  1668
-Transaction__get                                    2486
-Transaction__get_utxos                              2541
-Transaction__get                                    2695
-Transaction__get_utxos                              2702
-Utxo__get                                          51305
-Utxo__get                                          53358
-Utxo__get_assets                                   67708
-Utxo__get_assets                                   70686
-BlockHeader__get_by_merkle_root                    91748
-BlockHeader__all                                   97561
-BlockHeader__get_by_merkle_root                    99916
-BlockHeader__get_by_hash                          101425
-BlockHeader__all                                  101679
-BlockHeader__get_by_hash                          106044
-BlockHeader__range_by_timestamp                   124057
-BlockHeader__range_by_timestamp                   134169
-BlockHeader__range                                144804
-BlockHeader__range                                147597
-Asset__get                                        191860
-Asset__get                                        197572
-BlockHeader__get_by_timestamp                     219954
-BlockHeader__get                                  237630
-BlockHeader__get_by_timestamp                     264348
-Block__get_header                                 277703
-BlockHeader__get                                  287069
-Block__get_header                                 299232
+Block__all                                          1970
+Transaction__all                                    2035
+Transaction__get_by_hash                            2052
+Utxo__all                                           2091
+Utxo__get_by_datum                                  2095
+Utxo__get_by_address                                2107
+Utxo__range                                         2186
+Transaction__range                                  2301
+Asset__all                                          2820
+Asset__range                                        2858
+Asset__get_by_name                                  2869
+Asset__get_by_policy_id                             2876
+Block__range                                        2972
+Block__get                                          5930
+Block__get_transactions                             6002
+Transaction__get                                   18514
+Transaction__get_utxos                             19471
+Utxo__get                                          57419
+Utxo__get_assets                                   74826
+BlockHeader__get_by_merkle_root                   100101
+BlockHeader__all                                  101386
+BlockHeader__get_by_hash                          102755
+BlockHeader__get_by_timestamp                     103433
+BlockHeader__range                                142292
+Asset__get                                        210834
+Block__get_header                                 280401
+BlockHeader__get                                  281610
+BlockHeader__range_by_timestamp                  1358690
 ```
 <!-- END_BENCH -->
