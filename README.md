@@ -21,7 +21,8 @@ through auto-generated REST API.
 - ✅ Optional dictionaries for low cardinality fields
 - ✅ One-to-One and One-to-Many entities with cascade read/write/delete
 - ✅ All goodies including intuitive data ordering without writing custom codecs
-- ✅ auto-generated http rest API **with macro derived tests** at http://127.0.0.1:8000/swagger-ui/
+- ✅ Macro derived http rest API at http://127.0.0.1:8000/swagger-ui/
+- ✅ Macro derived unit tests and integration tests on axum test server
 
 ```
 cargo run --package utxo                # to run the demo example

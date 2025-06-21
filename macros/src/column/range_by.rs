@@ -32,6 +32,15 @@ pub fn range_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: 
             Ok(results)
         }
     };
+    let test_stream =  Some(quote! {
+        {
+            let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let from_value = #column_type::default();
+            let until_value = #column_type::default(); // TODO, there is no next on arbitrary values, range does not work on equal from/until
+            let entities = #entity_name::#fn_name(&read_tx, &from_value, &until_value).expect("Failed to get entities by range");
+            assert!(entities.len() == 0, "Expected entities to be returned for the given range");
+        }
+    });
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
@@ -44,5 +53,6 @@ pub fn range_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: 
             return_type: Some(syn::parse_quote!(Vec<#entity_type>)),
             endpoint: format!("/{}/{}", entity_name.to_string().to_lowercase(), column_name.clone()),
         }),
+        test_stream
     }
 }

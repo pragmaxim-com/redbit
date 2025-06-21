@@ -20,6 +20,17 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
                 Ok(results)
             }
         };
+    let test_stream = Some(quote! {
+        {
+            let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let from_value = #pk_type::default();
+            let until_value = #pk_type::default().next().next().next();
+            let entities = #entity_name::#fn_name(&read_tx, &from_value, &until_value).expect("Failed to get entities by range");
+            let expected_entities = #entity_type::sample_many(entity_count);
+            assert_eq!(entities, expected_entities, "Expected entities to be returned for the given range");
+        }
+    });
+
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
@@ -31,6 +42,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
             method: HttpMethod::GET,
             return_type: Some(syn::parse_quote!(Vec<#entity_type>)),
             endpoint: format!("/{}/{}", entity_name.to_string().to_lowercase(), pk_name.clone()),
-        })
+        }),
+        test_stream
     }
 }

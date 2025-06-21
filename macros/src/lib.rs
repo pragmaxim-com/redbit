@@ -15,11 +15,13 @@ use crate::pk::{DbPkMacros, PointerType};
 use proc_macro::TokenStream;
 use quote::quote;
 use std::sync::Once;
+use proc_macro_error::proc_macro_error;
 use syn::parse::Parse;
 use syn::spanned::Spanned;
 use syn::{parse_macro_input, parse_quote, DeriveInput, Fields, ItemStruct, Type};
 
 #[proc_macro_attribute]
+#[proc_macro_error]
 pub fn index(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut input = parse_macro_input!(item as ItemStruct);
     let struct_ident = &input.ident;
@@ -96,6 +98,7 @@ impl Parse for KeyAttr {
 
 
 #[proc_macro_attribute]
+#[proc_macro_error]
 pub fn root_key(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut s = parse_macro_input!(item as ItemStruct);
 
@@ -107,6 +110,7 @@ pub fn root_key(_attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
+#[proc_macro_error]
 pub fn pointer_key(attr: TokenStream, item: TokenStream) -> TokenStream {
     let attr_args = parse_macro_input!(attr as KeyAttr);
     let s = parse_macro_input!(item as ItemStruct);
@@ -142,6 +146,7 @@ pub fn pointer_key(attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_derive(Fk)]
+#[proc_macro_error]
 pub fn derive_fk(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
     let struct_name = &ast.ident;
@@ -162,6 +167,7 @@ pub fn derive_fk(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_derive(Pk)]
+#[proc_macro_error]
 pub fn derive_pk(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
     let struct_name = &ast.ident;
@@ -179,6 +185,7 @@ pub fn derive_pk(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
+#[proc_macro_error]
 pub fn entity(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut s = parse_macro_input!(item as ItemStruct);
     s.attrs.retain(|a| !a.path().is_ident("derive"));
@@ -189,6 +196,7 @@ pub fn entity(_attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_derive(Entity, attributes(pk, fk, column, one2many, one2one, transient))]
+#[proc_macro_error]
 pub fn derive_entity(input: TokenStream) -> TokenStream {
     let item_struct = parse_macro_input!(input as ItemStruct);
     let entity_ident = &item_struct.ident;

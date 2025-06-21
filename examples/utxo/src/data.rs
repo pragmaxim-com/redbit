@@ -23,15 +23,9 @@ pub fn empty_temp_db(name: &str) -> Database {
 
 pub fn init_temp_db(name: &str) -> (Vec<Block>, Database) {
     let db = empty_temp_db(name);
-    let blocks = get_blocks(3);
     let write_tx = db.begin_write().expect("Failed to begin write transaction");
+    let blocks = Block::sample_many(3);
     Block::store_many(&write_tx, &blocks).expect("Failed to persist blocks");
     write_tx.commit().expect("Failed to commit transaction");
     (blocks, db)
-}
-
-pub fn get_blocks(block_count: u32) -> Vec<Block> {
-    (0..block_count)
-        .map(|height| Block::sample_with(&Height(height)))
-        .collect::<Vec<_>>()
 }

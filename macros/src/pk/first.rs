@@ -14,6 +14,15 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
             Ok(None)
         }
     };
+    let test_stream = Some(quote! {
+        {
+            let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let entity = #entity_name::first(&read_tx).expect("Failed to get first entity by PK").expect("Expected first entity to exist");
+            let expected_enity = #entity_type::sample();
+            assert_eq!(entity, expected_enity, "First entity does not match expected");
+        }
+    });
+
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
@@ -21,5 +30,6 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
         fn_stream,
         fn_call: quote! { #entity_name::#fn_name(&tx) },
         endpoint_def: None,
+        test_stream
     }
 }

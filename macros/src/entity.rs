@@ -133,6 +133,14 @@ impl EntityMacros {
                 return_type: Some(pk_type.clone()),
                 endpoint: format!("/{}", entity_name.to_string().to_lowercase()),
             }),
+            test_stream: Some(quote! {
+                {
+                    for test_entity in #entity_type::sample_many(entity_count) {
+                        let pk = #entity_name::#fn_name(&db, &test_entity).expect("Failed to store and commit instance");
+                        assert_eq!(test_entity.#pk_name, pk, "Stored PK does not match the instance PK");
+                    }
+                }
+            }),
         }
     }
 
@@ -151,6 +159,7 @@ impl EntityMacros {
         let pk_type = &self.pk.definition.field.tpe;
         let pk_name = &self.pk.definition.field.name;
         let entity_name = &self.entity_name;
+        let entity_type = &self.entity_type;
         let fn_name = format_ident!("delete_and_commit");
         let delete_statements = self.delete_statements();
         let fn_stream = quote! {
@@ -175,6 +184,18 @@ impl EntityMacros {
                 return_type: None,
                 endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), pk_name, pk_name),
             }),
+            test_stream: Some(quote! {
+                {
+                    for test_entity in #entity_type::sample_many(entity_count) {
+                        let pk = test_entity.#pk_name;
+                        #entity_name::#fn_name(&db, &pk).expect("Failed to delete and commit instance");
+                        let read_tx = db.begin_read().expect("Failed to begin read transaction");
+                        let is_empty = #entity_name::get(&read_tx, &pk).expect("Failed to get instance").is_none();
+                        assert!(is_empty, "Instance should be deleted");
+                    }
+                }
+            }),
+
         }
     }
 

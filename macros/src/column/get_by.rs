@@ -41,6 +41,16 @@ pub fn get_by_dict_def(
             Ok(results)
         }
     };
+    let test_stream = Some(quote! {
+        {
+            let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let val = #column_type::default();
+            let entities = #entity_name::#fn_name(&read_tx, &val).expect("Failed to get entities by dictionary index");
+            let expected_entities = #entity_type::sample_many(entity_count);
+            assert_eq!(expected_entities, entities, "Expected entities to be returned for the given dictionary index");
+        }
+    });
+
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
@@ -57,6 +67,7 @@ pub fn get_by_dict_def(
             return_type: Some(syn::parse_quote!(Vec<#entity_type>)),
             endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), column_name, column_name),
         }),
+        test_stream
     }
 }
 
@@ -84,6 +95,16 @@ pub fn get_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &I
             Ok(results)
         }
     };
+    let test_stream = Some(quote! {
+        {
+            let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let val = #column_type::default();
+            let entities = #entity_name::#fn_name(&read_tx, &val).expect("Failed to get entities by index");
+            let expected_entities = #entity_type::sample_many(entity_count);
+            assert_eq!(expected_entities, entities, "Expected entities to be returned for the given index");
+        }
+    });
+
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
@@ -100,5 +121,6 @@ pub fn get_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &I
             return_type: Some(syn::parse_quote!(Vec<#entity_type>)),
             endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), column_name, column_name),
         }),
+        test_stream
     }
 }

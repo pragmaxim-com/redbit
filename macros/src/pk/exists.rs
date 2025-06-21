@@ -17,6 +17,15 @@ pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, table: &Iden
                 }
             }
         };
+    let test_stream = Some(quote! {
+        {
+            let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let pk_value = #pk_type::default();
+            let entity_exists = #entity_name::#fn_name(&read_tx, &pk_value).expect("Failed to check entity exists");
+            assert!(entity_exists, "Entity PK does not match the requested PK");
+        }
+    });
+
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
@@ -28,6 +37,7 @@ pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, table: &Iden
             method: HttpMethod::HEAD,
             return_type: None,
             endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), pk_name, pk_name),
-        })
+        }),
+        test_stream
     }
 }

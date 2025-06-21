@@ -7,11 +7,11 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
     let fn_name = format_ident!("take");
     let fn_stream =
         quote! {
-            pub fn #fn_name(tx: &::redbit::redb::ReadTransaction, n: u32) -> Result<Vec<#entity_type>, AppError> {
+            pub fn #fn_name(tx: &::redbit::redb::ReadTransaction, n: usize) -> Result<Vec<#entity_type>, AppError> {
                 let table_pk_6 = tx.open_table(#table)?;
                 let mut iter = table_pk_6.iter()?;
                 let mut results = Vec::new();
-                let mut count = 0;
+                let mut count: usize = 0;
 
                 while let Some(entry_res) = iter.next() {
                     if count >= n {
@@ -25,14 +25,23 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
                 Ok(results)
             }
         };
-
+    let test_stream = Some(quote! {
+        {
+            let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let n: usize = 2;
+            let entities = #entity_name::#fn_name(&read_tx, n).expect("Failed to take entities");
+            let expected_entities = #entity_type::sample_many(n);
+            assert_eq!(entities, expected_entities, "Expected to take 2 entities");
+        }
+    });
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
         fn_return_type: syn::parse_quote!(Vec<#entity_type>),
         fn_stream,
         fn_call: quote! { #entity_name::#fn_name(&tx, take) },
-        endpoint_def: None
+        endpoint_def: None,
+        test_stream
     }
 
 }

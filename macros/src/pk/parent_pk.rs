@@ -27,5 +27,6 @@ pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type) -> FunctionD
             return_type: Some(pk_type.clone()),
             endpoint: format!("/{}/{}/{{{}}}/{}", entity_name.to_string().to_lowercase(), pk_name, pk_name, fn_name),
         }),
+        test_stream: None
     }
 }

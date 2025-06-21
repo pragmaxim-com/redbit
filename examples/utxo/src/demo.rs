@@ -4,7 +4,7 @@ use redbit::AppError;
 use std::sync::Arc;
 
 pub fn run(db: Arc<Database>) -> Result<(), AppError> {
-    let blocks = get_blocks(1);
+    let blocks = Block::sample_many(2);
 
     println!("Persisting blocks:");
     let write_tx = db.begin_write()?;

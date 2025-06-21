@@ -23,7 +23,7 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
 
     let function_streams: Vec<TokenStream> = function_defs.iter().map(|f| f.fn_stream.clone()).collect::<Vec<_>>();
     let table_definition_streams: Vec<TokenStream> = table_definitions.iter().map(|table_def| table_def.definition.clone()).collect();
-
+    let tests = function_defs.iter().filter_map(|f| f.test_stream.clone()).collect::<Vec<_>>();
     let (endpoint_handlers, route_chains, route_tests) = to_http_endpoints(function_defs);
 
     let table_lines = table_definitions.iter().map(|table_def| format!("| Table         |  {}", table_def.name)).collect();
@@ -47,6 +47,10 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
         impl #entity_name {
             #(#function_streams)*
 
+            pub fn sample() -> Self {
+                #entity_name::sample_with(&#pk_type::default())
+            }
+
             pub fn sample_with(pk: &#pk_type) -> Self {
                 #entity_name {
                     #pk_name: pk.clone(),
@@ -54,8 +58,14 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
                 }
             }
 
-            pub fn sample() -> Self {
-                #entity_name::sample_with(&#pk_type::default())
+            pub fn sample_many(n: usize) -> Vec<#entity_type> {
+                std::iter::successors(Some((#pk_type::default(), None)), |(prev_pointer, _)| {
+                    let new_entity = #entity_type::sample_with(prev_pointer);
+                    Some((prev_pointer.next(), Some(new_entity)))
+                })
+                .filter_map(|(_, instance)| instance)
+                .take(n)
+                .collect()
             }
 
             fn compose(tx: &::redbit::redb::ReadTransaction, pk: &#pk_type) -> Result<#entity_type, AppError> {
@@ -96,14 +106,25 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
             use super::*;
             use axum_test::TestServer;
 
-            #[tokio::test]
-            async fn all_routes_should_work() {
-                let dir = std::env::temp_dir().join("redbit").join(#entity_literal);
+            fn init_temp_db(name: &str) -> std::sync::Arc<::redbit::redb::Database> {
+                let dir = std::env::temp_dir().join("redbit").join(name).join(#entity_literal);
                 if !dir.exists() {
                     std::fs::create_dir_all(dir.clone()).unwrap();
                 }
                 let db_path = dir.join(format!("{}_{}.redb", #entity_literal, rand::random::<u64>()));
-                let db = std::sync::Arc::new(redbit::redb::Database::create(db_path).expect("Failed to create database"));
+                std::sync::Arc::new(redbit::redb::Database::create(db_path).expect("Failed to create database"))
+            }
+
+            #[test]
+            fn test_entity_api() {
+                let db = init_temp_db("api");
+                let entity_count: usize = 3;
+                #(#tests)*
+            }
+
+            #[tokio::test]
+            async fn test_entity_rest_api() {
+                let db = init_temp_db("rest-api");
                 let router = build_router(RequestState { db: std::sync::Arc::clone(&db) }).await;
                 let server = axum_test::TestServer::new(router).unwrap();
                 #(#route_tests)*

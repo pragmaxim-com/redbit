@@ -253,7 +253,7 @@ pub struct ApiDoc;
 #[derive(utoipa::IntoParams, serde::Serialize, serde::Deserialize, Default)]
 pub struct LimitQuery {
     #[param(required = false)]
-    pub take: Option<u32>,
+    pub take: Option<usize>,
     #[param(required = false)]
     pub last: Option<bool>,
     #[param(required = false)]
