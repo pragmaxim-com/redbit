@@ -90,14 +90,14 @@ impl DbPkMacros {
     }
 
     /// Determines whether a struct is a `Root` or `Child` based on `#[parent]` attributes.
-    pub fn validate_pk(input: &DeriveInput) -> Result<(), syn::Error> {
+    pub fn validate_root_key(input: &DeriveInput) -> Result<(), syn::Error> {
         match &input.data {
             Data::Struct(_) => Ok(()),
             _ => Err(syn::Error::new_spanned(input, "Pk can only be derived for structs")),
         }
     }
 
-    pub fn validate_fk(input: &DeriveInput) -> Result<(), syn::Error> {
+    pub fn validate_pointer_key(input: &DeriveInput) -> Result<(), syn::Error> {
         let data_struct = match &input.data {
             Data::Struct(data_struct) => data_struct,
             _ => return Err(syn::Error::new_spanned(input, "Fk can only be derived for structs")),

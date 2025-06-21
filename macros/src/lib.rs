@@ -104,7 +104,7 @@ pub fn root_key(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     s.attrs.retain(|a| !a.path().is_ident("derive"));
     s.attrs.insert(0, parse_quote! {
-        #[derive(Pk, Clone, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
+        #[derive(RootKey, Clone, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
     });
     quote!(#s).into()
 }
@@ -135,7 +135,7 @@ pub fn pointer_key(attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     let expanded = quote! {
-        #[derive(Fk, Clone, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
+        #[derive(PointerKey, Clone, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
         #vis struct #struct_ident {
             pub parent: #parent_type,
             pub index: #index_type,
@@ -145,13 +145,13 @@ pub fn pointer_key(attr: TokenStream, item: TokenStream) -> TokenStream {
     expanded.into()
 }
 
-#[proc_macro_derive(Fk)]
+#[proc_macro_derive(PointerKey)]
 #[proc_macro_error]
-pub fn derive_fk(input: TokenStream) -> TokenStream {
+pub fn derive_pointer_key(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
     let struct_name = &ast.ident;
 
-    match DbPkMacros::validate_fk(&ast) {
+    match DbPkMacros::validate_pointer_key(&ast) {
         Ok(_) => {
             let (parent_field, index_field) = match DbPkMacros::extract_fields(&ast, &PointerType::Child) {
                 Ok(fields) => fields,
@@ -166,13 +166,13 @@ pub fn derive_fk(input: TokenStream) -> TokenStream {
     }
 }
 
-#[proc_macro_derive(Pk)]
+#[proc_macro_derive(RootKey)]
 #[proc_macro_error]
-pub fn derive_pk(input: TokenStream) -> TokenStream {
+pub fn derive_root_key(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
     let struct_name = &ast.ident;
 
-    match DbPkMacros::validate_pk(&ast) {
+    match DbPkMacros::validate_root_key(&ast) {
         Ok(_) => {
             let (_, index_field) = match DbPkMacros::extract_fields(&ast, &PointerType::Root) {
                 Ok(fields) => fields,

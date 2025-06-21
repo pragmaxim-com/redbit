@@ -6,8 +6,8 @@
 //! supporting one-to-one and one-to-many relationships.
 //!
 pub use macros::Entity;
-pub use macros::Pk;
-pub use macros::Fk;
+pub use macros::RootKey;
+pub use macros::PointerKey;
 pub use macros::entity;
 pub use macros::pointer_key;
 pub use macros::root_key;
