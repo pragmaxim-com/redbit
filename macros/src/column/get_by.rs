@@ -46,7 +46,7 @@ pub fn get_by_dict_def(
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
             let entities = #entity_name::#fn_name(&read_tx, &val).expect("Failed to get entities by dictionary index");
-            let expected_entities = #entity_type::sample_many(entity_count);
+            let expected_entities = vec![#entity_type::sample()];
             assert_eq!(expected_entities, entities, "Expected entities to be returned for the given dictionary index");
         }
     });
@@ -100,7 +100,7 @@ pub fn get_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &I
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
             let entities = #entity_name::#fn_name(&read_tx, &val).expect("Failed to get entities by index");
-            let expected_entities = #entity_type::sample_many(entity_count);
+            let expected_entities = vec![#entity_type::sample()];
             assert_eq!(expected_entities, entities, "Expected entities to be returned for the given index");
         }
     });

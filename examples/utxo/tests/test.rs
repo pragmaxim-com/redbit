@@ -3,10 +3,6 @@ use utxo::*;
 
 #[test]
 fn each_entity_should_have_a_default_sample() {
-    let bp = Height(5);
-    let block = Block::sample_with(&bp);
-    assert_eq!(block.id, block.header.id);
-
     let block = Block::sample();
     assert_eq!(block.id.0, 0);
     assert_eq!(block.header.id, block.id);
@@ -90,7 +86,7 @@ fn it_should_get_entities_by_index() {
     let transaction = blocks.first().unwrap().transactions.first().unwrap();
 
     let found_by_hash = Transaction::get_by_hash(&read_tx, &transaction.hash).expect("Failed to query by hash");
-    assert_eq!(found_by_hash.len(), 3*3);
+    assert_eq!(found_by_hash.len(), 3);
     assert!(found_by_hash.iter().any(|tx| tx.id == transaction.id));
     assert!(found_by_hash.iter().any(|tx| tx.id == transaction.id));
 }
@@ -103,7 +99,7 @@ fn it_should_get_entities_by_index_with_dict() {
     let utxo = blocks.first().unwrap().transactions.first().unwrap().utxos.first().unwrap();
 
     let found_by_address = Utxo::get_by_address(&read_tx, &utxo.address).expect("Failed to query by address");
-    assert_eq!(found_by_address.len(), 3*3*3);
+    assert_eq!(found_by_address.len(), 3*3);
     assert!(found_by_address.iter().any(|tx| tx.id == utxo.id));
     assert!(found_by_address.iter().any(|tx| tx.id == utxo.id));
 }
@@ -116,13 +112,13 @@ fn it_should_get_entities_by_range_on_index() {
 
     let from_timestamp = blocks[0].header.timestamp;
     let until_timestamp = blocks[2].header.timestamp;
-    let expected_blocks: Vec<BlockHeader> = blocks.into_iter().map(|b|b.header).collect();
-    let unique_timestamps: HashSet<u32> = BlockHeader::take(&read_tx, 1000).unwrap().iter().map(|h| h.timestamp).collect();
-    assert_eq!(unique_timestamps.len(), 1);
+    let expected_blocks: Vec<BlockHeader> = blocks.into_iter().map(|b|b.header).take(2).collect();
+    let unique_timestamps: HashSet<Timestamp> = BlockHeader::take(&read_tx, 1000).unwrap().iter().map(|h| h.timestamp).collect();
+    assert_eq!(unique_timestamps.len(), 3);
 
     let found_by_timestamp_range =
-        BlockHeader::range_by_timestamp(&read_tx, &from_timestamp, &(until_timestamp+1)).expect("Failed to range by timestamp");
-    assert_eq!(found_by_timestamp_range.len(), 3);
+        BlockHeader::range_by_timestamp(&read_tx, &from_timestamp, &until_timestamp).expect("Failed to range by timestamp");
+    assert_eq!(found_by_timestamp_range.len(), 2);
     assert_eq!(expected_blocks, found_by_timestamp_range);
 }
 

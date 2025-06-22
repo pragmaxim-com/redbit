@@ -3,11 +3,12 @@ use crate::field_parser::*;
 use crate::rest::HttpParams::{FromBody, FromPath};
 use crate::rest::{EndpointDef, FunctionDef, GetParam, HttpMethod, PostParam};
 use crate::pk::DbPkMacros;
-use crate::relationship::{DbRelationshipMacros, TransientMacros};
+use crate::relationship::DbRelationshipMacros;
 use crate::table::TableDef;
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use syn::Type;
+use crate::transient::TransientMacros;
 
 pub struct EntityMacros {
     pub entity_name: Ident,

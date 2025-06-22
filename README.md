@@ -24,6 +24,12 @@ through auto-generated REST API.
 - ✅ Macro derived http rest API at http://127.0.0.1:8000/swagger-ui/
 - ✅ Macro derived unit tests and integration tests on axum test server
 
+### Limitations
+
+- ❌ primitive types must be wrapped in a newtype struct if there is an index on it
+  - to macro derive implementations necessary for indexing and querying
+- ❌ Relationships between entities are done through hierarchical pointers, ie. foreign key is a (pointer-to-parent & index)
+
 ```
 cargo run --package utxo                # to run the demo example
 cargo test --package utxo               # to let all the self-generated tests run (including http layer)

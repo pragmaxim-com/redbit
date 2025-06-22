@@ -39,9 +39,15 @@ pub fn index_init(column_name: &Ident, table: &Ident) -> TokenStream {
     }
 }
 
-pub fn index_default_init(column_name: &Ident, column_type: &Type) -> TokenStream{
+pub fn index_default_init(column_name: &Ident, column_type: &Type) -> TokenStream {
     quote! {
-        #column_name: #column_type::default()
+        #column_name: {
+            let mut value = <#column_type as Default>::default();
+            for _ in 0..sample_index {
+                value = <#column_type as RangeColumn>::next(&value);
+            }
+            value
+        }
     }
 }
 
@@ -70,6 +76,12 @@ pub fn dict_init_statement(column_name: &Ident, table_dict_pk_by_pk: &Ident, tab
 
 pub fn dict_default_init(column_name: &Ident, column_type: &Type) -> TokenStream {
     quote! {
-            #column_name: #column_type::default()
+        #column_name: {
+            let mut value = <#column_type as Default>::default();
+            for _ in 0..sample_index {
+                value = <#column_type as RangeColumn>::next(&value);
+            }
+            value
         }
+    }
 }

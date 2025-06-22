@@ -8,10 +8,13 @@ mod rest;
 mod field_parser;
 mod compositor;
 mod table;
+mod transient;
 
 use crate::entity::EntityMacros;
 use crate::pk::{DbPkMacros, PointerType};
 
+use syn::{punctuated::Punctuated, Path, token::Comma};
+use syn::{Attribute, Result};
 use proc_macro::TokenStream;
 use quote::quote;
 use std::sync::Once;
@@ -19,6 +22,7 @@ use proc_macro_error::proc_macro_error;
 use syn::parse::Parse;
 use syn::spanned::Spanned;
 use syn::{parse_macro_input, parse_quote, DeriveInput, Fields, ItemStruct, Type};
+use crate::column::DbColumnMacros;
 
 #[proc_macro_attribute]
 #[proc_macro_error]
@@ -30,55 +34,57 @@ pub fn index(_attr: TokenStream, item: TokenStream) -> TokenStream {
         Fields::Unnamed(fields) if fields.unnamed.len() == 1 => &fields.unnamed[0].ty,
         _ => {
             return quote! {
-                compile_error!("`#[column]` can only be used on tuple structs with a single field.");
+                compile_error!("`#[index]` can only be used on tuple structs with a single field.");
                 #input
-            }
-                .into();
+            }.into();
         }
     };
 
-    // Clean any existing derives and insert our own
-    input.attrs.retain(|a| !a.path().is_ident("derive"));
-    input.attrs.insert(0, syn::parse_quote! {
-        #[derive(Clone, Eq, Ord, PartialEq, PartialOrd, Debug, serde::Serialize, serde::Deserialize, redbit::utoipa::ToSchema)]
+    // Collect derives from existing #[derive(...)] attributes
+    let mut existing_derives = Vec::<syn::Path>::new();
+
+    fn extract_derives(attr: &Attribute) -> Result<Vec<syn::Path>> {
+        let mut derives = Vec::new();
+        attr.parse_nested_meta(|meta| {
+            if let Some(ident) = meta.path.get_ident() {
+                derives.push(syn::Path::from(ident.clone()));
+                Ok(())
+            } else {
+                Err(meta.error("Expected identifier in derive"))
+            }
+        })?;
+        Ok(derives)
+    }
+
+    input.attrs.retain(|attr| {
+        if attr.path().is_ident("derive") {
+            // parse_nested_meta applies to the content inside #[derive(...)]
+            match extract_derives(attr) {
+                Ok(paths) => existing_derives.extend(paths),
+                Err(e) => {
+                    eprintln!("Error parsing derive attribute: {}", e);
+                    return true; // keep the attribute to avoid losing it
+                }
+            }
+            false // remove this derive attr, we'll reinsert merged one later
+        } else {
+            true
+        }
     });
 
-    // Determine default value based on inner type
-    let default_expr = match quote!(#field_ty).to_string().as_str() {
-        "String" | "std :: string :: String" => {
-            quote! { Self("default-value".to_string()) }
-        },
-        "&str" => {
-            quote! { Self("default-value".into()) }
-        },
-        _ => {
-            quote! { Self(Default::default()) }
-        },
-    };
+    let extra_derives: Punctuated<Path, Comma> = syn::parse_quote![Clone, Eq, Ord, PartialEq, PartialOrd, Debug, redbit::utoipa::ToSchema];
+    let extra_derives_vec: Vec<Path> = extra_derives.into_iter().collect();
+    // Merge, deduplicate
+    existing_derives.extend(extra_derives_vec);
+    existing_derives.sort_by(|a, b| quote!(#a).to_string().cmp(&quote!(#b).to_string()));
+    existing_derives.dedup_by(|a, b| quote!(#a).to_string() == quote!(#b).to_string());
 
-    let display_impl = quote! {
-        impl std::fmt::Display for #struct_ident {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "{}", self.0)
-            }
-        }
-    };
+    // Reinsert merged derive attribute
+    input.attrs.push(syn::parse_quote! {
+        #[derive(#(#existing_derives),*)]
+    });
 
-    let default_impl = quote! {
-        impl Default for #struct_ident {
-            fn default() -> Self {
-                #default_expr
-            }
-        }
-    };
-
-    let expanded = quote! {
-        #input
-        #default_impl
-        #display_impl
-    };
-
-    expanded.into()
+    DbColumnMacros::generate_index_impls(struct_ident, &input, field_ty).into()
 }
 
 struct KeyAttr {
@@ -94,19 +100,6 @@ impl Parse for KeyAttr {
             Ok(KeyAttr { index_type: Some(ty) })
         }
     }
-}
-
-
-#[proc_macro_attribute]
-#[proc_macro_error]
-pub fn root_key(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    let mut s = parse_macro_input!(item as ItemStruct);
-
-    s.attrs.retain(|a| !a.path().is_ident("derive"));
-    s.attrs.insert(0, parse_quote! {
-        #[derive(RootKey, Clone, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
-    });
-    quote!(#s).into()
 }
 
 #[proc_macro_attribute]
@@ -164,6 +157,18 @@ pub fn derive_pointer_key(input: TokenStream) -> TokenStream {
         },
         Err(e) => e.to_compile_error().into(),
     }
+}
+
+#[proc_macro_attribute]
+#[proc_macro_error]
+pub fn root_key(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let mut s = parse_macro_input!(item as ItemStruct);
+
+    s.attrs.retain(|a| !a.path().is_ident("derive"));
+    s.attrs.insert(0, parse_quote! {
+        #[derive(RootKey, Clone, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
+    });
+    quote!(#s).into()
 }
 
 #[proc_macro_derive(RootKey)]

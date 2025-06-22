@@ -70,7 +70,7 @@ impl DbPkMacros {
                     }
                     impl #entity_range_query {
                         pub fn sample() -> Vec<Self> {
-                            vec![Self { from: #pk_type::default(), until: #pk_type::default() }]
+                            vec![Self { from: #pk_type::default(), until: #pk_type::default().next().next().next() }]
                         }
                     }
                 }
@@ -155,7 +155,7 @@ impl DbPkMacros {
             }
         }
     }
-
+    
     /// Generates trait implementations for **Root Pointers** (IndexedPointer + RootPointer)
     /// and also derives Display, FromStr, Serialize, and Deserialize based on a dash-separated format.
     pub fn generate_root_impls(struct_name: &Ident, index_field: Field) -> TokenStream {
@@ -209,6 +209,7 @@ impl DbPkMacros {
                     write!(f, "{}", self.0)
                 }
             }
+            
             impl std::str::FromStr for #struct_name {
                 type Err = ParsePointerError;
                 fn from_str(s: &str) -> Result<Self, Self::Err> {

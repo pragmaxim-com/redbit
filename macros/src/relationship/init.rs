@@ -10,7 +10,7 @@ pub fn o2o_relation_init(child_name: &Ident, child_type: &Type) -> TokenStream {
 
 pub fn o2o_relation_default_init(child_name: &Ident, child_type: &Type) -> TokenStream { 
     quote! {
-        #child_name: #child_type::sample_with(pk)
+        #child_name: #child_type::sample_with(pk, sample_index)
     }
 }
 
@@ -27,9 +27,9 @@ pub fn o2m_relation_default_init(child_name: &Ident, child_type: &Type) -> Token
     quote! {
         #child_name:  {
             let (from, _) = pk.fk_range();
-            let sample_0 = #child_type::sample_with(&from);
-            let sample_1 = #child_type::sample_with(&from.next());
-            let sample_2 = #child_type::sample_with(&from.next().next());
+            let sample_0 = #child_type::sample_with(&from, sample_index);
+            let sample_1 = #child_type::sample_with(&from.next(), sample_index);
+            let sample_2 = #child_type::sample_with(&from.next().next(), sample_index);
             vec![sample_0, sample_1, sample_2]
         }
     }

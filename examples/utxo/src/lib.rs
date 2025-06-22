@@ -12,10 +12,14 @@ pub use redbit::*;
 #[pointer_key(u8)] pub struct AssetPointer(UtxoPointer);
 
 #[index] pub struct Hash(pub String);
-#[index] pub struct Address(pub String);
+#[index] pub struct Address(pub [u8; 32]);
 #[index] pub struct Datum(pub String);
 #[index] pub struct PolicyId(pub String);
 #[index] pub struct AssetName(pub String);
+
+#[index]
+#[derive(Copy, Hash)]
+pub struct Timestamp(pub u32);
 
 #[entity]
 pub struct Block {
@@ -34,7 +38,7 @@ pub struct BlockHeader {
     #[column(index)]
     pub hash: Hash,
     #[column(index, range)]
-    pub timestamp: u32,
+    pub timestamp: Timestamp,
     #[column(index)]
     pub merkle_root: Hash,
     #[column]

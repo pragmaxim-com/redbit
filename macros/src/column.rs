@@ -4,12 +4,13 @@ mod store;
 mod delete;
 mod init;
 
-use proc_macro2::{Ident, TokenStream};
-use quote::{format_ident, quote};
-use syn::Type;
 use crate::field_parser::{ColumnDef, Indexing, PkDef};
+use crate::macro_utils;
 use crate::rest::*;
 use crate::table::TableDef;
+use proc_macro2::{Ident, TokenStream};
+use quote::{format_ident, quote};
+use syn::{ItemStruct, Type};
 
 pub struct DbColumnMacros {
     pub definition: ColumnDef,
@@ -158,5 +159,154 @@ impl DbColumnMacros {
                 )
             ]
         }
+    }
+
+    pub fn generate_index_impls(struct_ident: &Ident, input: &ItemStruct, inner_type: &Type) -> TokenStream {
+        let serialization_code = if macro_utils::is_byte_array(inner_type) {
+            quote! {
+                if serializer.is_human_readable() {
+                    serializer.serialize_str(&hex::encode(&self.0))
+                } else {
+                    self.0.serialize(serializer)
+                }
+            }
+        } else {
+            quote! {
+                self.0.serialize(serializer)
+            }
+        };
+
+        let deserialization_code = if macro_utils::is_byte_array(inner_type) {
+            quote! {
+                if deserializer.is_human_readable() {
+                    let s = <&str>::deserialize(deserializer)?;
+                    let bytes = hex::decode(s).map_err(serde::de::Error::custom)?;
+                    if bytes.len() != std::mem::size_of::<#inner_type>() {
+                        return Err(serde::de::Error::custom("Invalid length"));
+                    }
+                    let mut array = [0u8; std::mem::size_of::<#inner_type>()];
+                    array.copy_from_slice(&bytes);
+                    Ok(#struct_ident(array))
+                } else {
+                    let inner = <#inner_type>::deserialize(deserializer)?;
+                    Ok(#struct_ident(inner))
+                }
+            }
+        } else {
+            quote! {
+                let inner = <#inner_type>::deserialize(deserializer)?;
+                Ok(#struct_ident(inner))
+            }
+        };
+
+        let display_impl = if macro_utils::is_byte_array(inner_type) {
+            quote! {
+                impl std::fmt::Display for #struct_ident {
+                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(f, "{}", hex::encode(&self.0))
+                    }
+                }
+           }
+        } else {
+            quote! {
+                impl std::fmt::Display for #struct_ident {
+                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(f, "{}", self.0)
+                    }
+                }
+            }
+        };
+
+        let serde = quote! {
+            impl serde::Serialize for #struct_ident {
+                fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+                where S: serde::Serializer {
+                    #serialization_code
+                }
+            }
+
+            impl<'de> serde::Deserialize<'de> for #struct_ident {
+                fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+                where D: serde::Deserializer<'de> {
+                    #deserialization_code
+                }
+            }
+        };
+
+        // Determine default value based on inner type
+        let default_expr = match quote!(#inner_type).to_string().as_str() {
+            "String" | "std :: string :: String" => {
+                quote! { Self("a".to_string()) }
+            },
+            "&str" => {
+                quote! { Self("a".into()) }
+            },
+            _ => {
+                quote! { Self(Default::default()) }
+            }
+        };
+
+        let default_impl = quote! {
+            impl Default for #struct_ident {
+                fn default() -> Self {
+                    #default_expr
+                }
+            }
+        };
+        // RangeColumn impl based on inner type
+        let next_impl = if macro_utils::is_integer(inner_type) {
+            quote! {
+                impl RangeColumn for #struct_ident {
+                    fn next(&self) -> Self {
+                        Self(self.0.wrapping_add(1))
+                    }
+                }
+            }
+        } else if macro_utils::is_string(inner_type) {
+            quote! {
+                impl RangeColumn for #struct_ident {
+                    fn next(&self) -> Self {
+                        let mut bytes = self.0.clone().into_bytes();
+                        if let Some(last) = bytes.last_mut() {
+                            *last = last.wrapping_add(1);
+                        } else {
+                            bytes.push(1);
+                        }
+                        Self(String::from_utf8(bytes).expect("Invalid UTF-8"))
+                    }
+                }
+            }
+        } else if macro_utils::is_byte_array(inner_type) {
+            let len = macro_utils::get_array_len(inner_type).unwrap();
+            quote! {
+                impl RangeColumn for #struct_ident {
+                    fn next(&self) -> Self {
+                        let mut arr = self.0;
+                        for i in (0..#len).rev() {
+                            if arr[i] != 0xFF {
+                                arr[i] = arr[i].wrapping_add(1);
+                                break;
+                            } else {
+                                arr[i] = 0;
+                            }
+                        }
+                        Self(arr)
+                    }
+                }
+            }
+        } else {
+            quote! {
+                compile_error!("RangeColumn not supported for this inner type");
+            }
+        };
+
+        let expanded = quote! {
+            #input
+            #serde
+            #default_impl
+            #display_impl
+            #next_impl
+        };
+        macro_utils::write_stream_and_return(expanded, struct_ident)
     }
 }

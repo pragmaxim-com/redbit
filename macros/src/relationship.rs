@@ -6,12 +6,6 @@ mod delete;
 use crate::field_parser::*;
 use crate::rest::FunctionDef;
 use proc_macro2::{Ident, TokenStream};
-use quote::quote;
-
-pub struct TransientMacros {
-    pub definition: TransientDef,
-    pub struct_default_init: TokenStream,
-}
 
 pub struct DbRelationshipMacros {
     pub definition: RelationshipDef,
@@ -22,21 +16,6 @@ pub struct DbRelationshipMacros {
     pub delete_statement: TokenStream,
     pub delete_many_statement: TokenStream,
     pub function_def: FunctionDef,
-}
-
-impl TransientMacros {
-    pub fn new(defs: Vec<TransientDef>) -> Vec<TransientMacros> {
-        let mut transient_macros: Vec<TransientMacros> = Vec::new();
-        for transient in defs {
-            let field_name = &transient.field.name;
-            let field_type = &transient.field.tpe;
-            let struct_default_init = quote! {
-                #field_name: #field_type::default()
-            };
-            transient_macros.push(TransientMacros { definition: transient, struct_default_init})
-        }
-        transient_macros
-    }
 }
 
 impl DbRelationshipMacros {

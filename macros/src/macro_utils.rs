@@ -2,6 +2,7 @@ use proc_macro2::{Ident, TokenStream};
 use std::env;
 use std::fs::OpenOptions;
 use std::io::Write;
+use syn::Type;
 
 pub fn write_to_local_file(lines: Vec<String>, dir_name: &str, entity: &Ident) {
     let dir_path = env::current_dir().expect("current dir inaccessible").join("target").join(dir_name);
@@ -32,4 +33,40 @@ pub fn write_stream_and_return(stream: TokenStream, entity: &Ident) -> TokenStre
     };
     write_to_local_file(vec![formatted_str], "macros", entity);
     stream
+}
+
+pub fn is_string(ty: &Type) -> bool {
+    if let Type::Path(tp) = ty {
+        tp.path.is_ident("String")
+    } else {
+        false
+    }
+}
+
+pub fn is_byte_array(ty: &Type) -> bool {
+    matches!(ty, Type::Array(_)) && {
+        if let Type::Array(arr) = ty {
+            if let Type::Path(tp) = &*arr.elem {
+                tp.path.is_ident("u8")
+            } else { false }
+        } else { false }
+    }
+}
+
+pub fn get_array_len(ty: &Type) -> Option<usize> {
+    if let Type::Array(arr) = ty {
+        if let syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Int(int), .. }) = &arr.len {
+            return int.base10_parse::<usize>().ok();
+        }
+    }
+    None
+}
+
+pub fn is_integer(ty: &Type) -> bool {
+    if let Type::Path(tp) = ty {
+        let ident = &tp.path.segments.last().unwrap().ident;
+        matches!(ident.to_string().as_str(), "u8" | "u16" | "u32" | "u64" | "usize" | "i8" | "i16" | "i32" | "i64" | "isize")
+    } else {
+        false
+    }
 }

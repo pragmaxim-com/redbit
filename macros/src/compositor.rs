@@ -48,10 +48,10 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
             #(#function_streams)*
 
             pub fn sample() -> Self {
-                #entity_name::sample_with(&#pk_type::default())
+                #entity_name::sample_with(&#pk_type::default(), 0)
             }
 
-            pub fn sample_with(pk: &#pk_type) -> Self {
+            pub fn sample_with(pk: &#pk_type, sample_index: usize) -> Self {
                 #entity_name {
                     #pk_name: pk.clone(),
                     #(#struct_default_inits),*
@@ -59,8 +59,10 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
             }
 
             pub fn sample_many(n: usize) -> Vec<#entity_type> {
+                let mut sample_index = 0;
                 std::iter::successors(Some((#pk_type::default(), None)), |(prev_pointer, _)| {
-                    let new_entity = #entity_type::sample_with(prev_pointer);
+                    let new_entity = #entity_type::sample_with(prev_pointer, sample_index);
+                    sample_index += 1;
                     Some((prev_pointer.next(), Some(new_entity)))
                 })
                 .filter_map(|(_, instance)| instance)

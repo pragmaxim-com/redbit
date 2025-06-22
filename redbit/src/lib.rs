@@ -26,6 +26,7 @@ pub use rand;
 pub use http;
 pub use serde_json;
 pub use serde_urlencoded;
+pub use hex;
 
 use bincode::Options;
 use serde::de::DeserializeOwned;
@@ -78,6 +79,11 @@ where
         (CH::from_parent(self.clone()), CH::from_parent(self.clone().next()))
     }
 }
+
+pub trait RangeColumn: Sized {
+    fn next(&self) -> Self;
+}
+
 
 #[derive(Debug)]
 pub enum AppError {
