@@ -13,8 +13,8 @@ pub use redbit::*;
 
 #[index] pub struct Hash(pub String);
 #[index] pub struct Address(pub [u8; 32]);
-#[index] pub struct Datum(pub String);
 #[index] pub struct PolicyId(pub String);
+#[index] pub struct Datum(pub Vec<u8>);
 #[index] pub struct AssetName(pub String);
 
 #[index]

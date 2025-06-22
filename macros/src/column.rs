@@ -1,8 +1,8 @@
+mod delete;
 mod get_by;
+mod init;
 mod range_by;
 mod store;
-mod delete;
-mod init;
 
 use crate::field_parser::{ColumnDef, Indexing, PkDef};
 use crate::macro_utils;
@@ -32,18 +32,27 @@ impl DbColumnMacros {
         let pk_name = &pk_def.field.name;
         let pk_type = &pk_def.field.tpe;
         match column_def.indexing {
-            Indexing::Off =>
-                Ok(DbColumnMacros::plain(column_def, entity_name, pk_name, pk_type, column_name, column_type)),
-            Indexing::On { dictionary: false, range } =>
-                Ok(DbColumnMacros::index(column_def, entity_name, entity_type, pk_name, pk_type, column_name, column_type, range)),
-            Indexing::On { dictionary: true, range: false } =>
-                Ok(DbColumnMacros::dictionary(column_def, entity_name, entity_type, pk_name, pk_type, column_name, column_type)),
-            Indexing::On { dictionary: true, range: true } =>
+            Indexing::Off => Ok(DbColumnMacros::plain(column_def, entity_name, pk_name, pk_type, column_name, column_type)),
+            Indexing::On { dictionary: false, range } => {
+                Ok(DbColumnMacros::index(column_def, entity_name, entity_type, pk_name, pk_type, column_name, column_type, range))
+            }
+            Indexing::On { dictionary: true, range: false } => {
+                Ok(DbColumnMacros::dictionary(column_def, entity_name, entity_type, pk_name, pk_type, column_name, column_type))
+            }
+            Indexing::On { dictionary: true, range: true } => {
                 Err(syn::Error::new(column_name.span(), "Range indexing on dictionary columns is not supported"))
+            }
         }
     }
 
-    pub fn plain(definition: ColumnDef, entity_name: &Ident, pk_name: &Ident, pk_type: &Type, column_name: &Ident, column_type: &Type) -> DbColumnMacros {
+    pub fn plain(
+        definition: ColumnDef,
+        entity_name: &Ident,
+        pk_name: &Ident,
+        pk_type: &Type,
+        column_name: &Ident,
+        column_type: &Type,
+    ) -> DbColumnMacros {
         let table_def = TableDef::plain_table_def(entity_name, column_name, column_type, pk_name, pk_type);
         DbColumnMacros {
             definition,
@@ -55,14 +64,23 @@ impl DbColumnMacros {
             store_many_statement: store::store_many_statement(pk_name, column_name, &table_def.name),
             delete_statement: delete::delete_statement(&table_def.name),
             delete_many_statement: delete::delete_many_statement(&table_def.name),
-            function_defs: vec![]
+            function_defs: vec![],
         }
     }
 
-    pub fn index(definition: ColumnDef, entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type: &Type, column_name: &Ident, column_type: &Type, range: bool) -> DbColumnMacros {
+    pub fn index(
+        definition: ColumnDef,
+        entity_name: &Ident,
+        entity_type: &Type,
+        pk_name: &Ident,
+        pk_type: &Type,
+        column_name: &Ident,
+        column_type: &Type,
+        range: bool,
+    ) -> DbColumnMacros {
         let plain_table_def = TableDef::plain_table_def(entity_name, column_name, column_type, pk_name, pk_type);
         let index_table_def = TableDef::index_table_def(entity_name, column_name, column_type, pk_type);
-        
+
         let mut function_defs: Vec<FunctionDef> = Vec::new();
         function_defs.push(get_by::get_by_index_def(entity_name, entity_type, column_name, column_type, &index_table_def.name));
         let entity_column_range_query = format_ident!("{}{}Range", entity_name.to_string(), column_name.to_string());
@@ -86,7 +104,14 @@ impl DbColumnMacros {
                     }
                 }
             });
-            function_defs.push(range_by::range_by_index_def(entity_name, entity_type, column_name, column_type, &index_table_def.name, &entity_column_range_query));
+            function_defs.push(range_by::range_by_index_def(
+                entity_name,
+                entity_type,
+                column_name,
+                column_type,
+                &index_table_def.name,
+                &entity_column_range_query,
+            ));
         };
 
         DbColumnMacros {
@@ -103,7 +128,15 @@ impl DbColumnMacros {
         }
     }
 
-    pub fn dictionary(definition: ColumnDef, entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type: &Type, column_name: &Ident, column_type: &Type) -> DbColumnMacros {
+    pub fn dictionary(
+        definition: ColumnDef,
+        entity_name: &Ident,
+        entity_type: &Type,
+        pk_name: &Ident,
+        pk_type: &Type,
+        column_name: &Ident,
+        column_type: &Type,
+    ) -> DbColumnMacros {
         let dict_index_table_def = TableDef::dict_index_table_def(entity_name, column_name, pk_type);
         let value_by_dict_pk_table_def = TableDef::value_by_dict_pk_table_def(entity_name, column_name, column_type, pk_type);
         let value_to_dict_pk_table_def = TableDef::value_to_dict_pk_table_def(entity_name, column_name, column_type, pk_type);
@@ -116,7 +149,7 @@ impl DbColumnMacros {
                 dict_index_table_def.clone(),
                 value_by_dict_pk_table_def.clone(),
                 value_to_dict_pk_table_def.clone(),
-                dict_pk_by_pk_table_def.clone()
+                dict_pk_by_pk_table_def.clone(),
             ],
             struct_init: init::dict_init_statement(column_name, &dict_pk_by_pk_table_def.name, &value_by_dict_pk_table_def.name),
             struct_default_init: init::dict_default_init(column_name, column_type),
@@ -126,7 +159,7 @@ impl DbColumnMacros {
                 &dict_pk_by_pk_table_def.name,
                 &value_to_dict_pk_table_def.name,
                 &value_by_dict_pk_table_def.name,
-                &dict_index_table_def.name
+                &dict_index_table_def.name,
             ),
             store_many_statement: store::store_many_dict_def(
                 column_name,
@@ -134,35 +167,33 @@ impl DbColumnMacros {
                 &dict_pk_by_pk_table_def.name,
                 &value_to_dict_pk_table_def.name,
                 &value_by_dict_pk_table_def.name,
-                &dict_index_table_def.name
+                &dict_index_table_def.name,
             ),
             delete_statement: delete::delete_dict_statement(
                 &dict_pk_by_pk_table_def.name,
                 &value_to_dict_pk_table_def.name,
                 &value_by_dict_pk_table_def.name,
-                &dict_index_table_def.name
+                &dict_index_table_def.name,
             ),
             delete_many_statement: delete::delete_many_dict_statement(
                 &dict_pk_by_pk_table_def.name,
                 &value_to_dict_pk_table_def.name,
                 &value_by_dict_pk_table_def.name,
-                &dict_index_table_def.name
+                &dict_index_table_def.name,
             ),
-            function_defs: vec![
-                get_by::get_by_dict_def(
-                    entity_name,
-                    entity_type,
-                    column_name,
-                    column_type,
-                    &value_to_dict_pk_table_def.name,
-                    &dict_index_table_def.name
-                )
-            ]
+            function_defs: vec![get_by::get_by_dict_def(
+                entity_name,
+                entity_type,
+                column_name,
+                column_type,
+                &value_to_dict_pk_table_def.name,
+                &dict_index_table_def.name,
+            )],
         }
     }
 
     pub fn generate_index_impls(struct_ident: &Ident, input: &ItemStruct, inner_type: &Type) -> TokenStream {
-        let serialization_code = if macro_utils::is_byte_array(inner_type) {
+        let serialization_code = if macro_utils::is_bytes(inner_type) {
             quote! {
                 if serializer.is_human_readable() {
                     serializer.serialize_str(&hex::encode(&self.0))
@@ -176,20 +207,34 @@ impl DbColumnMacros {
             }
         };
 
-        let deserialization_code = if macro_utils::is_byte_array(inner_type) {
-            quote! {
-                if deserializer.is_human_readable() {
-                    let s = <&str>::deserialize(deserializer)?;
-                    let bytes = hex::decode(s).map_err(serde::de::Error::custom)?;
-                    if bytes.len() != std::mem::size_of::<#inner_type>() {
-                        return Err(serde::de::Error::custom("Invalid length"));
+        let deserialization_code = if macro_utils::is_bytes(inner_type) {
+            if let Type::Array(_) = inner_type {
+                let len = macro_utils::get_array_len(inner_type).unwrap();
+                quote! {
+                    if deserializer.is_human_readable() {
+                        let s = <&str>::deserialize(deserializer)?;
+                        let bytes = hex::decode(s).map_err(serde::de::Error::custom)?;
+                        if bytes.len() != #len {
+                            return Err(serde::de::Error::custom(format!("Invalid length: expected {} bytes, got {}", #len, bytes.len())));
+                        }
+                        let mut array = [0u8; #len];
+                        array.copy_from_slice(&bytes);
+                        Ok(#struct_ident(array))
+                    } else {
+                        let inner = <#inner_type>::deserialize(deserializer)?;
+                        Ok(#struct_ident(inner))
                     }
-                    let mut array = [0u8; std::mem::size_of::<#inner_type>()];
-                    array.copy_from_slice(&bytes);
-                    Ok(#struct_ident(array))
-                } else {
-                    let inner = <#inner_type>::deserialize(deserializer)?;
-                    Ok(#struct_ident(inner))
+                }
+            } else {
+                quote! {
+                    if deserializer.is_human_readable() {
+                        let s = <&str>::deserialize(deserializer)?;
+                        let bytes = hex::decode(s).map_err(serde::de::Error::custom)?;
+                        Ok(#struct_ident(bytes))
+                    } else {
+                        let inner = <#inner_type>::deserialize(deserializer)?;
+                        Ok(#struct_ident(inner))
+                    }
                 }
             }
         } else {
@@ -199,14 +244,14 @@ impl DbColumnMacros {
             }
         };
 
-        let display_impl = if macro_utils::is_byte_array(inner_type) {
+        let display_impl = if macro_utils::is_bytes(inner_type) {
             quote! {
-                impl std::fmt::Display for #struct_ident {
-                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                        write!(f, "{}", hex::encode(&self.0))
-                    }
-                }
-           }
+                 impl std::fmt::Display for #struct_ident {
+                     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                         write!(f, "{}", hex::encode(&self.0))
+                     }
+                 }
+            }
         } else {
             quote! {
                 impl std::fmt::Display for #struct_ident {
@@ -233,26 +278,32 @@ impl DbColumnMacros {
             }
         };
 
-        // Determine default value based on inner type
-        let default_expr = match quote!(#inner_type).to_string().as_str() {
-            "String" | "std :: string :: String" => {
-                quote! { Self("a".to_string()) }
-            },
-            "&str" => {
-                quote! { Self("a".into()) }
-            },
-            _ => {
-                quote! { Self(Default::default()) }
+        let default_impl = if macro_utils::is_string(inner_type) {
+            quote! {
+                impl Default for #struct_ident {
+                    fn default() -> Self {
+                        Self("a".to_string())
+                    }
+                }
             }
-        };
-
-        let default_impl = quote! {
-            impl Default for #struct_ident {
-                fn default() -> Self {
-                    #default_expr
+        } else if macro_utils::is_vec_u8(inner_type) {
+            quote! {
+                impl Default for #struct_ident {
+                    fn default() -> Self {
+                        Self(b"a".to_vec())
+                    }
+                }
+            }
+        } else {
+            quote! {
+                impl Default for #struct_ident {
+                    fn default() -> Self {
+                        Self(Default::default())
+                    }
                 }
             }
         };
+
         // RangeColumn impl based on inner type
         let next_impl = if macro_utils::is_integer(inner_type) {
             quote! {
@@ -276,21 +327,37 @@ impl DbColumnMacros {
                     }
                 }
             }
-        } else if macro_utils::is_byte_array(inner_type) {
-            let len = macro_utils::get_array_len(inner_type).unwrap();
-            quote! {
-                impl RangeColumn for #struct_ident {
-                    fn next(&self) -> Self {
-                        let mut arr = self.0;
-                        for i in (0..#len).rev() {
-                            if arr[i] != 0xFF {
-                                arr[i] = arr[i].wrapping_add(1);
-                                break;
-                            } else {
-                                arr[i] = 0;
+        } else if macro_utils::is_bytes(inner_type) {
+            if let Type::Array(_) = inner_type {
+                let len = macro_utils::get_array_len(inner_type).unwrap();
+                quote! {
+                    impl RangeColumn for #struct_ident {
+                        fn next(&self) -> Self {
+                            let mut arr = self.0;
+                            for i in (0..#len).rev() {
+                                if arr[i] != 0xFF {
+                                    arr[i] = arr[i].wrapping_add(1);
+                                    break;
+                                } else {
+                                    arr[i] = 0;
+                                }
                             }
+                            Self(arr)
                         }
-                        Self(arr)
+                    }
+                }
+            } else {
+                quote! {
+                    impl RangeColumn for #struct_ident {
+                        fn next(&self) -> Self {
+                            let mut vec = self.0.clone();
+                            if let Some(last) = vec.last_mut() {
+                                *last = last.wrapping_add(1);
+                            } else {
+                                vec.push(1);
+                            }
+                            Self(vec)
+                        }
                     }
                 }
             }

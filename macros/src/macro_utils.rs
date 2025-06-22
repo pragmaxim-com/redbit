@@ -43,13 +43,39 @@ pub fn is_string(ty: &Type) -> bool {
     }
 }
 
-pub fn is_byte_array(ty: &Type) -> bool {
-    matches!(ty, Type::Array(_)) && {
-        if let Type::Array(arr) = ty {
+pub fn is_bytes(ty: &Type) -> bool {
+    match ty {
+        Type::Array(arr) => {
             if let Type::Path(tp) = &*arr.elem {
                 tp.path.is_ident("u8")
             } else { false }
-        } else { false }
+        }
+        Type::Path(tp) => {
+            tp.path.segments.last().map_or(false, |seg| seg.ident == "Vec")
+                && match &tp.path.segments.last().unwrap().arguments {
+                syn::PathArguments::AngleBracketed(args) => {
+                    args.args.iter().any(|arg| matches!(arg, syn::GenericArgument::Type(Type::Path(tp)) if tp.path.is_ident("u8")))
+                }
+                _ => false,
+            }
+        }
+        _ => false,
+    }
+}
+
+pub fn is_vec_u8(ty: &Type) -> bool {
+    if let Type::Path(tp) = ty {
+        tp.path.segments.last().map_or(false, |seg| {
+            seg.ident == "Vec" && match &seg.arguments {
+                syn::PathArguments::AngleBracketed(args) => {
+                    args.args.iter().any(|arg| matches!(arg,
+                        syn::GenericArgument::Type(Type::Path(p)) if p.path.is_ident("u8")))
+                }
+                _ => false,
+            }
+        })
+    } else {
+        false
     }
 }
 
