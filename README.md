@@ -28,7 +28,6 @@ through auto-generated REST API.
 
 - ❌ primitive types must be wrapped in a newtype struct if there is an index on it
   - to macro derive implementations necessary for indexing and querying
-- ❌ Relationships between entities are done through hierarchical pointers, ie. foreign key is a (pointer-to-parent & index)
 
 ```
 cargo run --package utxo                # to run the demo example

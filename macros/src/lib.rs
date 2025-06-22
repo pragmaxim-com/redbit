@@ -72,7 +72,7 @@ pub fn index(_attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     });
 
-    let extra_derives: Punctuated<Path, Comma> = syn::parse_quote![Clone, Eq, Ord, PartialEq, PartialOrd, Debug, redbit::utoipa::ToSchema];
+    let extra_derives: Punctuated<Path, Comma> = syn::parse_quote![Clone, Eq, Ord, PartialEq, PartialOrd, Debug];
     let extra_derives_vec: Vec<Path> = extra_derives.into_iter().collect();
     // Merge, deduplicate
     existing_derives.extend(extra_derives_vec);

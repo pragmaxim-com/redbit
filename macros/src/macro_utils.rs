@@ -43,26 +43,19 @@ pub fn is_string(ty: &Type) -> bool {
     }
 }
 
-pub fn is_bytes(ty: &Type) -> bool {
-    match ty {
-        Type::Array(arr) => {
+fn is_byte_array(ty: &Type) -> bool {
+    matches!(ty, Type::Array(_)) && {
+        if let Type::Array(arr) = ty {
             if let Type::Path(tp) = &*arr.elem {
                 tp.path.is_ident("u8")
-            } else { false }
-        }
-        Type::Path(tp) => {
-            tp.path.segments.last().map_or(false, |seg| seg.ident == "Vec")
-                && match &tp.path.segments.last().unwrap().arguments {
-                syn::PathArguments::AngleBracketed(args) => {
-                    args.args.iter().any(|arg| matches!(arg, syn::GenericArgument::Type(Type::Path(tp)) if tp.path.is_ident("u8")))
-                }
-                _ => false,
+            } else {
+                false
             }
+        } else {
+            false
         }
-        _ => false,
     }
 }
-
 pub fn is_vec_u8(ty: &Type) -> bool {
     if let Type::Path(tp) = ty {
         tp.path.segments.last().map_or(false, |seg| {
@@ -95,4 +88,26 @@ pub fn is_integer(ty: &Type) -> bool {
     } else {
         false
     }
+}
+
+pub fn classify_inner_type(ty: &Type) -> InnerKind {
+    if is_string(ty) {
+        InnerKind::String
+    } else if is_vec_u8(ty) {
+        InnerKind::VecU8
+    } else if is_byte_array(ty) {
+        InnerKind::ByteArray(get_array_len(ty).unwrap())
+    } else if is_integer(ty) {
+        InnerKind::Integer
+    } else {
+        InnerKind::Other
+    }
+}
+
+pub enum InnerKind {
+    String,
+    VecU8,
+    ByteArray(usize),
+    Integer,
+    Other,
 }

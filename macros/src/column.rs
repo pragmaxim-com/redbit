@@ -11,6 +11,7 @@ use crate::table::TableDef;
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use syn::{ItemStruct, Type};
+use crate::macro_utils::InnerKind;
 
 pub struct DbColumnMacros {
     pub definition: ColumnDef,
@@ -192,77 +193,136 @@ impl DbColumnMacros {
         }
     }
 
-    pub fn generate_index_impls(struct_ident: &Ident, input: &ItemStruct, inner_type: &Type) -> TokenStream {
-        let serialization_code = if macro_utils::is_bytes(inner_type) {
-            quote! {
+    pub fn generate_index_impls(struct_ident: &Ident, index_new_type: &ItemStruct, inner_type: &Type) -> TokenStream {
+        let kind = macro_utils::classify_inner_type(inner_type);
+
+        let serialization_code = match kind {
+            InnerKind::ByteArray(_) | InnerKind::VecU8 => quote! {
                 if serializer.is_human_readable() {
                     serializer.serialize_str(&hex::encode(&self.0))
                 } else {
                     self.0.serialize(serializer)
                 }
-            }
-        } else {
-            quote! {
+            },
+            _ => quote! {
                 self.0.serialize(serializer)
-            }
+            },
         };
 
-        let deserialization_code = if macro_utils::is_bytes(inner_type) {
-            if let Type::Array(_) = inner_type {
-                let len = macro_utils::get_array_len(inner_type).unwrap();
-                quote! {
-                    if deserializer.is_human_readable() {
-                        let s = <&str>::deserialize(deserializer)?;
-                        let bytes = hex::decode(s).map_err(serde::de::Error::custom)?;
-                        if bytes.len() != #len {
-                            return Err(serde::de::Error::custom(format!("Invalid length: expected {} bytes, got {}", #len, bytes.len())));
-                        }
-                        let mut array = [0u8; #len];
-                        array.copy_from_slice(&bytes);
-                        Ok(#struct_ident(array))
-                    } else {
-                        let inner = <#inner_type>::deserialize(deserializer)?;
-                        Ok(#struct_ident(inner))
+        let deserialization_code = match kind {
+            InnerKind::ByteArray(len) => quote! {
+                if deserializer.is_human_readable() {
+                    let s = <&str>::deserialize(deserializer)?;
+                    let bytes = hex::decode(s).map_err(serde::de::Error::custom)?;
+                    if bytes.len() != #len {
+                        return Err(serde::de::Error::custom(format!("Invalid length: expected {} bytes, got {}", #len, bytes.len())));
                     }
+                    let mut array = [0u8; #len];
+                    array.copy_from_slice(&bytes);
+                    Ok(#struct_ident(array))
+                } else {
+                    let inner = <#inner_type>::deserialize(deserializer)?;
+                    Ok(#struct_ident(inner))
                 }
-            } else {
-                quote! {
-                    if deserializer.is_human_readable() {
-                        let s = <&str>::deserialize(deserializer)?;
-                        let bytes = hex::decode(s).map_err(serde::de::Error::custom)?;
-                        Ok(#struct_ident(bytes))
-                    } else {
-                        let inner = <#inner_type>::deserialize(deserializer)?;
-                        Ok(#struct_ident(inner))
-                    }
+            },
+            InnerKind::VecU8 => quote! {
+                if deserializer.is_human_readable() {
+                    let s = <&str>::deserialize(deserializer)?;
+                    let bytes = hex::decode(s).map_err(serde::de::Error::custom)?;
+                    Ok(#struct_ident(bytes))
+                } else {
+                    let inner = <#inner_type>::deserialize(deserializer)?;
+                    Ok(#struct_ident(inner))
                 }
-            }
-        } else {
-            quote! {
+            },
+            _ => quote! {
                 let inner = <#inner_type>::deserialize(deserializer)?;
                 Ok(#struct_ident(inner))
-            }
+            },
         };
 
-        let display_impl = if macro_utils::is_bytes(inner_type) {
-            quote! {
-                 impl std::fmt::Display for #struct_ident {
-                     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                         write!(f, "{}", hex::encode(&self.0))
-                     }
-                 }
-            }
-        } else {
-            quote! {
-                impl std::fmt::Display for #struct_ident {
-                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                        write!(f, "{}", self.0)
+        let display_code = match kind {
+            InnerKind::ByteArray(_) | InnerKind::VecU8 => quote! {
+                write!(f, "{}", hex::encode(&self.0))
+            },
+            _ => quote! {
+                write!(f, "{}", self.0)
+            },
+        };
+
+        let default_code = match kind {
+            InnerKind::String => quote! {
+                Self("a".to_string())
+            },
+            InnerKind::VecU8 => quote! {
+                Self(b"a".to_vec())
+            },
+            _ => quote! {
+                Self(Default::default())
+            },
+        };
+
+        let range_code = match kind {
+            InnerKind::Integer => quote! {
+                let next_val = self.0.wrapping_add(1);
+                Self(next_val)
+            },
+            InnerKind::String => quote! {
+                let mut bytes = self.0.clone().into_bytes();
+                if let Some(last) = bytes.last_mut() {
+                    *last = last.wrapping_add(1);
+                } else {
+                    bytes.push(1);
+                }
+                Self(String::from_utf8(bytes).expect("Invalid UTF-8"))
+            },
+            InnerKind::VecU8 => quote! {
+                let mut vec = self.0.clone();
+                if let Some(last) = vec.last_mut() {
+                    *last = last.wrapping_add(1);
+                } else {
+                    vec.push(1);
+                }
+                Self(vec)
+            },
+            InnerKind::ByteArray(len) => quote! {
+                let mut arr = self.0;
+                for i in (0..#len).rev() {
+                    if arr[i] != 0xFF {
+                        arr[i] = arr[i].wrapping_add(1);
+                        break;
+                    } else {
+                        arr[i] = 0;
                     }
                 }
-            }
+                Self(arr)
+            },
+            InnerKind::Other => quote! {
+                compile_error!("RangeColumn not supported for this inner type");
+            },
         };
 
-        let serde = quote! {
+        let (schema_type, schema_example) = match kind {
+            InnerKind::ByteArray(_) | InnerKind::VecU8 => (
+                quote! { SchemaType::Type(Type::String) },
+                quote! { vec![Some(serde_json::json!(#struct_ident::default().to_string()))] },
+            ),
+            InnerKind::String => (
+                quote! { SchemaType::Type(Type::String) },
+                quote! { vec![Some(serde_json::json!(#struct_ident::default()))] },
+            ),
+            InnerKind::Integer => (
+                quote! { SchemaType::Type(Type::Integer) },
+                quote! { vec![Some(serde_json::json!(#struct_ident::default().0))] },
+            ),
+            _ => (
+                quote! { SchemaType::Type(Type::String) },
+                quote! { vec![Some(serde_json::json!(#struct_ident::default().to_string()))] },
+            ),
+        };
+
+        let expanded = quote! {
+            #index_new_type
             impl serde::Serialize for #struct_ident {
                 fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
                 where S: serde::Serializer {
@@ -276,104 +336,47 @@ impl DbColumnMacros {
                     #deserialization_code
                 }
             }
-        };
 
-        let default_impl = if macro_utils::is_string(inner_type) {
-            quote! {
-                impl Default for #struct_ident {
-                    fn default() -> Self {
-                        Self("a".to_string())
-                    }
+            impl std::fmt::Display for #struct_ident {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    #display_code
                 }
             }
-        } else if macro_utils::is_vec_u8(inner_type) {
-            quote! {
-                impl Default for #struct_ident {
-                    fn default() -> Self {
-                        Self(b"a".to_vec())
-                    }
-                }
-            }
-        } else {
-            quote! {
-                impl Default for #struct_ident {
-                    fn default() -> Self {
-                        Self(Default::default())
-                    }
-                }
-            }
-        };
 
-        // RangeColumn impl based on inner type
-        let next_impl = if macro_utils::is_integer(inner_type) {
-            quote! {
-                impl RangeColumn for #struct_ident {
-                    fn next(&self) -> Self {
-                        Self(self.0.wrapping_add(1))
-                    }
+            impl Default for #struct_ident {
+                fn default() -> Self {
+                    #default_code
                 }
             }
-        } else if macro_utils::is_string(inner_type) {
-            quote! {
-                impl RangeColumn for #struct_ident {
-                    fn next(&self) -> Self {
-                        let mut bytes = self.0.clone().into_bytes();
-                        if let Some(last) = bytes.last_mut() {
-                            *last = last.wrapping_add(1);
-                        } else {
-                            bytes.push(1);
-                        }
-                        Self(String::from_utf8(bytes).expect("Invalid UTF-8"))
-                    }
+
+            impl RangeColumn for #struct_ident {
+                fn next(&self) -> Self {
+                    #range_code
                 }
             }
-        } else if macro_utils::is_bytes(inner_type) {
-            if let Type::Array(_) = inner_type {
-                let len = macro_utils::get_array_len(inner_type).unwrap();
-                quote! {
-                    impl RangeColumn for #struct_ident {
-                        fn next(&self) -> Self {
-                            let mut arr = self.0;
-                            for i in (0..#len).rev() {
-                                if arr[i] != 0xFF {
-                                    arr[i] = arr[i].wrapping_add(1);
-                                    break;
-                                } else {
-                                    arr[i] = 0;
-                                }
-                            }
-                            Self(arr)
-                        }
-                    }
-                }
-            } else {
-                quote! {
-                    impl RangeColumn for #struct_ident {
-                        fn next(&self) -> Self {
-                            let mut vec = self.0.clone();
-                            if let Some(last) = vec.last_mut() {
-                                *last = last.wrapping_add(1);
-                            } else {
-                                vec.push(1);
-                            }
-                            Self(vec)
-                        }
-                    }
+
+            impl redbit::utoipa::PartialSchema for #struct_ident {
+                fn schema() -> redbit::utoipa::openapi::RefOr<redbit::utoipa::openapi::schema::Schema> {
+                    use redbit::utoipa::openapi::schema::*;
+                    Schema::Object(
+                        ObjectBuilder::new()
+                            .schema_type(#schema_type)
+                            .examples(#schema_example)
+                            .build()
+                    ).into()
                 }
             }
-        } else {
-            quote! {
-                compile_error!("RangeColumn not supported for this inner type");
+
+            impl redbit::utoipa::ToSchema for #struct_ident {
+                fn schemas(schemas: &mut Vec<(String, redbit::utoipa::openapi::RefOr<redbit::utoipa::openapi::schema::Schema>)>) {
+                    schemas.push((
+                        stringify!(#struct_ident).to_string(),
+                        <#struct_ident as redbit::utoipa::PartialSchema>::schema()
+                    ));
+                }
             }
         };
 
-        let expanded = quote! {
-            #input
-            #serde
-            #default_impl
-            #display_impl
-            #next_impl
-        };
         macro_utils::write_stream_and_return(expanded, struct_ident)
     }
 }
