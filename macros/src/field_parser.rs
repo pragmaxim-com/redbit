@@ -12,6 +12,7 @@ pub enum Indexing {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Multiplicity {
+    OneToOption,
     OneToOne,
     OneToMany,
 }
@@ -132,11 +133,43 @@ fn parse_entity_field(field: &syn::Field) -> Result<ParsingResult, syn::Error> {
                                     return Ok(ParsingResult::RelationShip(RelationshipDef { field, multiplicity: Multiplicity::OneToMany }));
                                 }
                             }
-                        } else if attr.path().is_ident("one2one") && segment.arguments.is_empty() {
-                            let struct_type = &segment.ident;
-                            let type_path = Type::Path(syn::TypePath { qself: None, path: syn::Path::from(struct_type.clone()) });
-                            let field = FieldDef { name: column_name.clone(), tpe: type_path };
-                            return Ok(ParsingResult::RelationShip(RelationshipDef { field, multiplicity: Multiplicity::OneToOne }));
+                        } else if attr.path().is_ident("one2one") {
+                            // Default to OneToOne
+                            let mut multiplicity = Multiplicity::OneToOne;
+                            let mut actual_type = &field.ty;
+
+                            // Check if the type is Option<T>
+                            if let Type::Path(type_path) = &field.ty {
+                                if let Some(segment) = type_path.path.segments.first() {
+                                    if segment.ident == "Option" {
+                                        // It is Option<T>, now get T
+                                        if let PathArguments::AngleBracketed(angle_bracketed) = &segment.arguments {
+                                            if let Some(GenericArgument::Type(inner_type)) = angle_bracketed.args.first() {
+                                                actual_type = inner_type;
+                                                multiplicity = Multiplicity::OneToOption;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Now get the segment from the actual type
+                            if let Type::Path(type_path) = actual_type {
+                                if let Some(segment) = type_path.path.segments.last() {
+                                    if segment.arguments.is_empty() {
+                                        let struct_type = &segment.ident;
+                                        let type_path = Type::Path(syn::TypePath { qself: None, path: syn::Path::from(struct_type.clone()) });
+                                        let field = FieldDef {
+                                            name: column_name.clone(),
+                                            tpe: type_path,
+                                        };
+                                        return Ok(ParsingResult::RelationShip(RelationshipDef {
+                                            field,
+                                            multiplicity,
+                                        }));
+                                    }
+                                }
+                            }
                         }
                     }
                 }

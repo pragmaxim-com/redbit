@@ -61,6 +61,7 @@ pub fn run(db: Arc<Database>) -> Result<(), AppError> {
     Utxo::range(&read_tx, &first_utxo.id, &last_utxo.id)?;
     Utxo::get_assets(&read_tx, &first_utxo.id)?;
     Utxo::parent_pk(&read_tx, &first_utxo.id)?;
+    Utxo::get_tree(&read_tx, &first_utxo.id)?;
 
     println!("Querying input refs:");
     let first_input_ref = InputRef::first(&read_tx)?.unwrap();

@@ -28,25 +28,37 @@ impl DbRelationshipMacros {
             Multiplicity::OneToOne => {
                 DbRelationshipMacros {
                     definition: definition.clone(),
-                    struct_init: init::o2o_relation_init(child_name, child_type),
-                    struct_default_init: init::o2o_relation_default_init(child_name, child_type),
-                    store_statement: store::o2o_store_def(child_name, child_type),
-                    store_many_statement: store::o2o_store_many_def(child_name, child_type),
-                    delete_statement: delete::o2o_delete_def(child_type),
-                    delete_many_statement: delete::o2o_delete_many_def(child_type),
-                    function_def: get::o2o_def(entity_ident, child_name, child_type, &pk_name, &pk_type)
+                    struct_init: init::one2one_relation_init(child_name, child_type),
+                    struct_default_init: init::one2one_relation_default_init(child_name, child_type),
+                    store_statement: store::one2one_store_def(child_name, child_type),
+                    store_many_statement: store::one2one_store_many_def(child_name, child_type),
+                    delete_statement: delete::one2one_delete_def(child_type),
+                    delete_many_statement: delete::one2one_delete_many_def(child_type),
+                    function_def: get::one2one_def(entity_ident, child_name, child_type, &pk_name, &pk_type)
+                }
+            }
+            Multiplicity::OneToOption => {
+                DbRelationshipMacros {
+                    definition: definition.clone(),
+                    struct_init: init::one2option_relation_init(child_name, child_type),
+                    struct_default_init: init::one2option_relation_default_init(child_name, child_type),
+                    store_statement: store::one2option_store_def(child_name, child_type),
+                    store_many_statement: store::one2option_store_many_def(child_name, child_type),
+                    delete_statement: delete::one2option_delete_def(child_type),
+                    delete_many_statement: delete::one2option_delete_many_def(child_type),
+                    function_def: get::one2option_def(entity_ident, child_name, child_type, &pk_name, &pk_type)
                 }
             }
             Multiplicity::OneToMany => {
                 DbRelationshipMacros {
                     definition: definition.clone(),
-                    struct_init: init::o2m_relation_init(child_name, child_type),
-                    struct_default_init: init::o2m_relation_default_init(child_name, child_type),
-                    store_statement: store::o2m_store_def(child_name, child_type),
-                    store_many_statement: store::o2m_store_many_def(child_name, child_type),
-                    delete_statement: delete::o2m_delete_def(child_type),
-                    delete_many_statement: delete::o2m_delete_many_def(child_type),
-                    function_def: get::o2m_def(entity_ident, child_name, child_type, &pk_name, &pk_type)
+                    struct_init: init::one2many_relation_init(child_name, child_type),
+                    struct_default_init: init::one2many_relation_default_init(child_name, child_type),
+                    store_statement: store::one2many_store_def(child_name, child_type),
+                    store_many_statement: store::one2many_store_many_def(child_name, child_type),
+                    delete_statement: delete::one2many_delete_def(child_type),
+                    delete_many_statement: delete::one2many_delete_many_def(child_type),
+                    function_def: get::one2many_def(entity_ident, child_name, child_type, &pk_name, &pk_type)
                 }
             }
         }

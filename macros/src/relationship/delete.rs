@@ -2,19 +2,33 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::Type;
 
-pub fn o2o_delete_def(child_type: &Type) -> TokenStream {
+pub fn one2one_delete_def(child_type: &Type) -> TokenStream {
     quote! {
         #child_type::delete(&tx, pk)?;
     }
 }
 
-pub fn o2o_delete_many_def(child_type: &Type) -> TokenStream {
+pub fn one2one_delete_many_def(child_type: &Type) -> TokenStream {
     quote! {
         #child_type::delete_many(&tx, pks)?;
     }
 }
 
-pub fn o2m_delete_def(child_type: &Type) -> TokenStream {
+
+pub fn one2option_delete_def(child_type: &Type) -> TokenStream {
+    quote! {
+        #child_type::delete(&tx, pk)?;
+    }
+}
+
+pub fn one2option_delete_many_def(child_type: &Type) -> TokenStream {
+    quote! {
+        #child_type::delete_many(&tx, pks)?;
+    }
+}
+
+
+pub fn one2many_delete_def(child_type: &Type) -> TokenStream {
     quote! {
         let (from, to) = pk.fk_range();
         let child_pks = #child_type::pk_range(&tx, &from, &to)?;
@@ -22,7 +36,7 @@ pub fn o2m_delete_def(child_type: &Type) -> TokenStream {
     }
 }
 
-pub fn o2m_delete_many_def(child_type: &Type) -> TokenStream {
+pub fn one2many_delete_many_def(child_type: &Type) -> TokenStream {
     quote! {
         let mut children = Vec::new();
         for pk in pks.iter() {

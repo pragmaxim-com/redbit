@@ -17,6 +17,7 @@ pub use redbit::*;
 #[index] pub struct Datum(pub Vec<u8>);
 #[index] pub struct AssetName(pub String);
 
+
 #[index]
 #[derive(Copy, Hash)]
 pub struct Timestamp(pub u32);
@@ -69,6 +70,16 @@ pub struct Utxo {
     pub address: Address,
     #[one2many]
     pub assets: Vec<Asset>,
+    #[one2one]
+    pub tree: Option<Tree>,
+}
+
+#[entity]
+pub struct Tree {
+    #[fk(one2one, range)]
+    pub id: UtxoPointer,
+    #[column(index)]
+    pub hash: Hash,
 }
 
 #[entity]

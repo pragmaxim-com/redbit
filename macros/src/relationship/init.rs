@@ -2,19 +2,31 @@ use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::Type;
 
-pub fn o2o_relation_init(child_name: &Ident, child_type: &Type) -> TokenStream { 
+pub fn one2one_relation_init(child_name: &Ident, child_type: &Type) -> TokenStream { 
     quote! {
         #child_name: #child_type::get(tx, pk)?.ok_or_else(|| AppError::NotFound(format!("Missing one-to-one child {:?}", pk)))?
     }
 }
 
-pub fn o2o_relation_default_init(child_name: &Ident, child_type: &Type) -> TokenStream { 
+pub fn one2one_relation_default_init(child_name: &Ident, child_type: &Type) -> TokenStream { 
     quote! {
         #child_name: #child_type::sample_with(pk, sample_index)
     }
 }
 
-pub fn o2m_relation_init(child_name: &Ident, child_type: &Type) -> TokenStream {
+pub fn one2option_relation_init(child_name: &Ident, child_type: &Type) -> TokenStream {
+    quote! {
+        #child_name: #child_type::get(tx, pk)?
+    }
+}
+
+pub fn one2option_relation_default_init(child_name: &Ident, child_type: &Type) -> TokenStream {
+    quote! {
+        #child_name: Some(#child_type::sample_with(pk, sample_index))
+    }
+}
+
+pub fn one2many_relation_init(child_name: &Ident, child_type: &Type) -> TokenStream {
     quote! {
         #child_name: {
             let (from, to) = pk.fk_range();
@@ -23,7 +35,7 @@ pub fn o2m_relation_init(child_name: &Ident, child_type: &Type) -> TokenStream {
     }
 }
 
-pub fn o2m_relation_default_init(child_name: &Ident, child_type: &Type) -> TokenStream {
+pub fn one2many_relation_default_init(child_name: &Ident, child_type: &Type) -> TokenStream {
     quote! {
         #child_name:  {
             let (from, _) = pk.fk_range();
