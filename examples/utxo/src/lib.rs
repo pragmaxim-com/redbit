@@ -17,7 +17,6 @@ pub use redbit::*;
 #[index] pub struct Datum(pub Vec<u8>);
 #[index] pub struct AssetName(pub String);
 
-
 #[index]
 #[derive(Copy, Hash)]
 pub struct Timestamp(pub u32);
@@ -26,9 +25,7 @@ pub struct Timestamp(pub u32);
 pub struct Block {
     #[pk(range)]
     pub id: Height,
-    #[one2one]
     pub header: BlockHeader,
-    #[one2many]
     pub transactions: Vec<Transaction>,
 }
 
@@ -52,9 +49,7 @@ pub struct Transaction {
     pub id: TxPointer,
     #[column(index)]
     pub hash: Hash,
-    #[one2many]
     pub utxos: Vec<Utxo>,
-    #[one2many]
     pub inputs: Vec<InputRef>,
 }
 
@@ -68,15 +63,13 @@ pub struct Utxo {
     pub datum: Datum,
     #[column(index, dictionary)]
     pub address: Address,
-    #[one2many]
     pub assets: Vec<Asset>,
-    #[one2one]
     pub tree: Option<Tree>,
 }
 
 #[entity]
 pub struct Tree {
-    #[fk(one2one, range)]
+    #[fk(one2opt, range)]
     pub id: UtxoPointer,
     #[column(index)]
     pub hash: Hash,

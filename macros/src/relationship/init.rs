@@ -2,25 +2,25 @@ use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::Type;
 
-pub fn one2one_relation_init(child_name: &Ident, child_type: &Type) -> TokenStream { 
+pub fn one2one_relation_init(child_name: &Ident, child_type: &Type) -> TokenStream {
     quote! {
         #child_name: #child_type::get(tx, pk)?.ok_or_else(|| AppError::NotFound(format!("Missing one-to-one child {:?}", pk)))?
     }
 }
 
-pub fn one2one_relation_default_init(child_name: &Ident, child_type: &Type) -> TokenStream { 
+pub fn one2one_relation_default_init(child_name: &Ident, child_type: &Type) -> TokenStream {
     quote! {
         #child_name: #child_type::sample_with(pk, sample_index)
     }
 }
 
-pub fn one2option_relation_init(child_name: &Ident, child_type: &Type) -> TokenStream {
+pub fn one2opt_relation_init(child_name: &Ident, child_type: &Type) -> TokenStream {
     quote! {
         #child_name: #child_type::get(tx, pk)?
     }
 }
 
-pub fn one2option_relation_default_init(child_name: &Ident, child_type: &Type) -> TokenStream {
+pub fn one2opt_relation_default_init(child_name: &Ident, child_type: &Type) -> TokenStream {
     quote! {
         #child_name: Some(#child_type::sample_with(pk, sample_index))
     }

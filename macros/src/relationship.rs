@@ -40,13 +40,13 @@ impl DbRelationshipMacros {
             Multiplicity::OneToOption => {
                 DbRelationshipMacros {
                     definition: definition.clone(),
-                    struct_init: init::one2option_relation_init(child_name, child_type),
-                    struct_default_init: init::one2option_relation_default_init(child_name, child_type),
-                    store_statement: store::one2option_store_def(child_name, child_type),
-                    store_many_statement: store::one2option_store_many_def(child_name, child_type),
-                    delete_statement: delete::one2option_delete_def(child_type),
-                    delete_many_statement: delete::one2option_delete_many_def(child_type),
-                    function_def: get::one2option_def(entity_ident, child_name, child_type, &pk_name, &pk_type)
+                    struct_init: init::one2opt_relation_init(child_name, child_type),
+                    struct_default_init: init::one2opt_relation_default_init(child_name, child_type),
+                    store_statement: store::one2opt_store_def(child_name, child_type),
+                    store_many_statement: store::one2opt_store_many_def(child_name, child_type),
+                    delete_statement: delete::one2opt_delete_def(child_type),
+                    delete_many_statement: delete::one2opt_delete_many_def(child_type),
+                    function_def: get::one2opt_def(entity_ident, child_name, child_type, &pk_name, &pk_type)
                 }
             }
             Multiplicity::OneToMany => {

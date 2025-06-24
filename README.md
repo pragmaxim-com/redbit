@@ -19,9 +19,9 @@ through auto-generated REST API.
 
 - ✅ Querying and ranging by secondary index
 - ✅ Optional dictionaries for low cardinality fields
-- ✅ One-to-One and One-to-Many entities with cascade read/write/delete
+- ✅ One-to-One / One-to-Option / One-to-Many entities with cascade read/write/delete
 - ✅ All goodies including intuitive data ordering without writing custom codecs
-- ✅ Macro derived http rest API at http://127.0.0.1:8000/swagger-ui/
+- ✅ Macro derived http rest API at http://127.0.0.1:8000/swagger-ui/ with examples
 - ✅ Macro derived unit tests and integration tests on axum test server
 
 ### Limitations

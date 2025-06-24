@@ -15,13 +15,13 @@ pub fn one2one_delete_many_def(child_type: &Type) -> TokenStream {
 }
 
 
-pub fn one2option_delete_def(child_type: &Type) -> TokenStream {
+pub fn one2opt_delete_def(child_type: &Type) -> TokenStream {
     quote! {
         #child_type::delete(&tx, pk)?;
     }
 }
 
-pub fn one2option_delete_many_def(child_type: &Type) -> TokenStream {
+pub fn one2opt_delete_many_def(child_type: &Type) -> TokenStream {
     quote! {
         #child_type::delete_many(&tx, pks)?;
     }

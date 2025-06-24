@@ -35,7 +35,7 @@ pub fn one2one_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
     }
 }
 
-pub fn one2option_def(
+pub fn one2opt_def(
     entity_name: &Ident,
     child_name: &Ident,
     child_type: &Type,

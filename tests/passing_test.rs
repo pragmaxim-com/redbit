@@ -60,9 +60,7 @@ pub struct FullStruct {
 struct MultipleOne2ManyAnnotationsStruct {
     #[pk(range)]
     id: ParentPK,
-    #[one2many]
     foos: Vec<MinimalStruct>,
-    #[one2many]
     bars: Vec<MinimalStruct>,
 }
 

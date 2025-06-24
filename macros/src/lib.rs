@@ -200,7 +200,7 @@ pub fn entity(_attr: TokenStream, item: TokenStream) -> TokenStream {
     quote!(#s).into()
 }
 
-#[proc_macro_derive(Entity, attributes(pk, fk, column, one2many, one2one, transient))]
+#[proc_macro_derive(Entity, attributes(pk, fk, column, transient))]
 #[proc_macro_error]
 pub fn derive_entity(input: TokenStream) -> TokenStream {
     let item_struct = parse_macro_input!(input as ItemStruct);

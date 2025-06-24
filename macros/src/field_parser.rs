@@ -94,6 +94,8 @@ fn parse_entity_field(field: &syn::Field) -> Result<ParsingResult, syn::Error> {
                             fk = Some(Multiplicity::OneToMany);
                         } else if nested.path.is_ident("one2one") {
                             fk = Some(Multiplicity::OneToOne);
+                        } else if nested.path.is_ident("one2opt") {
+                            fk = Some(Multiplicity::OneToOption);
                         }
                         Ok(())
                     });
@@ -120,55 +122,79 @@ fn parse_entity_field(field: &syn::Field) -> Result<ParsingResult, syn::Error> {
                 } else if attr.path().is_ident("transient") {
                     let field = FieldDef { name: column_name.clone(), tpe: column_type.clone() };
                     return Ok(ParsingResult::Transient(TransientDef {field}))
-                } else if let Type::Path(type_path) = &column_type {
-                    if let Some(segment) = type_path.path.segments.last() {
-                        if attr.path().is_ident("one2many") && segment.ident == "Vec" {
+                }
+            }
+            if let Type::Path(type_path) = &column_type {
+                if let Some(segment) = type_path.path.segments.last() {
+                    match segment.ident.to_string().as_str() {
+                        "Vec" => {
+                            // one-to-many
                             if let PathArguments::AngleBracketed(args) = &segment.arguments {
                                 if let Some(GenericArgument::Type(Type::Path(inner_type_path))) = args.args.first() {
-                                    let inner_type =
-                                        &inner_type_path.path.segments.last()
-                                            .ok_or_else(|| syn::Error::new(field.span(), "Parent field missing"))?.ident;
-                                    let type_path = Type::Path(syn::TypePath { qself: None, path: syn::Path::from(inner_type.clone()) });
-                                    let field = FieldDef { name: column_name.clone(), tpe: type_path };
-                                    return Ok(ParsingResult::RelationShip(RelationshipDef { field, multiplicity: Multiplicity::OneToMany }));
+                                    let inner_type = inner_type_path
+                                        .path
+                                        .segments
+                                        .last()
+                                        .ok_or_else(|| syn::Error::new(field.span(), "Parent field missing"))?
+                                        .ident
+                                        .clone();
+                                    let type_path = Type::Path(syn::TypePath {
+                                        qself: None,
+                                        path: syn::Path::from(inner_type),
+                                    });
+                                    let field = FieldDef {
+                                        name: column_name.clone(),
+                                        tpe: type_path,
+                                    };
+                                    return Ok(ParsingResult::RelationShip(RelationshipDef {
+                                        field,
+                                        multiplicity: Multiplicity::OneToMany,
+                                    }));
                                 }
                             }
-                        } else if attr.path().is_ident("one2one") {
-                            // Default to OneToOne
-                            let mut multiplicity = Multiplicity::OneToOne;
-                            let mut actual_type = &field.ty;
-
-                            // Check if the type is Option<T>
-                            if let Type::Path(type_path) = &field.ty {
-                                if let Some(segment) = type_path.path.segments.first() {
-                                    if segment.ident == "Option" {
-                                        // It is Option<T>, now get T
-                                        if let PathArguments::AngleBracketed(angle_bracketed) = &segment.arguments {
-                                            if let Some(GenericArgument::Type(inner_type)) = angle_bracketed.args.first() {
-                                                actual_type = inner_type;
-                                                multiplicity = Multiplicity::OneToOption;
-                                            }
-                                        }
-                                    }
+                        }
+                        "Option" => {
+                            // one-to-option
+                            if let PathArguments::AngleBracketed(args) = &segment.arguments {
+                                if let Some(GenericArgument::Type(Type::Path(inner_type_path))) = args.args.first() {
+                                    let inner_type = inner_type_path
+                                        .path
+                                        .segments
+                                        .last()
+                                        .ok_or_else(|| syn::Error::new(field.span(), "Parent field missing"))?
+                                        .ident
+                                        .clone();
+                                    let type_path = Type::Path(syn::TypePath {
+                                        qself: None,
+                                        path: syn::Path::from(inner_type),
+                                    });
+                                    let field = FieldDef {
+                                        name: column_name.clone(),
+                                        tpe: type_path,
+                                    };
+                                    return Ok(ParsingResult::RelationShip(RelationshipDef {
+                                        field,
+                                        multiplicity: Multiplicity::OneToOption,
+                                    }));
                                 }
                             }
-
-                            // Now get the segment from the actual type
-                            if let Type::Path(type_path) = actual_type {
-                                if let Some(segment) = type_path.path.segments.last() {
-                                    if segment.arguments.is_empty() {
-                                        let struct_type = &segment.ident;
-                                        let type_path = Type::Path(syn::TypePath { qself: None, path: syn::Path::from(struct_type.clone()) });
-                                        let field = FieldDef {
-                                            name: column_name.clone(),
-                                            tpe: type_path,
-                                        };
-                                        return Ok(ParsingResult::RelationShip(RelationshipDef {
-                                            field,
-                                            multiplicity,
-                                        }));
-                                    }
-                                }
+                        }
+                        _ => {
+                            // one-to-one (plain type)
+                            let struct_type = &segment.ident;
+                            if segment.arguments.is_empty() {
+                                let type_path = Type::Path(syn::TypePath {
+                                    qself: None,
+                                    path: syn::Path::from(struct_type.clone()),
+                                });
+                                let field = FieldDef {
+                                    name: column_name.clone(),
+                                    tpe: type_path,
+                                };
+                                return Ok(ParsingResult::RelationShip(RelationshipDef {
+                                    field,
+                                    multiplicity: Multiplicity::OneToOne,
+                                }));
                             }
                         }
                     }
@@ -176,7 +202,7 @@ fn parse_entity_field(field: &syn::Field) -> Result<ParsingResult, syn::Error> {
             }
             Err(syn::Error::new(
                 field.span(),
-                "Field must have one of #[pk(...)] / #[fk(...)] / #[column(...)] / #[one2one] / #[one2many] / #[transient] annotations of expected underlying types",
+                "Field must have one of #[pk(...)] / #[fk(...)] / #[column(...)] / #[transient] annotations or it is a one2one, one2opt, or one2many relationship (e.g., `Vec<Transaction>` or `Option<Transaction>`).",
             ))
         }
     }
