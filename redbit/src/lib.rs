@@ -63,7 +63,7 @@ pub trait ChildPointer: IndexedPointer {
     type Parent: IndexedPointer;
     fn is_pointer(&self) -> bool;
     fn parent(&self) -> &Self::Parent;
-    fn from_parent(parent: Self::Parent) -> Self;
+    fn from_parent(parent: Self::Parent, index: Self::Index) -> Self;
 }
 
 pub trait ForeignKey<CH: ChildPointer> {
@@ -76,7 +76,7 @@ where
     CH::Parent: IndexedPointer + Clone,
 {
     fn fk_range(&self) -> (CH, CH) {
-        (CH::from_parent(self.clone()), CH::from_parent(self.clone().next()))
+        (CH::from_parent(self.clone(), CH::Index::default()), CH::from_parent(self.clone().next(), CH::Index::default()))
     }
 }
 

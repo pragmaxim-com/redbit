@@ -28,6 +28,8 @@ through auto-generated REST API.
 
 - ❌ primitive types must be wrapped in a newtype struct if there is an index on it
   - to macro derive implementations necessary for indexing and querying
+- ❌ root key must be newtype struct with numeric inner type
+  - that's part of the design decision to achieve fast indexing of even whole bitcoin
 
 ```
 cargo run --package utxo                # to run the demo example

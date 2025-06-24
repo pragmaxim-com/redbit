@@ -74,7 +74,7 @@ struct MissingColumnsStruct {
 
 fn main() {
     let parent_pointer = ParentPK(5);
-    let pointer_0 = ChildPK::from_parent(parent_pointer.clone());
+    let pointer_0 = ChildPK::from_parent(parent_pointer.clone(), 0);
     let pointer_1 = pointer_0.next();
     let _ = MinimalStruct { id: pointer_0.clone(), persisted_no_index_no_dict: 42 };
     let _ = StructWithPersistedEntityField { id: ParentPK(2), persisted_indexed_no_dict: Index(43) };

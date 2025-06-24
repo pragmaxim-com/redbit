@@ -139,8 +139,8 @@ fn it_should_get_entities_by_range_on_pk() {
     assert_eq!(actual_blocks[1].transactions.len(), 3);
     assert_eq!(expected_blocks, actual_blocks);
 
-    let tx_pointer_1 = TxPointer::from_parent(block_pointer_1).next();
-    let tx_pointer_2 = TxPointer::from_parent(block_pointer_2).next().next().next();
+    let tx_pointer_1 = TxPointer::from_parent(block_pointer_1, 1);
+    let tx_pointer_2 = TxPointer::from_parent(block_pointer_2, 3);
     let actual_transactions = Transaction::range(&read_tx, &tx_pointer_1, &tx_pointer_2).expect("Failed to range by PK");
     let mut expected_transactions: Vec<Transaction> = Vec::new();
     expected_transactions.extend(blocks[1].transactions.clone().into_iter().filter(|t| t.id.index >= 1));
