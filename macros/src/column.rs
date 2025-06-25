@@ -3,6 +3,7 @@ mod get_by;
 mod init;
 mod range_by;
 mod store;
+mod get_keys_by;
 
 use crate::field_parser::{ColumnDef, Indexing, PkDef};
 use crate::macro_utils;
@@ -84,6 +85,14 @@ impl DbColumnMacros {
 
         let mut function_defs: Vec<FunctionDef> = Vec::new();
         function_defs.push(get_by::get_by_index_def(entity_name, entity_type, column_name, column_type, &index_table_def.name));
+        function_defs.push(get_keys_by::get_keys_by_index_def(
+            entity_name,
+            pk_name,
+            pk_type,
+            column_name,
+            column_type,
+            &index_table_def.name,
+        ));
         let entity_column_range_query = format_ident!("{}{}Range", entity_name.to_string(), column_name.to_string());
         let mut query = None;
 
@@ -182,14 +191,25 @@ impl DbColumnMacros {
                 &value_by_dict_pk_table_def.name,
                 &dict_index_table_def.name,
             ),
-            function_defs: vec![get_by::get_by_dict_def(
-                entity_name,
-                entity_type,
-                column_name,
-                column_type,
-                &value_to_dict_pk_table_def.name,
-                &dict_index_table_def.name,
-            )],
+            function_defs: vec![
+                get_by::get_by_dict_def(
+                    entity_name,
+                    entity_type,
+                    column_name,
+                    column_type,
+                    &value_to_dict_pk_table_def.name,
+                    &dict_index_table_def.name,
+                ),
+                get_keys_by::get_keys_by_dict_def(
+                    entity_name,
+                    pk_name,
+                    pk_type,
+                    column_name,
+                    column_type,
+                    &value_to_dict_pk_table_def.name,
+                    &dict_index_table_def.name,
+                ),
+            ],
         }
     }
 

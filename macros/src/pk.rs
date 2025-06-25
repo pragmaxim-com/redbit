@@ -7,7 +7,7 @@ mod range;
 mod pk_range;
 mod store;
 mod delete;
-mod parent_pk;
+mod parent_key;
 mod limit;
 
 use crate::field_parser::{Multiplicity, PkDef};
@@ -50,7 +50,7 @@ impl DbPkMacros {
 
         match pk_def.fk {
             Some(Multiplicity::OneToMany) => {
-                function_defs.push(parent_pk::fn_def(entity_name, &pk_name, &pk_type));
+                function_defs.push(parent_key::fn_def(entity_name, &pk_name, &pk_type));
             }
             _ => {}
         };
