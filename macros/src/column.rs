@@ -5,7 +5,7 @@ mod range_by;
 mod store;
 mod get_keys_by;
 
-use crate::field_parser::{ColumnDef, Indexing, PkDef};
+use crate::field_parser::{ColumnDef, ColumnType, PkDef};
 use crate::macro_utils;
 use crate::rest::*;
 use crate::table::TableDef;
@@ -33,16 +33,19 @@ impl DbColumnMacros {
         let column_type = &column_def.field.tpe.clone();
         let pk_name = &pk_def.field.name;
         let pk_type = &pk_def.field.tpe;
-        match column_def.indexing {
-            Indexing::Off => Ok(DbColumnMacros::plain(column_def, entity_name, pk_name, pk_type, column_name, column_type)),
-            Indexing::On { dictionary: false, range } => {
+        match column_def.col_type {
+            ColumnType::IndexingOff => Ok(DbColumnMacros::plain(column_def, entity_name, pk_name, pk_type, column_name, column_type)),
+            ColumnType::IndexingOn { dictionary: false, range } => {
                 Ok(DbColumnMacros::index(column_def, entity_name, entity_type, pk_name, pk_type, column_name, column_type, range))
             }
-            Indexing::On { dictionary: true, range: false } => {
+            ColumnType::IndexingOn { dictionary: true, range: false } => {
                 Ok(DbColumnMacros::dictionary(column_def, entity_name, entity_type, pk_name, pk_type, column_name, column_type))
             }
-            Indexing::On { dictionary: true, range: true } => {
+            ColumnType::IndexingOn { dictionary: true, range: true } => {
                 Err(syn::Error::new(column_name.span(), "Range indexing on dictionary columns is not supported"))
+            }
+            ColumnType::Transient => {
+                Err(syn::Error::new(column_name.span(), "Transient columns are not supported in this context"))
             }
         }
     }

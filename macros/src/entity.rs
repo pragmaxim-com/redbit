@@ -8,6 +8,7 @@ use crate::table::TableDef;
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use syn::Type;
+use crate::field_parser::ColumnType::Transient;
 use crate::transient::TransientMacros;
 
 pub struct EntityMacros {
@@ -21,10 +22,11 @@ pub struct EntityMacros {
 
 impl EntityMacros {
     pub fn new(entity_name: &Ident, entity_type: &Type, field_defs: FieldDefs) -> Result<EntityMacros, syn::Error> {
-        let FieldDefs { pk, columns, relationships, transients } = field_defs;
+        let FieldDefs { pk, columns, relationships } = field_defs;
         let column_macros = columns
-            .into_iter()
-            .map(|entity_column| DbColumnMacros::new(entity_column, entity_name, entity_type, &pk))
+            .iter()
+            .filter(|c|c.col_type != Transient)
+            .map(|entity_column| DbColumnMacros::new(entity_column.clone(), entity_name, entity_type, &pk))
             .collect::<Result<Vec<DbColumnMacros>, syn::Error>>()?;
         let relationship_macros = relationships.into_iter().map(|rel| DbRelationshipMacros::new(rel, entity_name, &pk)).collect();
         Ok(EntityMacros {
@@ -33,7 +35,7 @@ impl EntityMacros {
             pk: DbPkMacros::new(entity_name, entity_type, &pk),
             columns: column_macros,
             relationships: relationship_macros,
-            transients: TransientMacros::new(transients),
+            transients: TransientMacros::new(columns.into_iter().filter(|c|c.col_type == Transient).collect()),
         })
     }
 

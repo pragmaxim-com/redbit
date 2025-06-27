@@ -5,9 +5,10 @@ use syn::token::Comma;
 use syn::{Fields, GenericArgument, ItemStruct, PathArguments, Type};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Indexing {
-    Off,
-    On { dictionary: bool, range: bool },
+pub enum ColumnType {
+    Transient,
+    IndexingOff,
+    IndexingOn { dictionary: bool, range: bool },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,7 +22,6 @@ pub enum ParsingResult {
     Pk(PkDef),
     Column(ColumnDef),
     RelationShip(RelationshipDef),
-    Transient(TransientDef),
 }
 
 #[derive(Clone)]
@@ -40,11 +40,7 @@ pub struct PkDef {
 #[derive(Clone)]
 pub struct ColumnDef {
     pub field: FieldDef,
-    pub indexing: Indexing,
-}
-
-pub struct TransientDef {
-    pub field: FieldDef,
+    pub col_type: ColumnType,
 }
 
 #[derive(Clone)]
@@ -57,7 +53,6 @@ pub struct FieldDefs {
     pub pk: PkDef,
     pub columns: Vec<ColumnDef>,
     pub relationships: Vec<RelationshipDef>,
-    pub transients: Vec<TransientDef>
 }
 
 pub fn get_named_fields(ast: &ItemStruct) -> Result<Punctuated<syn::Field, Comma>, syn::Error> {
@@ -105,23 +100,21 @@ fn parse_entity_field(field: &syn::Field) -> Result<ParsingResult, syn::Error> {
                     let field = FieldDef { name: column_name.clone(), tpe: column_type.clone() };
                     return Ok(ParsingResult::Pk(PkDef { field, fk, range }));
                 } else if attr.path().is_ident("column") {
-                    let mut indexing = Indexing::Off;
+                    let mut indexing = ColumnType::IndexingOff;
                     let _ = attr.parse_nested_meta(|nested| {
-                        if nested.path.is_ident("index") {
-                            indexing = Indexing::On { dictionary: false, range: false };
-                        }
-                        if nested.path.is_ident("dictionary") {
-                            indexing = Indexing::On { dictionary: true, range: false };
+                        if nested.path.is_ident("transient") {
+                            indexing = ColumnType::Transient;
+                        } else if nested.path.is_ident("index") {
+                            indexing = ColumnType::IndexingOn { dictionary: false, range: false };
+                        } else if nested.path.is_ident("dictionary") {
+                            indexing = ColumnType::IndexingOn { dictionary: true, range: false };
                         } else if nested.path.is_ident("range") {
-                            indexing = Indexing::On { dictionary: false, range: true };
+                            indexing = ColumnType::IndexingOn { dictionary: false, range: true };
                         }
                         Ok(())
                     });
                     let field = FieldDef { name: column_name.clone(), tpe: column_type.clone() };
-                    return Ok(ParsingResult::Column(ColumnDef { field, indexing }));
-                } else if attr.path().is_ident("transient") {
-                    let field = FieldDef { name: column_name.clone(), tpe: column_type.clone() };
-                    return Ok(ParsingResult::Transient(TransientDef {field}))
+                    return Ok(ParsingResult::Column(ColumnDef { field, col_type: indexing }));
                 }
             }
             if let Type::Path(type_path) = &column_type {
@@ -212,7 +205,6 @@ pub fn get_field_macros(fields: &Punctuated<syn::Field, Comma>, ast: &ItemStruct
     let mut pk_column: Option<PkDef> = None;
     let mut columns: Vec<ColumnDef> = Vec::new();
     let mut relationships: Vec<RelationshipDef> = Vec::new();
-    let mut transients: Vec<TransientDef> = Vec::new();
 
     for field in fields.iter() {
         match parse_entity_field(field)? {
@@ -224,7 +216,6 @@ pub fn get_field_macros(fields: &Punctuated<syn::Field, Comma>, ast: &ItemStruct
                 pk_column = Some(pk);
             }
             ParsingResult::RelationShip(relationship) => relationships.push(relationship),
-            ParsingResult::Transient(transient) => transients.push(transient),
         }
     }
 
@@ -234,6 +225,5 @@ pub fn get_field_macros(fields: &Punctuated<syn::Field, Comma>, ast: &ItemStruct
         pk,
         columns,
         relationships,
-        transients,
     })
 }

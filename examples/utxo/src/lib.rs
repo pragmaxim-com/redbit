@@ -27,6 +27,8 @@ pub struct Block {
     pub id: Height,
     pub header: BlockHeader,
     pub transactions: Vec<Transaction>,
+    #[column(transient)]
+    pub weight: u32,
 }
 
 #[entity]
@@ -35,7 +37,7 @@ pub struct BlockHeader {
     pub id: Height,
     #[column(index)]
     pub hash: Hash,
-    #[column(index, range)]
+    #[column(range)]
     pub timestamp: Timestamp,
     #[column(index)]
     pub merkle_root: Hash,
@@ -61,7 +63,7 @@ pub struct Utxo {
     pub amount: u64,
     #[column(index)]
     pub datum: Datum,
-    #[column(index, dictionary)]
+    #[column(dictionary)]
     pub address: Address,
     pub assets: Vec<Asset>,
     pub tree: Option<Tree>,
@@ -87,8 +89,8 @@ pub struct Asset {
     pub id: AssetPointer,
     #[column]
     pub amount: u64,
-    #[column(index, dictionary)]
+    #[column(dictionary)]
     pub name: AssetName,
-    #[column(index, dictionary)]
+    #[column(dictionary)]
     pub policy_id: PolicyId,
 }
