@@ -18,6 +18,12 @@ pub use redbit::*;
 #[column] pub struct AssetName(pub String);
 
 #[column]
+pub struct TempInputRef {
+    tx_hash: Hash,
+    index: u32,
+}
+
+#[column]
 #[derive(Copy, Hash)]
 pub struct Timestamp(pub u32);
 
@@ -53,6 +59,8 @@ pub struct Transaction {
     pub hash: Hash,
     pub utxos: Vec<Utxo>,
     pub inputs: Vec<InputRef>,
+    #[column(transient)]
+    pub transient_inputs: Vec<TempInputRef>,
 }
 
 #[entity]

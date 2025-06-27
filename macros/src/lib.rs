@@ -13,62 +13,33 @@ mod transient;
 use crate::entity::EntityMacros;
 use crate::pk::{DbPkMacros, PointerType};
 
-use syn::{punctuated::Punctuated, Path, token::Comma};
-use syn::{Attribute, Result};
+use crate::column::DbColumnMacros;
 use proc_macro::TokenStream;
+use proc_macro_error::proc_macro_error;
 use quote::quote;
 use std::sync::Once;
-use proc_macro_error::proc_macro_error;
 use syn::parse::Parse;
 use syn::spanned::Spanned;
 use syn::{parse_macro_input, parse_quote, DeriveInput, Fields, ItemStruct, Type};
-use crate::column::DbColumnMacros;
 
 #[proc_macro_attribute]
 #[proc_macro_error]
 pub fn column(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut input = parse_macro_input!(item as ItemStruct);
-    let struct_ident = &input.ident;
+    let struct_ident = &input.ident.clone();
 
-    let field_ty = match &input.fields {
-        Fields::Unnamed(fields) if fields.unnamed.len() == 1 => &fields.unnamed[0].ty,
+    match &input.clone().fields {
+        Fields::Unnamed(fields) if fields.unnamed.len() == 1 => {
+            macro_utils::merge_struct_derives(&mut input, syn::parse_quote![Clone, Eq, Ord, PartialEq, PartialOrd, Debug]);
+            DbColumnMacros::generate_column_impls(struct_ident, &input, &fields.unnamed[0].ty).into()
+        },
         _ => {
-            return quote! {
-                compile_error!("`#[column]` can only be used on newtype structs with a single field.");
+            macro_utils::merge_struct_derives(&mut input, syn::parse_quote![serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, utoipa::ToSchema]);
+            quote! {
                 #input
-            }.into();
+            }.into()
         }
-    };
-
-    // Collect derives from existing #[derive(...)] attributes
-    let mut existing_derives = Vec::<syn::Path>::new();
-    input.attrs.retain(|attr| {
-        if attr.path().is_ident("derive") {
-            match macro_utils::extract_derives(attr) {
-                Ok(paths) => existing_derives.extend(paths),
-                Err(e) => {
-                    eprintln!("Error parsing derive attribute: {}", e);
-                    return true
-                }
-            }
-            false
-        } else {
-            true
-        }
-    });
-
-    let extra_derives: Punctuated<Path, Comma> = syn::parse_quote![Clone, Eq, Ord, PartialEq, PartialOrd, Debug];
-    let extra_derives_vec: Vec<Path> = extra_derives.into_iter().collect();
-    existing_derives.extend(extra_derives_vec);
-    existing_derives.sort_by(|a, b| quote!(#a).to_string().cmp(&quote!(#b).to_string()));
-    existing_derives.dedup_by(|a, b| quote!(#a).to_string() == quote!(#b).to_string());
-
-    // Reinsert merged derive attribute
-    input.attrs.push(syn::parse_quote! {
-        #[derive(#(#existing_derives),*)]
-    });
-
-    DbColumnMacros::generate_column_impls(struct_ident, &input, field_ty).into()
+    }
 }
 
 struct KeyAttr {

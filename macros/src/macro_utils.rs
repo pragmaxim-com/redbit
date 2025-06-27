@@ -1,8 +1,11 @@
 use proc_macro2::{Ident, TokenStream};
+use quote::quote;
 use std::env;
 use std::fs::OpenOptions;
 use std::io::Write;
-use syn::{Attribute, Type};
+use syn::punctuated::Punctuated;
+use syn::token::Comma;
+use syn::{Attribute, ItemStruct, Path, Type};
 
 pub fn extract_derives(attr: &Attribute) -> syn::Result<Vec<syn::Path>> {
     let mut derives = Vec::new();
@@ -15,6 +18,33 @@ pub fn extract_derives(attr: &Attribute) -> syn::Result<Vec<syn::Path>> {
         }
     })?;
     Ok(derives)
+}
+
+pub fn merge_struct_derives(input: &mut ItemStruct, extra_derives: Punctuated<Path, Comma>) {
+    let mut derives_vec: Vec<Path> = extra_derives.into_iter().collect();
+    input.attrs.retain(|attr| {
+        if attr.path().is_ident("derive") {
+            match extract_derives(attr) {
+                Ok(paths) => derives_vec.extend(paths),
+                Err(e) => {
+                    eprintln!("Error parsing derive attribute: {}", e);
+                    return true
+                }
+            }
+            false
+        } else {
+            true
+        }
+    });
+
+    derives_vec.sort_by(|a, b| quote!(#a).to_string().cmp(&quote!(#b).to_string()));
+    derives_vec.dedup_by(|a, b| quote!(#a).to_string() == quote!(#b).to_string());
+
+    // Reinsert merged derive attribute
+    input.attrs.push(syn::parse_quote! {
+        #[derive(#(#derives_vec),*)]
+    });
+
 }
 
 pub fn write_to_local_file(lines: Vec<String>, dir_name: &str, entity: &Ident) {

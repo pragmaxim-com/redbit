@@ -14,7 +14,7 @@ impl TransientMacros {
             let field_name = &transient.field.name;
             let field_type = &transient.field.tpe;
             let struct_default_init = quote! {
-                #field_name: #field_type::default()
+                #field_name: (<#field_type>::default())
             };
             transient_macros.push(TransientMacros { definition: transient, struct_default_init})
         }
