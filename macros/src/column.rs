@@ -216,7 +216,7 @@ impl DbColumnMacros {
         }
     }
 
-    pub fn generate_index_impls(struct_ident: &Ident, index_new_type: &ItemStruct, inner_type: &Type) -> TokenStream {
+    pub fn generate_column_impls(struct_ident: &Ident, index_new_type: &ItemStruct, inner_type: &Type) -> TokenStream {
         let kind = macro_utils::classify_inner_type(inner_type);
 
         let serialization_code = match kind {
@@ -285,7 +285,7 @@ impl DbColumnMacros {
             },
         };
 
-        let range_code = match kind {
+        let iterable_code = match kind {
             InnerKind::Integer => quote! {
                 let next_val = self.0.wrapping_add(1);
                 Self(next_val)
@@ -374,7 +374,7 @@ impl DbColumnMacros {
 
             impl IterableColumn for #struct_ident {
                 fn next(&self) -> Self {
-                    #range_code
+                    #iterable_code
                 }
             }
 

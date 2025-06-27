@@ -11,13 +11,13 @@ pub use redbit::*;
 #[pointer_key(u16)] pub struct InputPointer(TxPointer);
 #[pointer_key(u8)] pub struct AssetPointer(UtxoPointer);
 
-#[index] pub struct Hash(pub String);
-#[index] pub struct Address(pub [u8; 32]);
-#[index] pub struct PolicyId(pub String);
-#[index] pub struct Datum(pub Vec<u8>);
-#[index] pub struct AssetName(pub String);
+#[column] pub struct Hash(pub String);
+#[column] pub struct Address(pub [u8; 32]);
+#[column] pub struct PolicyId(pub String);
+#[column] pub struct Datum(pub Vec<u8>);
+#[column] pub struct AssetName(pub String);
 
-#[index]
+#[column]
 #[derive(Copy, Hash)]
 pub struct Timestamp(pub u32);
 

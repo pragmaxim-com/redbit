@@ -26,7 +26,7 @@ use crate::column::DbColumnMacros;
 
 #[proc_macro_attribute]
 #[proc_macro_error]
-pub fn index(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn column(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut input = parse_macro_input!(item as ItemStruct);
     let struct_ident = &input.ident;
 
@@ -34,7 +34,7 @@ pub fn index(_attr: TokenStream, item: TokenStream) -> TokenStream {
         Fields::Unnamed(fields) if fields.unnamed.len() == 1 => &fields.unnamed[0].ty,
         _ => {
             return quote! {
-                compile_error!("`#[index]` can only be used on tuple structs with a single field.");
+                compile_error!("`#[column]` can only be used on newtype structs with a single field.");
                 #input
             }.into();
         }
@@ -42,31 +42,16 @@ pub fn index(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Collect derives from existing #[derive(...)] attributes
     let mut existing_derives = Vec::<syn::Path>::new();
-
-    fn extract_derives(attr: &Attribute) -> Result<Vec<syn::Path>> {
-        let mut derives = Vec::new();
-        attr.parse_nested_meta(|meta| {
-            if let Some(ident) = meta.path.get_ident() {
-                derives.push(syn::Path::from(ident.clone()));
-                Ok(())
-            } else {
-                Err(meta.error("Expected identifier in derive"))
-            }
-        })?;
-        Ok(derives)
-    }
-
     input.attrs.retain(|attr| {
         if attr.path().is_ident("derive") {
-            // parse_nested_meta applies to the content inside #[derive(...)]
-            match extract_derives(attr) {
+            match macro_utils::extract_derives(attr) {
                 Ok(paths) => existing_derives.extend(paths),
                 Err(e) => {
                     eprintln!("Error parsing derive attribute: {}", e);
-                    return true; // keep the attribute to avoid losing it
+                    return true
                 }
             }
-            false // remove this derive attr, we'll reinsert merged one later
+            false
         } else {
             true
         }
@@ -74,7 +59,6 @@ pub fn index(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let extra_derives: Punctuated<Path, Comma> = syn::parse_quote![Clone, Eq, Ord, PartialEq, PartialOrd, Debug];
     let extra_derives_vec: Vec<Path> = extra_derives.into_iter().collect();
-    // Merge, deduplicate
     existing_derives.extend(extra_derives_vec);
     existing_derives.sort_by(|a, b| quote!(#a).to_string().cmp(&quote!(#b).to_string()));
     existing_derives.dedup_by(|a, b| quote!(#a).to_string() == quote!(#b).to_string());
@@ -84,7 +68,7 @@ pub fn index(_attr: TokenStream, item: TokenStream) -> TokenStream {
         #[derive(#(#existing_derives),*)]
     });
 
-    DbColumnMacros::generate_index_impls(struct_ident, &input, field_ty).into()
+    DbColumnMacros::generate_column_impls(struct_ident, &input, field_ty).into()
 }
 
 struct KeyAttr {

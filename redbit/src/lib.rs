@@ -11,7 +11,7 @@ pub use macros::PointerKey;
 pub use macros::entity;
 pub use macros::pointer_key;
 pub use macros::root_key;
-pub use macros::index;
+pub use macros::column;
 pub use redb;
 pub use redb::ReadableMultimapTable;
 pub use redb::ReadableTable;

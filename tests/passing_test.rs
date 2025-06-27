@@ -4,9 +4,9 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use redbit::*;
 
-#[index] pub struct Address(pub String);
-#[index] pub struct Datum(pub String);
-#[index] pub struct Index(pub u32);
+#[column] pub struct Address(pub String);
+#[column] pub struct Datum(pub String);
+#[column] pub struct Index(pub u32);
 
 #[entity]
 struct MinimalStruct {
@@ -40,7 +40,7 @@ struct StructWithPersistedEntityField {
 struct StructWithPersistedEntityFieldWithDict {
     #[pk]
     id: ParentPK,
-    #[column(index, dictionary)]
+    #[column(dictionary)]
     persisted_indexed_with_dict: Index,
 }
 
@@ -52,7 +52,7 @@ pub struct FullStruct {
     pub amount: u32,
     #[column(index)]
     pub datum: Datum,
-    #[column(index, dictionary)]
+    #[column(dictionary)]
     pub address: Address,
 }
 

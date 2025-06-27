@@ -2,7 +2,20 @@ use proc_macro2::{Ident, TokenStream};
 use std::env;
 use std::fs::OpenOptions;
 use std::io::Write;
-use syn::Type;
+use syn::{Attribute, Type};
+
+pub fn extract_derives(attr: &Attribute) -> syn::Result<Vec<syn::Path>> {
+    let mut derives = Vec::new();
+    attr.parse_nested_meta(|meta| {
+        if let Some(ident) = meta.path.get_ident() {
+            derives.push(syn::Path::from(ident.clone()));
+            Ok(())
+        } else {
+            Err(meta.error("Expected identifier in derive"))
+        }
+    })?;
+    Ok(derives)
+}
 
 pub fn write_to_local_file(lines: Vec<String>, dir_name: &str, entity: &Ident) {
     let dir_path = env::current_dir().expect("current dir inaccessible").join("target").join(dir_name);
