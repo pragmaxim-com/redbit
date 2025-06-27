@@ -50,9 +50,7 @@ impl EntityMacros {
 
     pub fn queries(&self) -> Vec<TokenStream> {
         let mut column_queries = Vec::new();
-        if let Some(query) = &self.pk.query {
-            column_queries.push(query.clone());
-        }
+        column_queries.push(self.pk.range_query.clone());
         for column in &self.columns {
             if let Some(query) = &column.query {
                 column_queries.push(query.clone());

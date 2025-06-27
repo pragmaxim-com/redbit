@@ -10,7 +10,7 @@ use redbit::*;
 
 #[entity]
 struct MinimalStruct {
-    #[fk(one2many, range)]
+    #[fk(one2many)]
     pub id: ChildPK,
     #[column]
     pub persisted_no_index_no_dict: i32,
@@ -22,7 +22,7 @@ struct MinimalStruct {
 struct TransientAnnotationStruct {
     #[pk]
     id: ParentPK,
-    #[transient]
+    #[column(transient)]
     name: String
 }
 
@@ -58,7 +58,7 @@ pub struct FullStruct {
 
 #[entity]
 struct MultipleOne2ManyAnnotationsStruct {
-    #[pk(range)]
+    #[pk]
     id: ParentPK,
     foos: Vec<MinimalStruct>,
     bars: Vec<MinimalStruct>,

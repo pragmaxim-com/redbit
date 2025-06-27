@@ -34,7 +34,6 @@ pub struct FieldDef {
 pub struct PkDef {
     pub field: FieldDef,
     pub fk: Option<Multiplicity>,
-    pub range: bool,
 }
 
 #[derive(Clone)]
@@ -69,22 +68,11 @@ fn parse_entity_field(field: &syn::Field) -> Result<ParsingResult, syn::Error> {
             let column_type = field.ty.clone();
             for attr in &field.attrs {
                 if attr.path().is_ident("pk") {
-                    let mut range = false;
-                    let _ = attr.parse_nested_meta(|nested| {
-                        if nested.path.is_ident("range") {
-                            range = true;
-                        }
-                        Ok(())
-                    });
                     let field = FieldDef { name: column_name.clone(), tpe: column_type.clone() };
-                    return Ok(ParsingResult::Pk(PkDef { field, fk: None, range }));
+                    return Ok(ParsingResult::Pk(PkDef { field, fk: None }));
                 } else if attr.path().is_ident("fk") {
-                    let mut range = false;
                     let mut fk = None;
                     let _ = attr.parse_nested_meta(|nested| {
-                        if nested.path.is_ident("range") {
-                            range = true;
-                        }
                         if nested.path.is_ident("one2many") {
                             fk = Some(Multiplicity::OneToMany);
                         } else if nested.path.is_ident("one2one") {
@@ -98,7 +86,7 @@ fn parse_entity_field(field: &syn::Field) -> Result<ParsingResult, syn::Error> {
                         return Err(syn::Error::new(attr.span(), "Foreign key must specify either `one2many` or `one2one`"));
                     }
                     let field = FieldDef { name: column_name.clone(), tpe: column_type.clone() };
-                    return Ok(ParsingResult::Pk(PkDef { field, fk, range }));
+                    return Ok(ParsingResult::Pk(PkDef { field, fk }));
                 } else if attr.path().is_ident("column") {
                     let mut indexing = ColumnType::IndexingOff;
                     let _ = attr.parse_nested_meta(|nested| {

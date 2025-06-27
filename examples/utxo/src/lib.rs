@@ -23,7 +23,7 @@ pub struct Timestamp(pub u32);
 
 #[entity]
 pub struct Block {
-    #[pk(range)]
+    #[pk]
     pub id: Height,
     pub header: BlockHeader,
     pub transactions: Vec<Transaction>,
@@ -33,7 +33,7 @@ pub struct Block {
 
 #[entity]
 pub struct BlockHeader {
-    #[fk(one2one, range)]
+    #[fk(one2one)]
     pub id: Height,
     #[column(index)]
     pub hash: Hash,
@@ -47,7 +47,7 @@ pub struct BlockHeader {
 
 #[entity]
 pub struct Transaction {
-    #[fk(one2many, range)]
+    #[fk(one2many)]
     pub id: TxPointer,
     #[column(index)]
     pub hash: Hash,
@@ -57,7 +57,7 @@ pub struct Transaction {
 
 #[entity]
 pub struct Utxo {
-    #[fk(one2many, range)]
+    #[fk(one2many)]
     pub id: UtxoPointer,
     #[column]
     pub amount: u64,
@@ -71,7 +71,7 @@ pub struct Utxo {
 
 #[entity]
 pub struct Tree {
-    #[fk(one2opt, range)]
+    #[fk(one2opt)]
     pub id: UtxoPointer,
     #[column(index)]
     pub hash: Hash,
@@ -79,13 +79,13 @@ pub struct Tree {
 
 #[entity]
 pub struct InputRef {
-    #[fk(one2many, range)]
+    #[fk(one2many)]
     pub id: InputPointer,
 }
 
 #[entity]
 pub struct Asset {
-    #[fk(one2many, range)]
+    #[fk(one2many)]
     pub id: AssetPointer,
     #[column]
     pub amount: u64,
