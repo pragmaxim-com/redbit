@@ -264,12 +264,12 @@ impl DbColumnMacros {
             },
         };
 
-        let display_code = match kind {
+        let url_encoded_code = match kind {
             InnerKind::ByteArray(_) | InnerKind::VecU8 => quote! {
-                write!(f, "{}", hex::encode(&self.0))
+                format!("{}", hex::encode(&self.0))
             },
             _ => quote! {
-                write!(f, "{}", self.0)
+                format!("{}", self.0)
             },
         };
 
@@ -328,7 +328,7 @@ impl DbColumnMacros {
         let (schema_type, schema_example) = match kind {
             InnerKind::ByteArray(_) | InnerKind::VecU8 => (
                 quote! { SchemaType::Type(Type::String) },
-                quote! { vec![Some(serde_json::json!(#struct_ident::default().to_string()))] },
+                quote! { vec![Some(serde_json::json!(hex::encode(#struct_ident::default().0)))] },
             ),
             InnerKind::String => (
                 quote! { SchemaType::Type(Type::String) },
@@ -340,7 +340,7 @@ impl DbColumnMacros {
             ),
             _ => (
                 quote! { SchemaType::Type(Type::String) },
-                quote! { vec![Some(serde_json::json!(#struct_ident::default().to_string()))] },
+                quote! { vec![Some(serde_json::json!(#struct_ident::default().0))] },
             ),
         };
 
@@ -360,9 +360,9 @@ impl DbColumnMacros {
                 }
             }
 
-            impl std::fmt::Display for #struct_ident {
-                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    #display_code
+            impl UrlEncoded for #struct_ident {
+                fn encode(&self) -> String {
+                    #url_encoded_code
                 }
             }
 

@@ -84,6 +84,9 @@ pub trait IterableColumn: Sized {
     fn next(&self) -> Self;
 }
 
+pub trait UrlEncoded {
+    fn encode(&self) -> String;
+}
 
 #[derive(Debug)]
 pub enum AppError {

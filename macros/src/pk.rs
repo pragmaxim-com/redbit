@@ -173,7 +173,7 @@ impl DbPkMacros {
                 fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
                 where S: serde::Serializer {
                     if serializer.is_human_readable() {
-                        serializer.serialize_str(&self.to_string())
+                        self.0.serialize(serializer)
                     } else {
                         #[derive(serde::Serialize)]
                         struct Helper(#index_type);
@@ -186,9 +186,7 @@ impl DbPkMacros {
                 fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
                 where D: serde::Deserializer<'de> {
                     if deserializer.is_human_readable() {
-                        let s = String::deserialize(deserializer)?;
-                        // parse single int
-                        let idx = s.parse::<#index_type>().map_err(serde::de::Error::custom)?;
+                        let idx = #index_type::deserialize(deserializer)?;
                         Ok(#struct_name(idx))
                     } else {
                         #[derive(serde::Deserialize)]
@@ -199,13 +197,12 @@ impl DbPkMacros {
                 }
             }
 
-            // HTTP path support
-            impl std::fmt::Display for #struct_name {
-                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    write!(f, "{}", self.0)
+            impl UrlEncoded for #struct_name {
+                fn encode(&self) -> String {
+                    format!("{}", self.0)
                 }
             }
-            
+
             impl std::str::FromStr for #struct_name {
                 type Err = ParsePointerError;
                 fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -220,8 +217,8 @@ impl DbPkMacros {
                     use redbit::utoipa::openapi::schema::*;
                     Schema::Object(
                         ObjectBuilder::new()
-                            .schema_type(SchemaType::Type(Type::String))
-                            .examples(vec!["0"])
+                            .schema_type(SchemaType::Type(Type::Integer))
+                            .examples(vec![0])
                             .build()
                     ).into()
                 }
@@ -262,7 +259,7 @@ impl DbPkMacros {
                 fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
                 where S: serde::Serializer {
                     if serializer.is_human_readable() {
-                        serializer.serialize_str(&self.to_string())
+                        serializer.serialize_str(UrlEncoded::encode(self).as_str())
                     } else {
                         #[derive(serde::Serialize)]
                         struct Helper {
@@ -298,12 +295,12 @@ impl DbPkMacros {
                 }
             }
 
-            // HTTP path support
-            impl std::fmt::Display for #struct_name {
-                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    write!(f, "{}-{}", self.#parent_name, self.#index_name)
+            impl UrlEncoded for #struct_name {
+                fn encode(&self) -> String {
+                    format!("{}-{}", self.#parent_name.encode(), self.#index_name)
                 }
             }
+
             impl std::str::FromStr for #struct_name {
                 type Err = ParsePointerError;
                 fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -319,7 +316,7 @@ impl DbPkMacros {
             impl redbit::utoipa::PartialSchema for #struct_name {
                 fn schema() -> redbit::utoipa::openapi::RefOr<redbit::utoipa::openapi::schema::Schema> {
                     use redbit::utoipa::openapi::schema::*;
-                    let example = format!("{}-{}", #parent_type::default(), "0");
+                    let example = format!("{}-{}", #parent_type::default().encode(), "0");
                     Schema::Object(
                         ObjectBuilder::new()
                             .schema_type(SchemaType::Type(Type::String))

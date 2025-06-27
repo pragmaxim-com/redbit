@@ -152,7 +152,7 @@ impl EndpointDef {
                 let placeholder = format!("{{{}}}", name);
                 if fmt_string.contains(&placeholder) {
                     fmt_string = fmt_string.replace(&placeholder, "{}");
-                    fmt_args.push(quote! { <#ty as Default>::default() });
+                    fmt_args.push(quote! { <#ty as Default>::default().encode() });
                 }
             }
 
