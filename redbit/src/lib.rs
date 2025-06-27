@@ -80,7 +80,7 @@ where
     }
 }
 
-pub trait RangeColumn: Sized {
+pub trait IterableColumn: Sized {
     fn next(&self) -> Self;
 }
 

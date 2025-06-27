@@ -318,7 +318,7 @@ impl DbColumnMacros {
                 Self(arr)
             },
             InnerKind::Other => quote! {
-                compile_error!("RangeColumn not supported for this inner type");
+                compile_error!("IterableColumn not supported for this inner type");
             },
         };
 
@@ -369,7 +369,7 @@ impl DbColumnMacros {
                 }
             }
 
-            impl RangeColumn for #struct_ident {
+            impl IterableColumn for #struct_ident {
                 fn next(&self) -> Self {
                     #range_code
                 }
