@@ -53,30 +53,40 @@ Let's say we want to persist and query blockchain data using Redbit, declare ann
     #[pointer_key(u16)] pub struct InputPointer(TxPointer);
     #[pointer_key(u8)] pub struct AssetPointer(UtxoPointer);
     
-    #[index] pub struct Hash(pub String);
-    #[index] pub struct Address(pub String);
-    #[index] pub struct Datum(pub String);
-    #[index] pub struct PolicyId(pub String);
-    #[index] pub struct AssetName(pub String);
+    #[column] pub struct Hash(pub String);
+    #[column] pub struct Address(pub [u8; 32]);
+    #[column] pub struct PolicyId(pub String);
+    #[column] pub struct Datum(pub Vec<u8>);
+    #[column] pub struct AssetName(pub String);
+    
+    #[column]
+    pub struct TempInputRef {
+        tx_hash: Hash,
+        index: u32,
+    }
+    
+    #[column]
+    #[derive(Copy, Hash)]
+    pub struct Timestamp(pub u32);
     
     #[entity]
     pub struct Block {
-        #[pk(range)]
+        #[pk]
         pub id: Height,
-        #[one2one]
         pub header: BlockHeader,
-        #[one2many]
         pub transactions: Vec<Transaction>,
+        #[column(transient)]
+        pub weight: u32,
     }
     
     #[entity]
     pub struct BlockHeader {
-        #[fk(one2one, range)]
+        #[fk(one2one)]
         pub id: Height,
         #[column(index)]
         pub hash: Hash,
-        #[column(index, range)]
-        pub timestamp: u32,
+        #[column(range)]
+        pub timestamp: Timestamp,
         #[column(index)]
         pub merkle_root: Hash,
         #[column]
@@ -85,45 +95,53 @@ Let's say we want to persist and query blockchain data using Redbit, declare ann
     
     #[entity]
     pub struct Transaction {
-        #[fk(one2many, range)]
+        #[fk(one2many)]
         pub id: TxPointer,
         #[column(index)]
         pub hash: Hash,
-        #[one2many]
         pub utxos: Vec<Utxo>,
-        #[one2many]
         pub inputs: Vec<InputRef>,
+        #[column(transient)]
+        pub transient_inputs: Vec<TempInputRef>,
     }
     
     #[entity]
     pub struct Utxo {
-        #[fk(one2many, range)]
+        #[fk(one2many)]
         pub id: UtxoPointer,
         #[column]
         pub amount: u64,
         #[column(index)]
         pub datum: Datum,
-        #[column(index, dictionary)]
+        #[column(dictionary)]
         pub address: Address,
-        #[one2many]
         pub assets: Vec<Asset>,
+        pub tree: Option<Tree>,
+    }
+    
+    #[entity]
+    pub struct Tree {
+        #[fk(one2opt)]
+        pub id: UtxoPointer,
+        #[column(index)]
+        pub hash: Hash,
     }
     
     #[entity]
     pub struct InputRef {
-        #[fk(one2many, range)]
+        #[fk(one2many)]
         pub id: InputPointer,
     }
     
     #[entity]
     pub struct Asset {
-        #[fk(one2many, range)]
+        #[fk(one2many)]
         pub id: AssetPointer,
         #[column]
         pub amount: u64,
-        #[column(index, dictionary)]
+        #[column(dictionary)]
         pub name: AssetName,
-        #[column(index, dictionary)]
+        #[column(dictionary)]
         pub policy_id: PolicyId,
     }
 ```
@@ -183,8 +201,9 @@ And R/W entire instances efficiently using indexes and dictionaries `examples/ut
         Transaction::range(&read_tx, &first_transaction.id, &last_transaction.id)?;
         Transaction::get_utxos(&read_tx, &first_transaction.id)?;
         Transaction::get_inputs(&read_tx, &first_transaction.id)?;
-        Transaction::parent_pk(&read_tx, &first_transaction.id)?;
-    
+        Transaction::parent_key(&read_tx, &first_transaction.id)?;
+        Transaction::get_ids_by_hash(&read_tx, &first_transaction.hash)?;
+        
         println!("Querying utxos:");
         let first_utxo = Utxo::first(&read_tx)?.unwrap();
         let last_utxo = Utxo::last(&read_tx)?.unwrap();
@@ -195,7 +214,9 @@ And R/W entire instances efficiently using indexes and dictionaries `examples/ut
         Utxo::get_by_datum(&read_tx, &first_utxo.datum)?;
         Utxo::range(&read_tx, &first_utxo.id, &last_utxo.id)?;
         Utxo::get_assets(&read_tx, &first_utxo.id)?;
-        Utxo::parent_pk(&read_tx, &first_utxo.id)?;
+        Utxo::parent_key(&read_tx, &first_utxo.id)?;
+        Utxo::get_tree(&read_tx, &first_utxo.id)?;
+        Utxo::get_ids_by_address(&read_tx, &first_utxo.address)?;
     
         println!("Querying input refs:");
         let first_input_ref = InputRef::first(&read_tx)?.unwrap();
@@ -205,7 +226,7 @@ And R/W entire instances efficiently using indexes and dictionaries `examples/ut
         InputRef::exists(&read_tx, &first_input_ref.id)?;
         InputRef::get(&read_tx, &first_input_ref.id)?;
         InputRef::range(&read_tx, &first_input_ref.id, &last_input_ref.id)?;
-        InputRef::parent_pk(&read_tx, &first_input_ref.id)?;
+        InputRef::parent_key(&read_tx, &first_input_ref.id)?;
     
     
         println!("Querying assets:");
@@ -217,7 +238,8 @@ And R/W entire instances efficiently using indexes and dictionaries `examples/ut
         Asset::get_by_name(&read_tx, &first_asset.name)?;
         Asset::get_by_policy_id(&read_tx, &first_asset.policy_id)?;
         Asset::range(&read_tx, &first_asset.id, &last_asset.id)?;
-        Asset::parent_pk(&read_tx, &first_asset.id)?;
+        Asset::parent_key(&read_tx, &first_asset.id)?;
+        Asset::get_ids_by_policy_id(&read_tx, &first_asset.policy_id)?;
     
         println!("Deleting blocks:");
         for block in blocks.iter() {
@@ -246,33 +268,33 @@ the operations reads :
 ```
 function                                           ops/s
 -------------------------------------------------------------
-Block__all                                          1970
-Transaction__all                                    2035
-Transaction__get_by_hash                            2052
-Utxo__all                                           2091
-Utxo__get_by_datum                                  2095
-Utxo__get_by_address                                2107
-Utxo__range                                         2186
-Transaction__range                                  2301
-Asset__all                                          2820
-Asset__range                                        2858
-Asset__get_by_name                                  2869
-Asset__get_by_policy_id                             2876
-Block__range                                        2972
-Block__get                                          5930
-Block__get_transactions                             6002
-Transaction__get                                   18514
-Transaction__get_utxos                             19471
-Utxo__get                                          57419
-Utxo__get_assets                                   74826
-BlockHeader__get_by_merkle_root                   100101
-BlockHeader__all                                  101386
-BlockHeader__get_by_hash                          102755
-BlockHeader__get_by_timestamp                     103433
-BlockHeader__range                                142292
-Asset__get                                        210834
-Block__get_header                                 280401
-BlockHeader__get                                  281610
-BlockHeader__range_by_timestamp                  1358690
+Block__all                                          1735
+Transaction__all                                    1782
+Utxo__all                                           1795
+Utxo__range                                         1858
+Transaction__range                                  2006
+Block__range                                        2593
+Asset__all                                          2744
+Asset__range                                        2776
+Block__get                                          5147
+Transaction__get_by_hash                            5312
+Block__get_transactions                             5358
+Utxo__get_by_datum                                  5358
+Utxo__get_by_address                                5480
+Asset__get_by_name                                  8522
+Asset__get_by_policy_id                             8556
+Transaction__get                                   16061
+Transaction__get_utxos                             16893
+Utxo__get                                          50744
+Utxo__get_assets                                   73315
+BlockHeader__all                                   99076
+BlockHeader__range_by_timestamp                   137498
+BlockHeader__range                                142409
+Asset__get                                        205802
+BlockHeader__get_by_merkle_root                   251986
+BlockHeader__get_by_hash                          258829
+BlockHeader__get_by_timestamp                     268039
+BlockHeader__get                                  273539
+Block__get_header                                 274593
 ```
 <!-- END_BENCH -->
