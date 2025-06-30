@@ -1,18 +1,29 @@
-use crate::{Hash, Transaction};
+use axum::response::IntoResponse;
+use axum_streams::StreamBodyAs;
+use futures::Stream;
 use redbit::utoipa;
-use redbit::{AppError, AppJson, RequestState};
+use std::time::Duration;
+use tokio_stream::StreamExt;
 
+use serde::Serialize;
+use utoipa::ToSchema;
+
+#[derive(Serialize, ToSchema)]
+pub struct NumberChunk {
+    pub value: u64,
+}
 #[utoipa::path(
     get,
-    path = "/foo_txs/{hash}",
-    params(("hash" = Hash, Path, description = "Secondary index column")),
-    responses((status = OK, body = Vec<Transaction>)),
-    tag = "Transaction"
+    path = "/events",
+    responses(
+        (status = 200, description = "SSE stream of heartbeat events", content_type = "text/event-stream",
+         body = NumberChunk)
+    )
 )]
-#[axum::debug_handler]
-pub async fn foo_txs(
-    axum::extract::State(_state): axum::extract::State<RequestState>,
-    axum::extract::Path(_hash): axum::extract::Path<Hash>,
-) -> Result<AppJson<Vec<Transaction>>, AppError> {
-    Ok(AppJson(vec![]))
+pub async fn test_json_nl_stream() -> impl IntoResponse {
+    StreamBodyAs::json_nl(number_stream(Duration::from_secs(1)))
+}
+
+fn number_stream(duration: Duration) -> impl Stream<Item = NumberChunk> {
+    futures::stream::iter(0u64..).throttle(duration).map(|n| NumberChunk { value: n })
 }

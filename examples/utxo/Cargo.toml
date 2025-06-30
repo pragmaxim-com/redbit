@@ -19,3 +19,6 @@ redbit = { path = "../../redbit" }
 axum = {  version = "0.8.4", features = ["default", "macros"] }
 serde = { version = "1.0.219", features = ["derive"] }
 tokio = { version = "1.45.1", features = ["full"] }
+tokio-stream = "0.1.17"
+axum-streams = { version = "0.21", features=["json"] }
+futures = "0.3.31"
