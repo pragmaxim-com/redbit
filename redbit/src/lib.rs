@@ -279,10 +279,13 @@ impl LimitQuery {
     }
 }
 
-pub async fn build_router(state: RequestState) -> Router<()> {
+pub async fn build_router(state: RequestState, extras: Option<OpenApiRouter<RequestState>>) -> Router<()> {
     let mut router: OpenApiRouter<RequestState> = OpenApiRouter::with_openapi(ApiDoc::openapi());
     for info in inventory::iter::<EntityInfo> {
         router = router.merge((info.routes_fn)());
+    }
+    if let Some(extra) = extras {
+        router = router.merge(extra);
     }
     let (r, api) = router.split_for_parts();
 
@@ -290,8 +293,8 @@ pub async fn build_router(state: RequestState) -> Router<()> {
         .with_state(state)
 }
 
-pub async fn serve(state: RequestState, socket_addr: SocketAddr) -> () {
-    let router: Router<()> = build_router(state).await;
+pub async fn serve(state: RequestState, socket_addr: SocketAddr, extras: Option<OpenApiRouter<RequestState>>) -> () {
+    let router: Router<()> = build_router(state, extras).await;
     println!("Starting server on {}", socket_addr);
     let tcp = TcpListener::bind(socket_addr).await.unwrap();
     crate::axum::serve(tcp, router).await.unwrap();

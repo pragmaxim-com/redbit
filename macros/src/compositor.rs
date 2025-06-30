@@ -127,7 +127,7 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
             #[tokio::test]
             async fn test_entity_rest_api() {
                 let db = init_temp_db("rest-api");
-                let router = build_router(RequestState { db: std::sync::Arc::clone(&db) }).await;
+                let router = build_router(RequestState { db: std::sync::Arc::clone(&db) }, None).await;
                 let server = axum_test::TestServer::new(router).unwrap();
                 #(#route_tests)*
             }

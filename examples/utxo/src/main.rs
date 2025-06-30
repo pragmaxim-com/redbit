@@ -1,6 +1,7 @@
 use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use redbit::utoipa_axum::router::OpenApiRouter;
 use utxo::*;
 
 #[tokio::main]
@@ -12,5 +13,10 @@ async fn main() {
                 .expect("Failed to create database")
         );
     demo::run(Arc::clone(&db)).expect("Db demo failed");
-    serve(RequestState { db: Arc::clone(&db) }, SocketAddr::from(([127,0,0,1], 8000))).await
+    let extra_routes = 
+        OpenApiRouter::new()
+            .routes(utoipa_axum::routes!(routes::foo_txs));
+    let state = RequestState { db: Arc::clone(&db) };
+    let addr = SocketAddr::from(([127,0,0,1], 8000));
+    serve(state, addr, Some(extra_routes)).await
 }

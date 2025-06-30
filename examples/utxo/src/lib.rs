@@ -1,5 +1,6 @@
 pub mod data;
 pub mod demo;
+pub mod routes;
 
 pub use data::*;
 pub use redbit::*;
