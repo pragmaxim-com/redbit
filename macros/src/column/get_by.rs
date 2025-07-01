@@ -1,8 +1,9 @@
 use crate::rest::HttpParams::FromPath;
-use crate::rest::{EndpointDef, FunctionDef, GetParam, HttpMethod};
+use crate::rest::{FunctionDef, GetParam, HttpMethod};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
+use crate::endpoint::EndpointDef;
 
 pub fn get_by_dict_def(
     entity_name: &Ident,
@@ -59,11 +60,11 @@ pub fn get_by_dict_def(
         fn_stream,
         fn_call: quote! { #entity_name::#fn_name(&tx, &#column_name) },
         endpoint_def: Some(EndpointDef {
-            params: FromPath(vec![GetParam {
+            params: vec![FromPath(vec![GetParam {
                 name: column_name.clone(),
                 ty: column_type.clone(),
                 description: "Secondary index column with dictionary".to_string(),
-            }]),
+            }])],
             method: HttpMethod::GET,
             return_type: Some(syn::parse_quote!(Vec<#entity_type>)),
             endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), column_name, column_name),
@@ -114,11 +115,11 @@ pub fn get_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &I
         fn_stream,
         fn_call: quote! { #entity_name::#fn_name(&tx, &#column_name) },
         endpoint_def: Some(EndpointDef {
-            params: FromPath(vec![GetParam {
+            params: vec![FromPath(vec![GetParam {
                 name: column_name.clone(),
                 ty: column_type.clone(),
                 description: "Secondary index column".to_string(),
-            }]),
+            }])],
             method: HttpMethod::GET,
             return_type: Some(syn::parse_quote!(Vec<#entity_type>)),
             endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), column_name, column_name),

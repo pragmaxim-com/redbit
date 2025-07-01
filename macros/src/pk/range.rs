@@ -1,8 +1,9 @@
 use crate::rest::HttpParams::FromQuery;
-use crate::rest::{EndpointDef, FunctionDef, HttpMethod};
+use crate::rest::{FunctionDef, HttpMethod};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
+use crate::endpoint::EndpointDef;
 
 pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type: &Type, table: &Ident, column_query: &Ident) -> FunctionDef {
     let fn_name = format_ident!("range");
@@ -39,7 +40,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
         fn_stream,
         fn_call: quote! { #entity_name::#fn_name(&tx, &query.from, &query.until) },
         endpoint_def: Some(EndpointDef {
-            params: FromQuery(syn::parse_quote!(#column_query)),
+            params: vec![FromQuery(syn::parse_quote!(#column_query))],
             method: HttpMethod::GET,
             return_type: Some(syn::parse_quote!(Vec<#entity_type>)),
             endpoint: format!("/{}/{}", entity_name.to_string().to_lowercase(), pk_name.clone()),

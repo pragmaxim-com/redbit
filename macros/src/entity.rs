@@ -1,13 +1,14 @@
 use crate::column::DbColumnMacros;
 use crate::field_parser::*;
 use crate::rest::HttpParams::{FromBody, FromPath};
-use crate::rest::{EndpointDef, FunctionDef, GetParam, HttpMethod, PostParam};
+use crate::rest::{FunctionDef, GetParam, HttpMethod, PostParam};
 use crate::pk::DbPkMacros;
 use crate::relationship::DbRelationshipMacros;
 use crate::table::TableDef;
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use syn::Type;
+use crate::endpoint::EndpointDef;
 use crate::field_parser::ColumnType::Transient;
 use crate::transient::TransientMacros;
 
@@ -126,11 +127,11 @@ impl EntityMacros {
             fn_stream,
             fn_call: quote! { #entity_name::#fn_name(&db, &body) },
             endpoint_def: Some(EndpointDef {
-                params: FromBody(PostParam {
+                params: vec![FromBody(PostParam {
                     name: format_ident!("body"),
                     ty: entity_type.clone(),
                     content_type: "application/json".to_string(),
-                }),
+                })],
                 method: HttpMethod::POST,
                 return_type: Some(pk_type.clone()),
                 endpoint: format!("/{}", entity_name.to_string().to_lowercase()),
@@ -182,7 +183,7 @@ impl EntityMacros {
             fn_stream,
             fn_call: quote! { #entity_name::#fn_name(&db, &#pk_name) },
             endpoint_def: Some(EndpointDef {
-                params: FromPath(vec![GetParam { name: pk_name.clone(), ty: pk_type.clone(), description: "Primary key".to_string() }]),
+                params: vec![FromPath(vec![GetParam { name: pk_name.clone(), ty: pk_type.clone(), description: "Primary key".to_string() }])],
                 method: HttpMethod::DELETE,
                 return_type: None,
                 endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), pk_name, pk_name),

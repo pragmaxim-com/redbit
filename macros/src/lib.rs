@@ -9,6 +9,7 @@ mod field_parser;
 mod compositor;
 mod table;
 mod transient;
+mod endpoint;
 
 use crate::entity::EntityMacros;
 use crate::pk::{DbPkMacros, PointerType};
