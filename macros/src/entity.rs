@@ -122,14 +122,18 @@ impl EntityMacros {
         FunctionDef {
             entity_name: entity_name.clone(),
             fn_name: fn_name.clone(),
-            fn_return_type: syn::parse_quote!(#pk_type),
-            is_sse: false,
             fn_stream,
-            fn_call: quote! { #entity_name::#fn_name(&db, &body) },
             endpoint_def: Some(EndpointDef {
                 params: vec![FromBody(entity_type.clone())],
                 method: HttpMethod::POST,
-                return_type: Some(pk_type.clone()),
+                handler_impl_stream: quote! {
+                    Result<AppJson<#pk_type>, AppError> {
+                        let db = state.db;
+                        let result = #entity_name::#fn_name(&db, &body)?;
+                        Ok(AppJson(result))
+                    }
+                },
+                utoipa_responses: quote! { responses((status = OK, body = #pk_type)) },
                 endpoint: format!("/{}", entity_name.to_string().to_lowercase()),
             }),
             test_stream: Some(quote! {
@@ -174,14 +178,18 @@ impl EntityMacros {
         FunctionDef {
             entity_name: entity_name.clone(),
             fn_name: fn_name.clone(),
-            fn_return_type: syn::parse_quote!(()),
-            is_sse: false,
             fn_stream,
-            fn_call: quote! { #entity_name::#fn_name(&db, &#pk_name) },
             endpoint_def: Some(EndpointDef {
                 params: vec![FromPath(vec![GetParam { name: pk_name.clone(), ty: pk_type.clone(), description: "Primary key".to_string() }])],
                 method: HttpMethod::DELETE,
-                return_type: None,
+                utoipa_responses: quote! { responses((status = OK)) },
+                handler_impl_stream: quote! {
+                    Result<AppJson<()>, AppError> {
+                        let db = state.db;
+                        let result = #entity_name::#fn_name(&db, &#pk_name)?;
+                        Ok(AppJson(result))
+                    }
+                },
                 endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), pk_name, pk_name),
             }),
             test_stream: Some(quote! {

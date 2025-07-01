@@ -1,14 +1,14 @@
 use proc_macro2::{Literal, TokenStream};
 use quote::quote;
-use syn::Type;
-use crate::rest::{GetParam, HttpMethod, HttpParams, PostParam};
+use crate::rest::{GetParam, HttpMethod, HttpParams};
 
 #[derive(Clone)]
 pub struct EndpointDef {
     pub params: Vec<HttpParams>,
     pub endpoint: String,
     pub method: HttpMethod,
-    pub return_type: Option<Type>,
+    pub handler_impl_stream: TokenStream,
+    pub utoipa_responses: TokenStream,
 }
 
 impl EndpointDef {

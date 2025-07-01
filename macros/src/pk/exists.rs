@@ -30,14 +30,16 @@ pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, table: &Iden
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
-        fn_return_type: syn::parse_quote!(bool),
-        is_sse: false,
         fn_stream,
-        fn_call: quote! { #entity_name::#fn_name(&tx, &#pk_name) },
         endpoint_def: Some(EndpointDef {
             params: vec![FromPath(vec![GetParam { name: pk_name.clone(), ty: pk_type.clone(), description: "Primary key".to_string() }])],
             method: HttpMethod::HEAD,
-            return_type: None,
+            utoipa_responses: quote! { responses((status = OK)) },
+            handler_impl_stream: quote! {
+               Result<AppJson<bool>, AppError> {
+                    state.db.begin_read().map_err(AppError::from).and_then(|tx| #entity_name::#fn_name(&tx, &#pk_name)).map(AppJson)
+                }
+            },
             endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), pk_name, pk_name),
         }),
         test_stream

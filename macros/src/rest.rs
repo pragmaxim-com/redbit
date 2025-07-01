@@ -30,10 +30,7 @@ impl Display for HttpEndpointMacro {
 pub struct FunctionDef {
     pub entity_name: Ident,
     pub fn_name: Ident,
-    pub fn_return_type: Type,
     pub fn_stream: TokenStream,
-    pub is_sse: bool,
-    pub fn_call: TokenStream,
     pub endpoint_def: Option<EndpointDef>,
     pub test_stream: Option<TokenStream>,
 }
@@ -95,69 +92,20 @@ pub fn to_http_endpoints(defs: Vec<FunctionDef>) -> (Vec<TokenStream>, Vec<Token
 
 pub fn to_http_endpoint(fn_def: &FunctionDef, endpoint_def: &EndpointDef) -> HttpEndpointMacro {
     let handler_fn_name = format_ident!("{}_{}", fn_def.entity_name.to_string().to_lowercase(), fn_def.fn_name);
-    let fn_return_type = &fn_def.fn_return_type;
-    let fn_call = fn_def.fn_call.clone();
     let param_binding = endpoint_def.axum_bindings();
     let endpoint_name = fn_def.entity_name.to_string();
     let endpoint_path = endpoint_def.endpoint.clone();
+    let handler_impl_stream = endpoint_def.handler_impl_stream.clone();
     let method_ident = format_ident!("{}", endpoint_def.method.to_string());
-    let handler_method_def = match endpoint_def.method {
-        HttpMethod::HEAD | HttpMethod::GET if !fn_def.is_sse => quote! {
-            pub async fn #handler_fn_name(
-                extract::State(state): extract::State<RequestState>,
-                #param_binding
-            ) -> Result<AppJson<#fn_return_type>, AppError> {
-                state.db.begin_read()
-                    .map_err(AppError::from)
-                    .and_then(|tx| #fn_call)
-                    .map(AppJson)
-            }
-        },
-        HttpMethod::GET if fn_def.is_sse => quote! {
-            pub async fn #handler_fn_name(
-                extract::State(state): extract::State<RequestState>,
-                #param_binding
-            ) -> impl axum::response::IntoResponse {
-               match state.db.begin_read()
-                    .map_err(AppError::from)
-                    .and_then(|tx| #fn_call) {
-                        Ok(stream) => axum_streams::StreamBodyAs::json_nl_with_errors(stream).into_response(),
-                        Err(err)   => err.into_response(),
-                }
-            }
-        },
-        HttpMethod::POST | HttpMethod::DELETE if !fn_def.is_sse => quote! {
-            pub async fn #handler_fn_name(
-                extract::State(state): extract::State<RequestState>,
-                #param_binding
-            ) -> Result<AppJson<#fn_return_type>, AppError> {
-                let db = state.db;
-                let result = #fn_call?;
-                Ok(AppJson(result))
-            }
-        },
-        _ => quote! {
-            redbit::AppError::from(format!("Unsupported HTTP method: {}", endpoint_def.method)).to_compile_error().into();
-        },
-    };
-
-    let utoipa_response = match fn_def.is_sse {
-        true => {
-            let return_ty = endpoint_def.return_type.clone().expect("SSE endpoints must have a return type");
-            quote! { responses((status = OK, content_type = "text/event-stream", body = #return_ty)) }
-        }
-        false => match endpoint_def.return_type.clone() {
-            Some(return_ty) => quote! { responses((status = OK, body = #return_ty)) },
-            None => quote! { responses((status = OK)) },
-        },
-    };
-
-    let params = endpoint_def.utoipa_params();
-
+    let utoipa_responses = endpoint_def.utoipa_responses.clone();
+    let utoipa_params = endpoint_def.utoipa_params();
     let handler = quote! {
-        #[utoipa::path(#method_ident, path = #endpoint_path, #params, #utoipa_response, tag = #endpoint_name)]
+        #[utoipa::path(#method_ident, path = #endpoint_path, #utoipa_params, #utoipa_responses, tag = #endpoint_name)]
         #[axum::debug_handler]
-        #handler_method_def
+        pub async fn #handler_fn_name(
+            extract::State(state): extract::State<RequestState>,
+            #param_binding
+        ) -> #handler_impl_stream
     };
 
     HttpEndpointMacro { endpoint_def: endpoint_def.clone(), handler_fn_name, handler, test: endpoint_def.generate_test() }

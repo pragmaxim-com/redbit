@@ -55,10 +55,7 @@ pub fn get_by_dict_def(
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
-        fn_return_type: syn::parse_quote!(Vec<#entity_type>),
-        is_sse: false,
         fn_stream,
-        fn_call: quote! { #entity_name::#fn_name(&tx, &#column_name) },
         endpoint_def: Some(EndpointDef {
             params: vec![FromPath(vec![GetParam {
                 name: column_name.clone(),
@@ -66,7 +63,12 @@ pub fn get_by_dict_def(
                 description: "Secondary index column with dictionary".to_string(),
             }])],
             method: HttpMethod::GET,
-            return_type: Some(syn::parse_quote!(Vec<#entity_type>)),
+            handler_impl_stream: quote! {
+                Result<AppJson<Vec<#entity_type>>, AppError> {
+                    state.db.begin_read().map_err(AppError::from).and_then(|tx| #entity_name::#fn_name(&tx, &#column_name)).map(AppJson)
+                }
+            },
+            utoipa_responses: quote! { responses((status = OK, body = Vec<#entity_type>)) },
             endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), column_name, column_name),
         }),
         test_stream
@@ -110,10 +112,7 @@ pub fn get_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &I
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
-        fn_return_type: syn::parse_quote!(Vec<#entity_type>),
-        is_sse: false,
         fn_stream,
-        fn_call: quote! { #entity_name::#fn_name(&tx, &#column_name) },
         endpoint_def: Some(EndpointDef {
             params: vec![FromPath(vec![GetParam {
                 name: column_name.clone(),
@@ -121,7 +120,12 @@ pub fn get_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &I
                 description: "Secondary index column".to_string(),
             }])],
             method: HttpMethod::GET,
-            return_type: Some(syn::parse_quote!(Vec<#entity_type>)),
+            handler_impl_stream: quote! {
+                Result<AppJson<Vec<#entity_type>>, AppError> {
+                    state.db.begin_read().map_err(AppError::from).and_then(|tx| #entity_name::#fn_name(&tx, &#column_name)).map(AppJson)
+                }
+            },
+            utoipa_responses: quote! { responses((status = OK, body = Vec<#entity_type>)) },
             endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), column_name, column_name),
         }),
         test_stream

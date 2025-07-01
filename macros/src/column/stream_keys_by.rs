@@ -57,10 +57,7 @@ pub fn stream_keys_by_dict_def(
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
-        fn_return_type: syn::parse_quote!(impl futures::Stream<Item = Result<#pk_type, AppError>> + Send + 'static),
-        is_sse: true,
         fn_stream,
-        fn_call: quote! { #entity_name::#fn_name(&tx, &#column_name) },
         endpoint_def: Some(EndpointDef {
             params: vec![FromPath(vec![GetParam {
                 name: column_name.clone(),
@@ -68,7 +65,17 @@ pub fn stream_keys_by_dict_def(
                 description: "Secondary index column (dict)".to_string(),
             }])],
             method: HttpMethod::GET,
-            return_type: Some(syn::parse_quote!(#pk_type)),
+            handler_impl_stream: quote! {
+               impl IntoResponse {
+                   match state.db.begin_read()
+                        .map_err(AppError::from)
+                        .and_then(|tx| #entity_name::#fn_name(&tx, &#column_name)) {
+                            Ok(stream) => axum_streams::StreamBodyAs::json_nl_with_errors(stream).into_response(),
+                            Err(err)   => err.into_response(),
+                    }
+                }
+            },
+            utoipa_responses: quote! { responses((status = OK, content_type = "text/event-stream", body = #pk_type)) },
             endpoint: format!("/{}/{}/{{{}}}/{}",
                               entity_name.to_string().to_lowercase(), column_name, column_name, pk_name
             ),
@@ -113,10 +120,7 @@ pub fn stream_keys_by_index_def(
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
-        fn_return_type: syn::parse_quote!(impl futures::Stream<Item = Result<#pk_type, AppError>> + Send + 'static),
-        is_sse: true,
         fn_stream,
-        fn_call: quote! { #entity_name::#fn_name(&tx, &#column_name) },
         endpoint_def: Some(EndpointDef {
             params: vec![FromPath(vec![GetParam {
                 name: column_name.clone(),
@@ -124,7 +128,17 @@ pub fn stream_keys_by_index_def(
                 description: "Secondary index column".to_string(),
             }])],
             method: HttpMethod::GET,
-            return_type: Some(syn::parse_quote!(#pk_type)),
+            handler_impl_stream: quote! {
+               impl IntoResponse {
+                   match state.db.begin_read()
+                        .map_err(AppError::from)
+                        .and_then(|tx| #entity_name::#fn_name(&tx, &#column_name)) {
+                            Ok(stream) => axum_streams::StreamBodyAs::json_nl_with_errors(stream).into_response(),
+                            Err(err)   => err.into_response(),
+                    }
+                }
+            },
+            utoipa_responses: quote! { responses((status = OK, content_type = "text/event-stream", body = #pk_type)) },
             endpoint: format!("/{}/{}/{{{}}}/{}",
                               entity_name.to_string().to_lowercase(), column_name, column_name, pk_name
             ),
