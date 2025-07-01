@@ -17,7 +17,7 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
     let first_block = Block::first(&read_tx)?.unwrap();
     let last_block = Block::last(&read_tx)?.unwrap();
 
-    Block::take(&read_tx, 1000)?;
+    Block::take(&read_tx, 100)?;
     Block::get(&read_tx, &first_block.id)?;
     Block::range(&read_tx, &first_block.id, &last_block.id)?;
     Block::get_transactions(&read_tx, &first_block.id)?;
@@ -30,7 +30,7 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
     let first_block_header = BlockHeader::first(&read_tx)?.unwrap();
     let last_block_header = BlockHeader::last(&read_tx)?.unwrap();
 
-    BlockHeader::take(&read_tx, 1000)?;
+    BlockHeader::take(&read_tx, 100)?;
     BlockHeader::get(&read_tx, &first_block_header.id)?;
     BlockHeader::range(&read_tx, &first_block_header.id, &last_block_header.id)?;
     BlockHeader::range_by_timestamp(&read_tx, &first_block_header.timestamp, &last_block_header.timestamp)?;
@@ -42,7 +42,7 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
     let first_transaction = Transaction::first(&read_tx)?.unwrap();
     let last_transaction = Transaction::last(&read_tx)?.unwrap();
 
-    Transaction::take(&read_tx, 1000)?;
+    Transaction::take(&read_tx, 100)?;
     Transaction::get(&read_tx, &first_transaction.id)?;
     Transaction::get_by_hash(&read_tx, &first_transaction.hash)?;
     Transaction::range(&read_tx, &first_transaction.id, &last_transaction.id)?;
@@ -55,7 +55,7 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
     let first_utxo = Utxo::first(&read_tx)?.unwrap();
     let last_utxo = Utxo::last(&read_tx)?.unwrap();
 
-    Utxo::take(&read_tx, 1000)?;
+    Utxo::take(&read_tx, 100)?;
     Utxo::get(&read_tx, &first_utxo.id)?;
     Utxo::get_by_address(&read_tx, &first_utxo.address)?;
     Utxo::get_by_datum(&read_tx, &first_utxo.datum)?;
@@ -67,7 +67,7 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
     let last_input_ref = InputRef::last(&read_tx)?.unwrap();
     Utxo::stream_ids_by_address(&read_tx, &first_utxo.address)?.try_collect::<Vec<UtxoPointer>>().await?;
 
-    InputRef::take(&read_tx, 1000)?;
+    InputRef::take(&read_tx, 100)?;
     InputRef::exists(&read_tx, &first_input_ref.id)?;
     InputRef::get(&read_tx, &first_input_ref.id)?;
     InputRef::range(&read_tx, &first_input_ref.id, &last_input_ref.id)?;
@@ -77,7 +77,7 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
     let first_asset = Asset::first(&read_tx)?.unwrap();
     let last_asset = Asset::last(&read_tx)?.unwrap();
 
-    Asset::take(&read_tx, 1000)?;
+    Asset::take(&read_tx, 100)?;
     Asset::get(&read_tx, &first_asset.id)?;
     Asset::get_by_name(&read_tx, &first_asset.name)?;
     Asset::get_by_policy_id(&read_tx, &first_asset.policy_id)?;

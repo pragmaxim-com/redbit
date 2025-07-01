@@ -32,8 +32,8 @@ fn it_should_commit_multiple_blocks_in_a_single_tx() {
     blocks.iter().for_each(|block| Block::store(&write_tx, block).expect("Failed to persist blocks"));
     write_tx.commit().unwrap();
 
-    let multi_tx_blocks = Block::take(&multi_tx_db.begin_read().unwrap(), 1000).unwrap();
-    let single_tx_blocks = Block::take(&single_tx_db.begin_read().unwrap(), 1000).unwrap();
+    let multi_tx_blocks = Block::take(&multi_tx_db.begin_read().unwrap(), 100).unwrap();
+    let single_tx_blocks = Block::take(&single_tx_db.begin_read().unwrap(), 100).unwrap();
 
     assert_eq!(multi_tx_blocks.len(), single_tx_blocks.len());
 }
@@ -113,7 +113,7 @@ fn it_should_get_entities_by_range_on_index() {
     let from_timestamp = blocks[0].header.timestamp;
     let until_timestamp = blocks[2].header.timestamp;
     let expected_blocks: Vec<BlockHeader> = blocks.into_iter().map(|b|b.header).take(2).collect();
-    let unique_timestamps: HashSet<Timestamp> = BlockHeader::take(&read_tx, 1000).unwrap().iter().map(|h| h.timestamp).collect();
+    let unique_timestamps: HashSet<Timestamp> = BlockHeader::take(&read_tx, 100).unwrap().iter().map(|h| h.timestamp).collect();
     assert_eq!(unique_timestamps.len(), 3);
 
     let found_by_timestamp_range =
