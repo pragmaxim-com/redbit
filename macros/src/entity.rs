@@ -127,11 +127,7 @@ impl EntityMacros {
             fn_stream,
             fn_call: quote! { #entity_name::#fn_name(&db, &body) },
             endpoint_def: Some(EndpointDef {
-                params: vec![FromBody(PostParam {
-                    name: format_ident!("body"),
-                    ty: entity_type.clone(),
-                    content_type: "application/json".to_string(),
-                })],
+                params: vec![FromBody(entity_type.clone())],
                 method: HttpMethod::POST,
                 return_type: Some(pk_type.clone()),
                 endpoint: format!("/{}", entity_name.to_string().to_lowercase()),

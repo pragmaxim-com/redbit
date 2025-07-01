@@ -56,7 +56,7 @@ pub struct PostParam {
 pub enum HttpParams {
     FromPath(Vec<GetParam>),
     FromQuery(Type),
-    FromBody(PostParam),
+    FromBody(Type),
 }
 
 #[derive(Clone)]

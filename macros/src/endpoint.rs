@@ -57,8 +57,8 @@ impl EndpointDef {
                 HttpParams::FromQuery(ty) => {
                     query_param_type = Some(ty);
                 }
-                HttpParams::FromBody(param) => {
-                    body_param_type = Some(&param.ty);
+                HttpParams::FromBody(ty) => {
+                    body_param_type = Some(ty);
                 }
             }
         }
@@ -131,9 +131,9 @@ impl EndpointDef {
                         extract::Query(query): extract::Query<#ty>
                     });
                 }
-                HttpParams::FromBody(PostParam { name, ty, .. }) => {
+                HttpParams::FromBody(ty) => {
                     bindings.push(quote! {
-                        AppJson(#name): AppJson<#ty>
+                        AppJson(body): AppJson<#ty>
                     });
                 }
             }
@@ -163,8 +163,8 @@ impl EndpointDef {
                         #ty
                     });
                 }
-                HttpParams::FromBody(PostParam { ty, content_type, .. }) => {
-                    let ct = Literal::string(content_type);
+                HttpParams::FromBody(ty) => {
+                    let ct = Literal::string("application/json");
                     body_token = Some(quote! {
                         request_body(content = #ty, content_type = #ct)
                     });
