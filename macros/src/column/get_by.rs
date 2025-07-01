@@ -15,10 +15,7 @@ pub fn get_by_dict_def(
 ) -> FunctionDef {
     let fn_name = format_ident!("get_by_{}", column_name);
     let fn_stream = quote! {
-        pub fn #fn_name(
-            tx: &ReadTransaction,
-            val: &#column_type
-        ) -> Result<Vec<#entity_type>, AppError> {
+        pub fn #fn_name(tx: &ReadTransaction, val: &#column_type) -> Result<Vec<#entity_type>, AppError> {
             let val2birth = tx.open_table(#value_to_dict_pk)?;
             let birth_guard = val2birth.get(val)?;
             let birth_id = match birth_guard {
@@ -78,10 +75,7 @@ pub fn get_by_dict_def(
 pub fn get_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident, column_type: &Type, table: &Ident) -> FunctionDef {
     let fn_name = format_ident!("get_by_{}", column_name);
     let fn_stream = quote! {
-        pub fn #fn_name(
-            tx: &ReadTransaction,
-            val: &#column_type
-        ) -> Result<Vec<#entity_type>, AppError> {
+        pub fn #fn_name(tx: &ReadTransaction, val: &#column_type) -> Result<Vec<#entity_type>, AppError> {
             let mm_table = tx.open_multimap_table(#table)?;
             let mut iter = mm_table.get(val)?;
             let mut results = Vec::new();

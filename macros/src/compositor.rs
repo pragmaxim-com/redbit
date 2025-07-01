@@ -13,7 +13,9 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
     let struct_inits = entity_macros.struct_inits();
     let struct_default_inits = entity_macros.struct_default_inits();
     let function_defs: Vec<FunctionDef> = entity_macros.function_defs();
-    
+    let stream_query_field_defs: Vec<TokenStream> = entity_macros.stream_query_field_defs();
+    let stream_query_field_inits: Vec<TokenStream> = entity_macros.stream_query_field_inits();
+
     let store_statements = entity_macros.store_statements();
     let store_many_statements = entity_macros.store_many_statements();
     let delete_statements = entity_macros.delete_statements();
@@ -33,8 +35,22 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
     let pk_type = db_pk_macros.definition.field.tpe.clone();
     let entity_tests = format_ident!("{}_tests", entity_name.to_string().to_lowercase());
     let entity_literal = Literal::string(&entity_name.to_string());
+    let entity_streaming_query = format_ident!("{}StreamQuery", entity_name.to_string());
 
     let expanded = quote! {
+        // for filtering streaming queries
+        #[derive(IntoParams, Serialize, Deserialize, Default)]
+        pub struct #entity_streaming_query {
+            #(#stream_query_field_defs),*
+        }
+        impl #entity_streaming_query {
+            pub fn sample() -> Self {
+                Self {
+                    #(#stream_query_field_inits),*
+                }
+            }
+        }
+
         // table definitions are not in the impl object because they are accessed globally with semantic meaning
         #(#table_definition_streams)*
 

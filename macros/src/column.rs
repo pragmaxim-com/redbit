@@ -16,7 +16,7 @@ use crate::macro_utils::InnerKind;
 
 pub struct DbColumnMacros {
     pub definition: ColumnDef,
-    pub query: Option<TokenStream>,
+    pub range_query: Option<TokenStream>,
     pub table_definitions: Vec<TableDef>,
     pub struct_init: TokenStream,
     pub struct_default_init: TokenStream,
@@ -61,7 +61,7 @@ impl DbColumnMacros {
         let table_def = TableDef::plain_table_def(entity_name, column_name, column_type, pk_name, pk_type);
         DbColumnMacros {
             definition,
-            query: None,
+            range_query: None,
             table_definitions: vec![table_def.clone()],
             struct_init: init::plain_init(column_name, &table_def.name),
             struct_default_init: init::plain_default_init(column_name, column_type),
@@ -96,11 +96,12 @@ impl DbColumnMacros {
             column_type,
             &index_table_def.name,
         ));
-        let entity_column_range_query = format_ident!("{}{}Range", entity_name.to_string(), column_name.to_string());
-        let mut query = None;
+        let entity_column_range_query = format_ident!("{}{}RangeQuery", entity_name.to_string(), column_name.to_string());
+        let entity_column_range_query_ty = syn::parse_quote!(#entity_column_range_query);
+        let mut range_query = None;
 
         if range {
-            query = Some(quote! {
+            range_query = Some(quote! {
                 #[derive(IntoParams, Serialize, Deserialize, Default)]
                 pub struct #entity_column_range_query {
                     pub from: #column_type,
@@ -121,13 +122,13 @@ impl DbColumnMacros {
                 column_name,
                 column_type,
                 &index_table_def.name,
-                &entity_column_range_query,
+                entity_column_range_query_ty,
             ));
         };
 
         DbColumnMacros {
             definition,
-            query,
+            range_query,
             table_definitions: vec![plain_table_def.clone(), index_table_def.clone()],
             struct_init: init::index_init(column_name, &plain_table_def.name),
             struct_default_init: init::index_default_init(column_name, column_type),
@@ -155,7 +156,7 @@ impl DbColumnMacros {
 
         DbColumnMacros {
             definition,
-            query: None,
+            range_query: None,
             table_definitions: vec![
                 dict_index_table_def.clone(),
                 value_by_dict_pk_table_def.clone(),

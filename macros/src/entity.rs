@@ -1,16 +1,15 @@
 use crate::column::DbColumnMacros;
+use crate::endpoint::EndpointDef;
 use crate::field_parser::*;
-use crate::rest::HttpParams::{FromBody, FromPath};
-use crate::rest::{FunctionDef, GetParam, HttpMethod, PostParam};
 use crate::pk::DbPkMacros;
 use crate::relationship::DbRelationshipMacros;
+use crate::rest::HttpParams::{FromBody, FromPath};
+use crate::rest::{FunctionDef, GetParam, HttpMethod};
 use crate::table::TableDef;
+use crate::transient::TransientMacros;
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use syn::Type;
-use crate::endpoint::EndpointDef;
-use crate::field_parser::ColumnType::Transient;
-use crate::transient::TransientMacros;
 
 pub struct EntityMacros {
     pub entity_name: Ident,
@@ -26,7 +25,7 @@ impl EntityMacros {
         let FieldDefs { pk, columns, relationships } = field_defs;
         let column_macros = columns
             .iter()
-            .filter(|c|c.col_type != Transient)
+            .filter(|c|c.col_type != ColumnType::Transient)
             .map(|entity_column| DbColumnMacros::new(entity_column.clone(), entity_name, entity_type, &pk))
             .collect::<Result<Vec<DbColumnMacros>, syn::Error>>()?;
         let relationship_macros = relationships.into_iter().map(|rel| DbRelationshipMacros::new(rel, entity_name, &pk)).collect();
@@ -36,7 +35,7 @@ impl EntityMacros {
             pk: DbPkMacros::new(entity_name, entity_type, &pk),
             columns: column_macros,
             relationships: relationship_macros,
-            transients: TransientMacros::new(columns.into_iter().filter(|c|c.col_type == Transient).collect()),
+            transients: TransientMacros::new(columns.into_iter().filter(|c|c.col_type == ColumnType::Transient).collect()),
         })
     }
 
@@ -53,7 +52,7 @@ impl EntityMacros {
         let mut column_queries = Vec::new();
         column_queries.push(self.pk.range_query.clone());
         for column in &self.columns {
-            if let Some(query) = &column.query {
+            if let Some(query) = &column.range_query {
                 column_queries.push(query.clone());
             }
         }
@@ -86,6 +85,36 @@ impl EntityMacros {
             struct_default_inits.push(transient.struct_default_init.clone());
         }
         struct_default_inits
+    }
+
+    pub fn stream_query_field_defs(&self) -> Vec<TokenStream> {
+        let mut stream_query_field_defs = vec![];
+        for column in &self.columns {
+            let column_name = column.definition.field.name.clone();
+            let column_type = column.definition.field.tpe.clone();
+            match column.definition.col_type.clone() {
+                ColumnType::Transient => {},
+                ColumnType::IndexingOn { dictionary: _, range: _ } => stream_query_field_defs.push(quote! { pub #column_name: Option<#column_type> }),
+                ColumnType::IndexingOff => stream_query_field_defs.push(quote! { pub #column_name: Option<#column_type> }),
+            }
+        }
+        stream_query_field_defs
+    }
+
+    pub fn stream_query_field_inits(&self) -> Vec<TokenStream> {
+        let mut stream_query_field_defs = vec![];
+        for column in &self.columns {
+            let column_name = column.definition.field.name.clone();
+            let column_type = column.definition.field.tpe.clone();
+            match column.definition.col_type.clone() {
+                ColumnType::Transient => {},
+                ColumnType::IndexingOn { dictionary: _, range: _ } =>
+                    stream_query_field_defs.push(quote! { #column_name: Some(#column_type::default()) }),
+                ColumnType::IndexingOff =>
+                    stream_query_field_defs.push(quote! { #column_name: Some(#column_type::default()) }),
+            }
+        }
+        stream_query_field_defs
     }
 
     pub fn function_defs(&self) -> Vec<FunctionDef> {

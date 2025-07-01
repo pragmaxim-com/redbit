@@ -55,9 +55,10 @@ impl DbPkMacros {
             _ => {}
         };
 
-        let entity_range_query = format_ident!("{}Range", entity_name.to_string());
+        let entity_range_query = format_ident!("{}RangeQuery", entity_name.to_string());
+        let entity_range_query_ty = syn::parse_quote!(#entity_range_query);
 
-        function_defs.push(range::fn_def(entity_name, entity_type, &pk_name, &pk_type, &table_def.name, &entity_range_query));
+        function_defs.push(range::fn_def(entity_name, entity_type, &pk_name, &pk_type, &table_def.name, entity_range_query_ty));
         function_defs.push(pk_range::fn_def(entity_name, entity_type, &pk_name, &pk_type, &table_def.name));
         let range_query =
             quote! {

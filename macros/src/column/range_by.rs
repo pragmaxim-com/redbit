@@ -5,7 +5,7 @@ use quote::{format_ident, quote};
 use syn::Type;
 use crate::endpoint::EndpointDef;
 
-pub fn range_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident, column_type: &Type, table: &Ident, column_query: &Ident) -> FunctionDef {
+pub fn range_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident, column_type: &Type, table: &Ident, column_query: Type) -> FunctionDef {
     let fn_name = format_ident!("range_by_{}", column_name);
     let fn_stream = quote! {
         pub fn #fn_name(
@@ -47,7 +47,7 @@ pub fn range_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: 
         fn_name: fn_name.clone(),
         fn_stream,
         endpoint_def: Some(EndpointDef {
-            params: vec![FromQuery(syn::parse_quote!(#column_query))],
+            params: vec![FromQuery(column_query)],
             method: HttpMethod::GET,
             handler_impl_stream: quote! {
                 Result<AppJson<Vec<#entity_type>>, AppError> {

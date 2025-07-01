@@ -43,13 +43,6 @@ pub struct GetParam {
 }
 
 #[derive(Clone)]
-pub struct PostParam {
-    pub name: Ident,
-    pub ty: Type,
-    pub content_type: String,
-}
-
-#[derive(Clone)]
 pub enum HttpParams {
     FromPath(Vec<GetParam>),
     FromQuery(Type),
