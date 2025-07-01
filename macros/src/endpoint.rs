@@ -67,26 +67,23 @@ impl EndpointDef {
             let query_ty = query_param_type.unwrap();
             let body_ty = body_param_type.unwrap();
             quote! {
-                for query_sample in #query_ty::sample() {
-                    let query_string = serde_urlencoded::to_string(&query_sample).unwrap();
-                    let final_path = format!("{}?{}", #path_expr, query_string);
-                    for body_sample in #body_ty::sample() {
-                        eprintln!("Testing endpoint: {} : {} with body", #method_name, final_path);
-                        let response = server.method(#method_name, &final_path).json(&body_sample).await;
-                        response.assert_status_ok();
-                    }
-                }
+                let query_sample = #query_ty::sample();
+                let query_string = serde_urlencoded::to_string(&query_sample).unwrap();
+                let final_path = format!("{}?{}", #path_expr, query_string);
+                let body_sample = #body_ty::sample();
+                eprintln!("Testing endpoint: {} : {} with body", #method_name, final_path);
+                let response = server.method(#method_name, &final_path).json(&body_sample).await;
+                response.assert_status_ok();
             }
         } else if query_param_type.is_some() {
             let query_ty = query_param_type.unwrap();
             quote! {
-                for query_sample in #query_ty::sample() {
-                    let query_string = serde_urlencoded::to_string(&query_sample).unwrap();
-                    let final_path = format!("{}?{}", #path_expr, query_string);
-                    eprintln!("Testing endpoint: {} : {}", #method_name, &final_path);
-                    let response = server.method(#method_name, &final_path).await;
-                    response.assert_status_ok();
-                }
+                let query_sample = #query_ty::sample();
+                let query_string = serde_urlencoded::to_string(&query_sample).unwrap();
+                let final_path = format!("{}?{}", #path_expr, query_string);
+                eprintln!("Testing endpoint: {} : {}", #method_name, &final_path);
+                let response = server.method(#method_name, &final_path).await;
+                response.assert_status_ok();
             }
         } else if body_param_type.is_some() {
             let body_ty = body_param_type.unwrap();

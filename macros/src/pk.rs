@@ -67,8 +67,11 @@ impl DbPkMacros {
                     pub until: #pk_type,
                 }
                 impl #entity_range_query {
-                    pub fn sample() -> Vec<Self> {
-                        vec![Self { from: #pk_type::default(), until: #pk_type::default().next().next().next() }]
+                    pub fn sample() -> Self {
+                        Self {
+                            from: #pk_type::default(),
+                            until: #pk_type::default().next().next().next()
+                        }
                     }
                 }
             };

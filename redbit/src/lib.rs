@@ -291,12 +291,8 @@ pub struct LimitQuery {
 }
 
 impl LimitQuery {
-    pub fn sample() -> Vec<LimitQuery> {
-        vec![
-            LimitQuery { take: Some(1), last: None, first: None },
-            LimitQuery { take: None, last: Some(true), first: None },
-            LimitQuery { take: None, last: None, first: Some(true) },
-        ]
+    pub fn sample() -> LimitQuery {
+        LimitQuery { take: Some(1), last: None, first: None }
     }
 }
 

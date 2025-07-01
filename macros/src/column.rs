@@ -107,13 +107,11 @@ impl DbColumnMacros {
                     pub until: #column_type,
                 }
                 impl #entity_column_range_query {
-                    pub fn sample() -> Vec<Self> {
-                        vec![
-                            #entity_column_range_query {
-                                from: #column_type::default(),
-                                until: #column_type::default()
-                            }
-                        ]
+                    pub fn sample() -> Self {
+                        Self {
+                            from: #column_type::default(),
+                            until: #column_type::default().next().next().next()
+                        }
                     }
                 }
             });
