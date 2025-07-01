@@ -7,7 +7,7 @@ use syn::Type;
 pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type) -> FunctionDef {
     let fn_name = format_ident!("parent_key");
     let fn_stream = quote! {
-        pub fn #fn_name(tx: &::redbit::redb::ReadTransaction, pk: &#pk_type) -> Result<<#pk_type as ChildPointer>::Parent, AppError> {
+        pub fn #fn_name(tx: &ReadTransaction, pk: &#pk_type) -> Result<<#pk_type as ChildPointer>::Parent, AppError> {
             Ok(pk.parent().clone())
         }
     };

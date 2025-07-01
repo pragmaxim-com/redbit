@@ -8,7 +8,7 @@ pub fn limit_fn_def(entity_name: &Ident, entity_type: &Type) -> FunctionDef {
     let fn_name = format_ident!("limit");
     let fn_stream =
         quote! {
-            pub fn #fn_name(tx: &::redbit::redb::ReadTransaction, query: LimitQuery) -> Result<Vec<#entity_type>, AppError> {
+            pub fn #fn_name(tx: &ReadTransaction, query: LimitQuery) -> Result<Vec<#entity_type>, AppError> {
                 match query {
                     LimitQuery{take: Some(n), ..} => {
                         #entity_name::take(&tx, n)

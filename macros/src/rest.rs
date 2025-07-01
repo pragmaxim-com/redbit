@@ -64,16 +64,16 @@ impl HttpParams {
             HttpParams::FromPath(params) => match &params[..] {
                 [] => quote! {},
                 [GetParam { name, ty, description: _ }] => {
-                    quote! { axum::extract::Path(#name): axum::extract::Path<#ty> }
+                    quote! { extract::Path(#name): extract::Path<#ty> }
                 }
                 _ => {
                     let bindings: Vec<Ident> = params.iter().map(|p| p.name.clone()).collect();
                     let types: Vec<&Type> = params.iter().map(|p| &p.ty).collect();
-                    quote! { axum::extract::Path((#(#bindings),*)): axum::extract::Path<(#(#types),*)> }
+                    quote! { extract::Path((#(#bindings),*)): extract::Path<(#(#types),*)> }
                 }
             },
             HttpParams::FromQuery(ty) => {
-                quote! { axum::extract::Query(query): axum::extract::Query<#ty> }
+                quote! { extract::Query(query): extract::Query<#ty> }
             }
             HttpParams::FromBody(PostParam { name, ty, content_type: _ }) => {
                 quote! { AppJson(#name): AppJson<#ty> }
@@ -220,7 +220,7 @@ pub fn to_http_endpoints(defs: Vec<FunctionDef>) -> (Vec<TokenStream>, Vec<Token
         .iter()
         .map(|e| {
             let function_name = &e.handler_fn_name;
-            quote! { .merge(redbit::utoipa_axum::router::OpenApiRouter::new().routes(redbit::utoipa_axum::routes!(#function_name))) }
+            quote! { .merge(utoipa_axum::router::OpenApiRouter::new().routes(utoipa_axum::routes!(#function_name))) }
         })
         .collect();
     let endpoint_handlers: Vec<TokenStream> = endpoints.iter().map(|e| e.handler.clone()).collect();
@@ -239,7 +239,7 @@ pub fn to_http_endpoint(fn_def: &FunctionDef, endpoint_def: &EndpointDef) -> Htt
     let handler_method_def = match endpoint_def.method {
         HttpMethod::HEAD | HttpMethod::GET if !fn_def.is_sse => quote! {
             pub async fn #handler_fn_name(
-                axum::extract::State(state): axum::extract::State<RequestState>, 
+                extract::State(state): extract::State<RequestState>,
                 #param_binding
             ) -> Result<AppJson<#fn_return_type>, AppError> {
                 state.db.begin_read()
@@ -250,21 +250,20 @@ pub fn to_http_endpoint(fn_def: &FunctionDef, endpoint_def: &EndpointDef) -> Htt
         },
         HttpMethod::GET if fn_def.is_sse => quote! {
             pub async fn #handler_fn_name(
-                axum::extract::State(state): axum::extract::State<RequestState>,
+                extract::State(state): extract::State<RequestState>,
                 #param_binding
             ) -> impl axum::response::IntoResponse {
-               use axum::response::IntoResponse;
                match state.db.begin_read()
                     .map_err(AppError::from)
                     .and_then(|tx| #fn_call) {
-                        Ok(stream) => redbit::axum_streams::StreamBodyAs::json_nl_with_errors(stream).into_response(),
+                        Ok(stream) => axum_streams::StreamBodyAs::json_nl_with_errors(stream).into_response(),
                         Err(err)   => err.into_response(),
                 }
             }
         },
         HttpMethod::POST | HttpMethod::DELETE if !fn_def.is_sse => quote! {
             pub async fn #handler_fn_name(
-                axum::extract::State(state): axum::extract::State<RequestState>,
+                extract::State(state): extract::State<RequestState>,
                 #param_binding
             ) -> Result<AppJson<#fn_return_type>, AppError> {
                 let db = state.db;
@@ -291,7 +290,7 @@ pub fn to_http_endpoint(fn_def: &FunctionDef, endpoint_def: &EndpointDef) -> Htt
     let params = endpoint_def.params.utoipa_params();
 
     let handler = quote! {
-        #[redbit::utoipa::path(#method_ident, path = #endpoint_path, #params, #utoipa_response, tag = #endpoint_name)]
+        #[utoipa::path(#method_ident, path = #endpoint_path, #params, #utoipa_response, tag = #endpoint_name)]
         #[axum::debug_handler]
         #handler_method_def
     };

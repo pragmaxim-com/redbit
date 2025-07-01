@@ -8,7 +8,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
     let fn_name = format_ident!("get");
     let fn_stream =
         quote! {
-            pub fn #fn_name(tx: &::redbit::redb::ReadTransaction, pk: &#pk_type) -> Result<Option<#entity_type>, AppError> {
+            pub fn #fn_name(tx: &ReadTransaction, pk: &#pk_type) -> Result<Option<#entity_type>, AppError> {
                 let table_pk_5 = tx.open_table(#table)?;
                 if table_pk_5.get(pk)?.is_some() {
                     Ok(Some(Self::compose(&tx, pk)?))

@@ -18,12 +18,9 @@ pub fn stream_keys_by_dict_def(
 
     let fn_stream = quote! {
         pub fn #fn_name(
-            tx: &::redbit::redb::ReadTransaction,
+            tx: &ReadTransaction,
             val: &#column_type
-        ) -> Result<impl redbit::futures::Stream<Item = Result<#pk_type, AppError>> + Send + 'static, AppError> {
-            use redbit::futures::stream::{self, StreamExt};
-            use std::iter;
-
+        ) -> Result<impl futures::Stream<Item = Result<#pk_type, AppError>> + Send + 'static, AppError> {
             // Original dictionary lookup logic
             let val2birth = tx.open_table(#value_to_dict_pk)?;
             let birth_guard = val2birth.get(val)?;
@@ -35,7 +32,7 @@ pub fn stream_keys_by_dict_def(
                 let it = mm.get(&birth_id)?;
                 Box::new(it)
             } else {
-                Box::new(iter::empty())
+                Box::new(std::iter::empty())
             };
 
             // Stream the iterator, mapping errors
@@ -50,16 +47,16 @@ pub fn stream_keys_by_dict_def(
         {
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
-            let mut stream = #entity_name::#fn_name(&read_tx, &val).expect("Stream creation failed");
-            let first = futures::executor::block_on(async { futures::StreamExt::next(&mut stream).await }).expect("Expected one item");
-            assert_eq!(#pk_type::default(), first.expect("Error from stream"));
+            let pk_stream = #entity_name::#fn_name(&read_tx, &val).expect("Stream creation failed");
+            let pks = pk_stream.try_collect::<Vec<#pk_type>>().await.expect("Failed to collect stream");
+            assert_eq!(vec![#pk_type::default()], pks);
         }
     });
 
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
-        fn_return_type: syn::parse_quote!(impl redbit::futures::Stream<Item = Result<#pk_type, AppError>> + Send + 'static),
+        fn_return_type: syn::parse_quote!(impl futures::Stream<Item = Result<#pk_type, AppError>> + Send + 'static),
         is_sse: true,
         fn_stream,
         fn_call: quote! { #entity_name::#fn_name(&tx, &#column_name) },
@@ -92,18 +89,12 @@ pub fn stream_keys_by_index_def(
 
     let fn_stream = quote! {
         pub fn #fn_name(
-            tx: &::redbit::redb::ReadTransaction,
+            tx: &ReadTransaction,
             val: &#column_type
-        ) -> Result<impl redbit::futures::Stream<Item = Result<#pk_type, AppError>> + Send + 'static, AppError> {
-            use redbit::futures::stream::{self, StreamExt};
-            use std::iter;
-
+        ) -> Result<impl futures::Stream<Item = Result<#pk_type, AppError>> + Send + 'static, AppError> {
             let it = tx.open_multimap_table(#table)?.get(val)?;
             let iter_box: Box<dyn Iterator<Item = Result<_, _>> + Send> = Box::new(it);
-
-            let stream = stream::iter(iter_box)
-                .map(|res| res.map(|e| e.value().clone()).map_err(AppError::from));
-
+            let stream = stream::iter(iter_box).map(|res| res.map(|e| e.value().clone()).map_err(AppError::from));
             Ok(stream)
         }
     };
@@ -112,16 +103,16 @@ pub fn stream_keys_by_index_def(
         {
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
-            let mut stream = #entity_name::#fn_name(&read_tx, &val).expect("Stream creation failed");
-            let first = futures::executor::block_on(async { futures::StreamExt::next(&mut stream).await }).expect("Expected one item");
-            assert_eq!(#pk_type::default(), first.expect("Error from stream"));
+            let pk_stream = #entity_name::#fn_name(&read_tx, &val).expect("Stream creation failed");
+            let pks = pk_stream.try_collect::<Vec<#pk_type>>().await.expect("Failed to collect stream");
+            assert_eq!(vec![#pk_type::default()], pks);
         }
     });
 
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
-        fn_return_type: syn::parse_quote!(impl redbit::futures::Stream<Item = Result<#pk_type, AppError>> + Send + 'static),
+        fn_return_type: syn::parse_quote!(impl futures::Stream<Item = Result<#pk_type, AppError>> + Send + 'static),
         is_sse: true,
         fn_stream,
         fn_call: quote! { #entity_name::#fn_name(&tx, &#column_name) },

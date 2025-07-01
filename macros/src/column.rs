@@ -3,7 +3,7 @@ mod get_by;
 mod init;
 mod range_by;
 mod store;
-mod get_keys_by;
+mod stream_keys_by;
 
 use crate::field_parser::{ColumnDef, ColumnType, PkDef};
 use crate::macro_utils;
@@ -88,7 +88,7 @@ impl DbColumnMacros {
 
         let mut function_defs: Vec<FunctionDef> = Vec::new();
         function_defs.push(get_by::get_by_index_def(entity_name, entity_type, column_name, column_type, &index_table_def.name));
-        function_defs.push(get_keys_by::stream_keys_by_index_def(
+        function_defs.push(stream_keys_by::stream_keys_by_index_def(
             entity_name,
             pk_name,
             pk_type,
@@ -101,7 +101,7 @@ impl DbColumnMacros {
 
         if range {
             query = Some(quote! {
-                #[derive(utoipa::IntoParams, serde::Serialize, serde::Deserialize, Default)]
+                #[derive(IntoParams, Serialize, Deserialize, Default)]
                 pub struct #entity_column_range_query {
                     pub from: #column_type,
                     pub until: #column_type,
@@ -203,7 +203,7 @@ impl DbColumnMacros {
                     &value_to_dict_pk_table_def.name,
                     &dict_index_table_def.name,
                 ),
-                get_keys_by::stream_keys_by_dict_def(
+                stream_keys_by::stream_keys_by_dict_def(
                     entity_name,
                     pk_name,
                     pk_type,
@@ -346,16 +346,16 @@ impl DbColumnMacros {
 
         let expanded = quote! {
             #index_new_type
-            impl serde::Serialize for #struct_ident {
+            impl Serialize for #struct_ident {
                 fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-                where S: serde::Serializer {
+                where S: Serializer {
                     #serialization_code
                 }
             }
 
-            impl<'de> serde::Deserialize<'de> for #struct_ident {
+            impl<'de> Deserialize<'de> for #struct_ident {
                 fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-                where D: serde::Deserializer<'de> {
+                where D: Deserializer<'de> {
                     #deserialization_code
                 }
             }
@@ -378,9 +378,9 @@ impl DbColumnMacros {
                 }
             }
 
-            impl redbit::utoipa::PartialSchema for #struct_ident {
-                fn schema() -> redbit::utoipa::openapi::RefOr<redbit::utoipa::openapi::schema::Schema> {
-                    use redbit::utoipa::openapi::schema::*;
+            impl PartialSchema for #struct_ident {
+                fn schema() -> openapi::RefOr<openapi::schema::Schema> {
+                    use openapi::schema::*;
                     Schema::Object(
                         ObjectBuilder::new()
                             .schema_type(#schema_type)
@@ -390,11 +390,11 @@ impl DbColumnMacros {
                 }
             }
 
-            impl redbit::utoipa::ToSchema for #struct_ident {
-                fn schemas(schemas: &mut Vec<(String, redbit::utoipa::openapi::RefOr<redbit::utoipa::openapi::schema::Schema>)>) {
+            impl ToSchema for #struct_ident {
+                fn schemas(schemas: &mut Vec<(String, openapi::RefOr<openapi::schema::Schema>)>) {
                     schemas.push((
                         stringify!(#struct_ident).to_string(),
-                        <#struct_ident as redbit::utoipa::PartialSchema>::schema()
+                        <#struct_ident as PartialSchema>::schema()
                     ));
                 }
             }

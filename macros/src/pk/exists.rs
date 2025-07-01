@@ -8,7 +8,7 @@ pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, table: &Iden
     let fn_name = format_ident!("exists");
     let fn_stream =
         quote! {
-            pub fn #fn_name(tx: &::redbit::redb::ReadTransaction, pk: &#pk_type) -> Result<bool, AppError> {
+            pub fn #fn_name(tx: &ReadTransaction, pk: &#pk_type) -> Result<bool, AppError> {
                 let table_pk_11 = tx.open_table(#table)?;
                 if table_pk_11.get(pk)?.is_some() {
                     Ok(true)

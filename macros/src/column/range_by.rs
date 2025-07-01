@@ -8,7 +8,7 @@ pub fn range_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: 
     let fn_name = format_ident!("range_by_{}", column_name);
     let fn_stream = quote! {
         pub fn #fn_name(
-            tx: &::redbit::redb::ReadTransaction,
+            tx: &ReadTransaction,
             from: &#column_type,
             until: &#column_type
         ) -> Result<Vec<#entity_type>, AppError> {

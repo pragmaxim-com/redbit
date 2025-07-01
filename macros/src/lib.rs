@@ -34,7 +34,7 @@ pub fn column(_attr: TokenStream, item: TokenStream) -> TokenStream {
             DbColumnMacros::generate_column_impls(struct_ident, &input, &fields.unnamed[0].ty).into()
         },
         _ => {
-            macro_utils::merge_struct_derives(&mut input, syn::parse_quote![serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, utoipa::ToSchema]);
+            macro_utils::merge_struct_derives(&mut input, syn::parse_quote![Serialize, Deserialize, Debug, Clone, PartialEq, Eq, utoipa::ToSchema]);
             quote! {
                 #input
             }.into()
@@ -150,7 +150,7 @@ pub fn entity(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut s = parse_macro_input!(item as ItemStruct);
     s.attrs.retain(|a| !a.path().is_ident("derive"));
     s.attrs.insert(0, parse_quote! {
-        #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, Eq, Entity, PartialEq, redbit::utoipa::ToSchema)]
+        #[derive(Clone, Debug, Default, Serialize, Deserialize, Eq, Entity, PartialEq, ToSchema)]
     });
     quote!(#s).into()
 }

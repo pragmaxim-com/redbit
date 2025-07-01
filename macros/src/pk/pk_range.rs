@@ -6,7 +6,7 @@ use syn::Type;
 pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type: &Type, table: &Ident) -> FunctionDef {
     let fn_name = format_ident!("pk_range");
     let fn_stream = quote! {
-        fn #fn_name(tx: &::redbit::redb::WriteTransaction, from: &#pk_type, until: &#pk_type) -> Result<Vec<#pk_type>, AppError> {
+        fn #fn_name(tx: &WriteTransaction, from: &#pk_type, until: &#pk_type) -> Result<Vec<#pk_type>, AppError> {
             let table_pk_10 = tx.open_table(#table)?;
             let range = from.clone()..until.clone();
             let mut iter = table_pk_10.range(range)?;

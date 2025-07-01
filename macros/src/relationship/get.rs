@@ -12,7 +12,7 @@ pub fn one2one_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
         fn_return_type: syn::parse_quote!(#child_type),
         is_sse: false,
         fn_stream: quote! {
-            pub fn #fn_name(tx: &::redbit::redb::ReadTransaction, pk: &#pk_type) -> Result<#child_type, AppError> {
+            pub fn #fn_name(tx: &ReadTransaction, pk: &#pk_type) -> Result<#child_type, AppError> {
                 #child_type::get(&tx, &pk).and_then(|opt| {
                     opt.ok_or_else(|| AppError::Internal(format!("No child found for pk: {:?}", pk)))
                 })
@@ -51,7 +51,7 @@ pub fn one2opt_def(
         is_sse: false,
         fn_stream: quote! {
             pub fn #fn_name(
-                tx: &::redbit::redb::ReadTransaction,
+                tx: &ReadTransaction,
                 pk: &#pk_type
             ) -> Result<Option<#child_type>, AppError> {
                 #child_type::get(&tx, &pk)
@@ -92,7 +92,7 @@ pub fn one2many_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, 
         fn_return_type: syn::parse_quote!(Vec<#child_type>),
         is_sse: false,
         fn_stream: quote! {
-            pub fn #fn_name(tx: &::redbit::redb::ReadTransaction, pk: &#pk_type) -> Result<Vec<#child_type>, AppError> {
+            pub fn #fn_name(tx: &ReadTransaction, pk: &#pk_type) -> Result<Vec<#child_type>, AppError> {
                 let (from, to) = pk.fk_range();
                 #child_type::range(&tx, &from, &to)
             }

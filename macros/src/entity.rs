@@ -109,7 +109,7 @@ impl EntityMacros {
         let fn_name = format_ident!("store_and_commit");
         let store_statements = self.store_statements();
         let fn_stream = quote! {
-            pub fn #fn_name(db: &::redbit::redb::Database, instance: &#entity_type) -> Result<#pk_type, AppError> {
+            pub fn #fn_name(db: &Database, instance: &#entity_type) -> Result<#pk_type, AppError> {
                let tx = db.begin_write()?;
                {
                    #(#store_statements)*
@@ -165,7 +165,7 @@ impl EntityMacros {
         let fn_name = format_ident!("delete_and_commit");
         let delete_statements = self.delete_statements();
         let fn_stream = quote! {
-            pub fn #fn_name(db: &::redbit::redb::Database, pk: &#pk_type) -> Result<(), AppError> {
+            pub fn #fn_name(db: &Database, pk: &#pk_type) -> Result<(), AppError> {
                let tx = db.begin_write()?;
                {
                    #(#delete_statements)*

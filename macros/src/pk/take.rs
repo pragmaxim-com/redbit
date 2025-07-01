@@ -7,7 +7,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
     let fn_name = format_ident!("take");
     let fn_stream =
         quote! {
-            pub fn #fn_name(tx: &::redbit::redb::ReadTransaction, n: usize) -> Result<Vec<#entity_type>, AppError> {
+            pub fn #fn_name(tx: &ReadTransaction, n: usize) -> Result<Vec<#entity_type>, AppError> {
                 let table_pk_6 = tx.open_table(#table)?;
                 let mut iter = table_pk_6.iter()?;
                 let mut results = Vec::new();

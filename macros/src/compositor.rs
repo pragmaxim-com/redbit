@@ -70,35 +70,35 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
                 .collect()
             }
 
-            fn compose(tx: &::redbit::redb::ReadTransaction, pk: &#pk_type) -> Result<#entity_type, AppError> {
+            fn compose(tx: &ReadTransaction, pk: &#pk_type) -> Result<#entity_type, AppError> {
                 Ok(#entity_name {
                     #pk_name: pk.clone(),
                     #(#struct_inits),*
                 })
             }
 
-            pub fn store(tx: &::redbit::redb::WriteTransaction, instance: &#entity_type) -> Result<(), AppError> {
+            pub fn store(tx: &WriteTransaction, instance: &#entity_type) -> Result<(), AppError> {
                 #(#store_statements)*
                 Ok(())
             }
 
-            pub fn store_many(tx: &::redbit::redb::WriteTransaction, instances: &Vec<#entity_type>) -> Result<(), AppError> {
+            pub fn store_many(tx: &WriteTransaction, instances: &Vec<#entity_type>) -> Result<(), AppError> {
                 #(#store_many_statements)*
                 Ok(())
             }
 
-            pub fn delete(tx: &::redbit::redb::WriteTransaction, pk: &#pk_type) -> Result<(), AppError> {
+            pub fn delete(tx: &WriteTransaction, pk: &#pk_type) -> Result<(), AppError> {
                 #(#delete_statements)*
                 Ok(())
             }
 
-            pub fn delete_many(tx: &::redbit::redb::WriteTransaction, pks: &Vec<#pk_type>) -> Result<(), AppError> {
+            pub fn delete_many(tx: &WriteTransaction, pks: &Vec<#pk_type>) -> Result<(), AppError> {
                 #(#delete_many_statements)*
                 Ok(())
             }
 
-            pub fn routes() -> redbit::utoipa_axum::router::OpenApiRouter<RequestState> {
-                redbit::utoipa_axum::router::OpenApiRouter::new()
+            pub fn routes() -> utoipa_axum::router::OpenApiRouter<RequestState> {
+                utoipa_axum::router::OpenApiRouter::new()
                     #(#route_chains)*
             }
         }
@@ -106,19 +106,18 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
         #[cfg(test)]
         mod #entity_tests {
             use super::*;
-            use axum_test::TestServer;
 
-            fn init_temp_db(name: &str) -> std::sync::Arc<::redbit::redb::Database> {
+            fn init_temp_db(name: &str) -> Arc<Database> {
                 let dir = std::env::temp_dir().join("redbit").join(name).join(#entity_literal);
                 if !dir.exists() {
                     std::fs::create_dir_all(dir.clone()).unwrap();
                 }
                 let db_path = dir.join(format!("{}_{}.redb", #entity_literal, rand::random::<u64>()));
-                std::sync::Arc::new(redbit::redb::Database::create(db_path).expect("Failed to create database"))
+                Arc::new(Database::create(db_path).expect("Failed to create database"))
             }
 
-            #[test]
-            fn test_entity_api() {
+            #[tokio::test]
+            async fn test_entity_api() {
                 let db = init_temp_db("api");
                 let entity_count: usize = 3;
                 #(#tests)*
@@ -127,7 +126,7 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
             #[tokio::test]
             async fn test_entity_rest_api() {
                 let db = init_temp_db("rest-api");
-                let router = build_router(RequestState { db: std::sync::Arc::clone(&db) }, None).await;
+                let router = build_router(RequestState { db: Arc::clone(&db) }, None).await;
                 let server = axum_test::TestServer::new(router).unwrap();
                 #(#route_tests)*
             }

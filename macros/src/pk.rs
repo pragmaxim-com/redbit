@@ -61,7 +61,7 @@ impl DbPkMacros {
         function_defs.push(pk_range::fn_def(entity_name, entity_type, &pk_name, &pk_type, &table_def.name));
         let range_query =
             quote! {
-                #[derive(utoipa::IntoParams, serde::Serialize, serde::Deserialize, Default)]
+                #[derive(IntoParams, Serialize, Deserialize, Default)]
                 pub struct #entity_range_query {
                     pub from: #pk_type,
                     pub until: #pk_type,
@@ -169,27 +169,27 @@ impl DbPkMacros {
             }
 
             // Serde: human-readable = dash string, binary = raw field
-            impl serde::Serialize for #struct_name {
+            impl Serialize for #struct_name {
                 fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-                where S: serde::Serializer {
+                where S: Serializer {
                     if serializer.is_human_readable() {
                         self.0.serialize(serializer)
                     } else {
-                        #[derive(serde::Serialize)]
+                        #[derive(Serialize)]
                         struct Helper(#index_type);
                         let helper = Helper(self.0);
                         helper.serialize(serializer)
                     }
                 }
             }
-            impl<'de> serde::Deserialize<'de> for #struct_name {
+            impl<'de> Deserialize<'de> for #struct_name {
                 fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-                where D: serde::Deserializer<'de> {
+                where D: Deserializer<'de> {
                     if deserializer.is_human_readable() {
                         let idx = #index_type::deserialize(deserializer)?;
                         Ok(#struct_name(idx))
                     } else {
-                        #[derive(serde::Deserialize)]
+                        #[derive(Deserialize)]
                         struct Helper(#index_type);
                         let helper = Helper::deserialize(deserializer)?;
                         Ok(#struct_name(helper.0))
@@ -212,9 +212,9 @@ impl DbPkMacros {
                 }
             }
 
-            impl redbit::utoipa::PartialSchema for #struct_name {
-                fn schema() -> redbit::utoipa::openapi::RefOr<redbit::utoipa::openapi::schema::Schema> {
-                    use redbit::utoipa::openapi::schema::*;
+            impl PartialSchema for #struct_name {
+                fn schema() -> openapi::RefOr<openapi::schema::Schema> {
+                    use openapi::schema::*;
                     Schema::Object(
                         ObjectBuilder::new()
                             .schema_type(SchemaType::Type(Type::Integer))
@@ -224,9 +224,9 @@ impl DbPkMacros {
                 }
             }
 
-            impl redbit::utoipa::ToSchema for #struct_name {
-                fn schemas(schemas: &mut Vec<(String, redbit::utoipa::openapi::RefOr<redbit::utoipa::openapi::schema::Schema>)>) {
-                    schemas.push((stringify!(#struct_name).to_string(), <#struct_name as redbit::utoipa::PartialSchema>::schema()));
+            impl ToSchema for #struct_name {
+                fn schemas(schemas: &mut Vec<(String, openapi::RefOr<openapi::schema::Schema>)>) {
+                    schemas.push((stringify!(#struct_name).to_string(), <#struct_name as PartialSchema>::schema()));
                 }
             }
         };
@@ -255,13 +255,13 @@ impl DbPkMacros {
             }
 
             // Serde: human-readable = dash string, binary = raw fields
-            impl serde::Serialize for #struct_name {
+            impl Serialize for #struct_name {
                 fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-                where S: serde::Serializer {
+                where S: Serializer {
                     if serializer.is_human_readable() {
                         serializer.serialize_str(UrlEncoded::encode(self).as_str())
                     } else {
-                        #[derive(serde::Serialize)]
+                        #[derive(Serialize)]
                         struct Helper {
                             #parent_name: #parent_type,
                             #index_name: #index_type,
@@ -271,9 +271,9 @@ impl DbPkMacros {
                     }
                 }
             }
-            impl<'de> serde::Deserialize<'de> for #struct_name {
+            impl<'de> Deserialize<'de> for #struct_name {
                 fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-                where D: serde::Deserializer<'de> {
+                where D: Deserializer<'de> {
                     if deserializer.is_human_readable() {
                         let s = String::deserialize(deserializer)?;
                         // split on last dash
@@ -284,7 +284,7 @@ impl DbPkMacros {
                         let idx = idx_str.parse::<#index_type>().map_err(serde::de::Error::custom)?;
                         Ok(#struct_name { #parent_name: parent, #index_name: idx })
                     } else {
-                        #[derive(serde::Deserialize)]
+                        #[derive(Deserialize)]
                         struct Helper {
                             #parent_name: #parent_type,
                             #index_name: #index_type,
@@ -313,9 +313,9 @@ impl DbPkMacros {
                 }
             }
 
-            impl redbit::utoipa::PartialSchema for #struct_name {
-                fn schema() -> redbit::utoipa::openapi::RefOr<redbit::utoipa::openapi::schema::Schema> {
-                    use redbit::utoipa::openapi::schema::*;
+            impl PartialSchema for #struct_name {
+                fn schema() -> openapi::RefOr<openapi::schema::Schema> {
+                    use openapi::schema::*;
                     let example = format!("{}-{}", #parent_type::default().encode(), "0");
                     Schema::Object(
                         ObjectBuilder::new()
@@ -326,10 +326,10 @@ impl DbPkMacros {
                 }
             }
 
-            impl redbit::utoipa::ToSchema for #struct_name {
-                fn schemas(schemas: &mut Vec<(String, redbit::utoipa::openapi::RefOr<redbit::utoipa::openapi::schema::Schema>)>) {
-                    use redbit::utoipa::ToSchema;
-                    schemas.push((stringify!(#struct_name).to_string(), <#struct_name as redbit::utoipa::PartialSchema>::schema()));
+            impl ToSchema for #struct_name {
+                fn schemas(schemas: &mut Vec<(String, openapi::RefOr<openapi::schema::Schema>)>) {
+                    use ToSchema;
+                    schemas.push((stringify!(#struct_name).to_string(), <#struct_name as PartialSchema>::schema()));
                     <#parent_type as ToSchema>::schemas(schemas);
                 }
             }

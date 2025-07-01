@@ -1,5 +1,4 @@
 use crate::*;
-use futures_util::stream::TryStreamExt;
 use redb::Database;
 use redbit::AppError;
 use std::sync::Arc;

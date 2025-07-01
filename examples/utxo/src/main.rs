@@ -1,7 +1,7 @@
 use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use redbit::utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::router::OpenApiRouter;
 use utxo::*;
 
 #[tokio::main]
