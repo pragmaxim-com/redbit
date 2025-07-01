@@ -55,6 +55,7 @@ pub fn get_by_dict_def(
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
         fn_return_type: syn::parse_quote!(Vec<#entity_type>),
+        is_sse: false,
         fn_stream,
         fn_call: quote! { #entity_name::#fn_name(&tx, &#column_name) },
         endpoint_def: Some(EndpointDef {
@@ -109,6 +110,7 @@ pub fn get_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &I
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
         fn_return_type: syn::parse_quote!(Vec<#entity_type>),
+        is_sse: false,
         fn_stream,
         fn_call: quote! { #entity_name::#fn_name(&tx, &#column_name) },
         endpoint_def: Some(EndpointDef {

@@ -1,7 +1,7 @@
 use axum::response::IntoResponse;
-use axum_streams::StreamBodyAs;
+use redbit::axum_streams::StreamBodyAs;
 use futures::Stream;
-use redbit::utoipa;
+use redbit::{utoipa, AppError};
 use std::time::Duration;
 use tokio_stream::StreamExt;
 
@@ -21,9 +21,9 @@ pub struct NumberChunk {
     )
 )]
 pub async fn test_json_nl_stream() -> impl IntoResponse {
-    StreamBodyAs::json_nl(number_stream(Duration::from_secs(1)))
+    StreamBodyAs::json_nl_with_errors(number_stream(Duration::from_secs(1)))
 }
 
-fn number_stream(duration: Duration) -> impl Stream<Item = NumberChunk> {
-    futures::stream::iter(0u64..).throttle(duration).map(|n| NumberChunk { value: n })
+fn number_stream(duration: Duration) -> impl Stream<Item = Result<NumberChunk, AppError>> {
+    futures::stream::iter(0u64..).throttle(duration).map(|n| Ok(NumberChunk { value: n }) )
 }

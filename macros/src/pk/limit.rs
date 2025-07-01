@@ -30,6 +30,7 @@ pub fn limit_fn_def(entity_name: &Ident, entity_type: &Type) -> FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
         fn_return_type: syn::parse_quote!(Vec<#entity_type>),
+        is_sse: false,
         fn_stream,
         fn_call: quote! { #entity_name::#fn_name(&tx, query) },
         endpoint_def: Some(EndpointDef {

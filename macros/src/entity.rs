@@ -122,6 +122,7 @@ impl EntityMacros {
             entity_name: entity_name.clone(),
             fn_name: fn_name.clone(),
             fn_return_type: syn::parse_quote!(#pk_type),
+            is_sse: false,
             fn_stream,
             fn_call: quote! { #entity_name::#fn_name(&db, &body) },
             endpoint_def: Some(EndpointDef {
@@ -177,6 +178,7 @@ impl EntityMacros {
             entity_name: entity_name.clone(),
             fn_name: fn_name.clone(),
             fn_return_type: syn::parse_quote!(()),
+            is_sse: false,
             fn_stream,
             fn_call: quote! { #entity_name::#fn_name(&db, &#pk_name) },
             endpoint_def: Some(EndpointDef {

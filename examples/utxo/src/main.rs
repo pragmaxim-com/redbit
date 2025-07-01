@@ -12,8 +12,8 @@ async fn main() {
             redb::Database::create(dir.join("my_db.redb"))
                 .expect("Failed to create database")
         );
-    demo::run(Arc::clone(&db)).expect("Db demo failed");
-    let extra_routes = 
+    demo::run(Arc::clone(&db)).await.expect("Db demo failed");
+    let extra_routes =
         OpenApiRouter::new()
             .routes(utoipa_axum::routes!(routes::test_json_nl_stream));
     let state = RequestState { db: Arc::clone(&db) };

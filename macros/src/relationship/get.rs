@@ -10,6 +10,7 @@ pub fn one2one_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
         fn_return_type: syn::parse_quote!(#child_type),
+        is_sse: false,
         fn_stream: quote! {
             pub fn #fn_name(tx: &::redbit::redb::ReadTransaction, pk: &#pk_type) -> Result<#child_type, AppError> {
                 #child_type::get(&tx, &pk).and_then(|opt| {
@@ -47,6 +48,7 @@ pub fn one2opt_def(
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
         fn_return_type: syn::parse_quote!(Option<#child_type>),
+        is_sse: false,
         fn_stream: quote! {
             pub fn #fn_name(
                 tx: &::redbit::redb::ReadTransaction,
@@ -88,6 +90,7 @@ pub fn one2many_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, 
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
         fn_return_type: syn::parse_quote!(Vec<#child_type>),
+        is_sse: false,
         fn_stream: quote! {
             pub fn #fn_name(tx: &::redbit::redb::ReadTransaction, pk: &#pk_type) -> Result<Vec<#child_type>, AppError> {
                 let (from, to) = pk.fk_range();

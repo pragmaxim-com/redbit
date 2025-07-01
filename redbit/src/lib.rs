@@ -5,29 +5,41 @@
 //! The library provides methods for storing, retrieving, and deleting entities based on primary keys (PKs) and secondary indexes,
 //! supporting one-to-one and one-to-many relationships.
 //!
-pub use macros::Entity;
-pub use macros::RootKey;
-pub use macros::PointerKey;
+pub use axum;
+pub use axum_test;
+pub use futures;
+pub use hex;
+pub use http;
+pub use inventory;
+pub use macros::column;
 pub use macros::entity;
 pub use macros::pointer_key;
 pub use macros::root_key;
-pub use macros::column;
+pub use macros::Entity;
+pub use macros::PointerKey;
+pub use macros::RootKey;
+pub use rand;
 pub use redb;
 pub use redb::ReadableMultimapTable;
 pub use redb::ReadableTable;
-pub use inventory;
-pub use axum;
-pub use utoipa_axum;
-pub use utoipa;
 pub use serde;
-pub use utoipa_swagger_ui;
-pub use axum_test;
-pub use rand;
-pub use http;
 pub use serde_json;
 pub use serde_urlencoded;
-pub use hex;
+pub use utoipa;
+pub use utoipa_axum;
+pub use axum_streams;
+pub use utoipa_swagger_ui;
 
+use crate::axum::extract::rejection::JsonRejection;
+use crate::axum::extract::FromRequest;
+use crate::axum::http::StatusCode;
+use crate::axum::response::{IntoResponse, Response};
+use crate::axum::Router;
+use crate::redb::Database;
+use crate::redb::{Key, TypeName, Value};
+use crate::utoipa::OpenApi;
+use crate::utoipa_axum::router::OpenApiRouter;
+use crate::utoipa_swagger_ui::SwaggerUi;
 use bincode::Options;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -35,19 +47,9 @@ use std::any::type_name;
 use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::net::SocketAddr;
-use tokio::net::TcpListener;
-use std::sync::Arc;
 use std::ops::Add;
-use crate::axum::response::{IntoResponse, Response};
-use crate::axum::extract::FromRequest;
-use crate::axum::extract::rejection::JsonRejection;
-use crate::axum::http::StatusCode;
-use crate::axum::Router;
-use crate::redb::{Key, TypeName, Value};
-use crate::redb::Database;
-use crate::utoipa::OpenApi;
-use crate::utoipa_axum::router::OpenApiRouter;
-use crate::utoipa_swagger_ui::SwaggerUi;
+use std::sync::Arc;
+use tokio::net::TcpListener;
 
 pub trait IndexedPointer: Clone {
     type Index: Copy + Ord + Add<Output = Self::Index> + Default;
@@ -116,6 +118,12 @@ impl std::fmt::Display for AppError {
 impl From<JsonRejection> for AppError {
     fn from(rejection: JsonRejection) -> Self {
         Self::JsonRejection(rejection)
+    }
+}
+
+impl Into<axum::Error> for AppError {
+    fn into(self) -> axum::Error {
+        axum::Error::new(self.to_string())
     }
 }
 
@@ -227,12 +235,9 @@ impl IntoResponse for AppError {
         }
 
         let (status, message) = match self {
-            AppError::NotFound(msg) =>
-                (StatusCode::NOT_FOUND, msg),
-            AppError::JsonRejection(rejection) => 
-                (rejection.status(), rejection.body_text()),
-            AppError::Internal(msg) =>
-                (StatusCode::INTERNAL_SERVER_ERROR, msg),
+            AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg),
+            AppError::JsonRejection(rejection) => (rejection.status(), rejection.body_text()),
+            AppError::Internal(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
         };
 
         (status, AppJson(ErrorResponse { message })).into_response()
@@ -241,13 +246,14 @@ impl IntoResponse for AppError {
 
 #[derive(Clone)]
 pub struct RequestState {
-    pub db: Arc<Database>
+    pub db: Arc<Database>,
 }
 
 impl RequestState {
     pub fn new(db: Arc<Database>) -> Self {
         Self { db }
-    }}
+    }
+}
 
 pub struct EntityInfo {
     pub name: &'static str,
@@ -289,8 +295,7 @@ pub async fn build_router(state: RequestState, extras: Option<OpenApiRouter<Requ
     }
     let (r, api) = router.split_for_parts();
 
-    r.merge(SwaggerUi::new("/swagger-ui").url("/apidoc/openapi.json", api))
-        .with_state(state)
+    r.merge(SwaggerUi::new("/swagger-ui").url("/apidoc/openapi.json", api)).with_state(state)
 }
 
 pub async fn serve(state: RequestState, socket_addr: SocketAddr, extras: Option<OpenApiRouter<RequestState>>) -> () {

@@ -1,16 +1,17 @@
 use crate::*;
+use futures_util::stream::TryStreamExt;
 use redb::Database;
 use redbit::AppError;
 use std::sync::Arc;
 
-pub fn run(db: Arc<Database>) -> Result<(), AppError> {
+pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
     let blocks = Block::sample_many(2);
 
     println!("Persisting blocks:");
     let write_tx = db.begin_write()?;
     Block::store_many(&write_tx, &blocks)?;
     write_tx.commit()?;
-    
+
     let read_tx = db.begin_read()?;
 
     println!("Querying blocks:");
@@ -49,8 +50,8 @@ pub fn run(db: Arc<Database>) -> Result<(), AppError> {
     Transaction::get_utxos(&read_tx, &first_transaction.id)?;
     Transaction::get_inputs(&read_tx, &first_transaction.id)?;
     Transaction::parent_key(&read_tx, &first_transaction.id)?;
-    Transaction::get_ids_by_hash(&read_tx, &first_transaction.hash)?;
-    
+    Transaction::stream_ids_by_hash(&read_tx, &first_transaction.hash)?.try_collect::<Vec<TxPointer>>().await?;
+
     println!("Querying utxos:");
     let first_utxo = Utxo::first(&read_tx)?.unwrap();
     let last_utxo = Utxo::last(&read_tx)?.unwrap();
@@ -63,18 +64,15 @@ pub fn run(db: Arc<Database>) -> Result<(), AppError> {
     Utxo::get_assets(&read_tx, &first_utxo.id)?;
     Utxo::parent_key(&read_tx, &first_utxo.id)?;
     Utxo::get_tree(&read_tx, &first_utxo.id)?;
-    Utxo::get_ids_by_address(&read_tx, &first_utxo.address)?;
-
-    println!("Querying input refs:");
     let first_input_ref = InputRef::first(&read_tx)?.unwrap();
     let last_input_ref = InputRef::last(&read_tx)?.unwrap();
+    Utxo::stream_ids_by_address(&read_tx, &first_utxo.address)?.try_collect::<Vec<UtxoPointer>>().await?;
 
     InputRef::take(&read_tx, 1000)?;
     InputRef::exists(&read_tx, &first_input_ref.id)?;
     InputRef::get(&read_tx, &first_input_ref.id)?;
     InputRef::range(&read_tx, &first_input_ref.id, &last_input_ref.id)?;
     InputRef::parent_key(&read_tx, &first_input_ref.id)?;
-
 
     println!("Querying assets:");
     let first_asset = Asset::first(&read_tx)?.unwrap();
@@ -86,7 +84,7 @@ pub fn run(db: Arc<Database>) -> Result<(), AppError> {
     Asset::get_by_policy_id(&read_tx, &first_asset.policy_id)?;
     Asset::range(&read_tx, &first_asset.id, &last_asset.id)?;
     Asset::parent_key(&read_tx, &first_asset.id)?;
-    Asset::get_ids_by_policy_id(&read_tx, &first_asset.policy_id)?;
+    Asset::stream_ids_by_policy_id(&read_tx, &first_asset.policy_id)?.try_collect::<Vec<AssetPointer>>().await?;
 
     println!("Deleting blocks:");
     for block in blocks.iter() {

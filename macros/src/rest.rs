@@ -1,14 +1,14 @@
 use proc_macro2::{Ident, Literal, TokenStream};
 use quote::{format_ident, quote};
 use std::fmt::Display;
-use syn::{Type};
+use syn::Type;
 
 #[derive(Clone)]
 pub struct HttpEndpointMacro {
     pub endpoint_def: EndpointDef,
     pub handler_fn_name: Ident,
     pub handler: TokenStream,
-    pub test: TokenStream
+    pub test: TokenStream,
 }
 
 impl Display for HttpEndpointMacro {
@@ -31,23 +31,24 @@ pub struct FunctionDef {
     pub fn_name: Ident,
     pub fn_return_type: Type,
     pub fn_stream: TokenStream,
+    pub is_sse: bool,
     pub fn_call: TokenStream,
     pub endpoint_def: Option<EndpointDef>,
-    pub test_stream: Option<TokenStream>
+    pub test_stream: Option<TokenStream>,
 }
 
 #[derive(Clone)]
 pub struct GetParam {
     pub name: Ident,
     pub ty: Type,
-    pub description: String
+    pub description: String,
 }
 
 #[derive(Clone)]
 pub struct PostParam {
     pub name: Ident,
     pub ty: Type,
-    pub content_type: String
+    pub content_type: String,
 }
 
 #[derive(Clone)]
@@ -60,23 +61,21 @@ pub enum HttpParams {
 impl HttpParams {
     pub fn axum_bindings(&self) -> TokenStream {
         match self {
-            HttpParams::FromPath(params) => {
-                match &params[..] {
-                    [] => quote! {},
-                    [GetParam { name, ty, description: _}] => {
-                        quote! { axum::extract::Path(#name): axum::extract::Path<#ty> }
-                    }
-                    _ => {
-                        let bindings: Vec<Ident> = params.iter().map(|p| p.name.clone()).collect();
-                        let types: Vec<&Type> = params.iter().map(|p| &p.ty).collect();
-                        quote! { axum::extract::Path((#(#bindings),*)): axum::extract::Path<(#(#types),*)> }
-                    }
+            HttpParams::FromPath(params) => match &params[..] {
+                [] => quote! {},
+                [GetParam { name, ty, description: _ }] => {
+                    quote! { axum::extract::Path(#name): axum::extract::Path<#ty> }
                 }
-            }
+                _ => {
+                    let bindings: Vec<Ident> = params.iter().map(|p| p.name.clone()).collect();
+                    let types: Vec<&Type> = params.iter().map(|p| &p.ty).collect();
+                    quote! { axum::extract::Path((#(#bindings),*)): axum::extract::Path<(#(#types),*)> }
+                }
+            },
             HttpParams::FromQuery(ty) => {
                 quote! { axum::extract::Query(query): axum::extract::Query<#ty> }
             }
-            HttpParams::FromBody(PostParam {name, ty, content_type: _}) => {
+            HttpParams::FromBody(PostParam { name, ty, content_type: _ }) => {
                 quote! { AppJson(#name): AppJson<#ty> }
             }
         }
@@ -85,25 +84,28 @@ impl HttpParams {
     pub fn utoipa_params(&self) -> TokenStream {
         match self {
             HttpParams::FromPath(params) => {
-                let param_tokens: Vec<TokenStream> = params.iter().map(|param| {
-                    let name_str = Literal::string(&param.name.to_string());
-                    let ty = &param.ty;
-                    let desc = Literal::string(&param.description);
-                    quote! { (#name_str = #ty, Path, description = #desc) }
-                }).collect();
+                let param_tokens: Vec<TokenStream> = params
+                    .iter()
+                    .map(|param| {
+                        let name_str = Literal::string(&param.name.to_string());
+                        let ty = &param.ty;
+                        let desc = Literal::string(&param.description);
+                        quote! { (#name_str = #ty, Path, description = #desc) }
+                    })
+                    .collect();
 
                 quote! {
                     params( #(#param_tokens),* )
                 }
-            },
+            }
             HttpParams::FromQuery(ty) => {
                 quote! { params(#ty) }
-            },
+            }
             HttpParams::FromBody(param) => {
                 let content_type = Literal::string(&param.content_type);
                 let param_type = param.ty.clone();
                 quote! { request_body(content = #param_type, content_type = #content_type) }
-            },
+            }
         }
     }
 }
@@ -113,7 +115,7 @@ pub enum HttpMethod {
     GET,
     POST,
     DELETE,
-    HEAD
+    HEAD,
 }
 
 impl Display for HttpMethod {
@@ -132,7 +134,7 @@ pub struct EndpointDef {
     pub params: HttpParams,
     pub endpoint: String,
     pub method: HttpMethod,
-    pub return_type: Option<Type>
+    pub return_type: Option<Type>,
 }
 
 impl EndpointDef {
@@ -211,20 +213,16 @@ impl EndpointDef {
     }
 }
 
-
 pub fn to_http_endpoints(defs: Vec<FunctionDef>) -> (Vec<TokenStream>, Vec<TokenStream>, Vec<TokenStream>) {
     let endpoints: Vec<HttpEndpointMacro> =
-        defs.iter()
-            .filter_map(|fn_def| fn_def.endpoint_def.clone().map(|e| to_http_endpoint(fn_def, &e)))
-            .collect();
-    let route_chains =
-        endpoints
-            .iter()
-            .map(|e| {
-                let function_name = &e.handler_fn_name;
-                quote! { .merge(redbit::utoipa_axum::router::OpenApiRouter::new().routes(redbit::utoipa_axum::routes!(#function_name))) }
-            })
-            .collect();
+        defs.iter().filter_map(|fn_def| fn_def.endpoint_def.clone().map(|e| to_http_endpoint(fn_def, &e))).collect();
+    let route_chains = endpoints
+        .iter()
+        .map(|e| {
+            let function_name = &e.handler_fn_name;
+            quote! { .merge(redbit::utoipa_axum::router::OpenApiRouter::new().routes(redbit::utoipa_axum::routes!(#function_name))) }
+        })
+        .collect();
     let endpoint_handlers: Vec<TokenStream> = endpoints.iter().map(|e| e.handler.clone()).collect();
     let tests: Vec<TokenStream> = endpoints.iter().map(|e| e.test.clone()).collect();
     (endpoint_handlers, route_chains, tests)
@@ -238,43 +236,65 @@ pub fn to_http_endpoint(fn_def: &FunctionDef, endpoint_def: &EndpointDef) -> Htt
     let endpoint_name = fn_def.entity_name.to_string();
     let endpoint_path = endpoint_def.endpoint.clone();
     let method_ident = format_ident!("{}", endpoint_def.method.to_string());
-    let db_call = match endpoint_def.method {
-        HttpMethod::GET | HttpMethod::HEAD =>
-            quote! {
+    let handler_method_def = match endpoint_def.method {
+        HttpMethod::HEAD | HttpMethod::GET if !fn_def.is_sse => quote! {
+            pub async fn #handler_fn_name(
+                axum::extract::State(state): axum::extract::State<RequestState>, 
+                #param_binding
+            ) -> Result<AppJson<#fn_return_type>, AppError> {
                 state.db.begin_read()
                     .map_err(AppError::from)
                     .and_then(|tx| #fn_call)
                     .map(AppJson)
-            },
-        HttpMethod::POST | HttpMethod::DELETE =>
-            quote! {
+            }
+        },
+        HttpMethod::GET if fn_def.is_sse => quote! {
+            pub async fn #handler_fn_name(
+                axum::extract::State(state): axum::extract::State<RequestState>,
+                #param_binding
+            ) -> impl axum::response::IntoResponse {
+               use axum::response::IntoResponse;
+               match state.db.begin_read()
+                    .map_err(AppError::from)
+                    .and_then(|tx| #fn_call) {
+                        Ok(stream) => redbit::axum_streams::StreamBodyAs::json_nl_with_errors(stream).into_response(),
+                        Err(err)   => err.into_response(),
+                }
+            }
+        },
+        HttpMethod::POST | HttpMethod::DELETE if !fn_def.is_sse => quote! {
+            pub async fn #handler_fn_name(
+                axum::extract::State(state): axum::extract::State<RequestState>,
+                #param_binding
+            ) -> Result<AppJson<#fn_return_type>, AppError> {
                 let db = state.db;
                 let result = #fn_call?;
                 Ok(AppJson(result))
-            },
+            }
+        },
+        _ => quote! {
+            redbit::AppError::from(format!("Unsupported HTTP method: {}", endpoint_def.method)).to_compile_error().into();
+        }
     };
 
-    let responses = match endpoint_def.return_type.clone() {
-        Some(return_ty) => quote! { responses((status = OK, body = #return_ty)) },
-        None => quote! { responses((status = OK)) },
+    let utoipa_response = match fn_def.is_sse {
+        true => {
+            let return_ty = endpoint_def.return_type.clone().expect("SSE endpoints must have a return type");
+            quote! { responses((status = OK, content_type = "text/event-stream", body = #return_ty)) }
+        }
+        false => match endpoint_def.return_type.clone() {
+            Some(return_ty) => quote! { responses((status = OK, body = #return_ty)) },
+            None => quote! { responses((status = OK)) },
+        },
     };
 
     let params = endpoint_def.params.utoipa_params();
 
     let handler = quote! {
-        #[redbit::utoipa::path(#method_ident, path = #endpoint_path, #params, #responses, tag = #endpoint_name)]
+        #[redbit::utoipa::path(#method_ident, path = #endpoint_path, #params, #utoipa_response, tag = #endpoint_name)]
         #[axum::debug_handler]
-        pub async fn #handler_fn_name(
-            axum::extract::State(state): axum::extract::State<RequestState>, #param_binding
-        ) -> Result<AppJson<#fn_return_type>, AppError> {
-            #db_call
-        }
+        #handler_method_def
     };
 
-    HttpEndpointMacro {
-        endpoint_def: endpoint_def.clone(),
-        handler_fn_name,
-        handler,
-        test: endpoint_def.generate_test()
-    }
+    HttpEndpointMacro { endpoint_def: endpoint_def.clone(), handler_fn_name, handler, test: endpoint_def.generate_test() }
 }
