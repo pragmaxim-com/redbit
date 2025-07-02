@@ -59,11 +59,16 @@ impl EntityMacros {
         column_queries
     }
     
-    pub fn struct_inits(&self) -> Vec<TokenStream> {
+    pub fn column_struct_inits(&self) -> Vec<(Ident, TokenStream)> {
         let mut struct_inits = Vec::new();
         for column in &self.columns {
-            struct_inits.push(column.struct_init.clone());
+            struct_inits.push((column.definition.field.name.clone(), column.struct_init.clone()));
         }
+        struct_inits
+    }
+
+    pub fn non_column_inits(&self) -> Vec<TokenStream> {
+        let mut struct_inits = Vec::new();
         for relationship in &self.relationships {
             struct_inits.push(relationship.struct_init.clone());
         }
@@ -86,37 +91,7 @@ impl EntityMacros {
         }
         struct_default_inits
     }
-
-    pub fn stream_query_field_defs(&self) -> Vec<TokenStream> {
-        let mut stream_query_field_defs = vec![];
-        for column in &self.columns {
-            let column_name = column.definition.field.name.clone();
-            let column_type = column.definition.field.tpe.clone();
-            match column.definition.col_type.clone() {
-                ColumnType::Transient => {},
-                ColumnType::IndexingOn { dictionary: _, range: _ } => stream_query_field_defs.push(quote! { pub #column_name: Option<#column_type> }),
-                ColumnType::IndexingOff => stream_query_field_defs.push(quote! { pub #column_name: Option<#column_type> }),
-            }
-        }
-        stream_query_field_defs
-    }
-
-    pub fn stream_query_field_inits(&self) -> Vec<TokenStream> {
-        let mut stream_query_field_defs = vec![];
-        for column in &self.columns {
-            let column_name = column.definition.field.name.clone();
-            let column_type = column.definition.field.tpe.clone();
-            match column.definition.col_type.clone() {
-                ColumnType::Transient => {},
-                ColumnType::IndexingOn { dictionary: _, range: _ } =>
-                    stream_query_field_defs.push(quote! { #column_name: Some(#column_type::default()) }),
-                ColumnType::IndexingOff =>
-                    stream_query_field_defs.push(quote! { #column_name: Some(#column_type::default()) }),
-            }
-        }
-        stream_query_field_defs
-    }
-
+    
     pub fn function_defs(&self) -> Vec<FunctionDef> {
         let mut function_defs = vec![];
         function_defs.push(self.store_fn_def());

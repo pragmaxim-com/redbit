@@ -1,6 +1,6 @@
 use crate::entity::EntityMacros;
 use crate::rest::{to_http_endpoints, FunctionDef};
-use crate::{macro_utils, stream_query};
+use crate::macro_utils;
 use proc_macro2::{Ident, Literal, TokenStream};
 use quote::{format_ident, quote};
 
@@ -17,6 +17,8 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
     struct_inits.extend(non_column_struct_inits.clone());
     let struct_default_inits = entity_macros.struct_default_inits();
     let function_defs: Vec<FunctionDef> = entity_macros.function_defs();
+    let stream_query_field_defs: Vec<TokenStream> = entity_macros.stream_query_field_defs();
+    let stream_query_field_inits: Vec<TokenStream> = entity_macros.stream_query_field_inits();
 
     let store_statements = entity_macros.store_statements();
     let store_many_statements = entity_macros.store_many_statements();
@@ -37,26 +39,45 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
     let pk_type = db_pk_macros.definition.field.tpe.clone();
     let entity_tests = format_ident!("{}_tests", entity_name.to_string().to_lowercase());
     let entity_literal = Literal::string(&entity_name.to_string());
+    let entity_streaming_query = format_ident!("{}StreamQuery", entity_name.to_string());
 
-    let column_locals = column_struct_inits_by_name
-        .iter()
-        .map(|(field_ident, init_expr)| {
-            quote! {
-                let #field_ident = #init_expr;
-                if let Some(expected) = streaming_query.#field_ident.clone() {
-                    if expected != #field_ident {
-                        return Ok(None);
-                    }
+    let field_check_blocks: Vec<TokenStream> = column_struct_inits_by_name.iter().map(|(field_ident, init_expr)| {
+        quote! {
+        {
+            let value = { #init_expr };
+            if let Some(expected) = streaming_query.#field_ident.clone() {
+                if expected != value {
+                    return Ok(None);
                 }
             }
-        });
+            Ok(value)
+        }
+    }
+    }).collect();
 
-    let col_idents: Vec<&Ident> = column_struct_inits_by_name.iter().map(|(ident, _)| ident).collect();
+    // turn &[Ident] into Vec<Ident>
+    let field_idents: Vec<Ident> = column_struct_inits_by_name
+        .iter()
+        .map(|(ident, _)| ident.clone())
+        .collect();
 
-    let (stream_query_ident, stream_query_struct) = stream_query::stream_query_struct_macro(entity_name, &entity_macros.columns);
+    // build a usize literal for the Vec capacity
+    let capacity = Literal::usize_unsuffixed(field_idents.len());
 
     let expanded = quote! {
-        #stream_query_struct
+        // for filtering streaming queries
+        #[derive(IntoParams, Serialize, Deserialize, Default)]
+        pub struct #entity_streaming_query {
+            #(#stream_query_field_defs),*
+        }
+        impl #entity_streaming_query {
+            pub fn sample() -> Self {
+                Self {
+                    #(#stream_query_field_inits),*
+                }
+            }
+        }
+
         // table definitions are not in the impl object because they are accessed globally with semantic meaning
         #(#table_definition_streams)*
 
@@ -99,14 +120,32 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
                 })
             }
 
-            fn compose_with_filter(tx: &ReadTransaction, pk: &#pk_type, streaming_query: #stream_query_ident) -> Result<Option<#entity_type>, AppError> {
-                // First: fetch & filter every column, short‑circuit on mismatch
-                #(#column_locals)*
+            fn compose_with_filter(
+                tx: &ReadTransaction,
+                pk: &#pk_type,
+                streaming_query: #entity_streaming_query,
+            ) -> Result<Option<#entity_type>, AppError> {
+                let field_values = [
+                    #(#field_check_blocks),*
+                ].into_iter().try_fold(
+                    Vec::with_capacity(#capacity),
+                    |mut acc, res| {
+                        res.map(|v| {
+                            acc.push(v);
+                            acc
+                        })
+                    }
+                )?;
+
+                let mut it = field_values.into_iter();
+
                 Ok(Some(#entity_type {
                     #pk_name: pk.clone(),
                     #(
-                        #col_idents: #col_idents,
+                        #field_idents: it.next().unwrap(),
                     )*
+
+                    // *then* your hand‑written, non‑column fields
                     #(#non_column_struct_inits),*
                 }))
             }
@@ -137,35 +176,35 @@ pub fn expand(entity_macros: EntityMacros) -> TokenStream {
             }
         }
 
-        #[cfg(test)]
-        mod #entity_tests {
-            use super::*;
+    # [cfg(test)]
+    mod # entity_tests {
+        use super::*;
 
-            fn init_temp_db(name: &str) -> Arc<Database> {
-                let dir = std::env::temp_dir().join("redbit").join(name).join(#entity_literal);
-                if !dir.exists() {
-                    std::fs::create_dir_all(dir.clone()).unwrap();
-                }
-                let db_path = dir.join(format!("{}_{}.redb", #entity_literal, rand::random::<u64>()));
-                Arc::new(Database::create(db_path).expect("Failed to create database"))
-            }
-
-            #[tokio::test]
-            async fn test_entity_api() {
-                let db = init_temp_db("api");
-                let entity_count: usize = 3;
-                #(#tests)*
-            }
-
-            #[tokio::test]
-            async fn test_entity_rest_api() {
-                let db = init_temp_db("rest-api");
-                let router = build_router(RequestState { db: Arc::clone(&db) }, None).await;
-                let server = axum_test::TestServer::new(router).unwrap();
-                #(#route_tests)*
-            }
+        fn init_temp_db(name: &str) -> Arc<Database> {
+        let dir = std::env::temp_dir().join("redbit").join(name).join( # entity_literal);
+        if ! dir.exists() {
+        std::fs::create_dir_all(dir.clone()).unwrap();
         }
-    };
-    // eprintln!("----------------------------------------------------------");
-    macro_utils::write_stream_and_return(expanded, &entity_name)
+        let db_path = dir.join(format ! ("{}_{}.redb", # entity_literal, rand::random::<u64 > ()));
+        Arc::new(Database::create(db_path).expect("Failed to create database"))
+        }
+
+        #[tokio::test]
+        async fn test_entity_api() {
+        let db = init_temp_db("api");
+        let entity_count: usize = 3;
+        # ( # tests)*
+        }
+
+        #[tokio::test]
+        async fn test_entity_rest_api() {
+        let db = init_temp_db("rest-api");
+        let router = build_router(RequestState { db: Arc::clone( & db) }, None).await;
+        let server = axum_test::TestServer::new(router).unwrap();
+        # ( # route_tests) *
+        }
+    }
+};
+// eprintln!("----------------------------------------------------------");
+macro_utils::write_stream_and_return(expanded, & entity_name)
 }

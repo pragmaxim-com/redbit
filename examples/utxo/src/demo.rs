@@ -6,6 +6,24 @@ use std::sync::Arc;
 pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
     let blocks = Block::sample_many(2);
 
+    let xs = vec![("a", 2), ("a", 1), ("a", 0)];
+    let condition = ("a", 2);
+
+    let result = xs.iter().try_fold(
+        Vec::with_capacity(xs.len()),
+        |mut acc, (x, y)| {
+            if *x == condition.0 && *y == condition.1 {
+                acc.push((*x, *y));
+                Ok(acc)
+            } else {
+                Err(())
+            }
+        },
+    ).ok();
+
+    println!("Result: {:?}", result);
+    println!("{:?}", result);
+
     println!("Persisting blocks:");
     let write_tx = db.begin_write()?;
     Block::store_many(&write_tx, &blocks)?;

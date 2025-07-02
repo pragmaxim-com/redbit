@@ -2,9 +2,9 @@ use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::Type;
 
-pub fn plain_init(column_name: &Ident, table: &Ident) -> TokenStream {
+pub fn plain_init(table: &Ident) -> TokenStream {
     quote! {
-        #column_name: {
+        {
             let table_col_5 = tx.open_table(#table)?;
             let guard = table_col_5.get(pk)?;
             guard.ok_or_else(|| AppError::NotFound(format!(
@@ -24,9 +24,9 @@ pub fn plain_default_init(column_name: &Ident, column_type: &Type) -> TokenStrea
 }
 
 
-pub fn index_init(column_name: &Ident, table: &Ident) -> TokenStream {
+pub fn index_init(table: &Ident) -> TokenStream {
     quote! {
-        #column_name: {
+        {
             let table_col_10 = tx.open_table(#table)?;
             let guard = table_col_10.get(pk)?;
             guard.ok_or_else(|| AppError::NotFound(format!(
@@ -51,9 +51,9 @@ pub fn index_default_init(column_name: &Ident, column_type: &Type) -> TokenStrea
     }
 }
 
-pub fn dict_init_statement(column_name: &Ident, table_dict_pk_by_pk: &Ident, table_value_by_dict_pk: &Ident) -> TokenStream {
+pub fn dict_init_statement(table_dict_pk_by_pk: &Ident, table_value_by_dict_pk: &Ident) -> TokenStream {
     quote! {
-        #column_name: {
+        {
             let pk2birth = tx.open_table(#table_dict_pk_by_pk)?;
             let birth_guard = pk2birth.get(pk)?;
             let birth_id = birth_guard.ok_or_else(|| AppError::NotFound(format!(

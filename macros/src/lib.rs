@@ -10,6 +10,7 @@ mod compositor;
 mod table;
 mod transient;
 mod endpoint;
+mod stream_query;
 
 use crate::entity::EntityMacros;
 use crate::pk::{DbPkMacros, PointerType};
