@@ -78,27 +78,27 @@ fn it_should_delete_entity_by_unique_id() {
     assert!(transitive_entities_not_found);
 }
 
-#[test]
-fn it_should_get_entities_by_index() {
+#[tokio::test]
+async fn it_should_get_entities_by_index() {
     let (blocks, db) = init_temp_db("db_test");
 
     let read_tx = db.begin_read().unwrap();
     let transaction = blocks.first().unwrap().transactions.first().unwrap();
 
-    let found_by_hash = Transaction::get_by_hash(&read_tx, &transaction.hash).expect("Failed to query by hash");
+    let found_by_hash = Transaction::stream_by_hash(read_tx, transaction.hash.clone()).unwrap().try_collect::<Vec<Transaction>>().await.unwrap();
     assert_eq!(found_by_hash.len(), 3);
     assert!(found_by_hash.iter().any(|tx| tx.id == transaction.id));
     assert!(found_by_hash.iter().any(|tx| tx.id == transaction.id));
 }
 
-#[test]
-fn it_should_get_entities_by_index_with_dict() {
+#[tokio::test]
+async fn it_should_get_entities_by_index_with_dict() {
     let (blocks, db) = init_temp_db("db_test");
 
     let read_tx = db.begin_read().unwrap();
     let utxo = blocks.first().unwrap().transactions.first().unwrap().utxos.first().unwrap();
 
-    let found_by_address = Utxo::get_by_address(&read_tx, &utxo.address).expect("Failed to query by address");
+    let found_by_address = Utxo::stream_by_address(read_tx, utxo.address.clone()).unwrap().try_collect::<Vec<Utxo>>().await.unwrap();
     assert_eq!(found_by_address.len(), 3*3);
     assert!(found_by_address.iter().any(|tx| tx.id == utxo.id));
     assert!(found_by_address.iter().any(|tx| tx.id == utxo.id));

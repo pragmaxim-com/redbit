@@ -1,5 +1,5 @@
 mod delete;
-mod get_by;
+mod stream_by;
 mod init;
 mod range_by;
 mod store;
@@ -91,7 +91,7 @@ impl DbColumnMacros {
         let index_table_def = TableDef::index_table_def(entity_name, column_name, column_type, pk_type);
 
         let mut function_defs: Vec<FunctionDef> = Vec::new();
-        function_defs.push(get_by::get_by_index_def(entity_name, entity_type, column_name, column_type, &index_table_def.name));
+        function_defs.push(stream_by::stream_by_index_def(entity_name, entity_type, column_name, column_type, &index_table_def.name));
         function_defs.push(stream_keys_by::stream_keys_by_index_def(
             entity_name,
             pk_name,
@@ -209,7 +209,7 @@ impl DbColumnMacros {
                 &dict_index_table_def.name,
             ),
             function_defs: vec![
-                get_by::get_by_dict_def(
+                stream_by::stream_by_dict_def(
                     entity_name,
                     entity_type,
                     column_name,

@@ -22,7 +22,6 @@ pub fn stream_keys_by_dict_def(
             tx: &ReadTransaction,
             val: &#column_type
         ) -> Result<impl futures::Stream<Item = Result<#pk_type, AppError>> + Send + 'static, AppError> {
-            // Original dictionary lookup logic
             let val2birth = tx.open_table(#value_to_dict_pk)?;
             let birth_guard = val2birth.get(val)?;
 
@@ -36,7 +35,6 @@ pub fn stream_keys_by_dict_def(
                 Box::new(std::iter::empty())
             };
 
-            // Stream the iterator, mapping errors
             let stream = stream::iter(iter_box)
                 .map(|res| res.map(|e| e.value().clone()).map_err(AppError::from));
 
