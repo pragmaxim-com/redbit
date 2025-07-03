@@ -1,23 +1,29 @@
+use crate::field_parser::FieldDef;
 use proc_macro2::TokenStream;
 use quote::quote;
-use crate::field_parser::ColumnDef;
 
 pub struct TransientMacros {
-    pub definition: ColumnDef,
+    pub field_def: FieldDef,
+    pub struct_init: TokenStream,
+    pub struct_init_with_query: TokenStream,
     pub struct_default_init: TokenStream,
 }
 
 impl TransientMacros {
-    pub fn new(defs: Vec<ColumnDef>) -> Vec<TransientMacros> {
-        let mut transient_macros: Vec<TransientMacros> = Vec::new();
-        for transient in defs {
-            let field_name = &transient.field.name;
-            let field_type = &transient.field.tpe;
-            let struct_default_init = quote! {
-                #field_name: (<#field_type>::default())
-            };
-            transient_macros.push(TransientMacros { definition: transient, struct_default_init})
+    pub fn new(field_def: FieldDef) -> TransientMacros {
+        let field_name = &field_def.name;
+        let field_type = &field_def.tpe;
+        let struct_default_init = quote! {
+            #field_name: (<#field_type>::default())
+        };
+        let struct_init_with_query = quote! {
+            let #field_name = (<#field_type>::default());
+        };
+        TransientMacros { 
+            field_def, 
+            struct_init: struct_default_init.clone(), 
+            struct_init_with_query, 
+            struct_default_init
         }
-        transient_macros
     }
 }

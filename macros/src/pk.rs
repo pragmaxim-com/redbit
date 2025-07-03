@@ -9,8 +9,9 @@ mod store;
 mod delete;
 mod parent_key;
 mod limit;
+mod init;
 
-use crate::field_parser::{Multiplicity, PkDef};
+use crate::field_parser::{FieldDef, Multiplicity};
 use crate::macro_utils;
 use crate::rest::FunctionDef;
 use crate::table::TableDef;
@@ -24,8 +25,11 @@ pub enum PointerType {
 }
 
 pub struct DbPkMacros {
-    pub definition: PkDef,
+    pub field_def: FieldDef,
     pub table_def: TableDef,
+    pub struct_init: TokenStream,
+    pub struct_init_with_query: TokenStream,
+    pub struct_default_init: TokenStream,
     pub range_query: TokenStream,
     pub store_statement: TokenStream,
     pub store_many_statement: TokenStream,
@@ -35,9 +39,9 @@ pub struct DbPkMacros {
 }
 
 impl DbPkMacros {
-    pub fn new(entity_name: &Ident, entity_type: &Type, pk_def: &PkDef) -> Self {
-        let pk_name: Ident = pk_def.field.name.clone();
-        let pk_type = pk_def.field.tpe.clone();
+    pub fn new(entity_name: &Ident, entity_type: &Type, field_def: FieldDef, fk: Option<Multiplicity>) -> Self {
+        let pk_name = field_def.name.clone();
+        let pk_type = field_def.tpe.clone();
         let table_def = TableDef::pk(entity_name, &pk_name, &pk_type);
 
         let mut function_defs: Vec<FunctionDef> = Vec::new();
@@ -48,7 +52,7 @@ impl DbPkMacros {
         function_defs.push(limit::limit_fn_def(entity_name, entity_type));
         function_defs.push(exists::fn_def(entity_name, &pk_name, &pk_type, &table_def.name));
 
-        match pk_def.fk {
+        match fk {
             Some(Multiplicity::OneToMany) => {
                 function_defs.push(parent_key::fn_def(entity_name, &pk_name, &pk_type));
             }
@@ -78,8 +82,11 @@ impl DbPkMacros {
             };
 
         DbPkMacros {
-            definition: pk_def.clone(),
+            field_def,
             table_def: table_def.clone(),
+            struct_init: init::pk_init(&pk_name),
+            struct_init_with_query: init::pk_init_with_query(&pk_name),
+            struct_default_init: init::pk_default_init(&pk_name),
             range_query,
             store_statement: store::store_statement(&pk_name, &table_def.name),
             store_many_statement: store::store_many_statement(&pk_name, &table_def.name),

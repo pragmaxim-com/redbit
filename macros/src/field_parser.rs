@@ -5,23 +5,10 @@ use syn::token::Comma;
 use syn::{Fields, GenericArgument, ItemStruct, PathArguments, Type};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ColumnType {
-    Transient,
-    IndexingOff,
-    IndexingOn { dictionary: bool, range: bool },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Multiplicity {
     OneToOption,
     OneToOne,
     OneToMany,
-}
-
-pub enum ParsingResult {
-    Pk(PkDef),
-    Column(ColumnDef),
-    RelationShip(RelationshipDef),
 }
 
 #[derive(Clone)]
@@ -31,27 +18,17 @@ pub struct FieldDef {
 }
 
 #[derive(Clone)]
-pub struct PkDef {
-    pub field: FieldDef,
-    pub fk: Option<Multiplicity>,
+pub enum IndexingType {
+    Off,
+    On { dictionary: bool, range: bool },
 }
 
 #[derive(Clone)]
-pub struct ColumnDef {
-    pub field: FieldDef,
-    pub col_type: ColumnType,
-}
-
-#[derive(Clone)]
-pub struct RelationshipDef {
-    pub field: FieldDef,
-    pub multiplicity: Multiplicity,
-}
-
-pub struct FieldDefs {
-    pub pk: PkDef,
-    pub columns: Vec<ColumnDef>,
-    pub relationships: Vec<RelationshipDef>,
+pub enum ColumnDef {
+    Key { field_def: FieldDef, fk: Option<Multiplicity> },
+    Plain(FieldDef, IndexingType),
+    Relationship(FieldDef, Multiplicity),
+    Transient(FieldDef),
 }
 
 pub fn get_named_fields(ast: &ItemStruct) -> Result<Punctuated<syn::Field, Comma>, syn::Error> {
@@ -61,7 +38,7 @@ pub fn get_named_fields(ast: &ItemStruct) -> Result<Punctuated<syn::Field, Comma
     }
 }
 
-fn parse_entity_field(field: &syn::Field) -> Result<ParsingResult, syn::Error> {
+fn parse_entity_field(field: &syn::Field) -> Result<ColumnDef, syn::Error> {
     match &field.ident {
         None => Err(syn::Error::new(field.span(), "Unnamed fields not supported")),
         Some(column_name) => {
@@ -69,7 +46,7 @@ fn parse_entity_field(field: &syn::Field) -> Result<ParsingResult, syn::Error> {
             for attr in &field.attrs {
                 if attr.path().is_ident("pk") {
                     let field = FieldDef { name: column_name.clone(), tpe: column_type.clone() };
-                    return Ok(ParsingResult::Pk(PkDef { field, fk: None }));
+                    return Ok(ColumnDef::Key { field_def: field.clone(), fk: None });
                 } else if attr.path().is_ident("fk") {
                     let mut fk = None;
                     let _ = attr.parse_nested_meta(|nested| {
@@ -86,23 +63,23 @@ fn parse_entity_field(field: &syn::Field) -> Result<ParsingResult, syn::Error> {
                         return Err(syn::Error::new(attr.span(), "Foreign key must specify either `one2many` or `one2one`"));
                     }
                     let field = FieldDef { name: column_name.clone(), tpe: column_type.clone() };
-                    return Ok(ParsingResult::Pk(PkDef { field, fk }));
+                    return Ok(ColumnDef::Key { field_def: field.clone(), fk });
                 } else if attr.path().is_ident("column") {
-                    let mut indexing = ColumnType::IndexingOff;
+                    let field = FieldDef { name: column_name.clone(), tpe: column_type.clone() };
+                    let mut indexing = ColumnDef::Plain(field.clone(), IndexingType::Off);
                     let _ = attr.parse_nested_meta(|nested| {
                         if nested.path.is_ident("transient") {
-                            indexing = ColumnType::Transient;
+                            indexing = ColumnDef::Transient(field.clone());
                         } else if nested.path.is_ident("index") {
-                            indexing = ColumnType::IndexingOn { dictionary: false, range: false };
+                            indexing = ColumnDef::Plain(field.clone(), IndexingType::On { dictionary: false, range: false });
                         } else if nested.path.is_ident("dictionary") {
-                            indexing = ColumnType::IndexingOn { dictionary: true, range: false };
+                            indexing = ColumnDef::Plain(field.clone(), IndexingType::On { dictionary: true, range: false });
                         } else if nested.path.is_ident("range") {
-                            indexing = ColumnType::IndexingOn { dictionary: false, range: true };
+                            indexing = ColumnDef::Plain(field.clone(), IndexingType::On { dictionary: false, range: true });
                         }
                         Ok(())
                     });
-                    let field = FieldDef { name: column_name.clone(), tpe: column_type.clone() };
-                    return Ok(ParsingResult::Column(ColumnDef { field, col_type: indexing }));
+                    return Ok(indexing);
                 }
             }
             if let Type::Path(type_path) = &column_type {
@@ -127,10 +104,7 @@ fn parse_entity_field(field: &syn::Field) -> Result<ParsingResult, syn::Error> {
                                         name: column_name.clone(),
                                         tpe: type_path,
                                     };
-                                    return Ok(ParsingResult::RelationShip(RelationshipDef {
-                                        field,
-                                        multiplicity: Multiplicity::OneToMany,
-                                    }));
+                                    return Ok(ColumnDef::Relationship(field, Multiplicity::OneToMany));
                                 }
                             }
                         }
@@ -153,10 +127,7 @@ fn parse_entity_field(field: &syn::Field) -> Result<ParsingResult, syn::Error> {
                                         name: column_name.clone(),
                                         tpe: type_path,
                                     };
-                                    return Ok(ParsingResult::RelationShip(RelationshipDef {
-                                        field,
-                                        multiplicity: Multiplicity::OneToOption,
-                                    }));
+                                    return Ok(ColumnDef::Relationship(field, Multiplicity::OneToOption));
                                 }
                             }
                         }
@@ -172,10 +143,7 @@ fn parse_entity_field(field: &syn::Field) -> Result<ParsingResult, syn::Error> {
                                     name: column_name.clone(),
                                     tpe: type_path,
                                 };
-                                return Ok(ParsingResult::RelationShip(RelationshipDef {
-                                    field,
-                                    multiplicity: Multiplicity::OneToOne,
-                                }));
+                                return Ok(ColumnDef::Relationship(field, Multiplicity::OneToOne));
                             }
                         }
                     }
@@ -189,29 +157,24 @@ fn parse_entity_field(field: &syn::Field) -> Result<ParsingResult, syn::Error> {
     }
 }
 
-pub fn get_field_macros(fields: &Punctuated<syn::Field, Comma>, ast: &ItemStruct) -> Result<FieldDefs, syn::Error> {
-    let mut pk_column: Option<PkDef> = None;
+pub fn get_field_macros(fields: &Punctuated<syn::Field, Comma>, ast: &ItemStruct) -> Result<(FieldDef, Vec<ColumnDef>), syn::Error> {
+    let mut pk_column: Option<FieldDef> = None;
     let mut columns: Vec<ColumnDef> = Vec::new();
-    let mut relationships: Vec<RelationshipDef> = Vec::new();
 
     for field in fields.iter() {
         match parse_entity_field(field)? {
-            ParsingResult::Column(column) => columns.push(column),
-            ParsingResult::Pk(pk) => {
+            ColumnDef::Key {field_def, fk}  => {
                 if pk_column.is_some() {
                     return Err(syn::Error::new(field.span(), "Multiple `#[pk]` columns found; only one is allowed"));
                 }
-                pk_column = Some(pk);
+                pk_column = Some(field_def.clone());
+                columns.push(ColumnDef::Key {field_def, fk});
             }
-            ParsingResult::RelationShip(relationship) => relationships.push(relationship),
+            column => columns.push(column),
         }
     }
 
     let pk = pk_column.ok_or_else(|| syn::Error::new(ast.span(), "`#[pk]` attribute not found on any column. Exactly one column must have `#[pk]`."))?;
 
-    Ok(FieldDefs {
-        pk,
-        columns,
-        relationships,
-    })
+    Ok((pk, columns))
 }

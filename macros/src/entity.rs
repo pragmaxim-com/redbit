@@ -1,246 +1,222 @@
-use crate::column::DbColumnMacros;
-use crate::endpoint::EndpointDef;
-use crate::field_parser::*;
-use crate::pk::DbPkMacros;
-use crate::relationship::DbRelationshipMacros;
-use crate::rest::HttpParams::{FromBody, FromPath};
-use crate::rest::{FunctionDef, GetParam, HttpMethod};
+mod store;
+mod delete;
+mod query;
+
+use crate::field::FieldMacros;
 use crate::table::TableDef;
-use crate::transient::TransientMacros;
-use proc_macro2::{Ident, TokenStream};
+use proc_macro2::{Ident, Literal, TokenStream};
 use quote::{format_ident, quote};
 use syn::Type;
+use crate::rest::{to_http_endpoints, FunctionDef};
+use crate::macro_utils;
 
 pub struct EntityMacros {
     pub entity_name: Ident,
     pub entity_type: Type,
-    pub pk: DbPkMacros,
-    pub columns: Vec<DbColumnMacros>,
-    pub relationships: Vec<DbRelationshipMacros>,
-    pub transients: Vec<TransientMacros>,
+    pub pk_name: Ident,
+    pub pk_type: Type,
+    pub field_names: Vec<Ident>,
+    pub table_definitions: Vec<TableDef>,
+    pub struct_inits: Vec<TokenStream>,
+    pub struct_inits_with_query: Vec<TokenStream>,
+    pub struct_default_inits: Vec<TokenStream>,
+    pub range_queries: Vec<TokenStream>,
+    pub stream_queries: Vec<(TokenStream,TokenStream)>,
+    pub store_statements: Vec<TokenStream>,
+    pub store_many_statements: Vec<TokenStream>,
+    pub delete_statements: Vec<TokenStream>,
+    pub delete_many_statements: Vec<TokenStream>,
+    pub function_defs: Vec<FunctionDef>,
 }
 
 impl EntityMacros {
-    pub fn new(entity_name: &Ident, entity_type: &Type, field_defs: FieldDefs) -> Result<EntityMacros, syn::Error> {
-        let FieldDefs { pk, columns, relationships } = field_defs;
-        let column_macros = columns
-            .iter()
-            .filter(|c|c.col_type != ColumnType::Transient)
-            .map(|entity_column| DbColumnMacros::new(entity_column.clone(), entity_name, entity_type, &pk))
-            .collect::<Result<Vec<DbColumnMacros>, syn::Error>>()?;
-        let relationship_macros = relationships.into_iter().map(|rel| DbRelationshipMacros::new(rel, entity_name, &pk)).collect();
+    pub fn new(entity_name: Ident, entity_type: Type, pk_name: Ident, pk_type: Type, field_macros: Vec<FieldMacros>) -> Result<EntityMacros, syn::Error> {
+        let mut field_names = Vec::new();
+        let mut table_definitions = Vec::new();
+        let mut range_queries = Vec::new();
+        let mut stream_queries = Vec::new();
+        let mut struct_inits = Vec::new();
+        let mut struct_inits_with_query = Vec::new();
+        let mut struct_default_inits = Vec::new();
+        let mut store_statements = Vec::new();
+        let mut delete_statements = Vec::new();
+        let mut store_many_statements = Vec::new();
+        let mut delete_many_statements = Vec::new();
+        let mut function_defs = Vec::new();
+
+        for column in field_macros.iter() {
+            field_names.push(column.field_name().clone());
+            table_definitions.extend(column.table_definitions());
+            range_queries.extend(column.range_queries());
+            stream_queries.extend(column.stream_queries());
+            struct_inits.push(column.struct_init());
+            struct_inits_with_query.push(column.struct_init_with_query());
+            struct_default_inits.push(column.struct_default_init());
+            store_statements.extend(column.store_statements());
+            delete_statements.extend(column.delete_statements());
+            store_many_statements.extend(column.store_many_statements());
+            delete_many_statements.extend(column.delete_many_statements());
+            function_defs.extend(column.function_defs())
+        }
+
         Ok(EntityMacros {
-            entity_name: entity_name.clone(),
-            entity_type: entity_type.clone(),
-            pk: DbPkMacros::new(entity_name, entity_type, &pk),
-            columns: column_macros,
-            relationships: relationship_macros,
-            transients: TransientMacros::new(columns.into_iter().filter(|c|c.col_type == ColumnType::Transient).collect()),
+            entity_name,
+            entity_type,
+            pk_name,
+            pk_type,
+            field_names,
+            table_definitions,
+            struct_inits,
+            struct_inits_with_query,
+            struct_default_inits,
+            range_queries,
+            stream_queries,
+            store_statements,
+            store_many_statements,
+            delete_statements,
+            delete_many_statements,
+            function_defs,
         })
     }
 
-    pub fn table_definitions(&self) -> Vec<TableDef> {
-        let mut table_definitions = Vec::new();
-        table_definitions.push(self.pk.table_def.clone());
-        for column in &self.columns {
-            table_definitions.extend(column.table_definitions.clone());
-        }
-        table_definitions
-    }
+    pub fn expand(&self) -> TokenStream {
+        let entity_name = &self.entity_name;
+        let entity_type = &self.entity_type;
+        let pk_name = &self.pk_name;
+        let pk_type = &self.pk_type;
 
-    pub fn queries(&self) -> Vec<TokenStream> {
-        let mut column_queries = Vec::new();
-        column_queries.push(self.pk.range_query.clone());
-        for column in &self.columns {
-            if let Some(query) = &column.range_query {
-                column_queries.push(query.clone());
+        let struct_default_inits = &self.struct_default_inits;
+
+        let store_statements = &self.store_statements;
+        let store_many_statements = &self.store_many_statements;
+        let delete_statements = &self.delete_statements;
+        let delete_many_statements = &self.delete_many_statements;
+
+        let mut function_defs = Vec::new();
+        function_defs.push(store::fn_def(&entity_name, &entity_type, &pk_name, &pk_type, &store_statements));
+        function_defs.extend(self.function_defs.clone());
+        function_defs.push(delete::fn_def(&entity_name, &entity_type, &pk_name, &pk_type, &delete_statements));
+
+        let struct_inits = &self.struct_inits;
+        let queries = &self.range_queries;
+
+        let function_streams: Vec<TokenStream> = function_defs.iter().map(|f| f.fn_stream.clone()).collect::<Vec<_>>();
+        let table_definition_streams: Vec<TokenStream> = self.table_definitions.iter().map(|table_def| table_def.definition.clone()).collect();
+        let tests = function_defs.iter().filter_map(|f| f.test_stream.clone()).collect::<Vec<_>>();
+        let (endpoint_handlers, route_chains, route_tests) = to_http_endpoints(&function_defs);
+
+        let entity_tests = format_ident!("{}_tests", entity_name.to_string().to_lowercase());
+        let entity_literal = Literal::string(&entity_name.to_string());
+
+        let (stream_query_ident, stream_query_struct) = query::stream_query_struct_macro(entity_name, &self.stream_queries);
+        let struct_inits_with_query = &self.struct_inits_with_query;
+        let field_names = &self.field_names;
+        
+        let expanded = quote! {
+            #stream_query_struct
+            // table definitions are not in the impl object because they are accessed globally with semantic meaning
+            #(#table_definition_streams)*
+            // utoipa and axum query structs to map query and path params into
+            #(#queries)*
+            // axum endpoints cannot be in the impl object https://docs.rs/axum/latest/axum/attr.debug_handler.html#limitations
+            #(#endpoint_handlers)*
+    
+            impl #entity_name {
+                #(#function_streams)*
+                
+                pub fn sample() -> Self {
+                    #entity_name::sample_with(&#pk_type::default(), 0)
+                }
+    
+                pub fn sample_with(pk: &#pk_type, sample_index: usize) -> Self {
+                    #entity_name {
+                        #(#struct_default_inits),*
+                    }
+                }
+    
+                pub fn sample_many(n: usize) -> Vec<#entity_type> {
+                    let mut sample_index = 0;
+                    std::iter::successors(Some((#pk_type::default(), None)), |(prev_pointer, _)| {
+                        let new_entity = #entity_type::sample_with(prev_pointer, sample_index);
+                        sample_index += 1;
+                        Some((prev_pointer.next(), Some(new_entity)))
+                    })
+                    .filter_map(|(_, instance)| instance)
+                    .take(n)
+                    .collect()
+                }
+    
+                fn compose(tx: &ReadTransaction, pk: &#pk_type) -> Result<#entity_type, AppError> {
+                    Ok(#entity_name {
+                        #(#struct_inits),*
+                    })
+                }
+    
+                fn compose_with_filter(tx: &ReadTransaction, pk: &#pk_type, streaming_query: #stream_query_ident) -> Result<Option<#entity_type>, AppError> {
+                    // First: fetch & filter every column, short‑circuit on mismatch
+                    #(#struct_inits_with_query)*
+                    Ok(Some(#entity_type {
+                        #(#field_names,)*
+                    }))
+                }
+                
+                pub fn store(tx: &WriteTransaction, instance: &#entity_type) -> Result<(), AppError> {
+                    #(#store_statements)*
+                    Ok(())
+                }
+    
+                pub fn store_many(tx: &WriteTransaction, instances: &Vec<#entity_type>) -> Result<(), AppError> {
+                    #(#store_many_statements)*
+                    Ok(())
+                }
+    
+                pub fn delete(tx: &WriteTransaction, pk: &#pk_type) -> Result<(), AppError> {
+                    #(#delete_statements)*
+                    Ok(())
+                }
+    
+                pub fn delete_many(tx: &WriteTransaction, pks: &Vec<#pk_type>) -> Result<(), AppError> {
+                    #(#delete_many_statements)*
+                    Ok(())
+                }
+    
+                pub fn routes() -> OpenApiRouter<RequestState> {
+                    OpenApiRouter::new()
+                        #(#route_chains)*
+                }
             }
-        }
-        column_queries
-    }
     
-    pub fn column_struct_inits(&self) -> Vec<(Ident, TokenStream)> {
-        let mut struct_inits = Vec::new();
-        for column in &self.columns {
-            struct_inits.push((column.definition.field.name.clone(), column.struct_init.clone()));
-        }
-        struct_inits
-    }
-
-    pub fn non_column_inits(&self) -> Vec<TokenStream> {
-        let mut struct_inits = Vec::new();
-        for relationship in &self.relationships {
-            struct_inits.push(relationship.struct_init.clone());
-        }
-        for transient in &self.transients {
-            struct_inits.push(transient.struct_default_init.clone());
-        }
-        struct_inits
-    }
-
-    pub fn struct_default_inits(&self) -> Vec<TokenStream> {
-        let mut struct_default_inits = Vec::new();
-        for column in &self.columns {
-            struct_default_inits.push(column.struct_default_init.clone());
-        }
-        for relationship in &self.relationships {
-            struct_default_inits.push(relationship.struct_default_init.clone());
-        }
-        for transient in &self.transients {
-            struct_default_inits.push(transient.struct_default_init.clone());
-        }
-        struct_default_inits
-    }
+            #[cfg(test)]
+            mod #entity_tests {
+                use super::*;
     
-    pub fn function_defs(&self) -> Vec<FunctionDef> {
-        let mut function_defs = vec![];
-        function_defs.push(self.store_fn_def());
-        function_defs.extend(self.pk.function_defs.clone());
-        for column in &self.columns {
-            function_defs.extend(column.function_defs.clone());
-        }
-        for relationship in &self.relationships {
-            function_defs.push(relationship.function_def.clone());
-        }
-        function_defs.push(self.delete_fn_def());
-        function_defs
-    }
-
-    pub fn store_fn_def(&self) -> FunctionDef {
-        let pk_name = &self.pk.definition.field.name;
-        let pk_type = &self.pk.definition.field.tpe;
-        let entity_type = &self.entity_type;
-        let entity_name = &self.entity_name;
-        let fn_name = format_ident!("store_and_commit");
-        let store_statements = self.store_statements();
-        let fn_stream = quote! {
-            pub fn #fn_name(db: &Database, instance: &#entity_type) -> Result<#pk_type, AppError> {
-               let tx = db.begin_write()?;
-               {
-                   #(#store_statements)*
-               }
-               tx.commit()?;
-               Ok(instance.#pk_name.clone())
-           }
-        };
-        FunctionDef {
-            entity_name: entity_name.clone(),
-            fn_name: fn_name.clone(),
-            fn_stream,
-            endpoint_def: Some(EndpointDef {
-                params: vec![FromBody(entity_type.clone())],
-                method: HttpMethod::POST,
-                handler_impl_stream: quote! {
-                    Result<AppJson<#pk_type>, AppError> {
-                        let db = state.db;
-                        let result = #entity_name::#fn_name(&db, &body)?;
-                        Ok(AppJson(result))
+                fn init_temp_db(name: &str) -> Arc<Database> {
+                    let dir = std::env::temp_dir().join("redbit").join(name).join(#entity_literal);
+                    if !dir.exists() {
+                        std::fs::create_dir_all(dir.clone()).unwrap();
                     }
-                },
-                utoipa_responses: quote! { responses((status = OK, body = #pk_type)) },
-                endpoint: format!("/{}", entity_name.to_string().to_lowercase()),
-            }),
-            test_stream: Some(quote! {
-                {
-                    for test_entity in #entity_type::sample_many(entity_count) {
-                        let pk = #entity_name::#fn_name(&db, &test_entity).expect("Failed to store and commit instance");
-                        assert_eq!(test_entity.#pk_name, pk, "Stored PK does not match the instance PK");
-                    }
+                    let db_path = dir.join(format!("{}_{}.redb", #entity_literal, rand::random::<u64>()));
+                    Arc::new(Database::create(db_path).expect("Failed to create database"))
                 }
-            }),
-        }
-    }
-
-    pub fn store_statements(&self) -> Vec<TokenStream> {
-        let mut statements = vec![self.pk.store_statement.clone()];
-        for column in &self.columns {
-            statements.push(column.store_statement.clone());
-        }
-        for relationship in &self.relationships {
-            statements.push(relationship.store_statement.clone());
-        }
-        statements
-    }
-
-    pub fn delete_fn_def(&self) -> FunctionDef {
-        let pk_type = &self.pk.definition.field.tpe;
-        let pk_name = &self.pk.definition.field.name;
-        let entity_name = &self.entity_name;
-        let entity_type = &self.entity_type;
-        let fn_name = format_ident!("delete_and_commit");
-        let delete_statements = self.delete_statements();
-        let fn_stream = quote! {
-            pub fn #fn_name(db: &Database, pk: &#pk_type) -> Result<(), AppError> {
-               let tx = db.begin_write()?;
-               {
-                   #(#delete_statements)*
-               }
-               tx.commit()?;
-               Ok(())
-           }
-        };
-        FunctionDef {
-            entity_name: entity_name.clone(),
-            fn_name: fn_name.clone(),
-            fn_stream,
-            endpoint_def: Some(EndpointDef {
-                params: vec![FromPath(vec![GetParam { name: pk_name.clone(), ty: pk_type.clone(), description: "Primary key".to_string() }])],
-                method: HttpMethod::DELETE,
-                utoipa_responses: quote! { responses((status = OK)) },
-                handler_impl_stream: quote! {
-                    Result<AppJson<()>, AppError> {
-                        let db = state.db;
-                        let result = #entity_name::#fn_name(&db, &#pk_name)?;
-                        Ok(AppJson(result))
-                    }
-                },
-                endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), pk_name, pk_name),
-            }),
-            test_stream: Some(quote! {
-                {
-                    for test_entity in #entity_type::sample_many(entity_count) {
-                        let pk = test_entity.#pk_name;
-                        #entity_name::#fn_name(&db, &pk).expect("Failed to delete and commit instance");
-                        let read_tx = db.begin_read().expect("Failed to begin read transaction");
-                        let is_empty = #entity_name::get(&read_tx, &pk).expect("Failed to get instance").is_none();
-                        assert!(is_empty, "Instance should be deleted");
-                    }
+    
+                #[tokio::test]
+                async fn test_entity_api() {
+                    let db = init_temp_db("api");
+                    let entity_count: usize = 3;
+                    #(#tests)*
                 }
-            }),
-
-        }
+    
+                #[tokio::test]
+                async fn test_entity_rest_api() {
+                    let db = init_temp_db("rest-api");
+                    let router = build_router(RequestState { db: Arc::clone(&db) }, None).await;
+                    let server = axum_test::TestServer::new(router).unwrap();
+                    #(#route_tests)*
+                }
+            }
+        };
+        // eprintln!("----------------------------------------------------------");
+        macro_utils::write_stream_and_return(expanded, &entity_name)
     }
 
-    pub fn store_many_statements(&self) -> Vec<TokenStream> {
-        let mut statements = vec![self.pk.store_many_statement.clone()];
-        for column in &self.columns {
-            statements.push(column.store_many_statement.clone());
-        }
-        for relationship in &self.relationships {
-            statements.push(relationship.store_many_statement.clone());
-        }
-        statements
-    }
-
-    pub fn delete_statements(&self) -> Vec<TokenStream> {
-        let mut statements = vec![self.pk.delete_statement.clone()];
-        for column in &self.columns {
-            statements.push(column.delete_statement.clone());
-        }
-        for relationship in &self.relationships {
-            statements.push(relationship.delete_statement.clone());
-        }
-        statements
-    }
-
-    pub fn delete_many_statements(&self) -> Vec<TokenStream> {
-        let mut statements = vec![self.pk.delete_many_statement.clone()];
-        for column in &self.columns {
-            statements.push(column.delete_many_statement.clone());
-        }
-        for relationship in &self.relationships {
-            statements.push(relationship.delete_many_statement.clone());
-        }
-        statements
-    }
 }

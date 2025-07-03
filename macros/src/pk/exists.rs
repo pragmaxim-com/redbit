@@ -23,7 +23,7 @@ pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, table: &Iden
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let pk_value = #pk_type::default();
             let entity_exists = #entity_name::#fn_name(&read_tx, &pk_value).expect("Failed to check entity exists");
-            assert!(entity_exists, "Entity PK does not match the requested PK");
+            assert!(entity_exists, "Entity is supposed to exist for the given PK");
         }
     });
 

@@ -4,8 +4,9 @@ mod init;
 mod range_by;
 mod store;
 mod stream_keys_by;
+mod query;
 
-use crate::field_parser::{ColumnDef, ColumnType, PkDef};
+use crate::field_parser::{FieldDef, IndexingType};
 use crate::macro_utils;
 use crate::rest::*;
 use crate::table::TableDef;
@@ -15,10 +16,13 @@ use syn::{ItemStruct, Type};
 use crate::macro_utils::InnerKind;
 
 pub struct DbColumnMacros {
-    pub definition: ColumnDef,
+    pub field_def: FieldDef,
+    pub indexing_type: IndexingType,
     pub range_query: Option<TokenStream>,
+    pub stream_query_init: (TokenStream, TokenStream),
     pub table_definitions: Vec<TableDef>,
     pub struct_init: TokenStream,
+    pub struct_init_with_query: TokenStream,
     pub struct_default_init: TokenStream,
     pub store_statement: TokenStream,
     pub store_many_statement: TokenStream,
@@ -28,30 +32,26 @@ pub struct DbColumnMacros {
 }
 
 impl DbColumnMacros {
-    pub fn new(column_def: ColumnDef, entity_name: &Ident, entity_type: &Type, pk_def: &PkDef) -> Result<DbColumnMacros, syn::Error> {
-        let column_name = &column_def.field.name.clone();
-        let column_type = &column_def.field.tpe.clone();
-        let pk_name = &pk_def.field.name;
-        let pk_type = &pk_def.field.tpe;
-        match column_def.col_type {
-            ColumnType::IndexingOff => Ok(DbColumnMacros::plain(column_def, entity_name, pk_name, pk_type, column_name, column_type)),
-            ColumnType::IndexingOn { dictionary: false, range } => {
-                Ok(DbColumnMacros::index(column_def, entity_name, entity_type, pk_name, pk_type, column_name, column_type, range))
+    pub fn new(field_def: FieldDef, indexing_type: IndexingType, entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type: &Type) -> DbColumnMacros {
+        let column_name = &field_def.name.clone();
+        let column_type = &field_def.tpe.clone();
+        match indexing_type {
+            IndexingType::Off => DbColumnMacros::plain(field_def, indexing_type, entity_name, pk_name, pk_type, column_name, column_type),
+            IndexingType::On { dictionary: false, range } => {
+                DbColumnMacros::index(field_def, indexing_type, entity_name, entity_type, pk_name, pk_type, column_name, column_type, range)
             }
-            ColumnType::IndexingOn { dictionary: true, range: false } => {
-                Ok(DbColumnMacros::dictionary(column_def, entity_name, entity_type, pk_name, pk_type, column_name, column_type))
+            IndexingType::On { dictionary: true, range: false } => {
+                DbColumnMacros::dictionary(field_def, indexing_type, entity_name, entity_type, pk_name, pk_type, column_name, column_type)
             }
-            ColumnType::IndexingOn { dictionary: true, range: true } => {
-                Err(syn::Error::new(column_name.span(), "Range indexing on dictionary columns is not supported"))
-            }
-            ColumnType::Transient => {
-                Err(syn::Error::new(column_name.span(), "Transient columns are not supported in this context"))
+            IndexingType::On { dictionary: true, range: true } => {
+                panic!("Range indexing on dictionary columns is not supported")
             }
         }
     }
 
     pub fn plain(
-        definition: ColumnDef,
+        field_def: FieldDef,
+        indexing_type: IndexingType,
         entity_name: &Ident,
         pk_name: &Ident,
         pk_type: &Type,
@@ -60,10 +60,13 @@ impl DbColumnMacros {
     ) -> DbColumnMacros {
         let table_def = TableDef::plain_table_def(entity_name, column_name, column_type, pk_name, pk_type);
         DbColumnMacros {
-            definition,
+            field_def,
+            indexing_type,
             range_query: None,
+            stream_query_init: query::stream_query_init(column_name, column_type),
             table_definitions: vec![table_def.clone()],
-            struct_init: init::plain_init(&table_def.name),
+            struct_init: init::plain_init(column_name, &table_def.name),
+            struct_init_with_query: init::plain_init_with_query(column_name, &table_def.name),
             struct_default_init: init::plain_default_init(column_name, column_type),
             store_statement: store::store_statement(pk_name, column_name, &table_def.name),
             store_many_statement: store::store_many_statement(pk_name, column_name, &table_def.name),
@@ -74,7 +77,8 @@ impl DbColumnMacros {
     }
 
     pub fn index(
-        definition: ColumnDef,
+        field_def: FieldDef,
+        indexing_type: IndexingType,
         entity_name: &Ident,
         entity_type: &Type,
         pk_name: &Ident,
@@ -127,10 +131,13 @@ impl DbColumnMacros {
         };
 
         DbColumnMacros {
-            definition,
+            field_def,
+            indexing_type,
             range_query,
+            stream_query_init: query::stream_query_init(column_name, column_type),
             table_definitions: vec![plain_table_def.clone(), index_table_def.clone()],
-            struct_init: init::index_init(&plain_table_def.name),
+            struct_init: init::index_init(column_name, &plain_table_def.name),
+            struct_init_with_query: init::index_init_with_query(column_name, &plain_table_def.name),
             struct_default_init: init::index_default_init(column_name, column_type),
             store_statement: store::store_index_def(column_name, pk_name, &plain_table_def.name, &index_table_def.name),
             store_many_statement: store::store_many_index_def(column_name, pk_name, &plain_table_def.name, &index_table_def.name),
@@ -141,7 +148,8 @@ impl DbColumnMacros {
     }
 
     pub fn dictionary(
-        definition: ColumnDef,
+        field_def: FieldDef,
+        indexing_type: IndexingType,
         entity_name: &Ident,
         entity_type: &Type,
         pk_name: &Ident,
@@ -155,15 +163,22 @@ impl DbColumnMacros {
         let dict_pk_by_pk_table_def = TableDef::dict_pk_by_pk_table_def(entity_name, column_name, pk_name, pk_type);
 
         DbColumnMacros {
-            definition,
+            field_def,
+            indexing_type,
             range_query: None,
+            stream_query_init: query::stream_query_init(column_name, column_type),
             table_definitions: vec![
                 dict_index_table_def.clone(),
                 value_by_dict_pk_table_def.clone(),
                 value_to_dict_pk_table_def.clone(),
                 dict_pk_by_pk_table_def.clone(),
             ],
-            struct_init: init::dict_init_statement(&dict_pk_by_pk_table_def.name, &value_by_dict_pk_table_def.name),
+            struct_init: init::dict_init(column_name, &dict_pk_by_pk_table_def.name, &value_by_dict_pk_table_def.name),
+            struct_init_with_query: init::dict_init_with_query(
+                column_name,
+                &dict_pk_by_pk_table_def.name,
+                &value_by_dict_pk_table_def.name,
+            ),
             struct_default_init: init::dict_default_init(column_name, column_type),
             store_statement: store::store_dict_def(
                 column_name,

@@ -6,13 +6,11 @@ mod relationship;
 mod macro_utils;
 mod rest;
 mod field_parser;
-mod compositor;
 mod table;
 mod transient;
 mod endpoint;
-mod stream_query;
+mod field;
 
-use crate::entity::EntityMacros;
 use crate::pk::{DbPkMacros, PointerType};
 
 use crate::column::DbColumnMacros;
@@ -23,6 +21,11 @@ use std::sync::Once;
 use syn::parse::Parse;
 use syn::spanned::Spanned;
 use syn::{parse_macro_input, parse_quote, DeriveInput, Fields, ItemStruct, Type};
+use crate::entity::EntityMacros;
+use crate::field::FieldMacros;
+use crate::field_parser::ColumnDef;
+use crate::relationship::DbRelationshipMacros;
+use crate::transient::TransientMacros;
 
 #[proc_macro_attribute]
 #[proc_macro_error]
@@ -182,10 +185,26 @@ pub fn derive_entity(input: TokenStream) -> TokenStream {
         .and_then(|named_fields| {
             field_parser::get_field_macros(&named_fields, &item_struct)
         })
-        .and_then(|field_macros| {
-            EntityMacros::new(entity_ident, &entity_type, field_macros)
+        .and_then(|(pk, field_macros)| {
+            let field_macros =
+                field_macros.into_iter().map(|c| match c {
+                    ColumnDef::Key {field_def, fk } => {
+                        FieldMacros::Pk(DbPkMacros::new(entity_ident, &entity_type, field_def.clone(), fk.clone()))
+                    },
+                    ColumnDef::Plain(field , indexing_type) => {
+                        FieldMacros::Plain(DbColumnMacros::new(field.clone(), indexing_type.clone(), entity_ident, &entity_type, &pk.name, &pk.tpe))
+                    },
+                    ColumnDef::Relationship(field, multiplicity) => {
+                        FieldMacros::Relationship(DbRelationshipMacros::new(field.clone(), multiplicity.clone(), entity_ident, &pk.name, &pk.tpe))
+                    },
+                    ColumnDef::Transient(field) =>{
+                        FieldMacros::Transient(TransientMacros::new(field.clone()))
+                    }
+                }
+                ).collect::<Vec<FieldMacros>>();
+            EntityMacros::new(entity_ident.clone(), entity_type, pk.name, pk.tpe, field_macros)
         })
-        .map(|entity_macros| compositor::expand(entity_macros)).unwrap_or_else(|e| e.to_compile_error().into());
+        .map(|entity_macros| entity_macros.expand()).unwrap_or_else(|e| e.to_compile_error().into());
 
     // Combine both parts
     let expanded = quote! {
