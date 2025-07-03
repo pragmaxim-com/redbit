@@ -110,6 +110,7 @@ pub trait UrlEncoded {
 pub enum AppError {
     Internal(String),
     NotFound(String),
+    BadRequest(String),
     JsonRejection(JsonRejection),
 }
 
@@ -126,6 +127,7 @@ impl std::fmt::Display for AppError {
         match self {
             AppError::Internal(msg) => write!(f, "Database error: {}", msg),
             AppError::NotFound(msg) => write!(f, "Not Found: {}", msg),
+            AppError::BadRequest(msg) => write!(f, "Bad Request: {}", msg),
             AppError::JsonRejection(reject) => write!(f, "Json rejection: {}", reject),
         }
     }
@@ -252,6 +254,7 @@ impl IntoResponse for AppError {
 
         let (status, message) = match self {
             AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg),
+            AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg),
             AppError::JsonRejection(rejection) => (rejection.status(), rejection.body_text()),
             AppError::Internal(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
         };

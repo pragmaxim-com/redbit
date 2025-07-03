@@ -19,10 +19,10 @@ impl TransientMacros {
         let struct_init_with_query = quote! {
             let #field_name = (<#field_type>::default());
         };
-        TransientMacros { 
-            field_def, 
-            struct_init: struct_default_init.clone(), 
-            struct_init_with_query, 
+        TransientMacros {
+            field_def,
+            struct_init: struct_default_init.clone(),
+            struct_init_with_query,
             struct_default_init
         }
     }

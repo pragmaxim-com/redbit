@@ -1,10 +1,12 @@
 mod delete;
 mod stream_by;
 mod init;
-mod range_by;
+mod stream_range_by;
 mod store;
 mod stream_keys_by;
 mod query;
+mod range_by;
+mod get_by;
 
 use crate::field_parser::{FieldDef, IndexingType};
 use crate::macro_utils;
@@ -17,7 +19,6 @@ use crate::macro_utils::InnerKind;
 
 pub struct DbColumnMacros {
     pub field_def: FieldDef,
-    pub indexing_type: IndexingType,
     pub range_query: Option<TokenStream>,
     pub stream_query_init: (TokenStream, TokenStream),
     pub table_definitions: Vec<TableDef>,
@@ -36,12 +37,12 @@ impl DbColumnMacros {
         let column_name = &field_def.name.clone();
         let column_type = &field_def.tpe.clone();
         match indexing_type {
-            IndexingType::Off => DbColumnMacros::plain(field_def, indexing_type, entity_name, pk_name, pk_type, column_name, column_type),
+            IndexingType::Off => DbColumnMacros::plain(field_def, entity_name, pk_name, pk_type, column_name, column_type),
             IndexingType::On { dictionary: false, range } => {
-                DbColumnMacros::index(field_def, indexing_type, entity_name, entity_type, pk_name, pk_type, column_name, column_type, range)
+                DbColumnMacros::index(field_def, entity_name, entity_type, pk_name, pk_type, column_name, column_type, range)
             }
             IndexingType::On { dictionary: true, range: false } => {
-                DbColumnMacros::dictionary(field_def, indexing_type, entity_name, entity_type, pk_name, pk_type, column_name, column_type)
+                DbColumnMacros::dictionary(field_def, entity_name, entity_type, pk_name, pk_type, column_name, column_type)
             }
             IndexingType::On { dictionary: true, range: true } => {
                 panic!("Range indexing on dictionary columns is not supported")
@@ -51,7 +52,6 @@ impl DbColumnMacros {
 
     pub fn plain(
         field_def: FieldDef,
-        indexing_type: IndexingType,
         entity_name: &Ident,
         pk_name: &Ident,
         pk_type: &Type,
@@ -61,7 +61,6 @@ impl DbColumnMacros {
         let table_def = TableDef::plain_table_def(entity_name, column_name, column_type, pk_name, pk_type);
         DbColumnMacros {
             field_def,
-            indexing_type,
             range_query: None,
             stream_query_init: query::stream_query_init(column_name, column_type),
             table_definitions: vec![table_def.clone()],
@@ -78,7 +77,6 @@ impl DbColumnMacros {
 
     pub fn index(
         field_def: FieldDef,
-        indexing_type: IndexingType,
         entity_name: &Ident,
         entity_type: &Type,
         pk_name: &Ident,
@@ -91,6 +89,7 @@ impl DbColumnMacros {
         let index_table_def = TableDef::index_table_def(entity_name, column_name, column_type, pk_type);
 
         let mut function_defs: Vec<FunctionDef> = Vec::new();
+        function_defs.push(get_by::get_by_index_def(entity_name, entity_type, column_name, column_type, &index_table_def.name));
         function_defs.push(stream_by::stream_by_index_def(entity_name, entity_type, column_name, column_type, &index_table_def.name));
         function_defs.push(stream_keys_by::stream_keys_by_index_def(
             entity_name,
@@ -115,12 +114,12 @@ impl DbColumnMacros {
                     pub fn sample() -> Self {
                         Self {
                             from: #column_type::default(),
-                            until: #column_type::default().next().next().next()
+                            until: #column_type::default().next()
                         }
                     }
                 }
             });
-            function_defs.push(range_by::range_by_index_def(
+            function_defs.push(stream_range_by::stream_range_by_index_def(
                 entity_name,
                 entity_type,
                 column_name,
@@ -128,11 +127,17 @@ impl DbColumnMacros {
                 &index_table_def.name,
                 entity_column_range_query_ty,
             ));
+            function_defs.push(range_by::by_index_def(
+                entity_name,
+                entity_type,
+                column_name,
+                column_type,
+                &index_table_def.name,
+            ));
         };
 
         DbColumnMacros {
             field_def,
-            indexing_type,
             range_query,
             stream_query_init: query::stream_query_init(column_name, column_type),
             table_definitions: vec![plain_table_def.clone(), index_table_def.clone()],
@@ -149,7 +154,6 @@ impl DbColumnMacros {
 
     pub fn dictionary(
         field_def: FieldDef,
-        indexing_type: IndexingType,
         entity_name: &Ident,
         entity_type: &Type,
         pk_name: &Ident,
@@ -164,7 +168,6 @@ impl DbColumnMacros {
 
         DbColumnMacros {
             field_def,
-            indexing_type,
             range_query: None,
             stream_query_init: query::stream_query_init(column_name, column_type),
             table_definitions: vec![
@@ -209,6 +212,14 @@ impl DbColumnMacros {
                 &dict_index_table_def.name,
             ),
             function_defs: vec![
+                get_by::get_by_dict_def(
+                    entity_name,
+                    entity_type,
+                    column_name,
+                    column_type,
+                    &value_to_dict_pk_table_def.name,
+                    &dict_index_table_def.name,
+                ),
                 stream_by::stream_by_dict_def(
                     entity_name,
                     entity_type,

@@ -28,7 +28,7 @@ impl FieldMacros {
             FieldMacros::Pk(pk) => pk.struct_init.clone(),
             FieldMacros::Plain(column) => column.struct_init.clone(),
             FieldMacros::Relationship(relationship) => relationship.struct_init.clone(),
-            FieldMacros::Transient(transient) => transient.struct_default_init.clone(),
+            FieldMacros::Transient(transient) => transient.struct_init.clone(),
         }
     }
     

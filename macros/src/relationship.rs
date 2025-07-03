@@ -10,7 +10,6 @@ use syn::Type;
 
 pub struct DbRelationshipMacros {
     pub field_def: FieldDef,
-    pub multiplicity: Multiplicity,
     pub struct_init: TokenStream,
     pub struct_init_with_query: TokenStream,
     pub struct_default_init: TokenStream,
@@ -29,7 +28,6 @@ impl DbRelationshipMacros {
             Multiplicity::OneToOne => {
                 DbRelationshipMacros {
                     field_def: field_def.clone(),
-                    multiplicity: multiplicity.clone(),
                     struct_init: init::one2one_relation_init(child_name, child_type),
                     struct_init_with_query: init::one2one_relation_init_with_query(child_name, child_type),
                     struct_default_init: init::one2one_relation_default_init(child_name, child_type),
@@ -43,7 +41,6 @@ impl DbRelationshipMacros {
             Multiplicity::OneToOption => {
                 DbRelationshipMacros {
                     field_def: field_def.clone(),
-                    multiplicity: multiplicity.clone(),
                     struct_init: init::one2opt_relation_init(child_name, child_type),
                     struct_init_with_query: init::one2opt_relation_init_with_query(child_name, child_type),
                     struct_default_init: init::one2opt_relation_default_init(child_name, child_type),
@@ -57,7 +54,6 @@ impl DbRelationshipMacros {
             Multiplicity::OneToMany => {
                 DbRelationshipMacros {
                     field_def: field_def.clone(),
-                    multiplicity: multiplicity.clone(),
                     struct_init: init::one2many_relation_init(child_name, child_type),
                     struct_init_with_query: init::one2many_relation_init_with_query(child_name, child_type),
                     struct_default_init: init::one2many_relation_default_init(child_name, child_type),

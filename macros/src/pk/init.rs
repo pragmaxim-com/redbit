@@ -1,6 +1,5 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
-use syn::Type;
 
 pub fn pk_init_expr() -> TokenStream {
     quote! {

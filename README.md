@@ -169,7 +169,7 @@ And R/W entire instances efficiently using indexes and dictionaries `examples/ut
         BlockHeader::take(&read_tx, 1000)?;
         BlockHeader::get(&read_tx, &first_block_header.id)?;
         BlockHeader::range(&read_tx, &first_block_header.id, &last_block_header.id)?;
-        BlockHeader::range_by_timestamp(&read_tx, &first_block_header.timestamp, &last_block_header.timestamp)?;
+        BlockHeader::stream_range_by_timestamp(&read_tx, &first_block_header.timestamp, &last_block_header.timestamp)?;
         BlockHeader::get_by_hash(&read_tx, &first_block_header.hash)?;
         BlockHeader::get_by_timestamp(&read_tx, &first_block_header.timestamp)?;
         BlockHeader::get_by_merkle_root(&read_tx, &first_block_header.merkle_root)?;
@@ -274,6 +274,6 @@ BlockHeader__range                                142292
 Asset__get                                        210834
 Block__get_header                                 280401
 BlockHeader__get                                  281610
-BlockHeader__range_by_timestamp                  1358690
+BlockHeader__stream_range_by_timestamp                  1358690
 ```
 <!-- END_BENCH -->

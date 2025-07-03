@@ -8,7 +8,7 @@
     "ops_per_ms": 1332
   },
   {
-    "function": "BlockHeader__range_by_timestamp",
+    "function": "BlockHeader__stream_range_by_timestamp",
     "ops_per_ms": 1144
   },
   {
