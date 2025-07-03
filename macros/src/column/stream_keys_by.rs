@@ -6,7 +6,7 @@ use syn::Type;
 use crate::endpoint::EndpointDef;
 
 /// Generates a streaming SSE endpoint definition for querying primary keys by a dictionary index.
-pub fn stream_keys_by_dict_def(
+pub fn by_dict_def(
     entity_name: &Ident,
     pk_name: &Ident,
     pk_type: &Type,
@@ -83,7 +83,7 @@ pub fn stream_keys_by_dict_def(
 }
 
 /// Generates a streaming SSE endpoint definition for querying primary keys by a simple index.
-pub fn stream_keys_by_index_def(
+pub fn by_index_def(
     entity_name: &Ident,
     pk_name: &Ident,
     pk_type: &Type,

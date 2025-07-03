@@ -7,6 +7,7 @@ mod stream_keys_by;
 mod query;
 mod range_by;
 mod get_by;
+mod get_keys_by;
 
 use crate::field_parser::{FieldDef, IndexingType};
 use crate::macro_utils;
@@ -90,8 +91,16 @@ impl DbColumnMacros {
 
         let mut function_defs: Vec<FunctionDef> = Vec::new();
         function_defs.push(get_by::get_by_index_def(entity_name, entity_type, column_name, column_type, &index_table_def.name));
-        function_defs.push(stream_by::stream_by_index_def(entity_name, entity_type, column_name, column_type, &index_table_def.name));
-        function_defs.push(stream_keys_by::stream_keys_by_index_def(
+        function_defs.push(stream_by::by_index_def(entity_name, entity_type, column_name, column_type, &index_table_def.name));
+        function_defs.push(get_keys_by::by_index_def(
+            entity_name,
+            pk_name,
+            pk_type,
+            column_name,
+            column_type,
+            &index_table_def.name,
+        ));
+        function_defs.push(stream_keys_by::by_index_def(
             entity_name,
             pk_name,
             pk_type,
@@ -220,7 +229,7 @@ impl DbColumnMacros {
                     &value_to_dict_pk_table_def.name,
                     &dict_index_table_def.name,
                 ),
-                stream_by::stream_by_dict_def(
+                stream_by::by_dict_def(
                     entity_name,
                     entity_type,
                     column_name,
@@ -228,7 +237,16 @@ impl DbColumnMacros {
                     &value_to_dict_pk_table_def.name,
                     &dict_index_table_def.name,
                 ),
-                stream_keys_by::stream_keys_by_dict_def(
+                get_keys_by::by_dict_def(
+                    entity_name,
+                    pk_name,
+                    pk_type,
+                    column_name,
+                    column_type,
+                    &value_to_dict_pk_table_def.name,
+                    &dict_index_table_def.name,
+                ),
+                stream_keys_by::by_dict_def(
                     entity_name,
                     pk_name,
                     pk_type,

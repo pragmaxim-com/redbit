@@ -34,7 +34,6 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
     BlockHeader::get_by_hash(&read_tx, &first_block_header.hash)?;
     BlockHeader::get_by_timestamp(&read_tx, &first_block_header.timestamp)?;
     BlockHeader::get_by_merkle_root(&read_tx, &first_block_header.merkle_root)?;
-
     BlockHeader::take(&read_tx, 100)?;
     BlockHeader::get(&read_tx, &first_block_header.id)?;
     BlockHeader::range(&read_tx, &first_block_header.id, &last_block_header.id)?;
@@ -49,6 +48,7 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
     let first_transaction = Transaction::first(&read_tx)?.unwrap();
     let last_transaction = Transaction::last(&read_tx)?.unwrap();
 
+    Transaction::get_ids_by_hash(&read_tx, &first_transaction.hash)?;
     Transaction::get_by_hash(&read_tx, &first_transaction.hash)?;
     Transaction::take(&read_tx, 100)?;
     Transaction::get(&read_tx, &first_transaction.id)?;
@@ -66,7 +66,7 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
 
     Utxo::get_by_address(&read_tx, &first_utxo.address)?;
     Utxo::get_by_datum(&read_tx, &first_utxo.datum)?;
-
+    Utxo::get_ids_by_address(&read_tx, &first_utxo.address)?;
     Utxo::take(&read_tx, 100)?;
     Utxo::get(&read_tx, &first_utxo.id)?;
     Utxo::range(&read_tx, &first_utxo.id, &last_utxo.id)?;
@@ -75,9 +75,9 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
     Utxo::get_tree(&read_tx, &first_utxo.id)?;
     let first_input_ref = InputRef::first(&read_tx)?.unwrap();
     let last_input_ref = InputRef::last(&read_tx)?.unwrap();
+
     Utxo::stream_ids_by_address(&read_tx, &first_utxo.address)?.try_collect::<Vec<UtxoPointer>>().await?;
     Utxo::stream_range(db.begin_read()?, first_utxo.id, last_utxo.id)?.try_collect::<Vec<Utxo>>().await?;
-
     Utxo::stream_by_address(db.begin_read()?, first_utxo.address)?.try_collect::<Vec<Utxo>>().await?;
     Utxo::stream_by_datum(db.begin_read()?, first_utxo.datum)?.try_collect::<Vec<Utxo>>().await?;
 
@@ -94,7 +94,7 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
 
     Asset::get_by_name(&read_tx, &first_asset.name)?;
     Asset::get_by_policy_id(&read_tx, &first_asset.policy_id)?;
-
+    Asset::get_ids_by_policy_id(&read_tx, &first_asset.policy_id)?;
     Asset::take(&read_tx, 100)?;
     Asset::get(&read_tx, &first_asset.id)?;
     Asset::range(&read_tx, &first_asset.id, &last_asset.id)?;

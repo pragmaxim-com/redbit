@@ -5,7 +5,7 @@ use quote::{format_ident, quote};
 use syn::Type;
 use crate::endpoint::EndpointDef;
 
-pub fn stream_by_dict_def(
+pub fn by_dict_def(
     entity_name: &Ident,
     entity_type: &Type,
     column_name: &Ident,
@@ -85,7 +85,7 @@ pub fn stream_by_dict_def(
     }
 }
 
-pub fn stream_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident, column_type: &Type, table: &Ident) -> FunctionDef {
+pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident, column_type: &Type, table: &Ident) -> FunctionDef {
     let fn_name = format_ident!("stream_by_{}", column_name);
     let fn_stream = quote! {
         pub fn #fn_name(tx: ReadTransaction, val: #column_type) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#entity_type, AppError>> + Send + 'static>>, AppError> {
