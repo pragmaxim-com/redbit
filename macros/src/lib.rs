@@ -11,9 +11,6 @@ mod endpoint;
 mod field;
 mod entity;
 
-use crate::pk::{DbPkMacros, PointerType};
-
-use crate::column::DbColumnMacros;
 use proc_macro::TokenStream;
 use proc_macro_error::proc_macro_error;
 use quote::quote;
@@ -21,9 +18,11 @@ use std::sync::Once;
 use syn::parse::Parse;
 use syn::spanned::Spanned;
 use syn::{parse_macro_input, parse_quote, DeriveInput, Fields, ItemStruct, Type};
+use crate::column::DbColumnMacros;
+use crate::relationship::DbRelationshipMacros;
+use crate::pk::{PointerType, DbPkMacros};
 use crate::field::FieldMacros;
 use crate::field_parser::ColumnDef;
-use crate::relationship::DbRelationshipMacros;
 use crate::transient::TransientMacros;
 
 #[proc_macro_attribute]
@@ -35,7 +34,7 @@ pub fn column(_attr: TokenStream, item: TokenStream) -> TokenStream {
     match &input.clone().fields {
         Fields::Unnamed(fields) if fields.unnamed.len() == 1 => {
             macro_utils::merge_struct_derives(&mut input, syn::parse_quote![Clone, Eq, Ord, PartialEq, PartialOrd, Debug]);
-            DbColumnMacros::generate_column_impls(struct_ident, &input, &fields.unnamed[0].ty).into()
+            column::impls::generate_column_impls(struct_ident, &input, &fields.unnamed[0].ty).into()
         },
         _ => {
             macro_utils::merge_struct_derives(&mut input, syn::parse_quote![Serialize, Deserialize, Debug, Clone, PartialEq, Eq, utoipa::ToSchema]);
@@ -103,14 +102,14 @@ pub fn derive_pointer_key(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
     let struct_name = &ast.ident;
 
-    match DbPkMacros::validate_pointer_key(&ast) {
+    match field_parser::validate_pointer_key(&ast) {
         Ok(_) => {
-            let (parent_field, index_field) = match DbPkMacros::extract_fields(&ast, &PointerType::Child) {
+            let (parent_field, index_field) = match field_parser::extract_pointer_key_fields(&ast, &PointerType::Child) {
                 Ok(fields) => fields,
                 Err(e) => return e.to_compile_error().into(),
             };
             match parent_field {
-                Some(parent_field) => DbPkMacros::generate_pointer_impls(struct_name, parent_field, index_field).into(),
+                Some(parent_field) => pk::pointer_impls::new(struct_name, parent_field, index_field).into(),
                 None => syn::Error::new(index_field.span(), "Parent field missing").to_compile_error().into(),
             }
         },
@@ -136,13 +135,13 @@ pub fn derive_root_key(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
     let struct_name = &ast.ident;
 
-    match DbPkMacros::validate_root_key(&ast) {
+    match field_parser::validate_root_key(&ast) {
         Ok(_) => {
-            let (_, index_field) = match DbPkMacros::extract_fields(&ast, &PointerType::Root) {
+            let (_, index_field) = match field_parser::extract_pointer_key_fields(&ast, &PointerType::Root) {
                 Ok(fields) => fields,
                 Err(e) => return e.to_compile_error().into(),
             };
-            DbPkMacros::generate_root_impls(struct_name, index_field).into()
+            pk::root_impls::new(struct_name, index_field).into()
         },
         Err(e) => e.to_compile_error().into(),
     }

@@ -2,7 +2,8 @@ use proc_macro2::Ident;
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::Comma;
-use syn::{Fields, GenericArgument, ItemStruct, PathArguments, Type};
+use syn::{Data, DeriveInput, Field, Fields, GenericArgument, ItemStruct, PathArguments, Type};
+use crate::pk::PointerType;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Multiplicity {
@@ -163,12 +164,12 @@ pub fn get_field_macros(fields: &Punctuated<syn::Field, Comma>, ast: &ItemStruct
 
     for field in fields.iter() {
         match parse_entity_field(field)? {
-            ColumnDef::Key {field_def, fk}  => {
+            ColumnDef::Key { field_def, fk } => {
                 if pk_column.is_some() {
                     return Err(syn::Error::new(field.span(), "Multiple `#[pk]` columns found; only one is allowed"));
                 }
                 pk_column = Some(field_def.clone());
-                columns.push(ColumnDef::Key {field_def, fk});
+                columns.push(ColumnDef::Key { field_def, fk });
             }
             column => columns.push(column),
         }
@@ -178,3 +179,75 @@ pub fn get_field_macros(fields: &Punctuated<syn::Field, Comma>, ast: &ItemStruct
 
     Ok((pk, columns))
 }
+
+/// Extracts and validates the required fields (parent & index) for root or pointer.
+pub fn extract_pointer_key_fields(input: &DeriveInput, pointer_type: &PointerType) -> Result<(Option<Field>, Field), syn::Error> {
+    let data_struct = match input.data.clone() {
+        Data::Struct(data_struct) => data_struct,
+        _ => return Err(syn::Error::new_spanned(input, "Pk can only be derived for structs")),
+    };
+
+    match pointer_type {
+        PointerType::Root => {
+            let fields: Vec<_> = match data_struct.fields {
+                Fields::Named(fields) => fields.named.into_iter().collect(),
+                Fields::Unnamed(fields) => fields.unnamed.into_iter().collect(),
+                _ => return Err(syn::Error::new_spanned(input, "Pk must have exactly one field")),
+            };
+
+            if fields.len() != 1 {
+                return Err(syn::Error::new_spanned(input, "Pk must have exactly one field"));
+            }
+            Ok((None, fields[0].clone())) // Root has only an index field
+        }
+        PointerType::Child => {
+            let fields: Vec<_> = match data_struct.fields {
+                Fields::Named(fields) => fields.named.into_iter().collect(),
+                _ => return Err(syn::Error::new_spanned(input, "Pk can only be used with named fields")),
+            };
+            if fields.len() != 2 {
+                return Err(syn::Error::new_spanned(input, "Child struct must have exactly two fields (parent and index)"));
+            }
+
+            let index_field = match fields.iter().find(|f| is_index_field(&f)) {
+                Some(f) => f.clone(),
+                None => return Err(syn::Error::new_spanned(input, "Unable to find index field")),
+            };
+            let parent_field = match fields.iter().find(|f| !is_index_field(&f)) {
+                Some(f) => f.clone(),
+                None => return Err(syn::Error::new_spanned(input, "Unable to find parent field")),
+            };
+
+            Ok((Some(parent_field), index_field))
+        }
+    }
+}
+
+fn is_index_field(f: &Field) -> bool {
+    f.ident.as_ref().map_or(false, |name| name.to_string().eq("index"))
+}
+
+/// Determines whether a struct is a `Root` or `Child` based on `#[parent]` attributes.
+pub fn validate_root_key(input: &DeriveInput) -> Result<(), syn::Error> {
+    match &input.data {
+        Data::Struct(_) => Ok(()),
+        _ => Err(syn::Error::new_spanned(input, "Pk can only be derived for structs")),
+    }
+}
+
+pub fn validate_pointer_key(input: &DeriveInput) -> Result<(), syn::Error> {
+    let data_struct = match &input.data {
+        Data::Struct(data_struct) => data_struct,
+        _ => return Err(syn::Error::new_spanned(input, "Fk can only be derived for structs")),
+    };
+
+    let fields: Vec<_> = match &data_struct.fields {
+        Fields::Named(fields) => fields.named.iter().collect(),
+        _ => return Err(syn::Error::new_spanned(input, "Fk can only be used with named fields")),
+    };
+    if fields.len() != 2 {
+        return Err(syn::Error::new_spanned(input, "Fk must have exactly two fields (parent and index)"));
+    }
+    Ok(())
+}
+

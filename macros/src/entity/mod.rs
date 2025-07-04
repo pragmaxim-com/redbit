@@ -14,9 +14,6 @@ mod expand;
 
 pub struct EntityMacros {
     pub entity_name: Ident,
-    pub entity_type: Type,
-    pub pk_name: Ident,
-    pub pk_type: Type,
     pub table_definitions: Vec<TableDef>,
     pub sample_functions: Vec<TokenStream>,
     pub compose_functions: Vec<TokenStream>,
@@ -72,9 +69,6 @@ impl EntityMacros {
 
         Ok(EntityMacros {
             entity_name,
-            entity_type,
-            pk_name,
-            pk_type,
             stream_query_struct,
             table_definitions,
             compose_functions,
