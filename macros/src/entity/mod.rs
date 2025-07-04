@@ -1,9 +1,8 @@
-use crate::rest::FunctionDef;
-use crate::table::TableDef;
+use crate::field::FieldMacros;
+use crate::rest::to_http_endpoints;
 use proc_macro2::{Ident, TokenStream};
 use quote::format_ident;
 use syn::Type;
-use crate::field::FieldMacros;
 
 mod store;
 mod delete;
@@ -11,15 +10,19 @@ mod query;
 mod sample;
 mod compose;
 mod expand;
+mod tests;
 
 pub struct EntityMacros {
     pub entity_name: Ident,
-    pub table_definitions: Vec<TableDef>,
+    pub table_definitions: Vec<TokenStream>,
     pub sample_functions: Vec<TokenStream>,
     pub compose_functions: Vec<TokenStream>,
     pub range_query_structs: Vec<TokenStream>,
     pub stream_query_struct: TokenStream,
-    pub function_defs: Vec<FunctionDef>,
+    pub functions: Vec<TokenStream>,
+    pub endpoint_handlers: Vec<TokenStream>,
+    pub routes: TokenStream,
+    pub test_suite: TokenStream,
 }
 
 impl EntityMacros {
@@ -66,6 +69,13 @@ impl EntityMacros {
 
         let sample_functions = Self::sample_token_streams(&entity_name, &entity_type, &pk_type, struct_default_inits);
         let compose_functions = Self::compose_token_streams(&entity_name, &entity_type, &pk_type, &stream_query_ident, &field_names, &struct_inits, &struct_inits_with_query);
+        let table_definitions = table_definitions.iter().map(|table_def| table_def.definition.clone()).collect();
+
+        let functions: Vec<TokenStream> = function_defs.iter().map(|f| f.fn_stream.clone()).collect::<Vec<_>>();
+        let unit_tests = function_defs.iter().filter_map(|f| f.test_stream.clone()).collect::<Vec<_>>();
+
+        let (endpoint_handlers, routes, route_tests) = to_http_endpoints(&function_defs);
+        let test_suite = tests::test_suite(&entity_name, unit_tests, route_tests);
 
         Ok(EntityMacros {
             entity_name,
@@ -74,7 +84,10 @@ impl EntityMacros {
             compose_functions,
             sample_functions,
             range_query_structs,
-            function_defs,
+            functions,
+            endpoint_handlers,
+            routes,
+            test_suite
         })
     }
 }
