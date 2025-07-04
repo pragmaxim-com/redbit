@@ -8,7 +8,7 @@ impl EntityMacros {
         let EntityMacros {
             stream_query_struct,
             range_query_structs,
-            functions,
+            api_functions,
             endpoint_handlers,
             routes,
             sample_functions,
@@ -17,23 +17,28 @@ impl EntityMacros {
             table_definitions,
             test_suite,
         } = self;
-        
+
         let expanded = quote! {
+            // StreamQuery is passed from the rest api as POST body and used to filter the stream of entities
             #stream_query_struct
+            // Query structs to map query params into
+            #(#range_query_structs)*
             // table definitions are not in the impl object because they are accessed globally with semantic meaning
             #(#table_definitions)*
-            // utoipa and axum query structs to map query and path params into
-            #(#range_query_structs)*
             // axum endpoints cannot be in the impl object https://docs.rs/axum/latest/axum/attr.debug_handler.html#limitations
             #(#endpoint_handlers)*
 
             impl #entity_name {
-                #(#functions)*
+                // api functions are exposed to users
+                #(#api_functions)*
+                // sample functions are used to generate test data
                 #(#sample_functions)*
+                // compose functions build entities from db results
                 #(#compose_functions)*
+                // axum routes
                 #routes
             }
-
+            // unit tests and rest api tests
             #test_suite
         };
         // eprintln!("----------------------------------------------------------");

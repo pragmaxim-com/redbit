@@ -19,7 +19,7 @@ pub struct EntityMacros {
     pub compose_functions: Vec<TokenStream>,
     pub range_query_structs: Vec<TokenStream>,
     pub stream_query_struct: TokenStream,
-    pub functions: Vec<TokenStream>,
+    pub api_functions: Vec<TokenStream>,
     pub endpoint_handlers: Vec<TokenStream>,
     pub routes: TokenStream,
     pub test_suite: TokenStream,
@@ -84,7 +84,7 @@ impl EntityMacros {
             compose_functions,
             sample_functions,
             range_query_structs,
-            functions,
+            api_functions: functions,
             endpoint_handlers,
             routes,
             test_suite
