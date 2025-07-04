@@ -5,14 +5,15 @@ use syn::Type;
 
 pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> FunctionDef {
     let fn_name = format_ident!("take");
-    let fn_stream =
-        quote! {
-            pub fn #fn_name(tx: &::redbit::redb::ReadTransaction, n: usize) -> Result<Vec<#entity_type>, AppError> {
-                let table_pk_6 = tx.open_table(#table)?;
-                let mut iter = table_pk_6.iter()?;
-                let mut results = Vec::new();
-                let mut count: usize = 0;
-
+    let fn_stream = quote! {
+        pub fn #fn_name(tx: &ReadTransaction, n: usize) -> Result<Vec<#entity_type>, AppError> {
+            let table_pk_6 = tx.open_table(#table)?;
+            let mut iter = table_pk_6.iter()?;
+            let mut results = Vec::new();
+            let mut count: usize = 0;
+            if n > 100 {
+                return Err(AppError::Internal("Cannot take more than 100 entities at once".to_string()));
+            } else {
                 while let Some(entry_res) = iter.next() {
                     if count >= n {
                         break;
@@ -21,10 +22,10 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
                     results.push(Self::compose(&tx, &pk)?);
                     count += 1;
                 }
-
                 Ok(results)
             }
-        };
+        }
+    };
     let test_stream = Some(quote! {
         {
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
@@ -37,11 +38,8 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
-        fn_return_type: syn::parse_quote!(Vec<#entity_type>),
         fn_stream,
-        fn_call: quote! { #entity_name::#fn_name(&tx, take) },
         endpoint_def: None,
-        test_stream
+        test_stream,
     }
-
 }

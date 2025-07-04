@@ -21,6 +21,7 @@ through auto-generated REST API.
 - ✅ Optional dictionaries for low cardinality fields
 - ✅ One-to-One / One-to-Option / One-to-Many entities with cascade read/write/delete
 - ✅ All goodies including intuitive data ordering without writing custom codecs
+- ✅ SSE streaming api with efficient filters (ie. get txs or utxos for really HOT address)
 - ✅ Macro derived http rest API at http://127.0.0.1:8000/swagger-ui/ with examples
 - ✅ Macro derived unit tests and integration tests on axum test server
 
@@ -187,7 +188,7 @@ And R/W entire instances efficiently using indexes and dictionaries `examples/ut
         BlockHeader::take(&read_tx, 1000)?;
         BlockHeader::get(&read_tx, &first_block_header.id)?;
         BlockHeader::range(&read_tx, &first_block_header.id, &last_block_header.id)?;
-        BlockHeader::range_by_timestamp(&read_tx, &first_block_header.timestamp, &last_block_header.timestamp)?;
+        BlockHeader::stream_range_by_timestamp(&read_tx, &first_block_header.timestamp, &last_block_header.timestamp)?;
         BlockHeader::get_by_hash(&read_tx, &first_block_header.hash)?;
         BlockHeader::get_by_timestamp(&read_tx, &first_block_header.timestamp)?;
         BlockHeader::get_by_merkle_root(&read_tx, &first_block_header.merkle_root)?;

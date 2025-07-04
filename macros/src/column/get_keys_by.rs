@@ -1,10 +1,9 @@
-use crate::rest::HttpParams::FromPath;
-use crate::rest::{EndpointDef, FunctionDef, GetParam, HttpMethod};
+use crate::rest::FunctionDef;
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
 
-pub fn get_keys_by_dict_def(
+pub fn by_dict_def(
     entity_name: &Ident,
     pk_name: &Ident,
     pk_type: &Type,
@@ -48,24 +47,13 @@ pub fn get_keys_by_dict_def(
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
-        fn_return_type: syn::parse_quote!(Vec<#pk_type>),
         fn_stream,
-        fn_call: quote! { #entity_name::#fn_name(&tx, &#column_name) },
-        endpoint_def: Some(EndpointDef {
-            params: FromPath(vec![GetParam {
-                name: column_name.clone(),
-                ty: column_type.clone(),
-                description: "Secondary index column with dictionary".to_string(),
-            }]),
-            method: HttpMethod::GET,
-            return_type: Some(syn::parse_quote!(Vec<#pk_type>)),
-            endpoint: format!("/{}/{}/{{{}}}/{}", entity_name.to_string().to_lowercase(), column_name, column_name, pk_name),
-        }),
+        endpoint_def: None,
         test_stream
     }
 }
 
-pub fn get_keys_by_index_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, column_name: &Ident, column_type: &Type, table: &Ident) -> FunctionDef {
+pub fn by_index_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, column_name: &Ident, column_type: &Type, table: &Ident) -> FunctionDef {
     let fn_name = format_ident!("get_{}s_by_{}", pk_name, column_name);
     let fn_stream = quote! {
         pub fn #fn_name(
@@ -95,19 +83,8 @@ pub fn get_keys_by_index_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Typ
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
-        fn_return_type: syn::parse_quote!(Vec<#pk_type>),
         fn_stream,
-        fn_call: quote! { #entity_name::#fn_name(&tx, &#column_name) },
-        endpoint_def: Some(EndpointDef {
-            params: FromPath(vec![GetParam {
-                name: column_name.clone(),
-                ty: column_type.clone(),
-                description: "Secondary index column".to_string(),
-            }]),
-            method: HttpMethod::GET,
-            return_type: Some(syn::parse_quote!(Vec<#pk_type>)),
-            endpoint: format!("/{}/{}/{{{}}}/{}", entity_name.to_string().to_lowercase(), column_name, column_name, pk_name),
-        }),
+        endpoint_def: None,
         test_stream
     }
 }

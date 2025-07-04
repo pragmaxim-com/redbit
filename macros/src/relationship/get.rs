@@ -1,27 +1,31 @@
 use crate::rest::HttpParams::FromPath;
-use crate::rest::{EndpointDef, FunctionDef, GetParam, HttpMethod};
+use crate::rest::{FunctionDef, GetParam, HttpMethod};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
+use crate::endpoint::EndpointDef;
 
 pub fn one2one_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, pk_name: &Ident, pk_type: &Type) -> FunctionDef {
     let fn_name = format_ident!("get_{}", child_name);
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
-        fn_return_type: syn::parse_quote!(#child_type),
         fn_stream: quote! {
-            pub fn #fn_name(tx: &::redbit::redb::ReadTransaction, pk: &#pk_type) -> Result<#child_type, AppError> {
+            pub fn #fn_name(tx: &ReadTransaction, pk: &#pk_type) -> Result<#child_type, AppError> {
                 #child_type::get(&tx, &pk).and_then(|opt| {
                     opt.ok_or_else(|| AppError::Internal(format!("No child found for pk: {:?}", pk)))
                 })
             }
         },
-        fn_call: quote! { #entity_name::#fn_name(&tx, &#pk_name) },
         endpoint_def: Some(EndpointDef {
-            params: FromPath(vec![GetParam { name: pk_name.clone(), ty: pk_type.clone(), description: "Primary key".to_string() }]),
+            params: vec![FromPath(vec![GetParam { name: pk_name.clone(), ty: pk_type.clone(), description: "Primary key".to_string() }])],
             method: HttpMethod::GET,
-            return_type: Some(child_type.clone()),
+            handler_impl_stream: quote! {
+               Result<AppJson<#child_type>, AppError> {
+                    state.db.begin_read().map_err(AppError::from).and_then(|tx| #entity_name::#fn_name(&tx, &#pk_name)).map(AppJson)
+                }
+            },
+            utoipa_responses: quote! { responses((status = OK, body = #child_type)) },
             endpoint: format!("/{}/{{{}}}/{}", entity_name.to_string().to_lowercase(), pk_name, child_name),
         }),
         test_stream: Some(quote! {
@@ -46,24 +50,27 @@ pub fn one2opt_def(
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
-        fn_return_type: syn::parse_quote!(Option<#child_type>),
         fn_stream: quote! {
             pub fn #fn_name(
-                tx: &::redbit::redb::ReadTransaction,
+                tx: &ReadTransaction,
                 pk: &#pk_type
             ) -> Result<Option<#child_type>, AppError> {
                 #child_type::get(&tx, &pk)
             }
         },
-        fn_call: quote! { #entity_name::#fn_name(&tx, &#pk_name) },
         endpoint_def: Some(EndpointDef {
-            params: FromPath(vec![GetParam {
+            params: vec![FromPath(vec![GetParam {
                 name: pk_name.clone(),
                 ty: pk_type.clone(),
                 description: "Primary key".to_string(),
-            }]),
+            }])],
             method: HttpMethod::GET,
-            return_type: Some(syn::parse_quote!(Option<#child_type>)),
+            handler_impl_stream: quote! {
+               Result<AppJson<Option<#child_type>>, AppError> {
+                    state.db.begin_read().map_err(AppError::from).and_then(|tx| #entity_name::#fn_name(&tx, &#pk_name)).map(AppJson)
+                }
+            },
+            utoipa_responses: quote! { responses((status = OK, body = Option<#child_type>)) },
             endpoint: format!(
                 "/{}/{{{}}}/{}",
                 entity_name.to_string().to_lowercase(),
@@ -87,18 +94,22 @@ pub fn one2many_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, 
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
-        fn_return_type: syn::parse_quote!(Vec<#child_type>),
         fn_stream: quote! {
-            pub fn #fn_name(tx: &::redbit::redb::ReadTransaction, pk: &#pk_type) -> Result<Vec<#child_type>, AppError> {
+            pub fn #fn_name(tx: &ReadTransaction, pk: &#pk_type) -> Result<Vec<#child_type>, AppError> {
                 let (from, to) = pk.fk_range();
                 #child_type::range(&tx, &from, &to)
             }
         },
-        fn_call: quote! { #entity_name::#fn_name(&tx, &#pk_name) },
         endpoint_def: Some(EndpointDef {
-            params: FromPath(vec![GetParam { name: pk_name.clone(), ty: pk_type.clone(), description: "Primary key".to_string() }]),
+            params: vec![FromPath(vec![GetParam { name: pk_name.clone(), ty: pk_type.clone(), description: "Primary key".to_string() }])],
             method: HttpMethod::GET,
-            return_type: Some(syn::parse_quote!(Vec<#child_type>)),
+            utoipa_responses: quote! { responses((status = OK, body = Vec<#child_type>)) },
+            handler_impl_stream: quote! {
+               Result<AppJson<Vec<#child_type>>, AppError> {
+                    state.db.begin_read().map_err(AppError::from).and_then(|tx| #entity_name::#fn_name(&tx, &#pk_name)).map(AppJson)
+                }
+            },
+
             endpoint: format!("/{}/{{{}}}/{}", entity_name.to_string().to_lowercase(), pk_name, child_name),
         }),
         test_stream: Some(quote! {

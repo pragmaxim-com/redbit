@@ -32,8 +32,8 @@ fn it_should_commit_multiple_blocks_in_a_single_tx() {
     blocks.iter().for_each(|block| Block::store(&write_tx, block).expect("Failed to persist blocks"));
     write_tx.commit().unwrap();
 
-    let multi_tx_blocks = Block::take(&multi_tx_db.begin_read().unwrap(), 1000).unwrap();
-    let single_tx_blocks = Block::take(&single_tx_db.begin_read().unwrap(), 1000).unwrap();
+    let multi_tx_blocks = Block::take(&multi_tx_db.begin_read().unwrap(), 100).unwrap();
+    let single_tx_blocks = Block::take(&single_tx_db.begin_read().unwrap(), 100).unwrap();
 
     assert_eq!(multi_tx_blocks.len(), single_tx_blocks.len());
 }
@@ -78,6 +78,50 @@ fn it_should_delete_entity_by_unique_id() {
     assert!(transitive_entities_not_found);
 }
 
+#[tokio::test]
+async fn it_should_stream_entities_by_index() {
+    let (blocks, db) = init_temp_db("db_test");
+
+    let read_tx = db.begin_read().unwrap();
+    let transaction = blocks.first().unwrap().transactions.first().unwrap();
+
+    let found_by_hash = Transaction::stream_by_hash(read_tx, transaction.hash.clone()).unwrap().try_collect::<Vec<Transaction>>().await.unwrap();
+    assert_eq!(found_by_hash.len(), 3);
+    assert!(found_by_hash.iter().any(|tx| tx.id == transaction.id));
+    assert!(found_by_hash.iter().any(|tx| tx.id == transaction.id));
+}
+
+#[tokio::test]
+async fn it_should_stream_entities_by_index_with_dict() {
+    let (blocks, db) = init_temp_db("db_test");
+
+    let read_tx = db.begin_read().unwrap();
+    let utxo = blocks.first().unwrap().transactions.first().unwrap().utxos.first().unwrap();
+
+    let found_by_address = Utxo::stream_by_address(read_tx, utxo.address.clone()).unwrap().try_collect::<Vec<Utxo>>().await.unwrap();
+    assert_eq!(found_by_address.len(), 3*3);
+    assert!(found_by_address.iter().any(|tx| tx.id == utxo.id));
+    assert!(found_by_address.iter().any(|tx| tx.id == utxo.id));
+}
+
+#[tokio::test]
+async fn it_should_stream_entities_by_range_on_index() {
+    let (blocks, db) = init_temp_db("db_test");
+
+    let read_tx = db.begin_read().unwrap();
+
+    let from_timestamp = blocks[0].header.timestamp;
+    let until_timestamp = blocks[2].header.timestamp;
+    let expected_blocks: Vec<BlockHeader> = blocks.into_iter().map(|b|b.header).take(2).collect();
+    let unique_timestamps: HashSet<Timestamp> = BlockHeader::take(&read_tx, 100).unwrap().iter().map(|h| h.timestamp).collect();
+    assert_eq!(unique_timestamps.len(), 3);
+
+    let found_by_timestamp_range =
+        BlockHeader::stream_range_by_timestamp(read_tx, from_timestamp, until_timestamp).unwrap().try_collect::<Vec<BlockHeader>>().await.unwrap();
+    assert_eq!(found_by_timestamp_range.len(), 2);
+    assert_eq!(expected_blocks, found_by_timestamp_range);
+}
+
 #[test]
 fn it_should_get_entities_by_index() {
     let (blocks, db) = init_temp_db("db_test");
@@ -104,23 +148,6 @@ fn it_should_get_entities_by_index_with_dict() {
     assert!(found_by_address.iter().any(|tx| tx.id == utxo.id));
 }
 
-#[test]
-fn it_should_get_entities_by_range_on_index() {
-    let (blocks, db) = init_temp_db("db_test");
-
-    let read_tx = db.begin_read().unwrap();
-
-    let from_timestamp = blocks[0].header.timestamp;
-    let until_timestamp = blocks[2].header.timestamp;
-    let expected_blocks: Vec<BlockHeader> = blocks.into_iter().map(|b|b.header).take(2).collect();
-    let unique_timestamps: HashSet<Timestamp> = BlockHeader::take(&read_tx, 1000).unwrap().iter().map(|h| h.timestamp).collect();
-    assert_eq!(unique_timestamps.len(), 3);
-
-    let found_by_timestamp_range =
-        BlockHeader::range_by_timestamp(&read_tx, &from_timestamp, &until_timestamp).expect("Failed to range by timestamp");
-    assert_eq!(found_by_timestamp_range.len(), 2);
-    assert_eq!(expected_blocks, found_by_timestamp_range);
-}
 
 #[test]
 fn it_should_get_entities_by_range_on_pk() {

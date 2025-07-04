@@ -6,10 +6,12 @@ mod delete;
 use crate::field_parser::*;
 use crate::rest::FunctionDef;
 use proc_macro2::{Ident, TokenStream};
+use syn::Type;
 
 pub struct DbRelationshipMacros {
-    pub definition: RelationshipDef,
+    pub field_def: FieldDef,
     pub struct_init: TokenStream,
+    pub struct_init_with_query: TokenStream,
     pub struct_default_init: TokenStream,
     pub store_statement: TokenStream,
     pub store_many_statement: TokenStream,
@@ -19,16 +21,15 @@ pub struct DbRelationshipMacros {
 }
 
 impl DbRelationshipMacros {
-    pub fn new(definition: RelationshipDef, entity_ident: &Ident, pk_column: &PkDef) -> DbRelationshipMacros {
-        let pk_type = pk_column.field.tpe.clone(); // BlockPointer
-        let pk_name = pk_column.field.name.clone(); // BlockPointer
-        let child_name = &definition.field.name; // e.g., "transactions"
-        let child_type = &definition.field.tpe; // e.g., the type `Transaction` from Vec<Transaction>
-        match definition.multiplicity {
+    pub fn new(field_def: FieldDef, multiplicity: Multiplicity, entity_ident: &Ident, pk_name: &Ident, pk_type: &Type) -> DbRelationshipMacros {
+        let child_name = &field_def.name; // e.g., "transactions"
+        let child_type = &field_def.tpe; // e.g., the type `Transaction` from Vec<Transaction>
+        match multiplicity {
             Multiplicity::OneToOne => {
                 DbRelationshipMacros {
-                    definition: definition.clone(),
+                    field_def: field_def.clone(),
                     struct_init: init::one2one_relation_init(child_name, child_type),
+                    struct_init_with_query: init::one2one_relation_init_with_query(child_name, child_type),
                     struct_default_init: init::one2one_relation_default_init(child_name, child_type),
                     store_statement: store::one2one_store_def(child_name, child_type),
                     store_many_statement: store::one2one_store_many_def(child_name, child_type),
@@ -39,8 +40,9 @@ impl DbRelationshipMacros {
             }
             Multiplicity::OneToOption => {
                 DbRelationshipMacros {
-                    definition: definition.clone(),
+                    field_def: field_def.clone(),
                     struct_init: init::one2opt_relation_init(child_name, child_type),
+                    struct_init_with_query: init::one2opt_relation_init_with_query(child_name, child_type),
                     struct_default_init: init::one2opt_relation_default_init(child_name, child_type),
                     store_statement: store::one2opt_store_def(child_name, child_type),
                     store_many_statement: store::one2opt_store_many_def(child_name, child_type),
@@ -51,8 +53,9 @@ impl DbRelationshipMacros {
             }
             Multiplicity::OneToMany => {
                 DbRelationshipMacros {
-                    definition: definition.clone(),
+                    field_def: field_def.clone(),
                     struct_init: init::one2many_relation_init(child_name, child_type),
+                    struct_init_with_query: init::one2many_relation_init_with_query(child_name, child_type),
                     struct_default_init: init::one2many_relation_default_init(child_name, child_type),
                     store_statement: store::one2many_store_def(child_name, child_type),
                     store_many_statement: store::one2many_store_many_def(child_name, child_type),

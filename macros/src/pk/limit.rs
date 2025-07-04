@@ -1,14 +1,15 @@
 use crate::rest::HttpParams::FromQuery;
-use crate::rest::{EndpointDef, FunctionDef, HttpMethod};
+use crate::rest::{FunctionDef, HttpMethod};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
+use crate::endpoint::EndpointDef;
 
 pub fn limit_fn_def(entity_name: &Ident, entity_type: &Type) -> FunctionDef {
     let fn_name = format_ident!("limit");
     let fn_stream =
         quote! {
-            pub fn #fn_name(tx: &::redbit::redb::ReadTransaction, query: LimitQuery) -> Result<Vec<#entity_type>, AppError> {
+            pub fn #fn_name(tx: &ReadTransaction, query: LimitQuery) -> Result<Vec<#entity_type>, AppError> {
                 match query {
                     LimitQuery{take: Some(n), ..} => {
                         #entity_name::take(&tx, n)
@@ -29,13 +30,16 @@ pub fn limit_fn_def(entity_name: &Ident, entity_type: &Type) -> FunctionDef {
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
-        fn_return_type: syn::parse_quote!(Vec<#entity_type>),
         fn_stream,
-        fn_call: quote! { #entity_name::#fn_name(&tx, query) },
         endpoint_def: Some(EndpointDef {
-            params: FromQuery(syn::parse_quote!(LimitQuery)),
+            params: vec![FromQuery(syn::parse_quote!(LimitQuery))],
             method: HttpMethod::GET,
-            return_type: Some(syn::parse_quote!(Vec<#entity_type>)),
+            handler_impl_stream: quote! {
+               Result<AppJson<Vec<#entity_type>>, AppError> {
+                    state.db.begin_read().map_err(AppError::from).and_then(|tx| #entity_name::#fn_name(&tx, query)).map(AppJson)
+                }
+            },
+            utoipa_responses: quote! { responses((status = OK, body = Vec<#entity_type>)) },
             endpoint: format!("/{}", entity_name.to_string().to_lowercase()),
         }),
         test_stream: None
