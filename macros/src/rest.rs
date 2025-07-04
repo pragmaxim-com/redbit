@@ -68,10 +68,10 @@ impl Display for HttpMethod {
     }
 }
 
-pub fn to_http_endpoints(defs: &Vec<FunctionDef>) -> (Vec<TokenStream>, Vec<TokenStream>, Vec<TokenStream>) {
+pub fn to_http_endpoints(defs: &Vec<FunctionDef>) -> (Vec<TokenStream>, TokenStream, Vec<TokenStream>) {
     let endpoints: Vec<HttpEndpointMacro> =
         defs.iter().filter_map(|fn_def| fn_def.endpoint_def.clone().map(|e| to_http_endpoint(fn_def, &e))).collect();
-    let route_chains = endpoints
+    let route_chains: Vec<TokenStream> = endpoints
         .iter()
         .map(|e| {
             let function_name = &e.handler_fn_name;
@@ -80,7 +80,13 @@ pub fn to_http_endpoints(defs: &Vec<FunctionDef>) -> (Vec<TokenStream>, Vec<Toke
         .collect();
     let endpoint_handlers: Vec<TokenStream> = endpoints.iter().map(|e| e.handler.clone()).collect();
     let tests: Vec<TokenStream> = endpoints.iter().map(|e| e.test.clone()).collect();
-    (endpoint_handlers, route_chains, tests)
+    let routes = quote! {
+        pub fn routes() -> OpenApiRouter<RequestState> {
+            OpenApiRouter::new()
+                #(#route_chains)*
+        }
+    };
+    (endpoint_handlers, routes, tests)
 }
 
 pub fn to_http_endpoint(fn_def: &FunctionDef, endpoint_def: &EndpointDef) -> HttpEndpointMacro {

@@ -1,6 +1,5 @@
 extern crate proc_macro;
 mod column;
-mod entity;
 mod pk;
 mod relationship;
 mod macro_utils;
@@ -10,6 +9,7 @@ mod table;
 mod transient;
 mod endpoint;
 mod field;
+mod entity;
 
 use crate::pk::{DbPkMacros, PointerType};
 
@@ -21,7 +21,6 @@ use std::sync::Once;
 use syn::parse::Parse;
 use syn::spanned::Spanned;
 use syn::{parse_macro_input, parse_quote, DeriveInput, Fields, ItemStruct, Type};
-use crate::entity::EntityMacros;
 use crate::field::FieldMacros;
 use crate::field_parser::ColumnDef;
 use crate::relationship::DbRelationshipMacros;
@@ -202,7 +201,7 @@ pub fn derive_entity(input: TokenStream) -> TokenStream {
                     }
                 }
                 ).collect::<Vec<FieldMacros>>();
-            EntityMacros::new(entity_ident.clone(), entity_type, pk.name, pk.tpe, field_macros)
+            entity::EntityMacros::new(entity_ident.clone(), entity_type, pk.name, pk.tpe, field_macros)
         })
         .map(|entity_macros| entity_macros.expand()).unwrap_or_else(|e| e.to_compile_error().into());
 

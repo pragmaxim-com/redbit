@@ -1,11 +1,11 @@
+use super::EntityMacros;
 use proc_macro2::{Ident, TokenStream};
-use quote::{format_ident, quote};
+use quote::quote;
 
-pub fn stream_query_struct_macro(entity_name: &Ident, stream_queries: &Vec<(TokenStream, TokenStream)>) -> (Ident, TokenStream) {
-    let stream_query_ident = format_ident!("{}StreamQuery", entity_name.to_string());
-    let definitions: Vec<TokenStream> = stream_queries.iter().map(|(def, _)| def.clone()).collect();
-    let inits: Vec<TokenStream> = stream_queries.iter().map(|(_, init)| init.clone()).collect();
-    let token_stream =
+impl EntityMacros {
+    pub fn query_struct_token_stream(stream_query_ident: &Ident, stream_queries: &Vec<(TokenStream, TokenStream)>) -> TokenStream {
+        let definitions: Vec<TokenStream> = stream_queries.iter().map(|(def, _)| def.clone()).collect();
+        let inits: Vec<TokenStream> = stream_queries.iter().map(|(_, init)| init.clone()).collect();
         quote! {
             #[derive(IntoParams, Serialize, Deserialize, Default)]
             pub struct #stream_query_ident {
@@ -18,6 +18,6 @@ pub fn stream_query_struct_macro(entity_name: &Ident, stream_queries: &Vec<(Toke
                     }
                 }
             }
-        };
-    (stream_query_ident, token_stream)
+        }
+    }
 }
