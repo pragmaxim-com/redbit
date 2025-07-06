@@ -13,7 +13,6 @@ pub use axum_test;
 pub use futures;
 pub use futures::stream::{self, StreamExt};
 pub use futures_util::stream::TryStreamExt;
-pub use hex;
 pub use http;
 pub use std::pin::Pin;
 pub use inventory;

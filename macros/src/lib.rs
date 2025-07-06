@@ -15,6 +15,7 @@ use proc_macro::TokenStream;
 use proc_macro_error::proc_macro_error;
 use quote::{format_ident, quote};
 use std::sync::Once;
+use proc_macro2::Literal;
 use syn::parse::Parse;
 use syn::spanned::Spanned;
 use syn::{parse_macro_input, parse_quote, DeriveInput, Fields, ItemStruct, Type};
@@ -27,15 +28,15 @@ use crate::transient::TransientMacros;
 
 #[proc_macro_attribute]
 #[proc_macro_error]
-pub fn column(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn column(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let attr_args = parse_macro_input!(attr as EncodingAttr);
     let mut input = parse_macro_input!(item as ItemStruct);
     let struct_ident = &input.ident.clone();
-
     let expanded =
         match &mut input.fields {
             Fields::Unnamed(fields) if fields.unnamed.len() == 1 => {
                 let (impls, maybe_field_attr) =
-                    column::impls::generate_column_impls(struct_ident, &fields.unnamed[0].ty);
+                    column::impls::generate_column_impls(struct_ident, &fields.unnamed[0].ty, attr_args.literal);
 
                 if let Some(attr) = maybe_field_attr {
                     input.attrs.push(syn::parse_quote! { #[serde_with::serde_as] });
@@ -60,17 +61,32 @@ pub fn column(_attr: TokenStream, item: TokenStream) -> TokenStream {
     macro_utils::write_stream_and_return(expanded, struct_ident).into()
 }
 
-struct KeyAttr {
-    index_type: Option<Type>,
+struct EncodingAttr {
+    literal: Option<Literal>,
 }
 
-impl Parse for KeyAttr {
+impl Parse for EncodingAttr {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         if input.is_empty() {
-            Ok(KeyAttr { index_type: None })
+            Ok(EncodingAttr { literal: None })
+        } else {
+            let literal: Literal = input.parse()?;
+            Ok(EncodingAttr { literal: Some(literal) })
+        }
+    }
+}
+
+struct IndexTypeAttr {
+    tpe: Option<Type>,
+}
+
+impl Parse for IndexTypeAttr {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        if input.is_empty() {
+            Ok(IndexTypeAttr { tpe: None })
         } else {
             let ty: Type = input.parse()?;
-            Ok(KeyAttr { index_type: Some(ty) })
+            Ok(IndexTypeAttr { tpe: Some(ty) })
         }
     }
 }
@@ -78,12 +94,12 @@ impl Parse for KeyAttr {
 #[proc_macro_attribute]
 #[proc_macro_error]
 pub fn pointer_key(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let attr_args = parse_macro_input!(attr as KeyAttr);
+    let attr_args = parse_macro_input!(attr as IndexTypeAttr);
     let s = parse_macro_input!(item as ItemStruct);
 
     let struct_ident = &s.ident;
     let vis = &s.vis;
-    let index_type = attr_args.index_type.unwrap_or_else(|| syn::parse_quote! { u16 });
+    let index_type = attr_args.tpe.unwrap_or_else(|| syn::parse_quote! { u16 });
 
     // Validate tuple struct with one field
     let parent_type = match &s.fields {

@@ -1,4 +1,4 @@
-use proc_macro2::{Ident, TokenStream};
+use proc_macro2::{Literal, Ident, TokenStream};
 use quote::quote;
 use syn::{Attribute, Type};
 
@@ -7,8 +7,19 @@ use crate::macro_utils::InnerKind;
 pub fn generate_column_impls(
     struct_ident: &Ident,
     inner_type: &Type,
+    binary_encoding_opt: Option<Literal>,
 ) -> (TokenStream, Option<Attribute>) {
+    let hex_encoding = Literal::string("hex");
+    let base64_encoding = Literal::string("base64");
     let kind = crate::macro_utils::classify_inner_type(inner_type);
+    let encoding_raw = binary_encoding_opt.unwrap_or_else(|| hex_encoding.clone());
+    let binary_encoding_literal = match encoding_raw {
+        l if l.to_string() == hex_encoding.to_string() =>
+            Literal::string(&"serde_with::hex::Hex"),
+        l if l.to_string() == base64_encoding.to_string() =>
+            Literal::string(&"serde_with::base64::Base64"),
+        _ => panic!("Unknown encoding '{}'. Expected 'hex' or 'base64'.", encoding_raw),
+    };
 
     let mut struct_attr: Option<Attribute> = None;
     let mut schema_type = quote! { SchemaType::Type(Type::String) };
@@ -19,9 +30,9 @@ pub fn generate_column_impls(
 
     match kind {
         InnerKind::ByteArray(len) => {
-            struct_attr = Some(syn::parse_quote! { #[serde_as(as = "serde_with::hex::Hex")] });
+            struct_attr = Some(syn::parse_quote! { #[serde_as(as = #binary_encoding_literal)] });
             default_code = quote! { Self([0u8; #len]) };
-            url_encoded_code = quote! { hex::encode(&self.0) };
+            url_encoded_code = quote! { serde_json::to_string(&self).unwrap().trim_matches('"').to_string() };
             iterable_code = quote! {
                 let mut arr = self.0;
                 for i in (0..#len).rev() {
@@ -36,9 +47,9 @@ pub fn generate_column_impls(
             };
         }
         InnerKind::VecU8 => {
-            struct_attr = Some(syn::parse_quote! { #[serde_as(as = "serde_with::hex::Hex")] });
+            struct_attr = Some(syn::parse_quote! { #[serde_as(as = #binary_encoding_literal)] });
             default_code = quote! { Self(b"a".to_vec()) };
-            url_encoded_code = quote! { hex::encode(&self.0) };
+            url_encoded_code = quote! { serde_json::to_string(&self).unwrap().trim_matches('"').to_string() };
             iterable_code = quote! {
                 let mut vec = self.0.clone();
                 if let Some(last) = vec.last_mut() {
