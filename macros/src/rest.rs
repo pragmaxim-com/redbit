@@ -36,17 +36,18 @@ pub struct FunctionDef {
 }
 
 #[derive(Clone)]
-pub struct GetParam {
+pub struct Param {
     pub name: Ident,
     pub ty: Type,
+    pub samples: Vec<TokenStream>,
     pub description: String,
 }
 
 #[derive(Clone)]
 pub enum HttpParams {
-    FromPath(Vec<GetParam>),
-    FromQuery(Type),
-    FromBody(Type),
+    FromPath(Vec<Param>),
+    FromQuery(Param),
+    FromBody(Param),
 }
 
 #[derive(Clone)]

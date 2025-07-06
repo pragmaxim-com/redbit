@@ -2,6 +2,7 @@ pub mod data;
 pub mod demo;
 pub mod routes;
 
+use chrono::{DateTime, Utc};
 pub use data::*;
 pub use redbit::*;
 
@@ -17,16 +18,17 @@ pub use redbit::*;
 #[column] pub struct PolicyId(pub String);
 #[column] pub struct Datum(pub Vec<u8>);
 #[column] pub struct AssetName(pub String);
+#[column] pub struct Time(pub DateTime<Utc>);
+#[column] pub struct Duration(pub std::time::Duration);
+#[column]
+#[derive(Copy, Hash)]
+pub struct Timestamp(pub u32);
 
 #[column]
 pub struct TempInputRef {
     tx_hash: Hash,
     index: u32,
 }
-
-#[column]
-#[derive(Copy, Hash)]
-pub struct Timestamp(pub u32);
 
 #[entity]
 pub struct Block {
@@ -46,6 +48,10 @@ pub struct BlockHeader {
     pub hash: Hash,
     #[column(range)]
     pub timestamp: Timestamp,
+    #[column(range)]
+    pub time: Time,
+    #[column]
+    pub duration: Duration,
     #[column(index)]
     pub merkle_root: Hash,
     #[column]

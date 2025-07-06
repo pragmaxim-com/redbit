@@ -28,7 +28,7 @@ pub fn plain_init_with_query(column_name: &Ident, table: &Ident) -> TokenStream 
     let init_expr = plain_init_expr(table);
     quote !{
         let #column_name = #init_expr;
-        if let Some(expected) = streaming_query.#column_name.clone() {
+        if let Some(expected) = stream_query.#column_name.clone() {
             if expected != #column_name {
                 return Ok(None);
             }
@@ -62,7 +62,7 @@ pub fn index_init_with_query(column_name: &Ident, table: &Ident) -> TokenStream 
     let init_expr = index_init_expr(table);
     quote! {
         let #column_name = #init_expr;
-        if let Some(expected) = streaming_query.#column_name.clone() {
+        if let Some(expected) = stream_query.#column_name.clone() {
             if expected != #column_name {
                 return Ok(None);
             }
@@ -123,7 +123,7 @@ pub fn dict_init_with_query(column_name: &Ident, table_dict_pk_by_pk: &Ident, ta
     let init_expr = dict_init_expr(table_dict_pk_by_pk, table_value_by_dict_pk);
     quote! {
         let #column_name = #init_expr;
-        if let Some(expected) = streaming_query.#column_name.clone() {
+        if let Some(expected) = stream_query.#column_name.clone() {
             if expected != #column_name {
                 return Ok(None);
             }

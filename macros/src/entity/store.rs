@@ -2,7 +2,7 @@ use proc_macro2::{Ident, TokenStream};
 use super::EntityMacros;
 use crate::endpoint::EndpointDef;
 use crate::rest::HttpParams::FromBody;
-use crate::rest::{FunctionDef, HttpMethod};
+use crate::rest::{FunctionDef, HttpMethod, Param};
 use quote::{format_ident, quote};
 use syn::Type;
 
@@ -73,7 +73,12 @@ impl EntityMacros {
             fn_name: fn_name.clone(),
             fn_stream,
             endpoint_def: Some(EndpointDef {
-                params: vec![FromBody(entity_type.clone())],
+                params: vec![FromBody(Param {
+                    name: format_ident!("body"), // TODO 
+                    ty: entity_type.clone(),
+                    description: "Entity instance to store".to_string(),
+                    samples: vec![quote! { #entity_type::sample() }],
+                })],
                 method: HttpMethod::POST,
                 handler_impl_stream: quote! {
                     Result<AppJson<#pk_type>, AppError> {

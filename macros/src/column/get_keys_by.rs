@@ -15,7 +15,7 @@ pub fn by_dict_def(
     let fn_name = format_ident!("get_{}s_by_{}", pk_name, column_name);
     let fn_stream = quote! {
         pub fn #fn_name(
-            tx: &::redbit::redb::ReadTransaction,
+            tx: &ReadTransaction,
             val: &#column_type
         ) -> Result<Vec<#pk_type>, AppError> {
             let val2birth = tx.open_table(#value_to_dict_pk)?;
@@ -57,7 +57,7 @@ pub fn by_index_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, column
     let fn_name = format_ident!("get_{}s_by_{}", pk_name, column_name);
     let fn_stream = quote! {
         pub fn #fn_name(
-            tx: &::redbit::redb::ReadTransaction,
+            tx: &ReadTransaction,
             val: &#column_type
         ) -> Result<Vec<#pk_type>, AppError> {
             let mm_table = tx.open_multimap_table(#table)?;

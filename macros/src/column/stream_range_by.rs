@@ -1,11 +1,11 @@
 use crate::rest::HttpParams::FromQuery;
-use crate::rest::{FunctionDef, HttpMethod};
+use crate::rest::{FunctionDef, HttpMethod, Param};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
 use crate::endpoint::EndpointDef;
 
-pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident, column_type: &Type, table: &Ident, column_query: Type) -> FunctionDef {
+pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident, column_type: &Type, table: &Ident, range_query: Type) -> FunctionDef {
     let fn_name = format_ident!("stream_range_by_{}", column_name);
     let fn_stream = quote! {
         pub fn #fn_name(
@@ -44,7 +44,12 @@ pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, column
         fn_name: fn_name.clone(),
         fn_stream,
         endpoint_def: Some(EndpointDef {
-            params: vec![FromQuery(column_query)],
+            params: vec![FromQuery(Param {
+                name: format_ident!("todo"), // TODO 
+                ty: range_query.clone(),
+                description: "Range query from/until".to_string(),
+                samples: vec![quote! { #range_query::sample() }],
+            })],
             method: HttpMethod::GET,
             handler_impl_stream: quote! {
                impl IntoResponse {

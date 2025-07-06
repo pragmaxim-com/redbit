@@ -1,5 +1,5 @@
 use crate::rest::HttpParams::FromQuery;
-use crate::rest::{FunctionDef, HttpMethod};
+use crate::rest::{FunctionDef, HttpMethod, Param};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
@@ -32,7 +32,12 @@ pub fn limit_fn_def(entity_name: &Ident, entity_type: &Type) -> FunctionDef {
         fn_name: fn_name.clone(),
         fn_stream,
         endpoint_def: Some(EndpointDef {
-            params: vec![FromQuery(syn::parse_quote!(LimitQuery))],
+            params: vec![FromQuery(Param {
+                name: format_ident!("query"), // TODO
+                ty: syn::parse_quote!(LimitQuery),
+                description: "Query parameter for limiting results".to_string(),
+                samples: vec![quote! { LimitQuery::sample() }], // TODO many
+            })],
             method: HttpMethod::GET,
             handler_impl_stream: quote! {
                Result<AppJson<Vec<#entity_type>>, AppError> {

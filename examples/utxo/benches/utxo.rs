@@ -94,7 +94,7 @@ fn benchmark_block_headers(c: &mut Criterion) {
         b.iter(|| {
             rt.block_on(async {
                 let read_tx = db.begin_read().unwrap();
-                BlockHeader::stream_by_hash(read_tx, first.hash.clone())?
+                BlockHeader::stream_by_hash(read_tx, first.hash.clone(), None)?
                     .try_collect::<Vec<BlockHeader>>()
                     .await
             }).unwrap()
@@ -104,7 +104,7 @@ fn benchmark_block_headers(c: &mut Criterion) {
         b.iter(|| {
             rt.block_on(async {
                 let read_tx = db.begin_read().unwrap();
-                BlockHeader::stream_by_timestamp(read_tx, first.timestamp.clone())?
+                BlockHeader::stream_by_timestamp(read_tx, first.timestamp.clone(), None)?
                     .try_collect::<Vec<BlockHeader>>()
                     .await
             }).unwrap()
@@ -114,7 +114,7 @@ fn benchmark_block_headers(c: &mut Criterion) {
         b.iter(|| {
             rt.block_on(async {
                 let read_tx = db.begin_read().unwrap();
-                BlockHeader::stream_by_merkle_root(read_tx, first.merkle_root.clone())?
+                BlockHeader::stream_by_merkle_root(read_tx, first.merkle_root.clone(), None)?
                     .try_collect::<Vec<BlockHeader>>()
                     .await
             }).unwrap()
@@ -144,7 +144,7 @@ fn benchmark_transactions(c: &mut Criterion) {
         b.iter(|| {
             rt.block_on(async {
                 let read_tx = db.begin_read().unwrap();
-                BlockHeader::stream_by_hash(read_tx, first.hash.clone())?
+                BlockHeader::stream_by_hash(read_tx, first.hash.clone(), None)?
                     .try_collect::<Vec<BlockHeader>>()
                     .await
             }).unwrap()
@@ -190,7 +190,7 @@ fn benchmark_utxos(c: &mut Criterion) {
         b.iter(|| {
             rt.block_on(async {
                 let read_tx = db.begin_read().unwrap();
-                Utxo::stream_by_datum(read_tx, first.datum.clone())?
+                Utxo::stream_by_datum(read_tx, first.datum.clone(), None)?
                     .try_collect::<Vec<Utxo>>()
                     .await
             }).unwrap()

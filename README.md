@@ -22,13 +22,14 @@ through auto-generated REST API.
 - ✅ One-to-One / One-to-Option / One-to-Many entities with cascade read/write/delete
 - ✅ All goodies including intuitive data ordering without writing custom codecs
 - ✅ SSE streaming api with efficient filters (ie. get txs or utxos for really HOT address)
+- ✅ supported column types : String, Integers, Vec<u8>, [u8; x], Bool, Uuid, ChronoDateTime, Time, Enum
+  - supported encodings of binary columns : hex, base64
+- ✅ all types have binary (db) and human-readable (http) serde support
 - ✅ Macro derived http rest API at http://127.0.0.1:8000/swagger-ui/ with examples
 - ✅ Macro derived unit tests and integration tests on axum test server
 
 ### Limitations
 
-- ❌ primitive types must be wrapped in a newtype struct if there is an index on it
-  - to macro derive implementations necessary for indexing and querying
 - ❌ root key must be newtype struct with numeric inner type
   - that's part of the design decision to achieve fast indexing of even whole bitcoin
 

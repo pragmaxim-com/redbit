@@ -8,9 +8,14 @@ pub fn new(struct_name: &Ident, parent_field: Field, index_field: Field) -> Toke
     let parent_type = &parent_field.ty;
     let index_name = &index_field.ident;
     let index_type = &index_field.ty;
-
+    let helper_name = Ident::new(&format!("{}Helper", struct_name), struct_name.span());
     let expanded = quote! {
-            // Core traits
+            #[derive(Serialize, Deserialize)]
+            struct #helper_name {
+                #parent_name: #parent_type,
+                #index_name: #index_type,
+            }
+
             impl IndexedPointer for #struct_name {
                 type Index = #index_type;
                 fn index(&self) -> Self::Index { self.#index_name }
@@ -30,12 +35,7 @@ pub fn new(struct_name: &Ident, parent_field: Field, index_field: Field) -> Toke
                     if serializer.is_human_readable() {
                         serializer.serialize_str(UrlEncoded::encode(self).as_str())
                     } else {
-                        #[derive(Serialize)]
-                        struct Helper {
-                            #parent_name: #parent_type,
-                            #index_name: #index_type,
-                        }
-                        let helper = Helper { #parent_name: self.#parent_name.clone(), #index_name: self.#index_name };
+                        let helper = #helper_name { #parent_name: self.#parent_name.clone(), #index_name: self.#index_name };
                         helper.serialize(serializer)
                     }
                 }
@@ -53,12 +53,7 @@ pub fn new(struct_name: &Ident, parent_field: Field, index_field: Field) -> Toke
                         let idx = idx_str.parse::<#index_type>().map_err(serde::de::Error::custom)?;
                         Ok(#struct_name { #parent_name: parent, #index_name: idx })
                     } else {
-                        #[derive(Deserialize)]
-                        struct Helper {
-                            #parent_name: #parent_type,
-                            #index_name: #index_type,
-                        }
-                        let helper = Helper::deserialize(deserializer)?;
+                        let helper = #helper_name::deserialize(deserializer)?;
                         Ok(#struct_name { #parent_name: helper.#parent_name, #index_name: helper.#index_name })
                     }
                 }

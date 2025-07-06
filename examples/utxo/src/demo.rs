@@ -38,9 +38,9 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
     BlockHeader::get(&read_tx, &first_block_header.id)?;
     BlockHeader::range(&read_tx, &first_block_header.id, &last_block_header.id)?;
     BlockHeader::range_by_timestamp(&read_tx, &first_block_header.timestamp, &last_block_header.timestamp)?;
-    BlockHeader::stream_by_hash(db.begin_read()?, first_block_header.hash)?.try_collect::<Vec<BlockHeader>>().await?;
-    BlockHeader::stream_by_timestamp(db.begin_read()?, first_block_header.timestamp)?.try_collect::<Vec<BlockHeader>>().await?;
-    BlockHeader::stream_by_merkle_root(db.begin_read()?, first_block_header.merkle_root)?.try_collect::<Vec<BlockHeader>>().await?;
+    BlockHeader::stream_by_hash(db.begin_read()?, first_block_header.hash, None)?.try_collect::<Vec<BlockHeader>>().await?;
+    BlockHeader::stream_by_timestamp(db.begin_read()?, first_block_header.timestamp, None)?.try_collect::<Vec<BlockHeader>>().await?;
+    BlockHeader::stream_by_merkle_root(db.begin_read()?, first_block_header.merkle_root, None)?.try_collect::<Vec<BlockHeader>>().await?;
     BlockHeader::stream_range(db.begin_read()?, first_block_header.id, last_block_header.id)?.try_collect::<Vec<BlockHeader>>().await?;
     BlockHeader::stream_range_by_timestamp(db.begin_read()?, first_block_header.timestamp, last_block_header.timestamp)?.try_collect::<Vec<BlockHeader>>().await?;
 
@@ -57,7 +57,7 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
     Transaction::get_inputs(&read_tx, &first_transaction.id)?;
     Transaction::parent_key(&read_tx, &first_transaction.id)?;
     Transaction::stream_ids_by_hash(&read_tx, &first_transaction.hash)?.try_collect::<Vec<TxPointer>>().await?;
-    Transaction::stream_by_hash(db.begin_read()?, first_transaction.hash)?.try_collect::<Vec<Transaction>>().await?;
+    Transaction::stream_by_hash(db.begin_read()?, first_transaction.hash, None)?.try_collect::<Vec<Transaction>>().await?;
     Transaction::stream_range(db.begin_read()?, first_transaction.id, last_transaction.id)?.try_collect::<Vec<Transaction>>().await?;
 
     println!("Querying utxos:");
@@ -79,7 +79,7 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
     Utxo::stream_ids_by_address(&read_tx, &first_utxo.address)?.try_collect::<Vec<UtxoPointer>>().await?;
     Utxo::stream_range(db.begin_read()?, first_utxo.id, last_utxo.id)?.try_collect::<Vec<Utxo>>().await?;
     Utxo::stream_by_address(db.begin_read()?, first_utxo.address)?.try_collect::<Vec<Utxo>>().await?;
-    Utxo::stream_by_datum(db.begin_read()?, first_utxo.datum)?.try_collect::<Vec<Utxo>>().await?;
+    Utxo::stream_by_datum(db.begin_read()?, first_utxo.datum, None)?.try_collect::<Vec<Utxo>>().await?;
 
     InputRef::take(&read_tx, 100)?;
     InputRef::exists(&read_tx, &first_input_ref.id)?;

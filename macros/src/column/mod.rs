@@ -33,13 +33,13 @@ pub struct DbColumnMacros {
 }
 
 impl DbColumnMacros {
-    pub fn new(field_def: FieldDef, indexing_type: IndexingType, entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type: &Type) -> DbColumnMacros {
+    pub fn new(field_def: FieldDef, indexing_type: IndexingType, entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type: &Type, stream_query_type: &Type) -> DbColumnMacros {
         let column_name = &field_def.name.clone();
         let column_type = &field_def.tpe.clone();
         match indexing_type {
             IndexingType::Off => DbColumnMacros::plain(field_def, entity_name, pk_name, pk_type, column_name, column_type),
             IndexingType::On { dictionary: false, range } => {
-                DbColumnMacros::index(field_def, entity_name, entity_type, pk_name, pk_type, column_name, column_type, range)
+                DbColumnMacros::index(field_def, entity_name, entity_type, pk_name, pk_type, column_name, column_type, stream_query_type, range)
             }
             IndexingType::On { dictionary: true, range: false } => {
                 DbColumnMacros::dictionary(field_def, entity_name, entity_type, pk_name, pk_type, column_name, column_type)
@@ -83,6 +83,7 @@ impl DbColumnMacros {
         pk_type: &Type,
         column_name: &Ident,
         column_type: &Type,
+        stream_query_type: &Type,
         range: bool,
     ) -> DbColumnMacros {
         let plain_table_def = TableDef::plain_table_def(entity_name, column_name, column_type, pk_name, pk_type);
@@ -90,7 +91,7 @@ impl DbColumnMacros {
 
         let mut function_defs: Vec<FunctionDef> = Vec::new();
         function_defs.push(get_by::get_by_index_def(entity_name, entity_type, column_name, column_type, &index_table_def.name));
-        function_defs.push(stream_by::by_index_def(entity_name, entity_type, column_name, column_type, &index_table_def.name));
+        function_defs.push(stream_by::by_index_def(entity_name, entity_type, column_name, column_type, &index_table_def.name, &stream_query_type));
         function_defs.push(get_keys_by::by_index_def(
             entity_name,
             pk_name,

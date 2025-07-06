@@ -85,7 +85,7 @@ async fn it_should_stream_entities_by_index() {
     let read_tx = db.begin_read().unwrap();
     let transaction = blocks.first().unwrap().transactions.first().unwrap();
 
-    let found_by_hash = Transaction::stream_by_hash(read_tx, transaction.hash.clone()).unwrap().try_collect::<Vec<Transaction>>().await.unwrap();
+    let found_by_hash = Transaction::stream_by_hash(read_tx, transaction.hash.clone(), None).unwrap().try_collect::<Vec<Transaction>>().await.unwrap();
     assert_eq!(found_by_hash.len(), 3);
     assert!(found_by_hash.iter().any(|tx| tx.id == transaction.id));
     assert!(found_by_hash.iter().any(|tx| tx.id == transaction.id));

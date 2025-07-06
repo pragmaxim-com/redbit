@@ -1,5 +1,5 @@
 use crate::rest::HttpParams::FromQuery;
-use crate::rest::{FunctionDef, HttpMethod};
+use crate::rest::{FunctionDef, HttpMethod, Param};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
@@ -50,7 +50,12 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
         fn_name: fn_name.clone(),
         fn_stream,
         endpoint_def: Some(EndpointDef {
-            params: vec![FromQuery(column_query)],
+            params: vec![FromQuery(Param {
+                name: format_ident!("query"), // TODO
+                ty: column_query.clone(),
+                description: "Range query from/until".to_string(),
+                samples: vec![quote! { #column_query::sample() }],
+            })],
             method: HttpMethod::GET,
             handler_impl_stream: quote! {
                impl IntoResponse {

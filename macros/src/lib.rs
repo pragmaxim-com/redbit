@@ -13,7 +13,7 @@ mod entity;
 
 use proc_macro::TokenStream;
 use proc_macro_error::proc_macro_error;
-use quote::quote;
+use quote::{format_ident, quote};
 use std::sync::Once;
 use syn::parse::Parse;
 use syn::spanned::Spanned;
@@ -31,18 +31,33 @@ pub fn column(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut input = parse_macro_input!(item as ItemStruct);
     let struct_ident = &input.ident.clone();
 
-    match &input.clone().fields {
-        Fields::Unnamed(fields) if fields.unnamed.len() == 1 => {
-            macro_utils::merge_struct_derives(&mut input, syn::parse_quote![Clone, Eq, Ord, PartialEq, PartialOrd, Debug]);
-            column::impls::generate_column_impls(struct_ident, &input, &fields.unnamed[0].ty).into()
-        },
-        _ => {
-            macro_utils::merge_struct_derives(&mut input, syn::parse_quote![Serialize, Deserialize, Debug, Clone, PartialEq, Eq, utoipa::ToSchema]);
-            quote! {
-                #input
-            }.into()
-        }
-    }
+    let expanded =
+        match &mut input.fields {
+            Fields::Unnamed(fields) if fields.unnamed.len() == 1 => {
+                let (impls, maybe_field_attr) =
+                    column::impls::generate_column_impls(struct_ident, &fields.unnamed[0].ty);
+
+                if let Some(attr) = maybe_field_attr {
+                    input.attrs.push(syn::parse_quote! { #[serde_with::serde_as] });
+                    fields.unnamed[0].attrs.push(attr);
+                }
+
+                macro_utils::merge_struct_derives(&mut input, syn::parse_quote![Clone, Eq, Ord, PartialEq, PartialOrd, Debug, Serialize, Deserialize]);
+                quote! {
+                    #input
+                    #impls
+                }.into()
+            },
+            _ => {
+                macro_utils::merge_struct_derives(&mut input, syn::parse_quote![
+                    Serialize, Deserialize, Debug, Clone, PartialEq, Eq, utoipa::ToSchema
+                ]);
+                quote! {
+                    #input
+                }.into()
+            }
+        };
+    macro_utils::write_stream_and_return(expanded, struct_ident).into()
 }
 
 struct KeyAttr {
@@ -178,6 +193,8 @@ pub fn derive_entity(input: TokenStream) -> TokenStream {
             }
         }
     };
+    let stream_query_ident = format_ident!("{}StreamQuery", entity_ident);
+    let stream_query_type: Type = syn::parse_quote! { #stream_query_ident };
 
     let stream = field_parser::get_named_fields(&item_struct)
         .and_then(|named_fields| {
@@ -190,7 +207,7 @@ pub fn derive_entity(input: TokenStream) -> TokenStream {
                         FieldMacros::Pk(DbPkMacros::new(entity_ident, &entity_type, field_def.clone(), fk.clone()))
                     },
                     ColumnDef::Plain(field , indexing_type) => {
-                        FieldMacros::Plain(DbColumnMacros::new(field.clone(), indexing_type.clone(), entity_ident, &entity_type, &pk.name, &pk.tpe))
+                        FieldMacros::Plain(DbColumnMacros::new(field.clone(), indexing_type.clone(), entity_ident, &entity_type, &pk.name, &pk.tpe, &stream_query_type))
                     },
                     ColumnDef::Relationship(field, multiplicity) => {
                         FieldMacros::Relationship(DbRelationshipMacros::new(field.clone(), multiplicity.clone(), entity_ident, &pk.name, &pk.tpe))
@@ -200,7 +217,7 @@ pub fn derive_entity(input: TokenStream) -> TokenStream {
                     }
                 }
                 ).collect::<Vec<FieldMacros>>();
-            entity::EntityMacros::new(entity_ident.clone(), entity_type, pk.name, pk.tpe, field_macros)
+            entity::EntityMacros::new(entity_ident.clone(), entity_type, pk.name, pk.tpe, &stream_query_type, field_macros)
         })
         .map(|entity_macros| entity_macros.expand()).unwrap_or_else(|e| e.to_compile_error().into());
 

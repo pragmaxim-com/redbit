@@ -4,7 +4,7 @@ use quote::quote;
 use syn::Type;
 
 impl EntityMacros {
-    pub fn sample_token_streams(entity_name: &Ident, entity_type: &Type, pk_type: &Type, struct_default_inits: Vec<TokenStream>) -> Vec<TokenStream> {
+    pub fn sample_token_streams(entity_name: &Ident, entity_type: &Type, pk_type: &Type, struct_default_inits: &Vec<TokenStream>) -> Vec<TokenStream> {
         vec![
             quote! {
                 pub fn sample() -> Self {
