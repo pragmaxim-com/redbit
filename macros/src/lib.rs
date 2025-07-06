@@ -155,7 +155,7 @@ pub fn root_key(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     s.attrs.retain(|a| !a.path().is_ident("derive"));
     s.attrs.insert(0, parse_quote! {
-        #[derive(RootKey, Clone, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
+        #[derive(RootKey, Clone, Debug, Default, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
     });
     quote!(#s).into()
 }

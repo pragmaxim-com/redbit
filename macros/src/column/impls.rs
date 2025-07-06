@@ -21,9 +21,9 @@ pub fn generate_column_impls(
         _ => panic!("Unknown encoding '{}'. Expected 'hex' or 'base64'.", encoding_raw),
     };
 
+    let schema_example = quote! { vec![Some(serde_json::json!(#struct_ident::default().encode()))] };
     let mut struct_attr: Option<Attribute> = None;
     let mut schema_type = quote! { SchemaType::Type(Type::String) };
-    let mut schema_example = quote! { vec![Some(serde_json::json!(#struct_ident::default().encode()))] };
     let mut default_code = quote! { Self(Default::default()) };
     let mut url_encoded_code = quote! { format!("{}", self.0) };
     let mut iterable_code = quote! { compile_error!("IterableColumn::next is not supported for this type.") };
@@ -74,7 +74,6 @@ pub fn generate_column_impls(
         }
         InnerKind::Integer => {
             schema_type = quote! { SchemaType::Type(Type::Integer) };
-            schema_example = quote! { vec![Some(serde_json::json!(#struct_ident::default().0))] };
             iterable_code = quote! { Self(self.0.wrapping_add(1)) };
         }
         InnerKind::Bool => {
