@@ -11,6 +11,7 @@ pub use axum::response::IntoResponse;
 pub use axum_streams;
 pub use axum_test;
 pub use futures;
+pub use once_cell;
 pub use futures::stream::{self, StreamExt};
 pub use futures_util::stream::TryStreamExt;
 pub use http;
@@ -66,6 +67,7 @@ use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::ops::Add;
+use std::path::PathBuf;
 use tokio::net::TcpListener;
 
 pub trait IndexedPointer: Clone {
@@ -323,6 +325,14 @@ impl<T: PartialOrd + PartialEq> FilterOp<T> {
             FilterOp::Ge(expected) => value >= expected,
             FilterOp::In(options) => options.contains(value),        }
     }
+}
+
+pub fn test_db_path(entity_name: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join("redbit").join("test");
+    if !dir.exists() {
+        std::fs::create_dir_all(dir.clone()).unwrap();
+    }
+    dir.join(format!("{}_{}.redb", entity_name, rand::random::<u64>()))
 }
 
 pub async fn build_router(state: RequestState, extras: Option<OpenApiRouter<RequestState>>) -> Router<()> {

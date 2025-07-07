@@ -47,6 +47,23 @@ impl EntityMacros {
                Ok(())
            }
         };
+        let test_fn_name = format_ident!("test_{}", fn_name);
+        let test_stream = Some(quote! {
+            #[tokio::test]
+            async fn #test_fn_name() {
+                let db = test_db();
+                let entity_count: usize = 3;
+                for test_entity in #entity_type::sample_many(entity_count) {
+                    #entity_name::store_and_commit(&db, &test_entity).expect("Failed to store and commit instance");
+                    let pk = test_entity.#pk_name;
+                    #entity_name::#fn_name(&db, &pk).expect("Failed to delete and commit instance");
+                    let read_tx = db.begin_read().expect("Failed to begin read transaction");
+                    let is_empty = #entity_name::get(&read_tx, &pk).expect("Failed to get instance").is_none();
+                    assert!(is_empty, "Instance should be deleted");
+                }
+            }
+        });
+
         FunctionDef {
             entity_name: entity_name.clone(),
             fn_name: fn_name.clone(),
@@ -69,17 +86,7 @@ impl EntityMacros {
                 },
                 endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), pk_name, pk_name),
             }),
-            test_stream: Some(quote! {
-                {
-                    for test_entity in #entity_type::sample_many(entity_count) {
-                        let pk = test_entity.#pk_name;
-                        #entity_name::#fn_name(&db, &pk).expect("Failed to delete and commit instance");
-                        let read_tx = db.begin_read().expect("Failed to begin read transaction");
-                        let is_empty = #entity_name::get(&read_tx, &pk).expect("Failed to get instance").is_none();
-                        assert!(is_empty, "Instance should be deleted");
-                    }
-                }
-            }),
+            test_stream,
         }
     }
 }

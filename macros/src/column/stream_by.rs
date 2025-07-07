@@ -46,8 +46,11 @@ pub fn by_dict_def(
         }
     };
 
+    let test_fn_name = format_ident!("test_{}", fn_name);
     let test_stream = Some(quote! {
-        {
+        #[tokio::test]
+        async fn #test_fn_name() {
+            let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
             let entity_stream = #entity_name::#fn_name(read_tx, val).expect("Failed to get entities by dictionary index");
@@ -116,14 +119,30 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
             Ok(stream)
         }
     };
+    let test_fn_name = format_ident!("test_{}", fn_name);
+    let test_with_filter_fn_name = format_ident!("{}_with_filter", test_fn_name);
     let test_stream = Some(quote! {
-        {
+        #[tokio::test]
+        async fn #test_fn_name() {
+            let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
             let entity_stream = #entity_name::#fn_name(read_tx, val, None).expect("Failed to get entities by index");
             let entities = entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
             let expected_entities = vec![#entity_type::sample()];
             assert_eq!(expected_entities, entities, "Expected entities to be returned for the given index");
+        }
+        #[tokio::test]
+        async fn #test_with_filter_fn_name() {
+            let db = DB.clone();
+            let entity_count: usize = 3;
+            let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let val = #column_type::default();
+            let query = #stream_query_type::sample();
+            let entity_stream = #entity_name::#fn_name(read_tx, val, Some(query.clone())).expect("Failed to get entities by index");
+            let entities = entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
+            let expected_entities = vec![#entity_type::sample()]; // only the default valued entity, filter is set for default values
+            assert_eq!(entities, expected_entities, "Expected entities to be filtered by query {:?}", query);
         }
     });
 

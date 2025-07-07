@@ -14,8 +14,12 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
             Ok(None)
         }
     };
+    let test_fn_name = format_ident!("test_{}", fn_name);
     let test_stream = Some(quote! {
-        {
+        #[tokio::test]
+        async fn #test_fn_name() {
+            let db = DB.clone();
+            let entity_count: usize = 3;
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let entity = #entity_name::last(&read_tx).expect("Failed to get last entity by PK").expect("Expected last entity to exist");
             let expected_entity = #entity_type::sample_many(entity_count).last().expect("Expected at least one entity").clone();

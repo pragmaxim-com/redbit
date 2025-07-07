@@ -65,7 +65,6 @@ pub struct Transaction {
     #[column(index)]
     pub hash: Hash,
     pub utxos: Vec<Utxo>,
-    pub inputs: Vec<InputRef>,
     #[column(transient)]
     pub transient_inputs: Vec<TempInputRef>,
 }
@@ -90,12 +89,6 @@ pub struct Tree {
     pub id: UtxoPointer,
     #[column(index)]
     pub hash: Hash,
-}
-
-#[entity]
-pub struct InputRef {
-    #[fk(one2many)]
-    pub id: InputPointer,
 }
 
 #[entity]

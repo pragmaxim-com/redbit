@@ -42,8 +42,11 @@ pub fn by_dict_def(
         }
     };
 
+    let test_fn_name = format_ident!("test_{}", fn_name);
     let test_stream = Some(quote! {
-        {
+        #[tokio::test]
+        async fn #test_fn_name() {
+            let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
             let pk_stream = #entity_name::#fn_name(&read_tx, &val).expect("Stream creation failed");
@@ -106,8 +109,11 @@ pub fn by_index_def(
         }
     };
 
+    let test_fn_name = format_ident!("test_{}", fn_name);
     let test_stream = Some(quote! {
-        {
+        #[tokio::test]
+        async fn #test_fn_name() {
+            let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
             let pk_stream = #entity_name::#fn_name(&read_tx, &val).expect("Stream creation failed");

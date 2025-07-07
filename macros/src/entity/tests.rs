@@ -9,26 +9,27 @@ pub fn test_suite(entity_name: &Ident, unit_tests: Vec<TokenStream>, http_tests:
         #[cfg(test)]
             mod #entity_tests {
                 use super::*;
+                use once_cell::sync::Lazy;
 
-                fn init_temp_db(name: &str) -> Arc<Database> {
-                    let dir = std::env::temp_dir().join("redbit").join(name).join(#entity_literal);
-                    if !dir.exists() {
-                        std::fs::create_dir_all(dir.clone()).unwrap();
+                fn test_db() -> Database {
+                    Database::create(test_db_path(#entity_literal)).expect("Failed to create database")
+                }
+
+                static DB: Lazy<Arc<Database>> = Lazy::new(|| {
+                    let db_path = test_db_path(#entity_literal);
+                    let db = Database::create(db_path).expect("Failed to create database");
+                    let entities = #entity_name::sample_many(3);
+                    for entity in entities {
+                        #entity_name::store_and_commit(&db, &entity).expect("Failed to persist entity");
                     }
-                    let db_path = dir.join(format!("{}_{}.redb", #entity_literal, rand::random::<u64>()));
-                    Arc::new(Database::create(db_path).expect("Failed to create database"))
-                }
+                    Arc::new(db)
+                });
 
-                #[tokio::test]
-                async fn test_entity_api() {
-                    let db = init_temp_db("api");
-                    let entity_count: usize = 3;
-                    #(#unit_tests)*
-                }
+                #(#unit_tests)*
 
                 #[tokio::test]
                 async fn test_entity_rest_api() {
-                    let db = init_temp_db("rest-api");
+                    let db = DB.clone();
                     let router = build_router(RequestState { db: Arc::clone(&db) }, None).await;
                     let server = axum_test::TestServer::new(router).unwrap();
                     #(#http_tests)*

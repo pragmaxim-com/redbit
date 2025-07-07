@@ -18,8 +18,12 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
             Ok(results)
         }
     };
+    let test_fn_name = format_ident!("test_{}", fn_name);
     let test_stream = Some(quote! {
-        {
+        #[tokio::test]
+        async fn #test_fn_name() {
+            let db = DB.clone();
+            let entity_count: usize = 3;
             let write_tx = db.begin_write().expect("Failed to begin write transaction");
             let from_value = #pk_type::default();
             let until_value = #pk_type::default().next().next().next();

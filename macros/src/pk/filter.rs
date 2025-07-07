@@ -15,11 +15,14 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, table: &I
             }
         }
     };
+    let test_fn_name = format_ident!("test_{}", fn_name);
     let test_stream = Some(quote! {
-        {
+        #[tokio::test]
+        async fn #test_fn_name() {
+            let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let pk_value = #pk_type::default();
-            let query = #stream_query_type::default();
+            let query = #stream_query_type::sample();
             let entity = #entity_name::#fn_name(&read_tx, &pk_value, &query).expect("Failed to get entity by PK").expect("Expected entity to exist");
             let expected_enity = #entity_type::sample();
             assert_eq!(entity, expected_enity, "Entity PK does not match the requested PK");

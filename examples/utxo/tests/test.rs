@@ -69,11 +69,7 @@ fn it_should_delete_entity_by_unique_id() {
             let assets_not_found = utxo.assets.iter().any(|asset| Asset::get(&read_tx, &asset.id).unwrap().is_none());
             utxo_not_found && assets_not_found
         });
-        let inputs_not_found = tx.inputs.iter().any(|input| {
-            let input_ref_not_found = InputRef::get(&read_tx, &input.id).unwrap().is_none();
-            input_ref_not_found
-        });
-        tx_not_found && utxos_not_found && inputs_not_found
+        tx_not_found && utxos_not_found
     });
     assert!(transitive_entities_not_found);
 }
@@ -190,14 +186,10 @@ fn it_should_get_related_one_to_many_entities() {
     let expected_utxos: Vec<Utxo> = expected_transactions.iter().flat_map(|t| t.utxos.clone()).collect();
     let utxos: Vec<Utxo> = transactions.iter().flat_map(|t| t.utxos.clone()).collect();
 
-    let expected_input_refs: Vec<InputRef> = expected_transactions.iter().flat_map(|t| t.inputs.clone()).collect();
-    let input_refs: Vec<InputRef> = transactions.iter().flat_map(|t| t.inputs.clone()).collect();
-
     let expected_assets: Vec<Asset> = expected_utxos.iter().flat_map(|u| u.assets.clone()).collect();
     let assets: Vec<Asset> = utxos.iter().flat_map(|u| u.assets.clone()).collect();
 
     assert_eq!(expected_transactions, transactions);
-    assert_eq!(expected_input_refs, input_refs);
     assert_eq!(expected_utxos, utxos);
     assert_eq!(expected_assets, assets);
 }

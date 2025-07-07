@@ -31,8 +31,11 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
             Ok(results)
         }
     };
-    let test_stream =  Some(quote! {
-        {
+    let test_fn_name = format_ident!("test_{}", fn_name);
+    let test_stream = Some(quote! {
+        #[tokio::test]
+        async fn #test_fn_name() {
+            let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let from_value = #column_type::default();
             let until_value = #column_type::default().next();
