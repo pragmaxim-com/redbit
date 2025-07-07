@@ -20,9 +20,9 @@ use syn::Type;
 pub struct DbColumnMacros {
     pub field_def: FieldDef,
     pub range_query: Option<TokenStream>,
-    pub stream_query_init: (TokenStream, TokenStream),
     pub table_definitions: Vec<TableDef>,
     pub struct_init: TokenStream,
+    pub stream_query_init: (TokenStream, TokenStream),
     pub struct_init_with_query: TokenStream,
     pub struct_default_init: TokenStream,
     pub store_statement: TokenStream,

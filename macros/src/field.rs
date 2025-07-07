@@ -69,6 +69,7 @@ impl FieldMacros {
     pub fn stream_queries(&self) -> Vec<(TokenStream, TokenStream)> {
         match self {
             FieldMacros::Plain(column) => vec![column.stream_query_init.clone()],
+            FieldMacros::Relationship(column) => vec![column.stream_query_init.clone()],
             _ => vec![],
         }
     }

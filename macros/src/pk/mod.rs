@@ -2,6 +2,7 @@ mod exists;
 mod get;
 mod take;
 mod first;
+mod filter;
 mod last;
 mod range;
 mod stream_range;
@@ -41,13 +42,14 @@ pub struct DbPkMacros {
 }
 
 impl DbPkMacros {
-    pub fn new(entity_name: &Ident, entity_type: &Type, field_def: FieldDef, fk: Option<Multiplicity>) -> Self {
+    pub fn new(entity_name: &Ident, entity_type: &Type, field_def: FieldDef, fk: Option<Multiplicity>, stream_query_type: &Type) -> Self {
         let pk_name = field_def.name.clone();
         let pk_type = field_def.tpe.clone();
         let table_def = TableDef::pk(entity_name, &pk_name, &pk_type);
 
         let mut function_defs: Vec<FunctionDef> = Vec::new();
         function_defs.push(get::fn_def(entity_name, entity_type, &pk_name, &pk_type, &table_def.name));
+        function_defs.push(filter::fn_def(entity_name, entity_type, &pk_type, &table_def.name, stream_query_type));
         function_defs.push(take::fn_def(entity_name, entity_type, &table_def.name));
         function_defs.push(first::fn_def(entity_name, entity_type, &table_def.name));
         function_defs.push(last::fn_def(entity_name, entity_type, &table_def.name));
@@ -64,7 +66,7 @@ impl DbPkMacros {
         let entity_range_query = format_ident!("{}RangeQuery", entity_name.to_string());
         let entity_range_query_ty = syn::parse_quote!(#entity_range_query);
 
-        function_defs.push(range::fn_def(entity_name, entity_type, &pk_type, &table_def.name));
+        function_defs.push(range::fn_def(entity_name, entity_type, &pk_type, &table_def.name, stream_query_type));
         function_defs.push(stream_range::fn_def(entity_name, entity_type, &pk_name, &pk_type, &table_def.name, entity_range_query_ty));
         function_defs.push(pk_range::fn_def(entity_name, entity_type, &pk_name, &pk_type, &table_def.name));
         let range_query =

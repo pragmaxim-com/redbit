@@ -19,7 +19,7 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
 
     Block::take(&read_tx, 100)?;
     Block::get(&read_tx, &first_block.id)?;
-    Block::range(&read_tx, &first_block.id, &last_block.id)?;
+    Block::range(&read_tx, &first_block.id, &last_block.id, None)?;
     Block::get_transactions(&read_tx, &first_block.id)?;
     Block::get_header(&read_tx, &first_block.id)?;
     Block::exists(&read_tx, &first_block.id)?;
@@ -36,7 +36,7 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
     BlockHeader::get_by_merkle_root(&read_tx, &first_block_header.merkle_root)?;
     BlockHeader::take(&read_tx, 100)?;
     BlockHeader::get(&read_tx, &first_block_header.id)?;
-    BlockHeader::range(&read_tx, &first_block_header.id, &last_block_header.id)?;
+    BlockHeader::range(&read_tx, &first_block_header.id, &last_block_header.id, None)?;
     BlockHeader::range_by_timestamp(&read_tx, &first_block_header.timestamp, &last_block_header.timestamp)?;
     BlockHeader::stream_by_hash(db.begin_read()?, first_block_header.hash, None)?.try_collect::<Vec<BlockHeader>>().await?;
     BlockHeader::stream_by_timestamp(db.begin_read()?, first_block_header.timestamp, None)?.try_collect::<Vec<BlockHeader>>().await?;
@@ -52,7 +52,7 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
     Transaction::get_by_hash(&read_tx, &first_transaction.hash)?;
     Transaction::take(&read_tx, 100)?;
     Transaction::get(&read_tx, &first_transaction.id)?;
-    Transaction::range(&read_tx, &first_transaction.id, &last_transaction.id)?;
+    Transaction::range(&read_tx, &first_transaction.id, &last_transaction.id, None)?;
     Transaction::get_utxos(&read_tx, &first_transaction.id)?;
     Transaction::get_inputs(&read_tx, &first_transaction.id)?;
     Transaction::parent_key(&read_tx, &first_transaction.id)?;
@@ -69,7 +69,7 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
     Utxo::get_ids_by_address(&read_tx, &first_utxo.address)?;
     Utxo::take(&read_tx, 100)?;
     Utxo::get(&read_tx, &first_utxo.id)?;
-    Utxo::range(&read_tx, &first_utxo.id, &last_utxo.id)?;
+    Utxo::range(&read_tx, &first_utxo.id, &last_utxo.id, None)?;
     Utxo::get_assets(&read_tx, &first_utxo.id)?;
     Utxo::parent_key(&read_tx, &first_utxo.id)?;
     Utxo::get_tree(&read_tx, &first_utxo.id)?;
@@ -84,7 +84,7 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
     InputRef::take(&read_tx, 100)?;
     InputRef::exists(&read_tx, &first_input_ref.id)?;
     InputRef::get(&read_tx, &first_input_ref.id)?;
-    InputRef::range(&read_tx, &first_input_ref.id, &last_input_ref.id)?;
+    InputRef::range(&read_tx, &first_input_ref.id, &last_input_ref.id, None)?;
     InputRef::parent_key(&read_tx, &first_input_ref.id)?;
     InputRef::stream_range(db.begin_read()?, first_input_ref.id, last_input_ref.id)?.try_collect::<Vec<InputRef>>().await?;
 
@@ -97,7 +97,7 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
     Asset::get_ids_by_policy_id(&read_tx, &first_asset.policy_id)?;
     Asset::take(&read_tx, 100)?;
     Asset::get(&read_tx, &first_asset.id)?;
-    Asset::range(&read_tx, &first_asset.id, &last_asset.id)?;
+    Asset::range(&read_tx, &first_asset.id, &last_asset.id, None)?;
     Asset::parent_key(&read_tx, &first_asset.id)?;
     Asset::stream_ids_by_policy_id(&read_tx, &first_asset.policy_id)?.try_collect::<Vec<AssetPointer>>().await?;
     Asset::stream_by_policy_id(db.begin_read()?, first_asset.policy_id)?.try_collect::<Vec<Asset>>().await?;

@@ -210,7 +210,8 @@ pub fn derive_entity(input: TokenStream) -> TokenStream {
             }
         }
     };
-    let stream_query_ident = format_ident!("{}StreamQuery", entity_ident);
+    let stream_query_suffix = format!("StreamQuery");
+    let stream_query_ident = format_ident!("{}{}", entity_ident, &stream_query_suffix);
     let stream_query_type: Type = syn::parse_quote! { #stream_query_ident };
 
     let stream = field_parser::get_named_fields(&item_struct)
@@ -221,13 +222,13 @@ pub fn derive_entity(input: TokenStream) -> TokenStream {
             let field_macros =
                 field_macros.into_iter().map(|c| match c {
                     ColumnDef::Key {field_def, fk } => {
-                        FieldMacros::Pk(DbPkMacros::new(entity_ident, &entity_type, field_def.clone(), fk.clone()))
+                        FieldMacros::Pk(DbPkMacros::new(entity_ident, &entity_type, field_def.clone(), fk.clone(), &stream_query_type))
                     },
                     ColumnDef::Plain(field , indexing_type) => {
                         FieldMacros::Plain(DbColumnMacros::new(field.clone(), indexing_type.clone(), entity_ident, &entity_type, &pk.name, &pk.tpe, &stream_query_type))
                     },
                     ColumnDef::Relationship(field, multiplicity) => {
-                        FieldMacros::Relationship(DbRelationshipMacros::new(field.clone(), multiplicity.clone(), entity_ident, &pk.name, &pk.tpe))
+                        FieldMacros::Relationship(DbRelationshipMacros::new(field.clone(), multiplicity.clone(), entity_ident, &pk.name, &pk.tpe, &stream_query_suffix))
                     },
                     ColumnDef::Transient(field) =>{
                         FieldMacros::Transient(TransientMacros::new(field.clone()))

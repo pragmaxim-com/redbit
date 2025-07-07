@@ -92,7 +92,7 @@ pub fn one2many_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, 
         fn_stream: quote! {
             pub fn #fn_name(tx: &ReadTransaction, pk: &#pk_type) -> Result<Vec<#child_type>, AppError> {
                 let (from, to) = pk.fk_range();
-                #child_type::range(&tx, &from, &to)
+                #child_type::range(&tx, &from, &to, None)
             }
         },
         endpoint_def: Some(EndpointDef {

@@ -301,6 +301,30 @@ impl LimitQuery {
     }
 }
 
+#[derive(Debug, Clone, ToSchema, Serialize, Deserialize)]
+pub enum FilterOp<T> {
+    Eq(T),
+    Ne(T),
+    Lt(T),
+    Le(T),
+    Gt(T),
+    Ge(T),
+    In(Vec<T>),
+}
+
+impl<T: PartialOrd + PartialEq> FilterOp<T> {
+    pub fn matches(&self, value: &T) -> bool {
+        match self {
+            FilterOp::Eq(expected) => value == expected,
+            FilterOp::Ne(expected) => value != expected,
+            FilterOp::Lt(expected) => value < expected,
+            FilterOp::Le(expected) => value <= expected,
+            FilterOp::Gt(expected) => value > expected,
+            FilterOp::Ge(expected) => value >= expected,
+            FilterOp::In(options) => options.contains(value),        }
+    }
+}
+
 pub async fn build_router(state: RequestState, extras: Option<OpenApiRouter<RequestState>>) -> Router<()> {
     let mut router: OpenApiRouter<RequestState> = OpenApiRouter::with_openapi(ApiDoc::openapi());
     for info in inventory::iter::<EntityInfo> {

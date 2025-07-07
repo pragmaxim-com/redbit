@@ -40,7 +40,7 @@ fn benchmark_blocks(c: &mut Criterion) {
     group.bench_function("Block::all", |b| b.iter(|| Block::take(&read_tx, 100).unwrap()));
     group.bench_function("Block::get", |b| b.iter(|| Block::get(&read_tx, &first_block.id).unwrap()));
     group.bench_function("Block::range", |b| {
-        b.iter(|| Block::range(&read_tx, &first_block.id, &last_block.id).unwrap())
+        b.iter(|| Block::range(&read_tx, &first_block.id, &last_block.id, None).unwrap())
     });
     group.bench_function("Block::get_transactions", |b| {
         b.iter(|| Block::get_transactions(&read_tx, &first_block.id).unwrap())
@@ -75,7 +75,7 @@ fn benchmark_block_headers(c: &mut Criterion) {
         b.iter(|| BlockHeader::get(&read_tx, &first.id).unwrap())
     });
     group.bench_function("BlockHeader::range", |b| {
-        b.iter(|| BlockHeader::range(&read_tx, &first.id, &last.id).unwrap())
+        b.iter(|| BlockHeader::range(&read_tx, &first.id, &last.id, None).unwrap())
     });
     group.bench_function("BlockHeader::range_by_timestamp", |b| {
         b.iter(|| BlockHeader::range_by_timestamp(&read_tx, &first.timestamp, &last.timestamp).unwrap())
@@ -151,7 +151,7 @@ fn benchmark_transactions(c: &mut Criterion) {
         })
     });
     group.bench_function("Transaction::range", |b| {
-        b.iter(|| Transaction::range(&read_tx, &first.id, &last.id).unwrap())
+        b.iter(|| Transaction::range(&read_tx, &first.id, &last.id, None).unwrap())
     });
     group.bench_function("Transaction::get_utxos", |b| {
         b.iter(|| Transaction::get_utxos(&read_tx, &first.id).unwrap())
@@ -197,7 +197,7 @@ fn benchmark_utxos(c: &mut Criterion) {
         })
     });
     group.bench_function("Utxo::range", |b| {
-        b.iter(|| Utxo::range(&read_tx, &first.id, &last.id).unwrap())
+        b.iter(|| Utxo::range(&read_tx, &first.id, &last.id, None).unwrap())
     });
     group.bench_function("Utxo::get_assets", |b| {
         b.iter(|| Utxo::get_assets(&read_tx, &first.id).unwrap())
@@ -244,7 +244,7 @@ fn benchmark_assets(c: &mut Criterion) {
 
     });
     group.bench_function("Asset::range", |b| {
-        b.iter(|| Asset::range(&read_tx, &first.id, &last.id).unwrap())
+        b.iter(|| Asset::range(&read_tx, &first.id, &last.id, None).unwrap())
     });
 }
 
