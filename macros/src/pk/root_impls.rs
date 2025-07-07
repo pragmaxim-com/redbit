@@ -23,7 +23,7 @@ pub fn new(struct_name: &Ident, index_field: Field) -> TokenStream {
                 format!("{}", self.0)
             }
         }
-
+        
         impl std::str::FromStr for #struct_name {
             type Err = ParsePointerError;
             fn from_str(s: &str) -> Result<Self, Self::Err> {
