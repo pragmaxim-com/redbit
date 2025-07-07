@@ -28,7 +28,6 @@ pub fn new(struct_name: &Ident, parent_field: Field, index_field: Field) -> Toke
             fn from_parent(parent: Self::Parent, index: #index_type) -> Self { #struct_name { #parent_name: parent, #index_name: index } }
         }
 
-        // Serde: human-readable = dash string, binary = raw fields
         impl Serialize for #struct_name {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
             where S: Serializer {
@@ -40,6 +39,7 @@ pub fn new(struct_name: &Ident, parent_field: Field, index_field: Field) -> Toke
                 }
             }
         }
+
         impl<'de> Deserialize<'de> for #struct_name {
             fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
             where D: Deserializer<'de> {
@@ -59,12 +59,6 @@ pub fn new(struct_name: &Ident, parent_field: Field, index_field: Field) -> Toke
             }
         }
 
-        impl UrlEncoded for #struct_name {
-            fn encode(&self) -> String {
-                format!("{}-{}", self.#parent_name.encode(), self.#index_name)
-            }
-        }
-
         impl std::str::FromStr for #struct_name {
             type Err = ParsePointerError;
             fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -77,14 +71,19 @@ pub fn new(struct_name: &Ident, parent_field: Field, index_field: Field) -> Toke
             }
         }
 
+        impl UrlEncoded for #struct_name {
+            fn encode(&self) -> String {
+                format!("{}-{}", self.#parent_name.encode(), self.#index_name)
+            }
+        }
+
         impl PartialSchema for #struct_name {
             fn schema() -> openapi::RefOr<openapi::schema::Schema> {
                 use openapi::schema::*;
-                let example = format!("{}-{}", #parent_type::default().encode(), "0");
                 Schema::Object(
                     ObjectBuilder::new()
                         .schema_type(SchemaType::Type(Type::String))
-                        .examples(vec![example])
+                        .examples(vec![format!("{}-{}", #parent_type::default().encode(), "0")])
                         .build()
                 ).into()
             }
@@ -92,7 +91,6 @@ pub fn new(struct_name: &Ident, parent_field: Field, index_field: Field) -> Toke
 
         impl ToSchema for #struct_name {
             fn schemas(schemas: &mut Vec<(String, openapi::RefOr<openapi::schema::Schema>)>) {
-                use ToSchema;
                 schemas.push((stringify!(#struct_name).to_string(), <#struct_name as PartialSchema>::schema()));
                 <#parent_type as ToSchema>::schemas(schemas);
             }
