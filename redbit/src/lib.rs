@@ -335,6 +335,11 @@ pub fn test_db_path(entity_name: &str) -> PathBuf {
     dir.join(format!("{}_{}.redb", entity_name, rand::random::<u64>()))
 }
 
+pub async fn build_test_server(db: Arc<Database>) -> axum_test::TestServer {
+    let router = build_router(RequestState { db }, None).await;
+    axum_test::TestServer::new(router).unwrap()
+}
+
 pub async fn build_router(state: RequestState, extras: Option<OpenApiRouter<RequestState>>) -> Router<()> {
     let mut router: OpenApiRouter<RequestState> = OpenApiRouter::with_openapi(ApiDoc::openapi());
     for info in inventory::iter::<EntityInfo> {

@@ -51,7 +51,7 @@ pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, column
                 name: format_ident!("todo"), // TODO 
                 ty: range_query.clone(),
                 description: "Range query from/until".to_string(),
-                samples: vec![quote! { #range_query::sample() }],
+                samples: quote! { vec![#range_query::sample()] },
             })],
             method: HttpMethod::GET,
             handler_impl_stream: quote! {

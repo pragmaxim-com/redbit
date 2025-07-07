@@ -1,6 +1,6 @@
-use proc_macro2::{Literal, TokenStream};
-use quote::quote;
-use crate::rest::{Param, HttpMethod, HttpParams};
+use proc_macro2::{Ident, Literal, TokenStream};
+use quote::{format_ident, quote};
+use crate::rest::{HttpMethod, HttpParams, PathExpr};
 
 #[derive(Clone)]
 pub struct EndpointDef {
@@ -12,23 +12,23 @@ pub struct EndpointDef {
 }
 
 impl EndpointDef {
-    pub fn generate_test(&self) -> TokenStream {
-        let method_name = match self.method {
-            HttpMethod::GET => quote! { http::Method::GET },
-            HttpMethod::POST => quote! { http::Method::POST },
-            HttpMethod::HEAD => quote! { http::Method::HEAD },
-            HttpMethod::DELETE => quote! { http::Method::DELETE },
+    pub fn generate_tests(&self, fn_name: &Ident) -> Vec<TokenStream> {
+        let (server, method_name) = match self.method {
+            HttpMethod::GET => (quote! { get_test_server() }, quote! { http::Method::GET }),
+            HttpMethod::POST => (quote! { get_test_server() }, quote! { http::Method::POST }),
+            HttpMethod::HEAD => (quote! { get_test_server() }, quote! { http::Method::HEAD }),
+            HttpMethod::DELETE => (quote! { get_test_server() }, quote! { http::Method::DELETE }),
         };
 
-        fn generate_path_expr(endpoint_path: &str, params: &[Param]) -> TokenStream {
-            let mut fmt_string = endpoint_path.to_string();
-            let mut fmt_args = Vec::new();
+        fn generate_path_expr(endpoint_path: &str, exprs: &[PathExpr]) -> TokenStream {
+            let mut fmt_string: String = endpoint_path.to_string();
+            let mut fmt_args: Vec<TokenStream> = Vec::new();
 
-            for Param { name, ty: _, samples, .. } in params {
+            for PathExpr { name, ty: _, sample, .. } in exprs {
                 let placeholder = format!("{{{}}}", name);
                 if fmt_string.contains(&placeholder) {
                     fmt_string = fmt_string.replace(&placeholder, "{}");
-                    fmt_args.push(samples[0].clone()); // TODO: try all samples
+                    fmt_args.push(sample.clone());
                 }
             }
 
@@ -63,56 +63,69 @@ impl EndpointDef {
             }
         }
 
-        let mut method_calls: Vec<TokenStream> = Vec::new();
+        let mut tests: Vec<TokenStream> = Vec::new();
         if query_param.is_some() && body_param.is_some() {
             let query_samples = query_param.unwrap().clone().samples;
             let body_param_clone = body_param.unwrap().clone();
-            for query_sample in query_samples {
-                for body_sample in body_param_clone.samples.iter() {
-                    let ty = &body_param_clone.ty;
-                    method_calls.push(quote! {
-                        let query_string = serde_urlencoded::to_string(#query_sample).unwrap();
-                        let final_path = format!("{}?{}", #path_expr, query_string);
-                        eprintln!("Testing endpoint: {} : {} with body", #method_name, final_path);
-                        let response = server.method(#method_name, &final_path).json::<#ty>(#body_sample).await;
-                        response.assert_status_ok();
-                    });
+            let body_samples = body_param_clone.samples;
+            let ty = &body_param_clone.ty;
+            let test_fn_name = format_ident!("test_http_endpoint_with_query_and_body_{}", fn_name);
+            tests.push(quote! {
+                #[tokio::test]
+                async fn #test_fn_name() {
+                    for query_sample in #query_samples {
+                        for body_sample in #body_samples {
+                            let query_string = serde_urlencoded::to_string(query_sample).unwrap();
+                            let final_path = format!("{}?{}", #path_expr, query_string);
+                            eprintln!("Testing endpoint: {} : {} with body", #method_name, final_path);
+                            let response = #server.await.method(#method_name, &final_path).json::<#ty>(body_sample).await;
+                            response.assert_status_ok();
+                        }
+                    }
                 }
-            }
+            });
         } else if query_param.is_some() {
             let query_samples = query_param.unwrap().clone().samples;
-            for query_sample in query_samples {
-                method_calls.push(quote! {
-                    let query_string = serde_urlencoded::to_string(#query_sample).unwrap();
-                    let final_path = format!("{}?{}", #path_expr, query_string);
-                    eprintln!("Testing endpoint: {} : {}", #method_name, &final_path);
-                    let response = server.method(#method_name, &final_path).await;
-                    response.assert_status_ok();
+            let test_fn_name = format_ident!("test_http_endpoint_with_query_{}", fn_name);
+                tests.push(quote! {
+                    #[tokio::test]
+                    async fn #test_fn_name() {
+                        for query_sample in #query_samples {
+                            let query_string = serde_urlencoded::to_string(query_sample).unwrap();
+                            let final_path = format!("{}?{}", #path_expr, query_string);
+                            eprintln!("Testing endpoint: {} : {}", #method_name, &final_path);
+                            let response = #server.await.method(#method_name, &final_path).await;
+                            response.assert_status_ok();
+                        }
+                    }
                 });
-            }
         } else if body_param.is_some() {
             let body_samples = body_param.unwrap().clone().samples;
-            for body_sample in body_samples {
-                let ty = body_param.unwrap().ty.clone();
-                method_calls.push(quote! {
-                    eprintln!("Testing endpoint: {} : {} with body", #method_name, #path_expr);
-                    let response = server.method(#method_name, &#path_expr).json::<#ty>(&#body_sample).await;
-                    response.assert_status_ok();
-                });
-            }
+            let test_fn_name = format_ident!("test_http_endpoint_with_body_{}", fn_name);
+            let ty = body_param.unwrap().ty.clone();
+            tests.push(quote! {
+                #[tokio::test]
+                async fn #test_fn_name() {
+                    for body_sample in #body_samples {
+                        eprintln!("Testing endpoint: {} : {} with body", #method_name, #path_expr);
+                        let response = #server.await.method(#method_name, &#path_expr).json::<#ty>(&body_sample).await;
+                        response.assert_status_ok();
+                    }
+                }
+            });
         } else {
-            method_calls.push(quote! {
-                eprintln!("Testing endpoint: {} : {}", #method_name, #path_expr);
-                let response = server.method(#method_name, &#path_expr).await;
-                response.assert_status_ok();
+            let test_fn_name = format_ident!("test_http_endpoint_{}", fn_name);
+            tests.push(quote! {
+                #[tokio::test]
+                async fn #test_fn_name() {
+                    eprintln!("Testing endpoint: {} : {}", #method_name, #path_expr);
+                    let response = #server.await.method(#method_name, &#path_expr).await;
+                    response.assert_status_ok();
+                }
             });
         };
 
-        quote! {
-            {
-                #(#method_calls)*
-            }
-        }
+        tests
     }
 
     pub fn axum_bindings(&self) -> TokenStream {
@@ -122,7 +135,7 @@ impl EndpointDef {
             match param {
                 HttpParams::FromPath(path_params) => match &path_params[..] {
                     [] => {}
-                    [Param { name, ty, .. }] => {
+                    [PathExpr { name, ty, .. }] => {
                         bindings.push(quote! { extract::Path(#name): extract::Path<#ty> });
                     }
                     _ => {

@@ -36,7 +36,7 @@ pub fn limit_fn_def(entity_name: &Ident, entity_type: &Type) -> FunctionDef {
                 name: format_ident!("query"), // TODO
                 ty: syn::parse_quote!(LimitQuery),
                 description: "Query parameter for limiting results".to_string(),
-                samples: vec![quote! { LimitQuery::sample() }], // TODO many
+                samples: quote! { vec![LimitQuery::sample()] }, // TODO many
             })],
             method: HttpMethod::GET,
             handler_impl_stream: quote! {

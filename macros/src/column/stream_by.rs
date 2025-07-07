@@ -1,5 +1,5 @@
 use crate::rest::HttpParams::{FromBody, FromPath};
-use crate::rest::{FunctionDef, Param, HttpMethod};
+use crate::rest::{FunctionDef, Param, HttpMethod, PathExpr};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
@@ -65,11 +65,11 @@ pub fn by_dict_def(
         fn_name: fn_name.clone(),
         fn_stream,
         endpoint_def: Some(EndpointDef {
-            params: vec![FromPath(vec![Param {
+            params: vec![FromPath(vec![PathExpr {
                 name: column_name.clone(),
                 ty: column_type.clone(),
                 description: "Secondary index column with dictionary".to_string(),
-                samples: vec![quote! { #column_type::default().encode() }],
+                sample: quote! { #column_type::default().encode() },
             }])],
             method: HttpMethod::GET,
             handler_impl_stream: quote! {
@@ -152,17 +152,17 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
         fn_stream,
         endpoint_def: Some(EndpointDef {
             params: vec![
-                FromPath(vec![Param {
+                FromPath(vec![PathExpr {
                     name: column_name.clone(),
                     ty: column_type.clone(),
                     description: "Secondary index column".to_string(),
-                    samples: vec![quote! { #column_type::default().encode() }],
+                    sample: quote! { #column_type::default().encode() },
                 }]
                 ), FromBody(Param {
                     name: format_ident!("todo"), // TODO 
                     ty: syn::parse_quote! { Option<#stream_query_type> },
                     description: "Query to filter stream entities by".to_string(),
-                    samples: vec![quote! { Some(#stream_query_type::sample()) }, quote! { None }],
+                    samples: quote! { vec![Some(#stream_query_type::sample()), None ] },
                 })
             ],
             method: HttpMethod::POST,

@@ -1,6 +1,6 @@
 use crate::endpoint::EndpointDef;
 use crate::rest::HttpParams::FromPath;
-use crate::rest::{FunctionDef, HttpMethod, Param};
+use crate::rest::{FunctionDef, HttpMethod, PathExpr};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
@@ -34,11 +34,11 @@ pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, table: &Iden
         fn_name: fn_name.clone(),
         fn_stream,
         endpoint_def: Some(EndpointDef {
-            params: vec![FromPath(vec![Param {
+            params: vec![FromPath(vec![PathExpr {
                 name: pk_name.clone(),
                 ty: pk_type.clone(),
                 description: "Primary key".to_string(),
-                samples: vec![quote! { #pk_type::default().encode() }],
+                sample: quote! { #pk_type::default().encode() },
             }])],
             method: HttpMethod::HEAD,
             utoipa_responses: quote! { responses((status = OK)) },

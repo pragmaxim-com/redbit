@@ -101,7 +101,7 @@ impl EntityMacros {
                     name: format_ident!("body"), // TODO 
                     ty: entity_type.clone(),
                     description: "Entity instance to store".to_string(),
-                    samples: vec![quote! { #entity_type::sample() }],
+                    samples: quote! { vec![#entity_type::sample()] },
                 })],
                 method: HttpMethod::POST,
                 handler_impl_stream: quote! {

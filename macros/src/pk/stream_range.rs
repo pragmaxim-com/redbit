@@ -57,7 +57,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
                 name: format_ident!("query"), // TODO
                 ty: column_query.clone(),
                 description: "Range query from/until".to_string(),
-                samples: vec![quote! { #column_query::sample() }],
+                samples: quote! { vec![#column_query::sample()] },
             })],
             method: HttpMethod::GET,
             handler_impl_stream: quote! {

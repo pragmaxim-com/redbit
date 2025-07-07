@@ -9,7 +9,7 @@ pub struct HttpEndpointMacro {
     pub endpoint_def: EndpointDef,
     pub handler_fn_name: Ident,
     pub handler: TokenStream,
-    pub test: TokenStream,
+    pub tests: Vec<TokenStream>,
 }
 
 impl Display for HttpEndpointMacro {
@@ -36,16 +36,23 @@ pub struct FunctionDef {
 }
 
 #[derive(Clone)]
+pub struct PathExpr {
+    pub name: Ident,
+    pub ty: Type,
+    pub sample: TokenStream,
+    pub description: String,
+}
+#[derive(Clone)]
 pub struct Param {
     pub name: Ident,
     pub ty: Type,
-    pub samples: Vec<TokenStream>,
+    pub samples: TokenStream,
     pub description: String,
 }
 
 #[derive(Clone)]
 pub enum HttpParams {
-    FromPath(Vec<Param>),
+    FromPath(Vec<PathExpr>),
     FromQuery(Param),
     FromBody(Param),
 }
@@ -80,7 +87,7 @@ pub fn to_http_endpoints(defs: &Vec<FunctionDef>) -> (Vec<TokenStream>, TokenStr
         })
         .collect();
     let endpoint_handlers: Vec<TokenStream> = endpoints.iter().map(|e| e.handler.clone()).collect();
-    let tests: Vec<TokenStream> = endpoints.iter().map(|e| e.test.clone()).collect();
+    let tests: Vec<TokenStream> = endpoints.into_iter().flat_map(|e| e.tests).collect();
     let routes = quote! {
         pub fn routes() -> OpenApiRouter<RequestState> {
             OpenApiRouter::new()
@@ -108,5 +115,5 @@ pub fn to_http_endpoint(fn_def: &FunctionDef, endpoint_def: &EndpointDef) -> Htt
         ) -> #handler_impl_stream
     };
 
-    HttpEndpointMacro { endpoint_def: endpoint_def.clone(), handler_fn_name, handler, test: endpoint_def.generate_test() }
+    HttpEndpointMacro { endpoint_def: endpoint_def.clone(), handler_fn_name, handler, tests: endpoint_def.generate_tests(&fn_def.fn_name) }
 }

@@ -1,6 +1,6 @@
 use crate::endpoint::EndpointDef;
 use crate::rest::HttpParams::FromPath;
-use crate::rest::{FunctionDef, HttpMethod, Param};
+use crate::rest::{FunctionDef, HttpMethod, PathExpr};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
@@ -29,11 +29,11 @@ pub fn one2one_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
             }
         },
         endpoint_def: Some(EndpointDef {
-            params: vec![FromPath(vec![Param {
+            params: vec![FromPath(vec![PathExpr {
                 name: pk_name.clone(),
                 ty: pk_type.clone(),
                 description: "Primary key".to_string(),
-                samples: vec![quote! { #pk_type::default().encode() }],
+                sample: quote! { #pk_type::default().encode() },
             }])],
             method: HttpMethod::GET,
             handler_impl_stream: quote! {
@@ -73,11 +73,11 @@ pub fn one2opt_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
             }
         },
         endpoint_def: Some(EndpointDef {
-            params: vec![FromPath(vec![Param {
+            params: vec![FromPath(vec![PathExpr {
                 name: pk_name.clone(),
                 ty: pk_type.clone(),
                 description: "Primary key".to_string(),
-                samples: vec![quote! { #pk_type::default().encode() }],
+                sample: quote! { #pk_type::default().encode() },
             }])],
             method: HttpMethod::GET,
             handler_impl_stream: quote! {
@@ -115,11 +115,11 @@ pub fn one2many_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, 
             }
         },
         endpoint_def: Some(EndpointDef {
-            params: vec![FromPath(vec![Param {
+            params: vec![FromPath(vec![PathExpr {
                 name: pk_name.clone(),
                 ty: pk_type.clone(),
                 description: "Primary key".to_string(),
-                samples: vec![quote! { #pk_type::default().encode() }],
+                sample: quote! { #pk_type::default().encode() },
             }])],
             method: HttpMethod::GET,
             utoipa_responses: quote! { responses((status = OK, body = Vec<#child_type>)) },
