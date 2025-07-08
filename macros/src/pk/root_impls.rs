@@ -1,13 +1,12 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::Field;
-use crate::macro_utils;
 
 /// Generates trait implementations for **Root Pointers** (IndexedPointer + RootPointer)
 /// and also derives Display, FromStr, Serialize, and Deserialize based on a dash-separated format.
 pub fn new(struct_name: &Ident, index_field: Field) -> TokenStream {
     let index_type = &index_field.ty;
-    let expanded = quote! {
+    quote! {
         // Core traits
         impl IndexedPointer for #struct_name {
             type Index = #index_type;
@@ -50,7 +49,6 @@ pub fn new(struct_name: &Ident, index_field: Field) -> TokenStream {
                 schemas.push((stringify!(#struct_name).to_string(), <#struct_name as PartialSchema>::schema()));
             }
         }
-    };
+    }.into()
 
-    macro_utils::write_stream_and_return(expanded, struct_name)
 }

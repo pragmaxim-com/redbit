@@ -1,8 +1,6 @@
-use proc_macro2::{Ident, TokenStream};
+use proc_macro::TokenStream;
+use proc_macro2::Ident;
 use quote::quote;
-use std::env;
-use std::fs::OpenOptions;
-use std::io::Write;
 use syn::punctuated::Punctuated;
 use syn::token::Comma;
 use syn::{Attribute, ItemStruct, Path, Type};
@@ -46,38 +44,6 @@ pub fn merge_struct_derives(input: &mut ItemStruct, extra_derives: Punctuated<Pa
     });
 
 }
-
-pub fn write_to_local_file(lines: Vec<String>, dir_name: &str, entity: &Ident) {
-    let dir_path = env::current_dir().expect("current dir inaccessible").join("target").join(dir_name);
-    if let Err(e) = std::fs::create_dir_all(&dir_path) {
-        eprintln!("Failed to create directory {:?}: {}", dir_path, e);
-        return;
-    }
-    let full_path = dir_path.join(entity.to_string());
-
-    #[cfg(not(test))]
-    {
-        if let Err(e) = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(&full_path)
-            .and_then(|mut file| file.write_all(lines.join("\n").as_bytes()))
-        {
-            eprintln!("Failed to write to {:?}: {}", full_path, e);
-        }
-    }
-}
-
-pub fn write_stream_and_return(stream: TokenStream, entity: &Ident) -> TokenStream {
-    let formatted_str = match syn::parse2(stream.clone()) {
-        Ok(ast) => prettyplease::unparse(&ast),
-        Err(_) => stream.to_string(),
-    };
-    write_to_local_file(vec![formatted_str], "macros", entity);
-    stream
-}
-
 
 pub fn is_string(ty: &Type) -> bool {
     matches!(ty, Type::Path(tp) if tp.path.is_ident("String"))
@@ -189,3 +155,24 @@ pub enum InnerKind {
     Other,
 }
 
+pub fn submit_struct_to_stream(stream: proc_macro2::TokenStream, dir: &str, struct_ident: &Ident, suffix: &str) -> TokenStream {
+    let formatted_token_stream: String = match syn::parse2(stream.clone()) {
+        Ok(ast) => prettyplease::unparse(&ast),
+        Err(_) => panic!("Failed to parse generated token stream"),
+    };
+
+    let register = quote! {
+        inventory::submit! {
+            StructInfo {
+                name: stringify!(#struct_ident),
+                dir: #dir,
+                suffix: #suffix,
+                formatted_token_stream: #formatted_token_stream
+            }
+        }
+    };
+    quote! {
+        #stream
+        #register
+    }.into()
+}

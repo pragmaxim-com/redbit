@@ -51,6 +51,7 @@ pub use utoipa_axum;
 pub use utoipa_axum::router::OpenApiRouter;
 pub use utoipa_swagger_ui;
 pub use urlencoding;
+pub use chrono;
 
 use crate::axum::extract::rejection::JsonRejection;
 use crate::axum::extract::FromRequest;
@@ -64,7 +65,10 @@ use bincode::Options;
 use serde::de::DeserializeOwned;
 use std::any::type_name;
 use std::cmp::Ordering;
+use std::env;
 use std::fmt::Debug;
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::net::SocketAddr;
 use std::ops::Add;
 use std::path::PathBuf;
@@ -277,12 +281,19 @@ impl RequestState {
     }
 }
 
-pub struct EntityInfo {
-    pub name: &'static str,
+pub struct RoutesInfo {
     pub routes_fn: fn() -> OpenApiRouter<RequestState>,
 }
 
-inventory::collect!(EntityInfo);
+pub struct StructInfo {
+    pub name: &'static str,
+    pub dir: &'static str,
+    pub suffix: &'static str,
+    pub formatted_token_stream: &'static str
+}
+
+inventory::collect!(RoutesInfo);
+inventory::collect!(StructInfo);
 
 #[derive(OpenApi)]
 pub struct ApiDoc;
@@ -342,9 +353,14 @@ pub async fn build_test_server(db: Arc<Database>) -> axum_test::TestServer {
 
 pub async fn build_router(state: RequestState, extras: Option<OpenApiRouter<RequestState>>) -> Router<()> {
     let mut router: OpenApiRouter<RequestState> = OpenApiRouter::with_openapi(ApiDoc::openapi());
-    for info in inventory::iter::<EntityInfo> {
+    for info in inventory::iter::<StructInfo> {
+        let file_name = format!("{}{}", info.name, info.suffix);
+        write_to_local_file(vec![info.formatted_token_stream.to_string()], info.dir, &file_name);
+    }
+    for info in inventory::iter::<RoutesInfo> {
         router = router.merge((info.routes_fn)());
     }
+
     if let Some(extra) = extras {
         router = router.merge(extra);
     }
@@ -358,4 +374,26 @@ pub async fn serve(state: RequestState, socket_addr: SocketAddr, extras: Option<
     println!("Starting server on {}", socket_addr);
     let tcp = TcpListener::bind(socket_addr).await.unwrap();
     crate::axum::serve(tcp, router).await.unwrap();
+}
+
+pub fn write_to_local_file(lines: Vec<String>, dir_name: &str, file_name: &str) {
+    let dir_path = env::current_dir().expect("current dir inaccessible").join("target").join("macros").join(dir_name);
+    if let Err(e) = std::fs::create_dir_all(&dir_path) {
+        eprintln!("Failed to create directory {:?}: {}", dir_path, e);
+        return;
+    }
+    let full_path = dir_path.join(file_name);
+
+    #[cfg(not(test))]
+    {
+        if let Err(e) = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&full_path)
+            .and_then(|mut file| file.write_all(lines.join("\n").as_bytes()))
+        {
+            eprintln!("Failed to write to {:?}: {}", full_path, e);
+        }
+    }
 }

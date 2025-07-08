@@ -2,7 +2,6 @@ pub mod data;
 pub mod demo;
 pub mod routes;
 
-use chrono::{DateTime, Utc};
 pub use data::*;
 pub use redbit::*;
 
@@ -18,7 +17,7 @@ pub use redbit::*;
 #[column("base64")] pub struct Address(pub [u8; 32]);
 #[column("hex")] pub struct Datum(pub Vec<u8>);
 #[column] pub struct AssetName(pub String);
-#[column] pub struct Time(pub DateTime<Utc>);
+#[column] pub struct Time(pub chrono::DateTime<chrono::Utc>);
 #[column] pub struct Duration(pub std::time::Duration);
 #[column]
 #[derive(Copy, Hash)]

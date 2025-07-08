@@ -1,5 +1,4 @@
 use super::EntityMacros;
-use crate::macro_utils;
 use proc_macro2::TokenStream;
 use quote::quote;
 
@@ -18,7 +17,7 @@ impl EntityMacros {
             test_suite,
         } = self;
 
-        let expanded = quote! {
+        quote! {
             // StreamQuery is passed from the rest api as POST body and used to filter the stream of entities
             #stream_query_struct
             // Query structs to map query params into
@@ -40,8 +39,6 @@ impl EntityMacros {
             }
             // unit tests and rest api tests
             #test_suite
-        };
-        // eprintln!("----------------------------------------------------------");
-        macro_utils::write_stream_and_return(expanded, &entity_name)
+        }.into()
     }
 }

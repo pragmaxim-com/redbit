@@ -1,14 +1,13 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::Field;
-use crate::macro_utils;
 
 pub fn new(struct_name: &Ident, parent_field: Field, index_field: Field) -> TokenStream {
     let parent_name = &parent_field.ident;
     let parent_type = &parent_field.ty;
     let index_name = &index_field.ident;
     let index_type = &index_field.ty;
-    let expanded = quote! {
+    quote! {
         impl IndexedPointer for #struct_name {
             type Index = #index_type;
             fn index(&self) -> Self::Index { self.#index_name }
@@ -70,7 +69,5 @@ pub fn new(struct_name: &Ident, parent_field: Field, index_field: Field) -> Toke
                 <#parent_type as ToSchema>::schemas(schemas);
             }
         }
-    };
-
-    macro_utils::write_stream_and_return(expanded, struct_name)
+    }.into()
 }
