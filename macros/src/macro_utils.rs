@@ -158,7 +158,10 @@ pub enum InnerKind {
 pub fn submit_struct_to_stream(stream: proc_macro2::TokenStream, dir: &str, struct_ident: &Ident, suffix: &str) -> TokenStream {
     let formatted_token_stream: String = match syn::parse2(stream.clone()) {
         Ok(ast) => prettyplease::unparse(&ast),
-        Err(_) => panic!("Failed to parse generated token stream"),
+        Err(err) => {
+            eprintln!("Error formatting token stream: {}", err);
+            return stream.into();
+        }
     };
 
     let register = quote! {

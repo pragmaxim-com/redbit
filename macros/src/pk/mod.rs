@@ -67,11 +67,11 @@ impl DbPkMacros {
         let entity_range_query_ty = syn::parse_quote!(#entity_range_query);
 
         function_defs.push(range::fn_def(entity_name, entity_type, &pk_type, &table_def.name, stream_query_type));
-        function_defs.push(stream_range::fn_def(entity_name, entity_type, &pk_name, &pk_type, &table_def.name, entity_range_query_ty));
+        function_defs.push(stream_range::fn_def(entity_name, entity_type, &pk_name, &pk_type, &table_def.name, entity_range_query_ty, stream_query_type));
         function_defs.push(pk_range::fn_def(entity_name, entity_type, &pk_name, &pk_type, &table_def.name));
         let range_query =
             quote! {
-                #[derive(IntoParams, Serialize, Deserialize, Default)]
+                #[derive(Clone, IntoParams, Serialize, Deserialize, Default)]
                 pub struct #entity_range_query {
                     pub from: #pk_type,
                     pub until: #pk_type,

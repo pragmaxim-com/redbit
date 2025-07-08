@@ -94,7 +94,7 @@ async fn it_should_stream_entities_by_index_with_dict() {
     let read_tx = db.begin_read().unwrap();
     let utxo = blocks.first().unwrap().transactions.first().unwrap().utxos.first().unwrap();
 
-    let found_by_address = Utxo::stream_by_address(read_tx, utxo.address.clone()).unwrap().try_collect::<Vec<Utxo>>().await.unwrap();
+    let found_by_address = Utxo::stream_by_address(read_tx, utxo.address.clone(), None).unwrap().try_collect::<Vec<Utxo>>().await.unwrap();
     assert_eq!(found_by_address.len(), 3*3);
     assert!(found_by_address.iter().any(|tx| tx.id == utxo.id));
     assert!(found_by_address.iter().any(|tx| tx.id == utxo.id));
@@ -113,7 +113,7 @@ async fn it_should_stream_entities_by_range_on_index() {
     assert_eq!(unique_timestamps.len(), 3);
 
     let found_by_timestamp_range =
-        BlockHeader::stream_range_by_timestamp(read_tx, from_timestamp, until_timestamp).unwrap().try_collect::<Vec<BlockHeader>>().await.unwrap();
+        BlockHeader::stream_range_by_timestamp(read_tx, from_timestamp, until_timestamp, None).unwrap().try_collect::<Vec<BlockHeader>>().await.unwrap();
     assert_eq!(found_by_timestamp_range.len(), 2);
     assert_eq!(expected_blocks, found_by_timestamp_range);
 }

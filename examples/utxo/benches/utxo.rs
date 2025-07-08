@@ -84,7 +84,7 @@ fn benchmark_block_headers(c: &mut Criterion) {
         b.iter(|| {
             rt.block_on(async {
                 let read_tx = db.begin_read().unwrap();
-                BlockHeader::stream_range_by_timestamp(read_tx, first.timestamp, last.timestamp)?
+                BlockHeader::stream_range_by_timestamp(read_tx, first.timestamp, last.timestamp, None)?
                     .try_collect::<Vec<BlockHeader>>()
                     .await
             }).unwrap()
@@ -180,7 +180,7 @@ fn benchmark_utxos(c: &mut Criterion) {
         b.iter(|| {
             rt.block_on(async {
                 let read_tx = db.begin_read().unwrap();
-                Utxo::stream_by_address(read_tx, first.address.clone())?
+                Utxo::stream_by_address(read_tx, first.address.clone(), None)?
                     .try_collect::<Vec<Utxo>>()
                     .await
             }).unwrap()
@@ -225,7 +225,7 @@ fn benchmark_assets(c: &mut Criterion) {
         b.iter(|| {
             rt.block_on(async {
                 let read_tx = db.begin_read().unwrap();
-                Asset::stream_by_name(read_tx, first.name.clone())?
+                Asset::stream_by_name(read_tx, first.name.clone(), None)?
                     .try_collect::<Vec<Asset>>()
                     .await
             }).unwrap()
@@ -236,7 +236,7 @@ fn benchmark_assets(c: &mut Criterion) {
         b.iter(|| {
             rt.block_on(async {
                 let read_tx = db.begin_read().unwrap();
-                Asset::stream_by_policy_id(read_tx, first.policy_id.clone())?
+                Asset::stream_by_policy_id(read_tx, first.policy_id.clone(), None)?
                     .try_collect::<Vec<Asset>>()
                     .await
             }).unwrap()

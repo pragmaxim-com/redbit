@@ -21,11 +21,12 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, table: &I
         async fn #test_fn_name() {
             let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
-            let pk_value = #pk_type::default();
             let query = #stream_query_type::sample();
-            let entity = #entity_name::#fn_name(&read_tx, &pk_value, &query).expect("Failed to get entity by PK").expect("Expected entity to exist");
-            let expected_enity = #entity_type::sample();
-            assert_eq!(entity, expected_enity, "Entity PK does not match the requested PK");
+            let entity = #entity_name::#fn_name(&read_tx, &#pk_type::default(), &query).expect("Failed to get entity by PK").expect("Expected entity to exist");
+            assert_eq!(entity, #entity_type::sample(), "Entity PK does not match the requested PK");
+
+            let entity_opt = #entity_name::#fn_name(&read_tx, &#pk_type::default().next(), &query).expect("Failed to get entity by PK");
+            assert_eq!(entity_opt, None, "Filter is set for default value");
         }
     });
 

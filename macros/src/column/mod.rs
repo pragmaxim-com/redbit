@@ -42,7 +42,7 @@ impl DbColumnMacros {
                 DbColumnMacros::index(field_def, entity_name, entity_type, pk_name, pk_type, column_name, column_type, stream_query_type, range)
             }
             IndexingType::On { dictionary: true, range: false } => {
-                DbColumnMacros::dictionary(field_def, entity_name, entity_type, pk_name, pk_type, column_name, column_type)
+                DbColumnMacros::dictionary(field_def, entity_name, entity_type, pk_name, pk_type, column_name, column_type, stream_query_type)
             }
             IndexingType::On { dictionary: true, range: true } => {
                 panic!("Range indexing on dictionary columns is not supported")
@@ -114,7 +114,7 @@ impl DbColumnMacros {
 
         if range {
             range_query = Some(quote! {
-                #[derive(IntoParams, Serialize, Deserialize, Default)]
+                #[derive(Clone, IntoParams, Serialize, Deserialize, Default)]
                 pub struct #entity_column_range_query {
                     pub from: #column_type,
                     pub until: #column_type,
@@ -135,6 +135,7 @@ impl DbColumnMacros {
                 column_type,
                 &index_table_def.name,
                 entity_column_range_query_ty,
+                stream_query_type
             ));
             function_defs.push(range_by::by_index_def(
                 entity_name,
@@ -169,6 +170,7 @@ impl DbColumnMacros {
         pk_type: &Type,
         column_name: &Ident,
         column_type: &Type,
+        stream_query_type: &Type,
     ) -> DbColumnMacros {
         let dict_index_table_def = TableDef::dict_index_table_def(entity_name, column_name, pk_type);
         let value_by_dict_pk_table_def = TableDef::value_by_dict_pk_table_def(entity_name, column_name, column_type, pk_type);
@@ -236,6 +238,7 @@ impl DbColumnMacros {
                     column_type,
                     &value_to_dict_pk_table_def.name,
                     &dict_index_table_def.name,
+                    &stream_query_type
                 ),
                 get_keys_by::by_dict_def(
                     entity_name,

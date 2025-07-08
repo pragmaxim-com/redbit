@@ -75,10 +75,10 @@ impl EndpointDef {
                 async fn #test_fn_name() {
                     for query_sample in #query_samples {
                         for body_sample in #body_samples {
-                            let query_string = serde_urlencoded::to_string(query_sample).unwrap();
+                            let query_string = serde_urlencoded::to_string(query_sample.clone()).unwrap();
                             let final_path = format!("{}?{}", #path_expr, query_string);
                             eprintln!("Testing endpoint: {} : {} with body", #method_name, final_path);
-                            let response = #server.await.method(#method_name, &final_path).json::<#ty>(body_sample).await;
+                            let response = #server.await.method(#method_name, &final_path).json::<#ty>(&body_sample).await;
                             response.assert_status_ok();
                         }
                     }
