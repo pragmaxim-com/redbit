@@ -1,4 +1,5 @@
 /.idea
 target/
 todo
+todo.png
 Cargo.lock

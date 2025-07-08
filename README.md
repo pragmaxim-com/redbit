@@ -10,35 +10,34 @@ through auto-generated REST API. It maximizes R/W speed while minimizing data si
 
 ### Major Out-of-the-Box Features
 
-- ✅ Querying and ranging by secondary index
-- ✅ Optional dictionaries for low cardinality fields
-- ✅ One-to-One / One-to-Option / One-to-Many entities with cascade read/write/delete
-- ✅ All goodies including intuitive data ordering without writing custom codecs
-- ✅ SSE streaming api with efficient querying (ie. get txs or utxos for really HOT address)
-  - supported filters : `eq`, `ne`, `lt`, `le`, `gt`, `ge`, `in`
-  - queries are deeply nested with logical `AND` : 
-    ```json
-    {
-      "header": {
-        "height": { "$eq": 1 }
-      },
-      "transactions": {
-        "hash": { "$in": ["bar", "baz"] },
-        "utxo": {
-          "address": { "$eq": "foo" }
-        }
+✅ Querying and ranging by secondary index \
+✅ Optional dictionaries for low cardinality fields \
+✅ One-to-One / One-to-Option / One-to-Many entities with cascade read/write/delete \
+✅ All goodies including intuitive data ordering without writing custom codecs \
+✅ SSE streaming api with efficient querying (ie. get txs or utxos for really HOT address) \
+✅ query contraints : `eq`, `ne`, `lt`, `le`, `gt`, `ge`, `in` with logical `AND`
+  ```json
+  {
+    "header": {
+      "height": { "$eq": 1 }
+    },
+    "transactions": {
+      "hash": { "$in": ["bar", "baz"] },
+      "utxo": {
+        "address": { "$eq": "foo" }
       }
     }
-    ```
-- ✅ supported column types : `String`, `Integers`, `Vec<u8>`, `[u8; N]`, `bool`, `uuid::Uuid`, `chrono::DateTime`, `std::time::Duration`
-  - supported encodings of binary columns : `hex`, `base64`
-- ✅ all types have binary (db) and human-readable (http) serde support
-- ✅ Macro derived http rest API at http://127.0.0.1:8000/swagger-ui/ with examples
-- ✅ Macro derived unit tests and integration tests on axum test server
+  }
+  ```
+✅ column types : `String`, `Int`, `Vec<u8>`, `[u8; N]`, `bool`, `uuid::Uuid`, `chrono::DateTime`, `std::time::Duration` \
+✅ column encodings of binary columns : `hex`, `base64` \
+✅ all types have binary (db) and human-readable (http) serde support \
+✅ Macro derived http rest API at http://127.0.0.1:8000/swagger-ui/ with examples \
+✅ Macro derived unit tests and integration tests on axum test server
 
 ### Limitations
 
-- ❌ root key must be newtype struct with numeric inner type (that's part of the design decision to achieve fast indexing of even whole bitcoin)
+❌ root key must be newtype struct with numeric inner type (that's part of the design decision to achieve fast indexing of even whole bitcoin)
 
 ```
 cargo run --package utxo                # to run the demo example
