@@ -1,5 +1,5 @@
 use crate::rest::HttpParams::FromPath;
-use crate::rest::{FunctionDef, GetParam, HttpMethod};
+use crate::rest::{FunctionDef, HttpMethod, PathExpr};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
@@ -42,8 +42,11 @@ pub fn by_dict_def(
         }
     };
 
+    let test_fn_name = format_ident!("test_{}", fn_name);
     let test_stream = Some(quote! {
-        {
+        #[tokio::test]
+        async fn #test_fn_name() {
+            let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
             let pk_stream = #entity_name::#fn_name(&read_tx, &val).expect("Stream creation failed");
@@ -57,10 +60,11 @@ pub fn by_dict_def(
         fn_name: fn_name.clone(),
         fn_stream,
         endpoint_def: Some(EndpointDef {
-            params: vec![FromPath(vec![GetParam {
+            params: vec![FromPath(vec![PathExpr {
                 name: column_name.clone(),
                 ty: column_type.clone(),
                 description: "Secondary index column (dict)".to_string(),
+                sample: quote! { #column_type::default().encode() },
             }])],
             method: HttpMethod::GET,
             handler_impl_stream: quote! {
@@ -105,8 +109,11 @@ pub fn by_index_def(
         }
     };
 
+    let test_fn_name = format_ident!("test_{}", fn_name);
     let test_stream = Some(quote! {
-        {
+        #[tokio::test]
+        async fn #test_fn_name() {
+            let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
             let pk_stream = #entity_name::#fn_name(&read_tx, &val).expect("Stream creation failed");
@@ -120,10 +127,11 @@ pub fn by_index_def(
         fn_name: fn_name.clone(),
         fn_stream,
         endpoint_def: Some(EndpointDef {
-            params: vec![FromPath(vec![GetParam {
+            params: vec![FromPath(vec![PathExpr {
                 name: column_name.clone(),
                 ty: column_type.clone(),
                 description: "Secondary index column".to_string(),
+                sample: quote! { #column_type::default().encode() },
             }])],
             method: HttpMethod::GET,
             handler_impl_stream: quote! {

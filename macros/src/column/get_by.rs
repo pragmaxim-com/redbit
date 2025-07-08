@@ -37,8 +37,11 @@ pub fn get_by_dict_def(
             Ok(results)
         }
     };
+    let test_fn_name = format_ident!("test_{}", fn_name);
     let test_stream = Some(quote! {
-        {
+        #[tokio::test]
+        async fn #test_fn_name() {
+            let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
             let entities = #entity_name::#fn_name(&read_tx, &val).expect("Failed to get entities by dictionary index");
@@ -77,8 +80,11 @@ pub fn get_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &I
             Ok(results)
         }
     };
+    let test_fn_name = format_ident!("test_{}", fn_name);
     let test_stream = Some(quote! {
-        {
+        #[tokio::test]
+        async fn #test_fn_name() {
+            let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
             let entities = #entity_name::#fn_name(&read_tx, &val).expect("Failed to get entities by index");

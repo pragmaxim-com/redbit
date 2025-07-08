@@ -15,7 +15,7 @@ pub fn by_dict_def(
     let fn_name = format_ident!("get_{}s_by_{}", pk_name, column_name);
     let fn_stream = quote! {
         pub fn #fn_name(
-            tx: &::redbit::redb::ReadTransaction,
+            tx: &ReadTransaction,
             val: &#column_type
         ) -> Result<Vec<#pk_type>, AppError> {
             let val2birth = tx.open_table(#value_to_dict_pk)?;
@@ -34,8 +34,11 @@ pub fn by_dict_def(
             Ok(results)
         }
     };
+    let test_fn_name = format_ident!("test_{}", fn_name);
     let test_stream = Some(quote! {
-        {
+        #[tokio::test]
+        async fn #test_fn_name() {
+            let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
             let entity_pks = #entity_name::#fn_name(&read_tx, &val).expect("Failed to get entity pks by dictionary index");
@@ -57,7 +60,7 @@ pub fn by_index_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, column
     let fn_name = format_ident!("get_{}s_by_{}", pk_name, column_name);
     let fn_stream = quote! {
         pub fn #fn_name(
-            tx: &::redbit::redb::ReadTransaction,
+            tx: &ReadTransaction,
             val: &#column_type
         ) -> Result<Vec<#pk_type>, AppError> {
             let mm_table = tx.open_multimap_table(#table)?;
@@ -70,8 +73,11 @@ pub fn by_index_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, column
             Ok(results)
         }
     };
+    let test_fn_name = format_ident!("test_{}", fn_name);
     let test_stream = Some(quote! {
-        {
+        #[tokio::test]
+        async fn #test_fn_name() {
+            let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
             let entity_pks = #entity_name::#fn_name(&read_tx, &val).expect("Failed to get entity pks by index");

@@ -13,8 +13,8 @@ mod entity;
 
 use proc_macro::TokenStream;
 use proc_macro_error::proc_macro_error;
-use quote::quote;
-use std::sync::Once;
+use quote::{format_ident, quote};
+use proc_macro2::Literal;
 use syn::parse::Parse;
 use syn::spanned::Spanned;
 use syn::{parse_macro_input, parse_quote, DeriveInput, Fields, ItemStruct, Type};
@@ -27,35 +27,66 @@ use crate::transient::TransientMacros;
 
 #[proc_macro_attribute]
 #[proc_macro_error]
-pub fn column(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn column(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let attr_args = parse_macro_input!(attr as EncodingAttr);
     let mut input = parse_macro_input!(item as ItemStruct);
     let struct_ident = &input.ident.clone();
+    let stream =
+        match &mut input.fields {
+            Fields::Unnamed(fields) if fields.unnamed.len() == 1 => {
+                let (impls, maybe_field_attr) =
+                    column::impls::generate_column_impls(struct_ident, &fields.unnamed[0].ty, attr_args.literal);
 
-    match &input.clone().fields {
-        Fields::Unnamed(fields) if fields.unnamed.len() == 1 => {
-            macro_utils::merge_struct_derives(&mut input, syn::parse_quote![Clone, Eq, Ord, PartialEq, PartialOrd, Debug]);
-            column::impls::generate_column_impls(struct_ident, &input, &fields.unnamed[0].ty).into()
-        },
-        _ => {
-            macro_utils::merge_struct_derives(&mut input, syn::parse_quote![Serialize, Deserialize, Debug, Clone, PartialEq, Eq, utoipa::ToSchema]);
-            quote! {
-                #input
-            }.into()
+                if let Some(attr) = maybe_field_attr {
+                    input.attrs.push(syn::parse_quote! { #[serde_with::serde_as] });
+                    fields.unnamed[0].attrs.push(attr);
+                }
+
+                macro_utils::merge_struct_derives(&mut input, syn::parse_quote![Clone, Eq, Ord, PartialEq, PartialOrd, Debug, Serialize, Deserialize]);
+                quote! {
+                    #input
+                    #impls
+                }
+            },
+            _ => {
+                macro_utils::merge_struct_derives(&mut input, syn::parse_quote![
+                    Serialize, Deserialize, Debug, Clone, PartialEq, Eq, utoipa::ToSchema
+                ]);
+                quote! {
+                    #input
+                }
+            }
+        };
+
+    macro_utils::submit_struct_to_stream(stream, "column", struct_ident, ".rs")
+}
+
+struct EncodingAttr {
+    literal: Option<Literal>,
+}
+
+impl Parse for EncodingAttr {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        if input.is_empty() {
+            Ok(EncodingAttr { literal: None })
+        } else {
+            let literal: Literal = input.parse()?;
+            Ok(EncodingAttr { literal: Some(literal) })
         }
     }
 }
 
-struct KeyAttr {
-    index_type: Option<Type>,
+struct IndexTypeAttr {
+    tpe: Option<Type>,
 }
 
-impl Parse for KeyAttr {
+impl Parse for IndexTypeAttr {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         if input.is_empty() {
-            Ok(KeyAttr { index_type: None })
+            Ok(IndexTypeAttr { tpe: None })
         } else {
             let ty: Type = input.parse()?;
-            Ok(KeyAttr { index_type: Some(ty) })
+            Ok(IndexTypeAttr { tpe: Some(ty) })
         }
     }
 }
@@ -63,12 +94,12 @@ impl Parse for KeyAttr {
 #[proc_macro_attribute]
 #[proc_macro_error]
 pub fn pointer_key(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let attr_args = parse_macro_input!(attr as KeyAttr);
+    let attr_args = parse_macro_input!(attr as IndexTypeAttr);
     let s = parse_macro_input!(item as ItemStruct);
 
     let struct_ident = &s.ident;
     let vis = &s.vis;
-    let index_type = attr_args.index_type.unwrap_or_else(|| syn::parse_quote! { u16 });
+    let index_type = attr_args.tpe.unwrap_or_else(|| syn::parse_quote! { u16 });
 
     // Validate tuple struct with one field
     let parent_type = match &s.fields {
@@ -85,77 +116,89 @@ pub fn pointer_key(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
-    let expanded = quote! {
-        #[derive(PointerKey, Clone, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
+    let stream = quote! {
+        #[derive(PointerKey, Clone, Debug, Default, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
+        #[serde(into = "String", try_from = "String")]
         #vis struct #struct_ident {
             pub parent: #parent_type,
             pub index: #index_type,
         }
     };
-
-    expanded.into()
+    macro_utils::submit_struct_to_stream(stream, "pk", struct_ident, "_attr.rs")
 }
 
 #[proc_macro_derive(PointerKey)]
 #[proc_macro_error]
 pub fn derive_pointer_key(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
-    let struct_name = &ast.ident;
+    let struct_ident = &ast.ident;
 
-    match field_parser::validate_pointer_key(&ast) {
+    let stream = match field_parser::validate_pointer_key(&ast) {
         Ok(_) => {
             let (parent_field, index_field) = match field_parser::extract_pointer_key_fields(&ast, &PointerType::Child) {
                 Ok(fields) => fields,
                 Err(e) => return e.to_compile_error().into(),
             };
             match parent_field {
-                Some(parent_field) => pk::pointer_impls::new(struct_name, parent_field, index_field).into(),
+                Some(parent_field) => pk::pointer_impls::new(struct_ident, parent_field, index_field).into(),
                 None => syn::Error::new(index_field.span(), "Parent field missing").to_compile_error().into(),
             }
         },
         Err(e) => e.to_compile_error().into(),
-    }
+    };
+    macro_utils::submit_struct_to_stream(stream, "pk", struct_ident, "_derive.rs")
 }
 
 #[proc_macro_attribute]
 #[proc_macro_error]
 pub fn root_key(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut s = parse_macro_input!(item as ItemStruct);
-
+    let struct_ident = &s.ident;
     s.attrs.retain(|a| !a.path().is_ident("derive"));
     s.attrs.insert(0, parse_quote! {
-        #[derive(RootKey, Clone, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
+        #[derive(RootKey, Clone, Debug, Default, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
     });
-    quote!(#s).into()
+    let stream = quote!(#s);
+    macro_utils::submit_struct_to_stream(stream, "pk", struct_ident, "_attr.rs")
 }
 
 #[proc_macro_derive(RootKey)]
 #[proc_macro_error]
 pub fn derive_root_key(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
-    let struct_name = &ast.ident;
+    let struct_ident = &ast.ident;
 
-    match field_parser::validate_root_key(&ast) {
+    let stream = match field_parser::validate_root_key(&ast) {
         Ok(_) => {
             let (_, index_field) = match field_parser::extract_pointer_key_fields(&ast, &PointerType::Root) {
                 Ok(fields) => fields,
                 Err(e) => return e.to_compile_error().into(),
             };
-            pk::root_impls::new(struct_name, index_field).into()
+            pk::root_impls::new(struct_ident, index_field).into()
         },
         Err(e) => e.to_compile_error().into(),
-    }
+    };
+    macro_utils::submit_struct_to_stream(stream, "pk", struct_ident, "_derive.rs")
 }
 
 #[proc_macro_attribute]
 #[proc_macro_error]
 pub fn entity(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut s = parse_macro_input!(item as ItemStruct);
+    let struct_ident = &s.ident;
     s.attrs.retain(|a| !a.path().is_ident("derive"));
     s.attrs.insert(0, parse_quote! {
         #[derive(Clone, Debug, Default, Serialize, Deserialize, Eq, Entity, PartialEq, ToSchema)]
     });
-    quote!(#s).into()
+    let stream = quote! {
+        #s
+        inventory::submit! {
+            RoutesInfo {
+                routes_fn: #struct_ident::routes,
+            }
+        }
+    };
+    macro_utils::submit_struct_to_stream(stream, "entity", struct_ident, "_attr.rs")
 }
 
 #[proc_macro_derive(Entity, attributes(pk, fk, column))]
@@ -165,50 +208,34 @@ pub fn derive_entity(input: TokenStream) -> TokenStream {
     let entity_ident = &item_struct.ident;
     let entity_type: syn::Type = parse_quote! { #entity_ident };
 
-    static PRINT_ONCE: Once = Once::new();
-    PRINT_ONCE.call_once(|| {
-        // eprintln!("----------------------------------------------------------");
-    });
-
-    let register = quote! {
-        inventory::submit! {
-            EntityInfo {
-                name: stringify!(#entity_ident),
-                routes_fn: #entity_ident::routes,
-            }
-        }
-    };
-
-    let stream = field_parser::get_named_fields(&item_struct)
-        .and_then(|named_fields| {
-            field_parser::get_field_macros(&named_fields, &item_struct)
-        })
-        .and_then(|(pk, field_macros)| {
-            let field_macros =
-                field_macros.into_iter().map(|c| match c {
-                    ColumnDef::Key {field_def, fk } => {
-                        FieldMacros::Pk(DbPkMacros::new(entity_ident, &entity_type, field_def.clone(), fk.clone()))
-                    },
-                    ColumnDef::Plain(field , indexing_type) => {
-                        FieldMacros::Plain(DbColumnMacros::new(field.clone(), indexing_type.clone(), entity_ident, &entity_type, &pk.name, &pk.tpe))
-                    },
-                    ColumnDef::Relationship(field, multiplicity) => {
-                        FieldMacros::Relationship(DbRelationshipMacros::new(field.clone(), multiplicity.clone(), entity_ident, &pk.name, &pk.tpe))
-                    },
-                    ColumnDef::Transient(field) =>{
-                        FieldMacros::Transient(TransientMacros::new(field.clone()))
+    let stream_query_suffix = format!("StreamQuery");
+    let stream_query_ident = format_ident!("{}{}", entity_ident, &stream_query_suffix);
+    let stream_query_type: Type = syn::parse_quote! { #stream_query_ident };
+    let stream =
+        field_parser::get_named_fields(&item_struct)
+            .and_then(|named_fields| {
+                field_parser::get_field_macros(&named_fields, &item_struct)
+            })
+            .and_then(|(pk, field_macros)| {
+                let field_macros =
+                    field_macros.into_iter().map(|c| match c {
+                        ColumnDef::Key {field_def, fk } => {
+                            FieldMacros::Pk(DbPkMacros::new(entity_ident, &entity_type, field_def.clone(), fk.clone(), &stream_query_type))
+                        },
+                        ColumnDef::Plain(field , indexing_type) => {
+                            FieldMacros::Plain(DbColumnMacros::new(field.clone(), indexing_type.clone(), entity_ident, &entity_type, &pk.name, &pk.tpe, &stream_query_type))
+                        },
+                        ColumnDef::Relationship(field, multiplicity) => {
+                            FieldMacros::Relationship(DbRelationshipMacros::new(field.clone(), multiplicity.clone(), entity_ident, &pk.name, &pk.tpe, &stream_query_suffix))
+                        },
+                        ColumnDef::Transient(field) =>{
+                            FieldMacros::Transient(TransientMacros::new(field.clone()))
+                        }
                     }
-                }
-                ).collect::<Vec<FieldMacros>>();
-            entity::EntityMacros::new(entity_ident.clone(), entity_type, pk.name, pk.tpe, field_macros)
-        })
-        .map(|entity_macros| entity_macros.expand()).unwrap_or_else(|e| e.to_compile_error().into());
+                    ).collect::<Vec<FieldMacros>>();
+                entity::EntityMacros::new(entity_ident.clone(), entity_type, pk.name, pk.tpe, &stream_query_type, field_macros)
+            })
+            .map(|entity_macros| entity_macros.expand()).unwrap_or_else(|e| e.to_compile_error().into());
 
-    // Combine both parts
-    let expanded = quote! {
-        #stream
-        #register
-    };
-
-    expanded.into()
+    macro_utils::submit_struct_to_stream(stream, "entity", entity_ident, "_derive.rs")
 }

@@ -69,11 +69,7 @@ fn it_should_delete_entity_by_unique_id() {
             let assets_not_found = utxo.assets.iter().any(|asset| Asset::get(&read_tx, &asset.id).unwrap().is_none());
             utxo_not_found && assets_not_found
         });
-        let inputs_not_found = tx.inputs.iter().any(|input| {
-            let input_ref_not_found = InputRef::get(&read_tx, &input.id).unwrap().is_none();
-            input_ref_not_found
-        });
-        tx_not_found && utxos_not_found && inputs_not_found
+        tx_not_found && utxos_not_found
     });
     assert!(transitive_entities_not_found);
 }
@@ -85,7 +81,7 @@ async fn it_should_stream_entities_by_index() {
     let read_tx = db.begin_read().unwrap();
     let transaction = blocks.first().unwrap().transactions.first().unwrap();
 
-    let found_by_hash = Transaction::stream_by_hash(read_tx, transaction.hash.clone()).unwrap().try_collect::<Vec<Transaction>>().await.unwrap();
+    let found_by_hash = Transaction::stream_by_hash(read_tx, transaction.hash.clone(), None).unwrap().try_collect::<Vec<Transaction>>().await.unwrap();
     assert_eq!(found_by_hash.len(), 3);
     assert!(found_by_hash.iter().any(|tx| tx.id == transaction.id));
     assert!(found_by_hash.iter().any(|tx| tx.id == transaction.id));
@@ -98,7 +94,7 @@ async fn it_should_stream_entities_by_index_with_dict() {
     let read_tx = db.begin_read().unwrap();
     let utxo = blocks.first().unwrap().transactions.first().unwrap().utxos.first().unwrap();
 
-    let found_by_address = Utxo::stream_by_address(read_tx, utxo.address.clone()).unwrap().try_collect::<Vec<Utxo>>().await.unwrap();
+    let found_by_address = Utxo::stream_by_address(read_tx, utxo.address.clone(), None).unwrap().try_collect::<Vec<Utxo>>().await.unwrap();
     assert_eq!(found_by_address.len(), 3*3);
     assert!(found_by_address.iter().any(|tx| tx.id == utxo.id));
     assert!(found_by_address.iter().any(|tx| tx.id == utxo.id));
@@ -117,7 +113,7 @@ async fn it_should_stream_entities_by_range_on_index() {
     assert_eq!(unique_timestamps.len(), 3);
 
     let found_by_timestamp_range =
-        BlockHeader::stream_range_by_timestamp(read_tx, from_timestamp, until_timestamp).unwrap().try_collect::<Vec<BlockHeader>>().await.unwrap();
+        BlockHeader::stream_range_by_timestamp(read_tx, from_timestamp, until_timestamp, None).unwrap().try_collect::<Vec<BlockHeader>>().await.unwrap();
     assert_eq!(found_by_timestamp_range.len(), 2);
     assert_eq!(expected_blocks, found_by_timestamp_range);
 }
@@ -158,7 +154,7 @@ fn it_should_get_entities_by_range_on_pk() {
     let block_pointer_1 = Height(1);
     let block_pointer_2 = Height(2);
     let block_pointer_3 = Height(3);
-    let actual_blocks = Block::range(&read_tx, &block_pointer_1, &block_pointer_3).expect("Failed to range by PK");
+    let actual_blocks = Block::range(&read_tx, &block_pointer_1, &block_pointer_3, None).expect("Failed to range by PK");
     let expected_blocks: Vec<Block> = vec![blocks[1].clone(), blocks[2].clone()];
 
     assert_eq!(expected_blocks.len(), actual_blocks.len());
@@ -168,7 +164,7 @@ fn it_should_get_entities_by_range_on_pk() {
 
     let tx_pointer_1 = TxPointer::from_parent(block_pointer_1, 1);
     let tx_pointer_2 = TxPointer::from_parent(block_pointer_2, 3);
-    let actual_transactions = Transaction::range(&read_tx, &tx_pointer_1, &tx_pointer_2).expect("Failed to range by PK");
+    let actual_transactions = Transaction::range(&read_tx, &tx_pointer_1, &tx_pointer_2, None).expect("Failed to range by PK");
     let mut expected_transactions: Vec<Transaction> = Vec::new();
     expected_transactions.extend(blocks[1].transactions.clone().into_iter().filter(|t| t.id.index >= 1));
     expected_transactions.extend(blocks[2].transactions.clone().into_iter().filter(|t| t.id.index < 3));
@@ -190,14 +186,10 @@ fn it_should_get_related_one_to_many_entities() {
     let expected_utxos: Vec<Utxo> = expected_transactions.iter().flat_map(|t| t.utxos.clone()).collect();
     let utxos: Vec<Utxo> = transactions.iter().flat_map(|t| t.utxos.clone()).collect();
 
-    let expected_input_refs: Vec<InputRef> = expected_transactions.iter().flat_map(|t| t.inputs.clone()).collect();
-    let input_refs: Vec<InputRef> = transactions.iter().flat_map(|t| t.inputs.clone()).collect();
-
     let expected_assets: Vec<Asset> = expected_utxos.iter().flat_map(|u| u.assets.clone()).collect();
     let assets: Vec<Asset> = utxos.iter().flat_map(|u| u.assets.clone()).collect();
 
     assert_eq!(expected_transactions, transactions);
-    assert_eq!(expected_input_refs, input_refs);
     assert_eq!(expected_utxos, utxos);
     assert_eq!(expected_assets, assets);
 }

@@ -2,7 +2,7 @@ use proc_macro2::{Ident, TokenStream};
 use super::EntityMacros;
 use crate::endpoint::EndpointDef;
 use crate::rest::HttpParams::FromBody;
-use crate::rest::{FunctionDef, HttpMethod};
+use crate::rest::{FunctionDef, HttpMethod, Param};
 use quote::{format_ident, quote};
 use syn::Type;
 
@@ -15,20 +15,26 @@ impl EntityMacros {
                 Ok(())
             }
         };
+        let test_fn_name = format_ident!("test_{}", fn_name);
+        let test_stream = Some(quote! {
+            #[tokio::test]
+            async fn #test_fn_name() {
+                let db = test_db();
+                let entity_count: usize = 3;
+                for test_entity in #entity_type::sample_many(entity_count) {
+                    let tx = db.begin_write().expect("Failed to begin write transaction");
+                    let pk = #entity_name::#fn_name(&tx, &test_entity).expect("Failed to store and commit instance");
+                    tx.commit().expect("Failed to commit transaction");
+                }
+            }
+        });
+
         FunctionDef {
             entity_name: entity_name.clone(),
             fn_name: fn_name.clone(),
             fn_stream,
             endpoint_def: None,
-            test_stream: Some(quote! {
-                {
-                    for test_entity in #entity_type::sample_many(entity_count) {
-                        let tx = db.begin_write().expect("Failed to begin write transaction");
-                        let pk = #entity_name::#fn_name(&tx, &test_entity).expect("Failed to store and commit instance");
-                        tx.commit().expect("Failed to commit transaction");
-                    }
-                }
-            }),
+            test_stream,
         }
     }
 
@@ -40,19 +46,25 @@ impl EntityMacros {
                 Ok(())
             }
         };
+        let test_fn_name = format_ident!("test_{}", fn_name);
+        let test_stream = Some(quote! {
+            #[tokio::test]
+            async fn #test_fn_name() {
+                let db = test_db();
+                let entity_count: usize = 3;
+                let test_entities = #entity_type::sample_many(entity_count);
+                let tx = db.begin_write().expect("Failed to begin write transaction");
+                let pk = #entity_name::#fn_name(&tx, &test_entities).expect("Failed to store and commit instance");
+                tx.commit().expect("Failed to commit transaction");
+            }
+        });
+
         FunctionDef {
             entity_name: entity_name.clone(),
             fn_name: fn_name.clone(),
             fn_stream,
             endpoint_def: None,
-            test_stream: Some(quote! {
-                {
-                    let test_entities = #entity_type::sample_many(entity_count);
-                    let tx = db.begin_write().expect("Failed to begin write transaction");
-                    let pk = #entity_name::#fn_name(&tx, &test_entities).expect("Failed to store and commit instance");
-                    tx.commit().expect("Failed to commit transaction");
-                }
-            }),
+            test_stream,
         }
     }
 
@@ -68,12 +80,29 @@ impl EntityMacros {
                Ok(instance.#pk_name.clone())
            }
         };
+        let test_fn_name = format_ident!("test_{}", fn_name);
+        let test_stream = Some(quote! {
+            #[tokio::test]
+            async fn #test_fn_name() {
+                let db = test_db();
+                let entity_count: usize = 3;
+                for test_entity in #entity_type::sample_many(entity_count) {
+                    let pk = #entity_name::#fn_name(&db, &test_entity).expect("Failed to store and commit instance");
+                    assert_eq!(test_entity.#pk_name, pk, "Stored PK does not match the instance PK");
+                }
+            }
+        });
         FunctionDef {
             entity_name: entity_name.clone(),
             fn_name: fn_name.clone(),
             fn_stream,
             endpoint_def: Some(EndpointDef {
-                params: vec![FromBody(entity_type.clone())],
+                params: vec![FromBody(Param {
+                    name: format_ident!("body"), // TODO 
+                    ty: entity_type.clone(),
+                    description: "Entity instance to store".to_string(),
+                    samples: quote! { vec![#entity_type::sample()] },
+                })],
                 method: HttpMethod::POST,
                 handler_impl_stream: quote! {
                     Result<AppJson<#pk_type>, AppError> {
@@ -85,14 +114,7 @@ impl EntityMacros {
                 utoipa_responses: quote! { responses((status = OK, body = #pk_type)) },
                 endpoint: format!("/{}", entity_name.to_string().to_lowercase()),
             }),
-            test_stream: Some(quote! {
-                {
-                    for test_entity in #entity_type::sample_many(entity_count) {
-                        let pk = #entity_name::#fn_name(&db, &test_entity).expect("Failed to store and commit instance");
-                        assert_eq!(test_entity.#pk_name, pk, "Stored PK does not match the instance PK");
-                    }
-                }
-            }),
+            test_stream,
         }
     }
 }

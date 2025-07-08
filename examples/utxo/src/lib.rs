@@ -13,20 +13,21 @@ pub use redbit::*;
 #[pointer_key(u8)] pub struct AssetPointer(UtxoPointer);
 
 #[column] pub struct Hash(pub String);
-#[column] pub struct Address(pub [u8; 32]);
 #[column] pub struct PolicyId(pub String);
-#[column] pub struct Datum(pub Vec<u8>);
+#[column("base64")] pub struct Address(pub [u8; 32]);
+#[column("hex")] pub struct Datum(pub Vec<u8>);
 #[column] pub struct AssetName(pub String);
+#[column] pub struct Time(pub chrono::DateTime<chrono::Utc>);
+#[column] pub struct Duration(pub std::time::Duration);
+#[column]
+#[derive(Copy, Hash)]
+pub struct Timestamp(pub u32);
 
 #[column]
 pub struct TempInputRef {
     tx_hash: Hash,
     index: u32,
 }
-
-#[column]
-#[derive(Copy, Hash)]
-pub struct Timestamp(pub u32);
 
 #[entity]
 pub struct Block {
@@ -46,6 +47,10 @@ pub struct BlockHeader {
     pub hash: Hash,
     #[column(range)]
     pub timestamp: Timestamp,
+    #[column(range)]
+    pub time: Time,
+    #[column]
+    pub duration: Duration,
     #[column(index)]
     pub merkle_root: Hash,
     #[column]
@@ -59,7 +64,6 @@ pub struct Transaction {
     #[column(index)]
     pub hash: Hash,
     pub utxos: Vec<Utxo>,
-    pub inputs: Vec<InputRef>,
     #[column(transient)]
     pub transient_inputs: Vec<TempInputRef>,
 }
@@ -84,12 +88,6 @@ pub struct Tree {
     pub id: UtxoPointer,
     #[column(index)]
     pub hash: Hash,
-}
-
-#[entity]
-pub struct InputRef {
-    #[fk(one2many)]
-    pub id: InputPointer,
 }
 
 #[entity]

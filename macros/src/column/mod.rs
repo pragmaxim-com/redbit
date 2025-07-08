@@ -20,9 +20,9 @@ use syn::Type;
 pub struct DbColumnMacros {
     pub field_def: FieldDef,
     pub range_query: Option<TokenStream>,
-    pub stream_query_init: (TokenStream, TokenStream),
     pub table_definitions: Vec<TableDef>,
     pub struct_init: TokenStream,
+    pub stream_query_init: (TokenStream, TokenStream),
     pub struct_init_with_query: TokenStream,
     pub struct_default_init: TokenStream,
     pub store_statement: TokenStream,
@@ -33,16 +33,16 @@ pub struct DbColumnMacros {
 }
 
 impl DbColumnMacros {
-    pub fn new(field_def: FieldDef, indexing_type: IndexingType, entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type: &Type) -> DbColumnMacros {
+    pub fn new(field_def: FieldDef, indexing_type: IndexingType, entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type: &Type, stream_query_type: &Type) -> DbColumnMacros {
         let column_name = &field_def.name.clone();
         let column_type = &field_def.tpe.clone();
         match indexing_type {
             IndexingType::Off => DbColumnMacros::plain(field_def, entity_name, pk_name, pk_type, column_name, column_type),
             IndexingType::On { dictionary: false, range } => {
-                DbColumnMacros::index(field_def, entity_name, entity_type, pk_name, pk_type, column_name, column_type, range)
+                DbColumnMacros::index(field_def, entity_name, entity_type, pk_name, pk_type, column_name, column_type, stream_query_type, range)
             }
             IndexingType::On { dictionary: true, range: false } => {
-                DbColumnMacros::dictionary(field_def, entity_name, entity_type, pk_name, pk_type, column_name, column_type)
+                DbColumnMacros::dictionary(field_def, entity_name, entity_type, pk_name, pk_type, column_name, column_type, stream_query_type)
             }
             IndexingType::On { dictionary: true, range: true } => {
                 panic!("Range indexing on dictionary columns is not supported")
@@ -83,6 +83,7 @@ impl DbColumnMacros {
         pk_type: &Type,
         column_name: &Ident,
         column_type: &Type,
+        stream_query_type: &Type,
         range: bool,
     ) -> DbColumnMacros {
         let plain_table_def = TableDef::plain_table_def(entity_name, column_name, column_type, pk_name, pk_type);
@@ -90,7 +91,7 @@ impl DbColumnMacros {
 
         let mut function_defs: Vec<FunctionDef> = Vec::new();
         function_defs.push(get_by::get_by_index_def(entity_name, entity_type, column_name, column_type, &index_table_def.name));
-        function_defs.push(stream_by::by_index_def(entity_name, entity_type, column_name, column_type, &index_table_def.name));
+        function_defs.push(stream_by::by_index_def(entity_name, entity_type, column_name, column_type, &index_table_def.name, &stream_query_type));
         function_defs.push(get_keys_by::by_index_def(
             entity_name,
             pk_name,
@@ -113,7 +114,7 @@ impl DbColumnMacros {
 
         if range {
             range_query = Some(quote! {
-                #[derive(IntoParams, Serialize, Deserialize, Default)]
+                #[derive(Clone, IntoParams, Serialize, Deserialize, Default)]
                 pub struct #entity_column_range_query {
                     pub from: #column_type,
                     pub until: #column_type,
@@ -134,6 +135,7 @@ impl DbColumnMacros {
                 column_type,
                 &index_table_def.name,
                 entity_column_range_query_ty,
+                stream_query_type
             ));
             function_defs.push(range_by::by_index_def(
                 entity_name,
@@ -168,6 +170,7 @@ impl DbColumnMacros {
         pk_type: &Type,
         column_name: &Ident,
         column_type: &Type,
+        stream_query_type: &Type,
     ) -> DbColumnMacros {
         let dict_index_table_def = TableDef::dict_index_table_def(entity_name, column_name, pk_type);
         let value_by_dict_pk_table_def = TableDef::value_by_dict_pk_table_def(entity_name, column_name, column_type, pk_type);
@@ -235,6 +238,7 @@ impl DbColumnMacros {
                     column_type,
                     &value_to_dict_pk_table_def.name,
                     &dict_index_table_def.name,
+                    &stream_query_type
                 ),
                 get_keys_by::by_dict_def(
                     entity_name,

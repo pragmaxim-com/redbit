@@ -1,7 +1,6 @@
 use crate::field::FieldMacros;
 use crate::rest::to_http_endpoints;
 use proc_macro2::{Ident, TokenStream};
-use quote::format_ident;
 use syn::Type;
 
 mod store;
@@ -26,7 +25,7 @@ pub struct EntityMacros {
 }
 
 impl EntityMacros {
-    pub fn new(entity_name: Ident, entity_type: Type, pk_name: Ident, pk_type: Type, field_macros: Vec<FieldMacros>) -> Result<EntityMacros, syn::Error> {
+    pub fn new(entity_name: Ident, entity_type: Type, pk_name: Ident, pk_type: Type, stream_query_type: &Type, field_macros: Vec<FieldMacros>) -> Result<EntityMacros, syn::Error> {
         let mut field_names = Vec::new();
         let mut table_definitions = Vec::new();
         let mut range_query_structs = Vec::new();
@@ -64,14 +63,15 @@ impl EntityMacros {
         function_defs.push(Self::delete_def(&entity_name, &pk_type, &delete_statements));
         function_defs.push(Self::delete_many_def(&entity_name, &pk_type, &delete_many_statements));
 
-        let stream_query_ident = format_ident!("{}StreamQuery", entity_name);
-        let stream_query_struct = Self::query_struct_token_stream(&stream_query_ident, &stream_queries);
+        let stream_query_struct = Self::query_struct_token_stream(&stream_query_type, &stream_queries);
 
-        let sample_functions = Self::sample_token_streams(&entity_name, &entity_type, &pk_type, struct_default_inits);
-        let compose_functions = Self::compose_token_streams(&entity_name, &entity_type, &pk_type, &stream_query_ident, &field_names, &struct_inits, &struct_inits_with_query);
+        let sample_functions = Self::sample_token_streams(&entity_name, &entity_type, &pk_type, &struct_default_inits);
+        let compose_function = Self::compose_token_stream(&entity_name, &entity_type, &pk_type, &struct_inits);
+        let compose_with_filter_function = Self::compose_with_filter_token_stream(&entity_type, &pk_type, &stream_query_type, &field_names, &struct_inits_with_query);
+        let compose_functions = vec![compose_function, compose_with_filter_function];
         let table_definitions = table_definitions.iter().map(|table_def| table_def.definition.clone()).collect();
 
-        let functions: Vec<TokenStream> = function_defs.iter().map(|f| f.fn_stream.clone()).collect::<Vec<_>>();
+        let api_functions: Vec<TokenStream> = function_defs.iter().map(|f| f.fn_stream.clone()).collect::<Vec<_>>();
         let unit_tests = function_defs.iter().filter_map(|f| f.test_stream.clone()).collect::<Vec<_>>();
 
         let (endpoint_handlers, routes, route_tests) = to_http_endpoints(&function_defs);
@@ -84,7 +84,7 @@ impl EntityMacros {
             compose_functions,
             sample_functions,
             range_query_structs,
-            api_functions: functions,
+            api_functions,
             endpoint_handlers,
             routes,
             test_suite

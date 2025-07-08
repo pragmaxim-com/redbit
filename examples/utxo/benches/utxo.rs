@@ -40,7 +40,7 @@ fn benchmark_blocks(c: &mut Criterion) {
     group.bench_function("Block::all", |b| b.iter(|| Block::take(&read_tx, 100).unwrap()));
     group.bench_function("Block::get", |b| b.iter(|| Block::get(&read_tx, &first_block.id).unwrap()));
     group.bench_function("Block::range", |b| {
-        b.iter(|| Block::range(&read_tx, &first_block.id, &last_block.id).unwrap())
+        b.iter(|| Block::range(&read_tx, &first_block.id, &last_block.id, None).unwrap())
     });
     group.bench_function("Block::get_transactions", |b| {
         b.iter(|| Block::get_transactions(&read_tx, &first_block.id).unwrap())
@@ -75,7 +75,7 @@ fn benchmark_block_headers(c: &mut Criterion) {
         b.iter(|| BlockHeader::get(&read_tx, &first.id).unwrap())
     });
     group.bench_function("BlockHeader::range", |b| {
-        b.iter(|| BlockHeader::range(&read_tx, &first.id, &last.id).unwrap())
+        b.iter(|| BlockHeader::range(&read_tx, &first.id, &last.id, None).unwrap())
     });
     group.bench_function("BlockHeader::range_by_timestamp", |b| {
         b.iter(|| BlockHeader::range_by_timestamp(&read_tx, &first.timestamp, &last.timestamp).unwrap())
@@ -84,7 +84,7 @@ fn benchmark_block_headers(c: &mut Criterion) {
         b.iter(|| {
             rt.block_on(async {
                 let read_tx = db.begin_read().unwrap();
-                BlockHeader::stream_range_by_timestamp(read_tx, first.timestamp, last.timestamp)?
+                BlockHeader::stream_range_by_timestamp(read_tx, first.timestamp, last.timestamp, None)?
                     .try_collect::<Vec<BlockHeader>>()
                     .await
             }).unwrap()
@@ -94,7 +94,7 @@ fn benchmark_block_headers(c: &mut Criterion) {
         b.iter(|| {
             rt.block_on(async {
                 let read_tx = db.begin_read().unwrap();
-                BlockHeader::stream_by_hash(read_tx, first.hash.clone())?
+                BlockHeader::stream_by_hash(read_tx, first.hash.clone(), None)?
                     .try_collect::<Vec<BlockHeader>>()
                     .await
             }).unwrap()
@@ -104,7 +104,7 @@ fn benchmark_block_headers(c: &mut Criterion) {
         b.iter(|| {
             rt.block_on(async {
                 let read_tx = db.begin_read().unwrap();
-                BlockHeader::stream_by_timestamp(read_tx, first.timestamp.clone())?
+                BlockHeader::stream_by_timestamp(read_tx, first.timestamp.clone(), None)?
                     .try_collect::<Vec<BlockHeader>>()
                     .await
             }).unwrap()
@@ -114,7 +114,7 @@ fn benchmark_block_headers(c: &mut Criterion) {
         b.iter(|| {
             rt.block_on(async {
                 let read_tx = db.begin_read().unwrap();
-                BlockHeader::stream_by_merkle_root(read_tx, first.merkle_root.clone())?
+                BlockHeader::stream_by_merkle_root(read_tx, first.merkle_root.clone(), None)?
                     .try_collect::<Vec<BlockHeader>>()
                     .await
             }).unwrap()
@@ -144,14 +144,14 @@ fn benchmark_transactions(c: &mut Criterion) {
         b.iter(|| {
             rt.block_on(async {
                 let read_tx = db.begin_read().unwrap();
-                BlockHeader::stream_by_hash(read_tx, first.hash.clone())?
+                BlockHeader::stream_by_hash(read_tx, first.hash.clone(), None)?
                     .try_collect::<Vec<BlockHeader>>()
                     .await
             }).unwrap()
         })
     });
     group.bench_function("Transaction::range", |b| {
-        b.iter(|| Transaction::range(&read_tx, &first.id, &last.id).unwrap())
+        b.iter(|| Transaction::range(&read_tx, &first.id, &last.id, None).unwrap())
     });
     group.bench_function("Transaction::get_utxos", |b| {
         b.iter(|| Transaction::get_utxos(&read_tx, &first.id).unwrap())
@@ -180,7 +180,7 @@ fn benchmark_utxos(c: &mut Criterion) {
         b.iter(|| {
             rt.block_on(async {
                 let read_tx = db.begin_read().unwrap();
-                Utxo::stream_by_address(read_tx, first.address.clone())?
+                Utxo::stream_by_address(read_tx, first.address.clone(), None)?
                     .try_collect::<Vec<Utxo>>()
                     .await
             }).unwrap()
@@ -190,14 +190,14 @@ fn benchmark_utxos(c: &mut Criterion) {
         b.iter(|| {
             rt.block_on(async {
                 let read_tx = db.begin_read().unwrap();
-                Utxo::stream_by_datum(read_tx, first.datum.clone())?
+                Utxo::stream_by_datum(read_tx, first.datum.clone(), None)?
                     .try_collect::<Vec<Utxo>>()
                     .await
             }).unwrap()
         })
     });
     group.bench_function("Utxo::range", |b| {
-        b.iter(|| Utxo::range(&read_tx, &first.id, &last.id).unwrap())
+        b.iter(|| Utxo::range(&read_tx, &first.id, &last.id, None).unwrap())
     });
     group.bench_function("Utxo::get_assets", |b| {
         b.iter(|| Utxo::get_assets(&read_tx, &first.id).unwrap())
@@ -225,7 +225,7 @@ fn benchmark_assets(c: &mut Criterion) {
         b.iter(|| {
             rt.block_on(async {
                 let read_tx = db.begin_read().unwrap();
-                Asset::stream_by_name(read_tx, first.name.clone())?
+                Asset::stream_by_name(read_tx, first.name.clone(), None)?
                     .try_collect::<Vec<Asset>>()
                     .await
             }).unwrap()
@@ -236,7 +236,7 @@ fn benchmark_assets(c: &mut Criterion) {
         b.iter(|| {
             rt.block_on(async {
                 let read_tx = db.begin_read().unwrap();
-                Asset::stream_by_policy_id(read_tx, first.policy_id.clone())?
+                Asset::stream_by_policy_id(read_tx, first.policy_id.clone(), None)?
                     .try_collect::<Vec<Asset>>()
                     .await
             }).unwrap()
@@ -244,7 +244,7 @@ fn benchmark_assets(c: &mut Criterion) {
 
     });
     group.bench_function("Asset::range", |b| {
-        b.iter(|| Asset::range(&read_tx, &first.id, &last.id).unwrap())
+        b.iter(|| Asset::range(&read_tx, &first.id, &last.id, None).unwrap())
     });
 }
 

@@ -2,27 +2,25 @@ use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::Type;
 
-pub fn one2one_relation_expr(child_type: &Type) -> TokenStream {
-    quote! {
-        #child_type::get(tx, pk)?.ok_or_else(|| AppError::NotFound(format!("Missing one-to-one child {:?}", pk)))?
-    }
-}
-
 pub fn one2one_relation_init(child_name: &Ident, child_type: &Type) -> TokenStream {
-    let init_expr = one2one_relation_expr(child_type);
     quote! {
-        #child_name: #init_expr
+        #child_name: #child_type::get(tx, pk)?.ok_or_else(|| AppError::NotFound(format!("Missing one-to-one child {:?}", pk)))?
     }
 }
 
-pub fn one2one_relation_init_with_query(
-    child_name: &Ident,
-    child_type: &Type,
-) -> TokenStream {
-    let init_expr = one2one_relation_expr(child_type);
+pub fn one2one_relation_init_with_query(child_name: &Ident, child_type: &Type) -> TokenStream {
     quote! {
-        let #child_name = #init_expr;
-        // todo!!!
+        let #child_name = {
+            if let Some(ref q) = stream_query.#child_name {
+                let result = #child_type::filter(tx, pk, q)?;
+                if result.is_none() {
+                    return Ok(None); // short-circuit
+                }
+                result.unwrap()
+            } else {
+                #child_type::get(tx, pk)?.ok_or_else(|| AppError::NotFound(format!("Missing one-to-one child {:?}", pk)))?
+            }
+        };
     }
 }
 
@@ -32,27 +30,25 @@ pub fn one2one_relation_default_init(child_name: &Ident, child_type: &Type) -> T
     }
 }
 
-pub fn one2opt_relation_expr(child_type: &Type) -> TokenStream {
-    quote! {
-        #child_type::get(tx, pk)?
-    }
-}
-
 pub fn one2opt_relation_init(child_name: &Ident, child_type: &Type) -> TokenStream {
-    let init_expr = one2opt_relation_expr(child_type);
     quote! {
-        #child_name: #init_expr
+        #child_name: #child_type::get(tx, pk)?
     }
 }
 
-pub fn one2opt_relation_init_with_query(
-    child_name: &Ident,
-    child_type: &Type,
-) -> TokenStream {
-    let init_expr = one2opt_relation_expr(child_type);
+pub fn one2opt_relation_init_with_query(child_name: &Ident, child_type: &Type) -> TokenStream {
     quote! {
-        let #child_name = #init_expr;
-        // todo!!!
+        let #child_name = {
+            if let Some(ref q) = stream_query.#child_name {
+                let result = #child_type::filter(tx, pk, q)?;
+                if result.is_none() {
+                    return Ok(None); // short-circuit
+                }
+                result
+            } else {
+                #child_type::get(tx, pk)?
+            }
+        };
     }
 }
 
@@ -62,30 +58,25 @@ pub fn one2opt_relation_default_init(child_name: &Ident, child_type: &Type) -> T
     }
 }
 
-pub fn one2many_relation_expr(child_type: &Type) -> TokenStream {
+pub fn one2many_relation_init(child_name: &Ident, child_type: &Type) -> TokenStream {
     quote! {
-        {
+        #child_name: {
             let (from, to) = pk.fk_range();
-            #child_type::range(tx, &from, &to)?
+            #child_type::range(tx, &from, &to, None)?
         }
     }
 }
 
-pub fn one2many_relation_init_with_query(
-    child_name: &Ident,
-    child_type: &Type,
-) -> TokenStream {
-    let init_expr = one2many_relation_expr(child_type);
+pub fn one2many_relation_init_with_query(child_name: &Ident, child_type: &Type) -> TokenStream {
     quote! {
-        let #child_name = #init_expr;
-        // todo!!!
-    }
-}
-
-pub fn one2many_relation_init(child_name: &Ident, child_type: &Type) -> TokenStream {
-    let init_expr = one2many_relation_expr(child_type);
-    quote! {
-        #child_name: #init_expr
+        let #child_name = {
+            let (from, to) = pk.fk_range();
+            let children = #child_type::range(tx, &from, &to, stream_query.#child_name.clone())?;
+            if children.is_empty() {
+                return Ok(None); // short-circuit
+            }
+            children
+        };
     }
 }
 

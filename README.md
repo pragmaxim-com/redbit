@@ -1,19 +1,12 @@
 Built for blazing fast persistence of terra bytes of structured data on a single machine
 while offering rich querying capabilities, e.g. bitcoin/blockchain data. Blockchains need rich and often
 analytical queries which is done through explorers because indexing speed of even embedded/in-process (not through socket) 
-analytical db like [DuckDB](https://duckdb.org/) right on the node would be an order of magnitude slower than doing so with 
+analytical db like [DuckDB](https://duckdb.org/) right on the node would be an order of magnitude slower than a hand-made solution on top of 
 [Redb](https://github.com/cberner/redb) or [RocksDb](https://rocksdb.org/).
 
 Redbit reads struct annotations and derives code necessary for persisting and querying structured data into/from
 [Redb](https://github.com/cberner/redb) using secondary indexes and dictionaries, served by [axum](https://github.com/tokio-rs/axum)
-through auto-generated REST API.
-
-### Main motivation is a research
-
-- Rust type and macro system and db engines at the byte level
-- decentralized persistence options to maximize indexing speed and minimize data size
-- meta space : self-tested and self-documented db & http layers of code derived from annotated structs
-- maximizing R/W speed while minimizing data size using hierarchical data structures of smart pointers
+through auto-generated REST API. It maximizes R/W speed while minimizing data size using hierarchical data structures of smart pointers.
 
 ### Major Out-of-the-Box Features
 
@@ -21,16 +14,31 @@ through auto-generated REST API.
 - ✅ Optional dictionaries for low cardinality fields
 - ✅ One-to-One / One-to-Option / One-to-Many entities with cascade read/write/delete
 - ✅ All goodies including intuitive data ordering without writing custom codecs
-- ✅ SSE streaming api with efficient filters (ie. get txs or utxos for really HOT address)
+- ✅ SSE streaming api with efficient querying (ie. get txs or utxos for really HOT address)
+  - supported filters : `eq`, `ne`, `lt`, `le`, `gt`, `ge`, `in`
+  - queries are deeply nested with logical `AND` : 
+    ```json
+    {
+      "header": {
+        "height": { "$eq": 1 }
+      },
+      "transactions": {
+        "hash": { "$in": ["bar", "baz"] },
+        "utxo": {
+          "address": { "$eq": "foo" }
+        }
+      }
+    }
+    ```
+- ✅ supported column types : `String`, `Integers`, `Vec<u8>`, `[u8; N]`, `bool`, `uuid::Uuid`, `chrono::DateTime`, `std::time::Duration`
+  - supported encodings of binary columns : `hex`, `base64`
+- ✅ all types have binary (db) and human-readable (http) serde support
 - ✅ Macro derived http rest API at http://127.0.0.1:8000/swagger-ui/ with examples
 - ✅ Macro derived unit tests and integration tests on axum test server
 
 ### Limitations
 
-- ❌ primitive types must be wrapped in a newtype struct if there is an index on it
-  - to macro derive implementations necessary for indexing and querying
-- ❌ root key must be newtype struct with numeric inner type
-  - that's part of the design decision to achieve fast indexing of even whole bitcoin
+- ❌ root key must be newtype struct with numeric inner type (that's part of the design decision to achieve fast indexing of even whole bitcoin)
 
 ```
 cargo run --package utxo                # to run the demo example
