@@ -64,20 +64,21 @@ Let's say we want to persist and query blockchain data using Redbit, declare ann
     #[pointer_key(u8)] pub struct AssetPointer(UtxoPointer);
     
     #[column] pub struct Hash(pub String);
-    #[column] pub struct Address(pub [u8; 32]);
     #[column] pub struct PolicyId(pub String);
-    #[column] pub struct Datum(pub Vec<u8>);
+    #[column("base64")] pub struct Address(pub [u8; 32]);
+    #[column("hex")] pub struct Datum(pub Vec<u8>);
     #[column] pub struct AssetName(pub String);
+    #[column] pub struct Time(pub chrono::DateTime<chrono::Utc>);
+    #[column] pub struct Duration(pub std::time::Duration);
+    #[column]
+    #[derive(Copy, Hash)]
+    pub struct Timestamp(pub u32);
     
     #[column]
     pub struct TempInputRef {
         tx_hash: Hash,
         index: u32,
     }
-    
-    #[column]
-    #[derive(Copy, Hash)]
-    pub struct Timestamp(pub u32);
     
     #[entity]
     pub struct Block {
@@ -97,6 +98,10 @@ Let's say we want to persist and query blockchain data using Redbit, declare ann
         pub hash: Hash,
         #[column(range)]
         pub timestamp: Timestamp,
+        #[column(range)]
+        pub time: Time,
+        #[column]
+        pub duration: Duration,
         #[column(index)]
         pub merkle_root: Hash,
         #[column]
@@ -110,7 +115,6 @@ Let's say we want to persist and query blockchain data using Redbit, declare ann
         #[column(index)]
         pub hash: Hash,
         pub utxos: Vec<Utxo>,
-        pub inputs: Vec<InputRef>,
         #[column(transient)]
         pub transient_inputs: Vec<TempInputRef>,
     }
@@ -135,12 +139,6 @@ Let's say we want to persist and query blockchain data using Redbit, declare ann
         pub id: UtxoPointer,
         #[column(index)]
         pub hash: Hash,
-    }
-    
-    #[entity]
-    pub struct InputRef {
-        #[fk(one2many)]
-        pub id: InputPointer,
     }
     
     #[entity]
@@ -182,13 +180,13 @@ And R/W entire instances efficiently using indexes and dictionaries `examples/ut
     
         Block::take(&read_tx, 100)?;
         Block::get(&read_tx, &first_block.id)?;
-        Block::range(&read_tx, &first_block.id, &last_block.id)?;
+        Block::range(&read_tx, &first_block.id, &last_block.id, None)?;
         Block::get_transactions(&read_tx, &first_block.id)?;
         Block::get_header(&read_tx, &first_block.id)?;
         Block::exists(&read_tx, &first_block.id)?;
         Block::first(&read_tx)?;
         Block::last(&read_tx)?;
-        Block::stream_range(db.begin_read()?, first_block.id, last_block.id)?.try_collect::<Vec<Block>>().await?;
+        Block::stream_range(db.begin_read()?, first_block.id, last_block.id, None)?.try_collect::<Vec<Block>>().await?;
     
         println!("Querying block headers:");
         let first_block_header = BlockHeader::first(&read_tx)?.unwrap();
@@ -199,13 +197,13 @@ And R/W entire instances efficiently using indexes and dictionaries `examples/ut
         BlockHeader::get_by_merkle_root(&read_tx, &first_block_header.merkle_root)?;
         BlockHeader::take(&read_tx, 100)?;
         BlockHeader::get(&read_tx, &first_block_header.id)?;
-        BlockHeader::range(&read_tx, &first_block_header.id, &last_block_header.id)?;
+        BlockHeader::range(&read_tx, &first_block_header.id, &last_block_header.id, None)?;
         BlockHeader::range_by_timestamp(&read_tx, &first_block_header.timestamp, &last_block_header.timestamp)?;
-        BlockHeader::stream_by_hash(db.begin_read()?, first_block_header.hash)?.try_collect::<Vec<BlockHeader>>().await?;
-        BlockHeader::stream_by_timestamp(db.begin_read()?, first_block_header.timestamp)?.try_collect::<Vec<BlockHeader>>().await?;
-        BlockHeader::stream_by_merkle_root(db.begin_read()?, first_block_header.merkle_root)?.try_collect::<Vec<BlockHeader>>().await?;
-        BlockHeader::stream_range(db.begin_read()?, first_block_header.id, last_block_header.id)?.try_collect::<Vec<BlockHeader>>().await?;
-        BlockHeader::stream_range_by_timestamp(db.begin_read()?, first_block_header.timestamp, last_block_header.timestamp)?.try_collect::<Vec<BlockHeader>>().await?;
+        BlockHeader::stream_by_hash(db.begin_read()?, first_block_header.hash, None)?.try_collect::<Vec<BlockHeader>>().await?;
+        BlockHeader::stream_by_timestamp(db.begin_read()?, first_block_header.timestamp, None)?.try_collect::<Vec<BlockHeader>>().await?;
+        BlockHeader::stream_by_merkle_root(db.begin_read()?, first_block_header.merkle_root, None)?.try_collect::<Vec<BlockHeader>>().await?;
+        BlockHeader::stream_range(db.begin_read()?, first_block_header.id, last_block_header.id, None)?.try_collect::<Vec<BlockHeader>>().await?;
+        BlockHeader::stream_range_by_timestamp(db.begin_read()?, first_block_header.timestamp, last_block_header.timestamp, None)?.try_collect::<Vec<BlockHeader>>().await?;
     
         println!("Querying transactions:");
         let first_transaction = Transaction::first(&read_tx)?.unwrap();
@@ -215,13 +213,12 @@ And R/W entire instances efficiently using indexes and dictionaries `examples/ut
         Transaction::get_by_hash(&read_tx, &first_transaction.hash)?;
         Transaction::take(&read_tx, 100)?;
         Transaction::get(&read_tx, &first_transaction.id)?;
-        Transaction::range(&read_tx, &first_transaction.id, &last_transaction.id)?;
+        Transaction::range(&read_tx, &first_transaction.id, &last_transaction.id, None)?;
         Transaction::get_utxos(&read_tx, &first_transaction.id)?;
-        Transaction::get_inputs(&read_tx, &first_transaction.id)?;
         Transaction::parent_key(&read_tx, &first_transaction.id)?;
         Transaction::stream_ids_by_hash(&read_tx, &first_transaction.hash)?.try_collect::<Vec<TxPointer>>().await?;
-        Transaction::stream_by_hash(db.begin_read()?, first_transaction.hash)?.try_collect::<Vec<Transaction>>().await?;
-        Transaction::stream_range(db.begin_read()?, first_transaction.id, last_transaction.id)?.try_collect::<Vec<Transaction>>().await?;
+        Transaction::stream_by_hash(db.begin_read()?, first_transaction.hash, None)?.try_collect::<Vec<Transaction>>().await?;
+        Transaction::stream_range(db.begin_read()?, first_transaction.id, last_transaction.id, None)?.try_collect::<Vec<Transaction>>().await?;
     
         println!("Querying utxos:");
         let first_utxo = Utxo::first(&read_tx)?.unwrap();
@@ -232,24 +229,14 @@ And R/W entire instances efficiently using indexes and dictionaries `examples/ut
         Utxo::get_ids_by_address(&read_tx, &first_utxo.address)?;
         Utxo::take(&read_tx, 100)?;
         Utxo::get(&read_tx, &first_utxo.id)?;
-        Utxo::range(&read_tx, &first_utxo.id, &last_utxo.id)?;
+        Utxo::range(&read_tx, &first_utxo.id, &last_utxo.id, None)?;
         Utxo::get_assets(&read_tx, &first_utxo.id)?;
         Utxo::parent_key(&read_tx, &first_utxo.id)?;
         Utxo::get_tree(&read_tx, &first_utxo.id)?;
-        let first_input_ref = InputRef::first(&read_tx)?.unwrap();
-        let last_input_ref = InputRef::last(&read_tx)?.unwrap();
-    
         Utxo::stream_ids_by_address(&read_tx, &first_utxo.address)?.try_collect::<Vec<UtxoPointer>>().await?;
-        Utxo::stream_range(db.begin_read()?, first_utxo.id, last_utxo.id)?.try_collect::<Vec<Utxo>>().await?;
-        Utxo::stream_by_address(db.begin_read()?, first_utxo.address)?.try_collect::<Vec<Utxo>>().await?;
-        Utxo::stream_by_datum(db.begin_read()?, first_utxo.datum)?.try_collect::<Vec<Utxo>>().await?;
-    
-        InputRef::take(&read_tx, 100)?;
-        InputRef::exists(&read_tx, &first_input_ref.id)?;
-        InputRef::get(&read_tx, &first_input_ref.id)?;
-        InputRef::range(&read_tx, &first_input_ref.id, &last_input_ref.id)?;
-        InputRef::parent_key(&read_tx, &first_input_ref.id)?;
-        InputRef::stream_range(db.begin_read()?, first_input_ref.id, last_input_ref.id)?.try_collect::<Vec<InputRef>>().await?;
+        Utxo::stream_range(db.begin_read()?, first_utxo.id, last_utxo.id, None)?.try_collect::<Vec<Utxo>>().await?;
+        Utxo::stream_by_address(db.begin_read()?, first_utxo.address, None)?.try_collect::<Vec<Utxo>>().await?;
+        Utxo::stream_by_datum(db.begin_read()?, first_utxo.datum, None)?.try_collect::<Vec<Utxo>>().await?;
     
         println!("Querying assets:");
         let first_asset = Asset::first(&read_tx)?.unwrap();
@@ -260,12 +247,12 @@ And R/W entire instances efficiently using indexes and dictionaries `examples/ut
         Asset::get_ids_by_policy_id(&read_tx, &first_asset.policy_id)?;
         Asset::take(&read_tx, 100)?;
         Asset::get(&read_tx, &first_asset.id)?;
-        Asset::range(&read_tx, &first_asset.id, &last_asset.id)?;
+        Asset::range(&read_tx, &first_asset.id, &last_asset.id, None)?;
         Asset::parent_key(&read_tx, &first_asset.id)?;
         Asset::stream_ids_by_policy_id(&read_tx, &first_asset.policy_id)?.try_collect::<Vec<AssetPointer>>().await?;
-        Asset::stream_by_policy_id(db.begin_read()?, first_asset.policy_id)?.try_collect::<Vec<Asset>>().await?;
-        Asset::stream_by_name(db.begin_read()?, first_asset.name)?.try_collect::<Vec<Asset>>().await?;
-        Asset::stream_range(db.begin_read()?, first_asset.id, last_asset.id)?.try_collect::<Vec<Asset>>().await?;
+        Asset::stream_by_policy_id(db.begin_read()?, first_asset.policy_id, None)?.try_collect::<Vec<Asset>>().await?;
+        Asset::stream_by_name(db.begin_read()?, first_asset.name, None)?.try_collect::<Vec<Asset>>().await?;
+        Asset::stream_range(db.begin_read()?, first_asset.id, last_asset.id, None)?.try_collect::<Vec<Asset>>().await?;
     
         println!("Deleting blocks:");
         for block in blocks.iter() {
@@ -294,42 +281,42 @@ the operations reads :
 ```
 function                                           ops/s
 -------------------------------------------------------------
-Transaction__all                                    1612
-Block__all                                          1686
-Utxo__all                                           1736
-Utxo__range                                         1804
-Transaction__range                                  1928
-Block__range                                        2533
-Asset__all                                          2685
-Asset__range                                        2734
-Block__get                                          5025
-Block__get_transactions                             5173
-Transaction__get_by_hash                            5209
-Utxo__stream_by_address                             5234
-Utxo__get_by_address                                5279
-Utxo__stream_by_datum                               5334
-Utxo__get_by_datum                                  5346
-Asset__stream_by_name                               8033
-Asset__stream_by_policy_id                          8114
-Asset__get_by_name                                  8263
-Asset__get_by_policy_id                             8293
-Transaction__get                                   15615
-Transaction__get_utxos                             16406
-Utxo__get                                          49004
-Utxo__get_assets                                   71722
-BlockHeader__all                                   96229
-BlockHeader__stream_range_by_timestamp            122412
-BlockHeader__range_by_timestamp                   131771
-BlockHeader__range                                139231
-Asset__get                                        198803
-BlockHeader__stream_by_merkle_root                214336
-BlockHeader__stream_by_hash                       221872
-Transaction__stream_by_hash                       226007
-BlockHeader__stream_by_timestamp                  229727
-BlockHeader__get_by_merkle_root                   242411
-BlockHeader__get_by_hash                          243403
-BlockHeader__get_by_timestamp                     256793
-BlockHeader__get                                  270672
-Block__get_header                                 272788
+Block__all                                           692
+Transaction__all                                     708
+Utxo__all                                            724
+Utxo__range                                          755
+Transaction__range                                   802
+Block__range                                        1038
+Asset__all                                          1065
+Asset__range                                        1081
+Block__get                                          2052
+Transaction__get_by_hash                            2083
+Block__get_transactions                             2087
+Utxo__stream_by_address                             2112
+Utxo__get_by_address                                2130
+Utxo__stream_by_datum                               2133
+Utxo__get_by_datum                                  2148
+Asset__stream_by_name                               3131
+Asset__get_by_name                                  3132
+Asset__stream_by_policy_id                          3146
+Asset__get_by_policy_id                             3161
+Transaction__get                                    5843
+Transaction__get_utxos                              6121
+Utxo__get                                          18100
+Utxo__get_assets                                   24454
+Asset__get                                         66041
+BlockHeader__all                                   68104
+BlockHeader__stream_range_by_timestamp             89130
+BlockHeader__range_by_timestamp                    95484
+BlockHeader__range                                 99279
+Transaction__stream_by_hash                       164657
+BlockHeader__stream_by_hash                       165457
+BlockHeader__stream_by_merkle_root                168000
+BlockHeader__stream_by_timestamp                  170365
+BlockHeader__get_by_merkle_root                   181178
+BlockHeader__get_by_hash                          182823
+BlockHeader__get_by_timestamp                     189858
+BlockHeader__get                                  193592
+Block__get_header                                 194217
 ```
 <!-- END_BENCH -->
