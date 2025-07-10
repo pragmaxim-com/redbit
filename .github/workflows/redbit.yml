@@ -33,7 +33,7 @@ jobs:
             cargo-${{ runner.os }}-
 
       - name: Run tests
-        run: cargo test --package utxo
+        run: cargo +nightly test --package utxo
 
   performance:
     runs-on: ubuntu-latest
@@ -61,17 +61,18 @@ jobs:
           
           # Extract and process lines with `bench:`
           grep 'bench:' bench_output.txt | while read -r line; do
-            # Example line: test asset::bench_exists ... bench: 1,552.93 ns/iter (+/- 139.93)
-            FUNCTION=$(echo "$line" | awk '{print $2}')
+            # Extract full function name regardless of spacing
+            FUNCTION=$(echo "$line" | sed -n 's/^test \([^ ]*\) \+\.\.\. bench:.*/\1/p')
+          
+            # Extract time in ns/iter
             TIME_NS=$(echo "$line" | grep -oP 'bench:\s+\K[0-9.,]+' | tr -d ',')
           
-            # Convert TIME_NS string to float using awk
+            # Convert TIME_NS to ops/sec
             OPS_PER_S=$(awk "BEGIN {if ($TIME_NS > 0) printf \"%.0f\", 1000000000 / $TIME_NS; else print 0}")
           
             echo "$FUNCTION,$OPS_PER_S" >> benchmarks.csv
           done
           
-          # Sort descending by ops/sec (more = better)
           sort -t, -k2 -n benchmarks.csv > sorted_benchmarks.csv
           mv sorted_benchmarks.csv benchmarks.csv
 

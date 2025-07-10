@@ -26,7 +26,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
         }
     });
 
-    let bench_fn_name = format_ident!("bench_{}", fn_name);
+    let bench_fn_name = format_ident!("_{}", fn_name);
     let bench_stream = Some(quote! {
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {

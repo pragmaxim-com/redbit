@@ -80,7 +80,7 @@ pub fn by_dict_def(
         }
     });
 
-    let bench_fn_name = format_ident!("bench_{}", fn_name);
+    let bench_fn_name = format_ident!("_{}", fn_name);
     let bench_stream = Some(quote! {
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
@@ -189,7 +189,7 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
         }
     });
 
-    let bench_fn_name = format_ident!("bench_{}", fn_name);
+    let bench_fn_name = format_ident!("_{}", fn_name);
     let bench_stream = Some(quote! {
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {

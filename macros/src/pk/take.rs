@@ -28,8 +28,8 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
     };
 
     let test_stream = Some(quote! {
-        #[tokio::test]
-        async fn #fn_name() {
+        #[test]
+        fn #fn_name() {
             let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let n: usize = 2;
@@ -39,7 +39,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
         }
     });
 
-    let bench_fn_name = format_ident!("bench_{}", fn_name);
+    let bench_fn_name = format_ident!("_{}", fn_name);
     let bench_stream = Some(quote! {
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {

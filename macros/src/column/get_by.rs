@@ -37,7 +37,7 @@ pub fn get_by_dict_def(
             Ok(results)
         }
     };
-    
+
     let test_stream = Some(quote! {
         #[test]
         fn #fn_name() {
@@ -49,8 +49,8 @@ pub fn get_by_dict_def(
             assert_eq!(expected_entities, entities, "Expected entities to be returned for the given dictionary index");
         }
     });
-    
-    let bench_fn_name = format_ident!("bench_{}", fn_name);
+
+    let bench_fn_name = format_ident!("_{}", fn_name);
     let bench_stream = Some(quote! {
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
@@ -107,7 +107,7 @@ pub fn get_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &I
         }
     });
 
-    let bench_fn_name = format_ident!("bench_{}", fn_name);
+    let bench_fn_name = format_ident!("_{}", fn_name);
     let bench_stream = Some(quote! {
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
