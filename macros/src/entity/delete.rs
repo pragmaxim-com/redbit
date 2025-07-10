@@ -15,7 +15,7 @@ impl EntityMacros {
                 Ok(())
             }
         };
-        FunctionDef { entity_name: entity_name.clone(), fn_name: fn_name.clone(), fn_stream, endpoint_def: None, test_stream: None }
+        FunctionDef { entity_name: entity_name.clone(), fn_name: fn_name.clone(), fn_stream, endpoint_def: None, test_stream: None, bench_stream: None }
     }
 
     pub fn delete_many_def(entity_name: &Ident, pk_type: &Type, delete_many_statements: &Vec<TokenStream>) -> FunctionDef {
@@ -26,7 +26,7 @@ impl EntityMacros {
                 Ok(())
             }
         };
-        FunctionDef { entity_name: entity_name.clone(), fn_name: fn_name.clone(), fn_stream, endpoint_def: None, test_stream: None }
+        FunctionDef { entity_name: entity_name.clone(), fn_name: fn_name.clone(), fn_stream, endpoint_def: None, test_stream: None, bench_stream: None }
     }
 
     pub fn delete_and_commit_def(
@@ -47,10 +47,10 @@ impl EntityMacros {
                Ok(())
            }
         };
-        let test_fn_name = format_ident!("test_{}", fn_name);
+
         let test_stream = Some(quote! {
-            #[tokio::test]
-            async fn #test_fn_name() {
+            #[test]
+            fn #fn_name() {
                 let db = test_db();
                 let entity_count: usize = 3;
                 for test_entity in #entity_type::sample_many(entity_count) {
@@ -61,6 +61,20 @@ impl EntityMacros {
                     let is_empty = #entity_name::get(&read_tx, &pk).expect("Failed to get instance").is_none();
                     assert!(is_empty, "Instance should be deleted");
                 }
+            }
+        });
+
+        let bench_fn_name = format_ident!("bench_{}", fn_name);
+        let bench_stream = Some(quote! {
+            #[bench]
+            fn #bench_fn_name(b: &mut Bencher) {
+                let db = test_db();
+                let test_entity = #entity_type::sample();
+                #entity_name::store_and_commit(&db, &test_entity).expect("Failed to store and commit instance");
+                let pk = test_entity.#pk_name;
+                b.iter(|| {
+                    #entity_name::#fn_name(&db, &pk).expect("Failed to delete and commit instance");
+                });
             }
         });
 
@@ -87,6 +101,7 @@ impl EntityMacros {
                 endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), pk_name, pk_name),
             }),
             test_stream,
+            bench_stream
         }
     }
 }

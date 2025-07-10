@@ -69,7 +69,7 @@ impl EndpointDef {
             let body_param_clone = body_param.unwrap().clone();
             let body_samples = body_param_clone.samples;
             let ty = &body_param_clone.ty;
-            let test_fn_name = format_ident!("test_http_endpoint_with_query_and_body_{}", fn_name);
+            let test_fn_name = format_ident!("http_endpoint_with_query_and_body_{}", fn_name);
             tests.push(quote! {
                 #[tokio::test]
                 async fn #test_fn_name() {
@@ -86,7 +86,7 @@ impl EndpointDef {
             });
         } else if query_param.is_some() {
             let query_samples = query_param.unwrap().clone().samples;
-            let test_fn_name = format_ident!("test_http_endpoint_with_query_{}", fn_name);
+            let test_fn_name = format_ident!("http_endpoint_with_query_{}", fn_name);
                 tests.push(quote! {
                     #[tokio::test]
                     async fn #test_fn_name() {
@@ -101,7 +101,7 @@ impl EndpointDef {
                 });
         } else if body_param.is_some() {
             let body_samples = body_param.unwrap().clone().samples;
-            let test_fn_name = format_ident!("test_http_endpoint_with_body_{}", fn_name);
+            let test_fn_name = format_ident!("http_endpoint_with_body_{}", fn_name);
             let ty = body_param.unwrap().ty.clone();
             tests.push(quote! {
                 #[tokio::test]
@@ -114,7 +114,7 @@ impl EndpointDef {
                 }
             });
         } else {
-            let test_fn_name = format_ident!("test_http_endpoint_{}", fn_name);
+            let test_fn_name = format_ident!("http_endpoint_{}", fn_name);
             tests.push(quote! {
                 #[tokio::test]
                 async fn #test_fn_name() {

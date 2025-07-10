@@ -18,10 +18,10 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
             Ok(results)
         }
     };
-    let test_fn_name = format_ident!("test_{}", fn_name);
+
     let test_stream = Some(quote! {
-        #[tokio::test]
-        async fn #test_fn_name() {
+        #[test]
+        fn #fn_name() {
             let db = DB.clone();
             let entity_count: usize = 3;
             let write_tx = db.begin_write().expect("Failed to begin write transaction");
@@ -32,12 +32,28 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
             assert_eq!(test_pks, pks, "Expected PKs to be returned for the given range");
         }
     });
+
+    let bench_fn_name = format_ident!("bench_{}", fn_name);
+    let bench_stream = Some(quote! {
+        #[bench]
+        fn #bench_fn_name(b: &mut Bencher) {
+            let db = DB.clone();
+            let write_tx = db.begin_write().expect("Failed to begin write transaction");
+            let from_value = #pk_type::default();
+            let until_value = #pk_type::default().next().next().next();
+            b.iter(|| {
+                #entity_name::#fn_name(&write_tx, &from_value, &until_value).expect("Failed to get PKs in range");
+            });
+        }
+    });
+
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
         fn_stream,
         endpoint_def: None,
-        test_stream
+        test_stream,
+        bench_stream
     }
 
 }

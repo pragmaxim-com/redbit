@@ -55,25 +55,24 @@ jobs:
           restore-keys: |
             rust-binaries-${{ runner.os }}-
 
-      - name: Run Criterion Benchmarks
+      - name: Run Built-in Rust Benchmarks and Extract Metrics
         run: |
-          cargo bench --package utxo --bench utxo
-          find target/criterion -path "*/base/estimates.json" -print0 | while IFS= read -r -d '' file; do
-            FUNCTION=$(basename $(dirname $(dirname "$file")))
-            if [[ "$FUNCTION" == "criterion" ]]; then
-              continue
-            fi
-            TIME_NS=$(jq -r '.mean.point_estimate' "$file")
-            if [[ "$TIME_NS" != "null" && "$TIME_NS" != "0" ]]; then
-              OPS_PER_S=$(awk "BEGIN {print 1000000000 / $TIME_NS}") # Convert to ops/s
-              OPS_PER_S=$(awk "BEGIN {printf \"%.0f\", $OPS_PER_S}") # Round to whole number
-            else
-              OPS_PER_S=0 # Prevent division by zero errors
-            fi
+          cargo +nightly bench --package utxo -- --nocapture | tee bench_output.txt
+          
+          # Extract and process lines with `bench:`
+          grep 'bench:' bench_output.txt | while read -r line; do
+            # Example line: test asset::bench_exists ... bench: 1,552.93 ns/iter (+/- 139.93)
+            FUNCTION=$(echo "$line" | awk '{print $2}')
+            TIME_NS=$(echo "$line" | grep -oP 'bench:\s+\K[0-9.,]+' | tr -d ',')
+          
+            # Convert TIME_NS string to float using awk
+            OPS_PER_S=$(awk "BEGIN {if ($TIME_NS > 0) printf \"%.0f\", 1000000000 / $TIME_NS; else print 0}")
+          
             echo "$FUNCTION,$OPS_PER_S" >> benchmarks.csv
           done
-      
-          (cat benchmarks.csv | sort -t, -k2 -n) > sorted_benchmarks.csv
+          
+          # Sort descending by ops/sec (more = better)
+          sort -t, -k2 -n benchmarks.csv > sorted_benchmarks.csv
           mv sorted_benchmarks.csv benchmarks.csv
 
       - name: Update README

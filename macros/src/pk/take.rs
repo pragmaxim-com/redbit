@@ -26,10 +26,10 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
             }
         }
     };
-    let test_fn_name = format_ident!("test_{}", fn_name);
+
     let test_stream = Some(quote! {
         #[tokio::test]
-        async fn #test_fn_name() {
+        async fn #fn_name() {
             let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let n: usize = 2;
@@ -38,11 +38,26 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
             assert_eq!(entities, expected_entities, "Expected to take 2 entities");
         }
     });
+
+    let bench_fn_name = format_ident!("bench_{}", fn_name);
+    let bench_stream = Some(quote! {
+        #[bench]
+        fn #bench_fn_name(b: &mut Bencher) {
+            let db = DB.clone();
+            let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let n: usize = 2;
+            b.iter(|| {
+                #entity_name::#fn_name(&read_tx, n).expect("Failed to take entities");
+            });
+        }
+    });
+
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
         fn_stream,
         endpoint_def: None,
         test_stream,
+        bench_stream,
     }
 }

@@ -40,11 +40,11 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
                 Ok(stream)
             }
         };
-    let test_fn_name = format_ident!("test_{}", fn_name);
-    let test_with_filter_fn_name = format_ident!("{}_with_filter", test_fn_name);
+
+    let test_with_filter_fn_name = format_ident!("{}_with_filter", fn_name);
     let test_stream = Some(quote! {
         #[tokio::test]
-        async fn #test_fn_name() {
+        async fn #fn_name() {
             let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let from_value = #pk_type::default();
@@ -65,6 +65,25 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
             let entities = entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
             let expected_entities = vec![#entity_type::sample()];
             assert_eq!(entities, expected_entities, "Only the default valued entity, filter is set for default values, query: {:?}", query);
+        }
+    });
+
+    let bench_fn_name = format_ident!("bench_{}", fn_name);
+    let bench_stream = Some(quote! {
+        #[bench]
+        fn #bench_fn_name(b: &mut Bencher) {
+            let rt = Runtime::new().unwrap();
+            let db = DB.clone();
+            let query = #stream_query_type::sample();
+            b.iter(|| {
+                rt.block_on(async {
+                    let from_value = #pk_type::default();
+                    let until_value = #pk_type::default().next().next().next();
+                    let read_tx = db.begin_read().unwrap();
+                    let entity_stream = #entity_name::#fn_name(read_tx, from_value, until_value, Some(query.clone())).expect("Failed to range entities by pk");
+                    entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
+                })
+            });
         }
     });
 
@@ -98,6 +117,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
             utoipa_responses: quote! { responses((status = OK, content_type = "text/event-stream", body = #entity_type)) },
             endpoint: format!("/{}/{}", entity_name.to_string().to_lowercase(), pk_name.clone()),
         }),
-        test_stream
+        test_stream,
+        bench_stream
     }
 }

@@ -42,16 +42,32 @@ pub fn by_dict_def(
         }
     };
 
-    let test_fn_name = format_ident!("test_{}", fn_name);
+
     let test_stream = Some(quote! {
         #[tokio::test]
-        async fn #test_fn_name() {
+        async fn #fn_name() {
             let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
             let pk_stream = #entity_name::#fn_name(&read_tx, &val).expect("Stream creation failed");
             let pks = pk_stream.try_collect::<Vec<#pk_type>>().await.expect("Failed to collect stream");
             assert_eq!(vec![#pk_type::default()], pks);
+        }
+    });
+
+    let bench_fn_name = format_ident!("bench_{}", fn_name);
+    let bench_stream = Some(quote! {
+        #[bench]
+        fn #bench_fn_name(b: &mut Bencher) {
+            let rt = Runtime::new().unwrap();
+            let db = DB.clone();
+            b.iter(|| {
+                rt.block_on(async {
+                    let read_tx = db.begin_read().unwrap();
+                    let pk_stream = #entity_name::#fn_name(&read_tx, &#column_type::default()).expect("Stream creation failed");
+                    pk_stream.try_collect::<Vec<#pk_type>>().await.expect("Failed to collect stream");
+                })
+            });
         }
     });
 
@@ -82,7 +98,8 @@ pub fn by_dict_def(
                               entity_name.to_string().to_lowercase(), column_name, column_name, pk_name
             ),
         }),
-        test_stream: test_stream,
+        test_stream,
+        bench_stream
     }
 }
 
@@ -109,16 +126,32 @@ pub fn by_index_def(
         }
     };
 
-    let test_fn_name = format_ident!("test_{}", fn_name);
+
     let test_stream = Some(quote! {
         #[tokio::test]
-        async fn #test_fn_name() {
+        async fn #fn_name() {
             let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
             let pk_stream = #entity_name::#fn_name(&read_tx, &val).expect("Stream creation failed");
             let pks = pk_stream.try_collect::<Vec<#pk_type>>().await.expect("Failed to collect stream");
             assert_eq!(vec![#pk_type::default()], pks);
+        }
+    });
+
+    let bench_fn_name = format_ident!("bench_{}", fn_name);
+    let bench_stream = Some(quote! {
+        #[bench]
+        fn #bench_fn_name(b: &mut Bencher) {
+            let rt = Runtime::new().unwrap();
+            let db = DB.clone();
+            b.iter(|| {
+                rt.block_on(async {
+                    let read_tx = db.begin_read().unwrap();
+                    let pk_stream = #entity_name::#fn_name(&read_tx, &#column_type::default()).expect("Stream creation failed");
+                    pk_stream.try_collect::<Vec<#pk_type>>().await.expect("Failed to collect stream");
+                })
+            });
         }
     });
 
@@ -149,6 +182,7 @@ pub fn by_index_def(
                               entity_name.to_string().to_lowercase(), column_name, column_name, pk_name
             ),
         }),
-        test_stream: test_stream,
+        test_stream,
+        bench_stream
     }
 }

@@ -29,13 +29,12 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, table: &I
                 Ok(results)
             }
         };
-    let test_fn_name = format_ident!("test_{}", fn_name);
-    let test_with_filter_fn_name = format_ident!("{}_with_filter", test_fn_name);
+
+    let test_with_filter_fn_name = format_ident!("{}_with_filter", fn_name);
     let test_stream = Some(quote! {
-        #[tokio::test]
-        async fn #test_fn_name() {
+        #[test]
+        fn #fn_name() {
             let db = DB.clone();
-            let entity_count: usize = 3;
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let from_value = #pk_type::default();
             let until_value = #pk_type::default().next().next();
@@ -43,10 +42,9 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, table: &I
             let expected_entities = #entity_type::sample_many(2);
             assert_eq!(entities, expected_entities, "Expected entities to be returned for the given range");
         }
-        #[tokio::test]
-        async fn #test_with_filter_fn_name() {
+        #[test]
+        fn #test_with_filter_fn_name() {
             let db = DB.clone();
-            let entity_count: usize = 3;
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let from_value = #pk_type::default();
             let until_value = #pk_type::default().next().next().next();
@@ -57,11 +55,28 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, table: &I
         }
     });
 
+    let bench_fn_name = format_ident!("bench_{}", fn_name);
+    let bench_stream = Some(quote! {
+        #[bench]
+        fn #bench_fn_name(b: &mut Bencher) {
+            let db = DB.clone();
+            let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let from_value = #pk_type::default();
+            let until_value = #pk_type::default().next().next().next();
+            let query = #stream_query_type::sample();
+            b.iter(|| {
+                #entity_name::#fn_name(&read_tx, &from_value, &until_value, Some(query.clone())).expect("Failed to get entities by range");
+            });
+        }
+    });
+
+
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
         fn_stream,
         endpoint_def: None,
-        test_stream
+        test_stream,
+        bench_stream
     }
 }

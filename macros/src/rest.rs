@@ -33,6 +33,7 @@ pub struct FunctionDef {
     pub fn_stream: TokenStream,
     pub endpoint_def: Option<EndpointDef>,
     pub test_stream: Option<TokenStream>,
+    pub bench_stream: Option<TokenStream>,
 }
 
 #[derive(Clone)]

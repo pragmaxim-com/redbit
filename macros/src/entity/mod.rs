@@ -73,9 +73,10 @@ impl EntityMacros {
 
         let api_functions: Vec<TokenStream> = function_defs.iter().map(|f| f.fn_stream.clone()).collect::<Vec<_>>();
         let unit_tests = function_defs.iter().filter_map(|f| f.test_stream.clone()).collect::<Vec<_>>();
+        let benches = function_defs.iter().filter_map(|f| f.bench_stream.clone()).collect::<Vec<_>>();
 
         let (endpoint_handlers, routes, route_tests) = to_http_endpoints(&function_defs);
-        let test_suite = tests::test_suite(&entity_name, unit_tests, route_tests);
+        let test_suite = tests::test_suite(&entity_name, unit_tests, route_tests, benches);
 
         Ok(EntityMacros {
             entity_name,

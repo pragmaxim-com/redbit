@@ -15,10 +15,10 @@ impl EntityMacros {
                 Ok(())
             }
         };
-        let test_fn_name = format_ident!("test_{}", fn_name);
+
         let test_stream = Some(quote! {
-            #[tokio::test]
-            async fn #test_fn_name() {
+            #[test]
+            fn #fn_name() {
                 let db = test_db();
                 let entity_count: usize = 3;
                 for test_entity in #entity_type::sample_many(entity_count) {
@@ -29,12 +29,27 @@ impl EntityMacros {
             }
         });
 
+        let bench_fn_name = format_ident!("bench_{}", fn_name);
+        let bench_stream = Some(quote! {
+            #[bench]
+            fn #bench_fn_name(b: &mut Bencher) {
+                let db = test_db();
+                let test_entity = #entity_type::sample();
+                b.iter(|| {
+                    let tx = db.begin_write().expect("Failed to begin write transaction");
+                    #entity_name::#fn_name(&tx, &test_entity).expect("Failed to store and commit instance");
+                    tx.commit().expect("Failed to commit transaction");
+                });
+            }
+        });
+
         FunctionDef {
             entity_name: entity_name.clone(),
             fn_name: fn_name.clone(),
             fn_stream,
             endpoint_def: None,
             test_stream,
+            bench_stream
         }
     }
 
@@ -46,10 +61,10 @@ impl EntityMacros {
                 Ok(())
             }
         };
-        let test_fn_name = format_ident!("test_{}", fn_name);
+
         let test_stream = Some(quote! {
-            #[tokio::test]
-            async fn #test_fn_name() {
+            #[test]
+            fn #fn_name() {
                 let db = test_db();
                 let entity_count: usize = 3;
                 let test_entities = #entity_type::sample_many(entity_count);
@@ -59,12 +74,29 @@ impl EntityMacros {
             }
         });
 
+        let bench_fn_name = format_ident!("bench_{}", fn_name);
+        let bench_stream = Some(quote! {
+            #[bench]
+            fn #bench_fn_name(b: &mut Bencher) {
+                let db = test_db();
+                let entity_count = 3;
+                let test_entities = #entity_type::sample_many(entity_count);
+                b.iter(|| {
+                    let tx = db.begin_write().expect("Failed to begin write transaction");
+                    #entity_name::#fn_name(&tx, &test_entities).expect("Failed to store and commit instance");
+                    tx.commit().expect("Failed to commit transaction");
+                });
+            }
+        });
+
+
         FunctionDef {
             entity_name: entity_name.clone(),
             fn_name: fn_name.clone(),
             fn_stream,
             endpoint_def: None,
             test_stream,
+            bench_stream
         }
     }
 
@@ -80,10 +112,10 @@ impl EntityMacros {
                Ok(instance.#pk_name.clone())
            }
         };
-        let test_fn_name = format_ident!("test_{}", fn_name);
+
         let test_stream = Some(quote! {
-            #[tokio::test]
-            async fn #test_fn_name() {
+            #[test]
+            fn #fn_name() {
                 let db = test_db();
                 let entity_count: usize = 3;
                 for test_entity in #entity_type::sample_many(entity_count) {
@@ -92,6 +124,19 @@ impl EntityMacros {
                 }
             }
         });
+
+        let bench_fn_name = format_ident!("bench_{}", fn_name);
+        let bench_stream = Some(quote! {
+            #[bench]
+            fn #bench_fn_name(b: &mut Bencher) {
+                let db = test_db();
+                let test_entity = #entity_type::sample();
+                b.iter(|| {
+                    #entity_name::#fn_name(&db, &test_entity).expect("Failed to store and commit instance");
+                });
+            }
+        });
+
         FunctionDef {
             entity_name: entity_name.clone(),
             fn_name: fn_name.clone(),
@@ -115,6 +160,7 @@ impl EntityMacros {
                 endpoint: format!("/{}", entity_name.to_string().to_lowercase()),
             }),
             test_stream,
+            bench_stream
         }
     }
 }

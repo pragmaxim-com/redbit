@@ -32,6 +32,7 @@ pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type) -> FunctionD
             utoipa_responses: quote! { responses((status = OK, body = #pk_type)) },
             endpoint: format!("/{}/{}/{{{}}}/{}", entity_name.to_string().to_lowercase(), pk_name, pk_name, fn_name),
         }),
-        test_stream: None
+        test_stream: None,
+        bench_stream: None
     }
 }

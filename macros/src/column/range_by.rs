@@ -31,10 +31,10 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
             Ok(results)
         }
     };
-    let test_fn_name = format_ident!("test_{}", fn_name);
+
     let test_stream = Some(quote! {
-        #[tokio::test]
-        async fn #test_fn_name() {
+        #[test]
+        fn #fn_name() {
             let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let from_value = #column_type::default();
@@ -44,11 +44,27 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
             assert_eq!(expected_entities, entities, "Expected entities to be returned for the given range by index");
         }
     });
+
+    let bench_fn_name = format_ident!("bench_{}", fn_name);
+    let bench_stream = Some(quote! {
+        #[bench]
+        fn #bench_fn_name(b: &mut Bencher) {
+            let db = DB.clone();
+            let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let from_value = #column_type::default();
+            let until_value = #column_type::default().next();
+            b.iter(|| {
+                #entity_name::#fn_name(&read_tx, &from_value, &until_value).expect("Failed to get entities by range");
+            });
+        }
+    });
+
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
         fn_stream,
         endpoint_def: None,
-        test_stream
+        test_stream,
+        bench_stream
     }
 }

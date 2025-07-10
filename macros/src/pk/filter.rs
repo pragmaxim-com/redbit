@@ -15,18 +15,34 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, table: &I
             }
         }
     };
-    let test_fn_name = format_ident!("test_{}", fn_name);
+
     let test_stream = Some(quote! {
-        #[tokio::test]
-        async fn #test_fn_name() {
+        #[test]
+        fn #fn_name() {
             let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let query = #stream_query_type::sample();
-            let entity = #entity_name::#fn_name(&read_tx, &#pk_type::default(), &query).expect("Failed to get entity by PK").expect("Expected entity to exist");
+            let pk_default = #pk_type::default();
+            let pk_default_next = #pk_type::default().next();
+            let entity = #entity_name::#fn_name(&read_tx, &pk_default, &query).expect("Failed to get entity by PK").expect("Expected entity to exist");
             assert_eq!(entity, #entity_type::sample(), "Entity PK does not match the requested PK");
 
-            let entity_opt = #entity_name::#fn_name(&read_tx, &#pk_type::default().next(), &query).expect("Failed to get entity by PK");
+            let entity_opt = #entity_name::#fn_name(&read_tx, &pk_default_next, &query).expect("Failed to get entity by PK");
             assert_eq!(entity_opt, None, "Filter is set for default value");
+        }
+    });
+
+    let bench_fn_name = format_ident!("bench_{}", fn_name);
+    let bench_stream = Some(quote! {
+        #[bench]
+        fn #bench_fn_name(b: &mut Bencher) {
+            let db = DB.clone();
+            let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let query = #stream_query_type::sample();
+            let pk_default = #pk_type::default();
+            b.iter(|| {
+                #entity_name::#fn_name(&read_tx, &pk_default, &query).expect("Failed to get entity by PK").expect("Expected entity to exist");
+            });
         }
     });
 
@@ -36,5 +52,6 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, table: &I
         fn_stream,
         endpoint_def: None,
         test_stream,
+        bench_stream
     }
 }

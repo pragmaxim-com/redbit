@@ -37,10 +37,10 @@ pub fn get_by_dict_def(
             Ok(results)
         }
     };
-    let test_fn_name = format_ident!("test_{}", fn_name);
+    
     let test_stream = Some(quote! {
-        #[tokio::test]
-        async fn #test_fn_name() {
+        #[test]
+        fn #fn_name() {
             let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
@@ -49,13 +49,27 @@ pub fn get_by_dict_def(
             assert_eq!(expected_entities, entities, "Expected entities to be returned for the given dictionary index");
         }
     });
+    
+    let bench_fn_name = format_ident!("bench_{}", fn_name);
+    let bench_stream = Some(quote! {
+        #[bench]
+        fn #bench_fn_name(b: &mut Bencher) {
+            let db = DB.clone();
+            let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let val = #column_type::default();
+            b.iter(|| {
+                #entity_name::#fn_name(&read_tx, &val).expect("Failed to get entities by dictionary index");
+            });
+        }
+    });
 
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
         fn_stream,
         endpoint_def: None,
-        test_stream
+        test_stream,
+        bench_stream
     }
 }
 
@@ -80,10 +94,10 @@ pub fn get_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &I
             Ok(results)
         }
     };
-    let test_fn_name = format_ident!("test_{}", fn_name);
+
     let test_stream = Some(quote! {
-        #[tokio::test]
-        async fn #test_fn_name() {
+        #[test]
+        fn #fn_name() {
             let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
@@ -93,11 +107,25 @@ pub fn get_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &I
         }
     });
 
+    let bench_fn_name = format_ident!("bench_{}", fn_name);
+    let bench_stream = Some(quote! {
+        #[bench]
+        fn #bench_fn_name(b: &mut Bencher) {
+            let db = DB.clone();
+            let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let val = #column_type::default();
+            b.iter(|| {
+                #entity_name::#fn_name(&read_tx, &val).expect("Failed to get entities by index");
+            });
+        }
+    });
+
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
         fn_stream,
         endpoint_def: None,
-        test_stream
+        test_stream,
+        bench_stream
     }
 }

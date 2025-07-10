@@ -1,8 +1,8 @@
 use proc_macro2::{Ident, Literal, TokenStream};
 use quote::{format_ident, quote};
 
-pub fn test_suite(entity_name: &Ident, unit_tests: Vec<TokenStream>, http_tests: Vec<TokenStream>) -> TokenStream {
-    let entity_tests = format_ident!("{}_tests", entity_name.to_string().to_lowercase());
+pub fn test_suite(entity_name: &Ident, unit_tests: Vec<TokenStream>, http_tests: Vec<TokenStream>, benches: Vec<TokenStream>) -> TokenStream {
+    let entity_tests = format_ident!("{}", entity_name.to_string().to_lowercase());
     let entity_literal = Literal::string(&entity_name.to_string());
 
     quote!{
@@ -11,6 +11,8 @@ pub fn test_suite(entity_name: &Ident, unit_tests: Vec<TokenStream>, http_tests:
                 use super::*;
                 use once_cell::sync::Lazy;
                 use tokio::sync::OnceCell;
+                use test::Bencher;
+                use tokio::runtime::Runtime;
 
                 fn test_db() -> Database {
                     Database::create(test_db_path(#entity_literal)).expect("Failed to create database")
@@ -54,6 +56,9 @@ pub fn test_suite(entity_name: &Ident, unit_tests: Vec<TokenStream>, http_tests:
                 #(#unit_tests)*
 
                 #(#http_tests)*
+
+                #(#benches)*
+
             }
     }
 }

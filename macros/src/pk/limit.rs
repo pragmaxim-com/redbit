@@ -47,6 +47,7 @@ pub fn limit_fn_def(entity_name: &Ident, entity_type: &Type) -> FunctionDef {
             utoipa_responses: quote! { responses((status = OK, body = Vec<#entity_type>)) },
             endpoint: format!("/{}", entity_name.to_string().to_lowercase()),
         }),
-        test_stream: None
+        test_stream: None,
+        bench_stream: None
     }
 }

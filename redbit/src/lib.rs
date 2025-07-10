@@ -10,12 +10,11 @@ pub use axum::extract;
 pub use axum::response::IntoResponse;
 pub use axum_streams;
 pub use axum_test;
+pub use chrono;
 pub use futures;
-pub use once_cell;
 pub use futures::stream::{self, StreamExt};
 pub use futures_util::stream::TryStreamExt;
 pub use http;
-pub use std::pin::Pin;
 pub use inventory;
 pub use macros::column;
 pub use macros::entity;
@@ -24,6 +23,7 @@ pub use macros::root_key;
 pub use macros::Entity;
 pub use macros::PointerKey;
 pub use macros::RootKey;
+pub use once_cell;
 pub use rand;
 pub use redb;
 pub use redb::Database;
@@ -34,14 +34,16 @@ pub use redb::ReadableTable;
 pub use redb::TableDefinition;
 pub use redb::WriteTransaction;
 pub use serde;
-pub use serde_with;
 pub use serde::Deserialize;
 pub use serde::Deserializer;
 pub use serde::Serialize;
 pub use serde::Serializer;
 pub use serde_json;
 pub use serde_urlencoded;
+pub use serde_with;
+pub use std::pin::Pin;
 pub use std::sync::Arc;
+pub use urlencoding;
 pub use utoipa;
 pub use utoipa::openapi;
 pub use utoipa::IntoParams;
@@ -50,8 +52,6 @@ pub use utoipa::ToSchema;
 pub use utoipa_axum;
 pub use utoipa_axum::router::OpenApiRouter;
 pub use utoipa_swagger_ui;
-pub use urlencoding;
-pub use chrono;
 
 use crate::axum::extract::rejection::JsonRejection;
 use crate::axum::extract::FromRequest;
@@ -65,10 +65,7 @@ use bincode::Options;
 use serde::de::DeserializeOwned;
 use std::any::type_name;
 use std::cmp::Ordering;
-use std::env;
 use std::fmt::Debug;
-use std::fs::OpenOptions;
-use std::io::Write;
 use std::net::SocketAddr;
 use std::ops::Add;
 use std::path::PathBuf;
@@ -353,9 +350,8 @@ pub async fn build_test_server(db: Arc<Database>) -> axum_test::TestServer {
 
 pub async fn build_router(state: RequestState, extras: Option<OpenApiRouter<RequestState>>) -> Router<()> {
     let mut router: OpenApiRouter<RequestState> = OpenApiRouter::with_openapi(ApiDoc::openapi());
-    for info in inventory::iter::<StructInfo> {
-        let file_name = format!("{}{}", info.name, info.suffix);
-        write_to_local_file(vec![info.formatted_token_stream.to_string()], info.dir, &file_name);
+    for _info in inventory::iter::<StructInfo> {
+        // let file_name = format!("{}{}", info.name, info.suffix);
     }
     for info in inventory::iter::<RoutesInfo> {
         router = router.merge((info.routes_fn)());
@@ -374,26 +370,4 @@ pub async fn serve(state: RequestState, socket_addr: SocketAddr, extras: Option<
     println!("Starting server on {}", socket_addr);
     let tcp = TcpListener::bind(socket_addr).await.unwrap();
     crate::axum::serve(tcp, router).await.unwrap();
-}
-
-pub fn write_to_local_file(lines: Vec<String>, dir_name: &str, file_name: &str) {
-    let dir_path = env::current_dir().expect("current dir inaccessible").join("target").join("macros").join(dir_name);
-    if let Err(e) = std::fs::create_dir_all(&dir_path) {
-        eprintln!("Failed to create directory {:?}: {}", dir_path, e);
-        return;
-    }
-    let full_path = dir_path.join(file_name);
-
-    #[cfg(not(test))]
-    {
-        if let Err(e) = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(&full_path)
-            .and_then(|mut file| file.write_all(lines.join("\n").as_bytes()))
-        {
-            eprintln!("Failed to write to {:?}: {}", full_path, e);
-        }
-    }
 }

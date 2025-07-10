@@ -1,3 +1,6 @@
+#![feature(test)]
+extern crate test;
+
 pub mod data;
 pub mod demo;
 pub mod routes;
