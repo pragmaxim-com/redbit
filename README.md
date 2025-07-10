@@ -271,11 +271,11 @@ Performance wise, check 🔥[flamegraph](https://rawcdn.githack.com/pragmaxim-co
 The demo example persists data into 30 tables to allow for rich querying.
 
 ### ⏱️ Benchmark Summary
-The slowest `block::_store_many` operation in this context persists 3 blocks of 3 transactions of 3 utxos of 3 assets, ie.
+The slowest `block::_store_many` operation in this context persists 3 blocks of 3 transactions of 1 input and 3 utxos of 3 assets, ie.
 the operations writes :
 - 3 blocks
 - 3 * 3 = 9 transactions
-- 3 * 3 * 3 = 27 inputs
+- 3 * 3 = 9 inputs
 - 3 * 3 * 3 = 27 utxos
 - 3 * 3 * 3 * 3 = 81 assets
 

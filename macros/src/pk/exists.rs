@@ -56,8 +56,13 @@ pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, table: &Iden
             method: HttpMethod::HEAD,
             utoipa_responses: quote! { responses((status = OK)) },
             handler_impl_stream: quote! {
-               Result<AppJson<bool>, AppError> {
-                    state.db.begin_read().map_err(AppError::from).and_then(|tx| #entity_name::#fn_name(&tx, &#pk_name)).map(AppJson)
+                Result<axum::http::StatusCode, AppError> {
+                    let tx = state.db.begin_read().map_err(AppError::from)?;
+                    match #entity_name::#fn_name(&tx, &#pk_name) {
+                        Ok(true) => Ok(axum::http::StatusCode::OK),
+                        Ok(false) => Ok(axum::http::StatusCode::NOT_FOUND),
+                        Err(e) => Err(AppError::from(e)),
+                    }
                 }
             },
             endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), pk_name, pk_name),

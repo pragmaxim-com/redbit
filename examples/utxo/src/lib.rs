@@ -67,6 +67,7 @@ pub struct Transaction {
     #[column(index)]
     pub hash: Hash,
     pub utxos: Vec<Utxo>,
+    pub input: Option<InputRef>, // intentionally Option to demonstrate it is possible
     #[column(transient)]
     pub transient_inputs: Vec<TempInputRef>,
 }
@@ -82,15 +83,14 @@ pub struct Utxo {
     #[column(dictionary)]
     pub address: Address,
     pub assets: Vec<Asset>,
-    pub tree: Option<Tree>,
 }
 
 #[entity]
-pub struct Tree {
+pub struct InputRef {
     #[fk(one2opt)]
-    pub id: UtxoPointer,
+    pub id: TxPointer,
     #[column(index)]
-    pub hash: Hash,
+    pub hash: Hash, // just dummy values
 }
 
 #[entity]

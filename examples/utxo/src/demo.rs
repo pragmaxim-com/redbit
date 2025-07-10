@@ -54,6 +54,7 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
     Transaction::get(&read_tx, &first_transaction.id)?;
     Transaction::range(&read_tx, &first_transaction.id, &last_transaction.id, None)?;
     Transaction::get_utxos(&read_tx, &first_transaction.id)?;
+    Transaction::get_input(&read_tx, &first_transaction.id)?;
     Transaction::parent_key(&read_tx, &first_transaction.id)?;
     Transaction::stream_ids_by_hash(&read_tx, &first_transaction.hash)?.try_collect::<Vec<TxPointer>>().await?;
     Transaction::stream_by_hash(db.begin_read()?, first_transaction.hash, None)?.try_collect::<Vec<Transaction>>().await?;
@@ -71,7 +72,6 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
     Utxo::range(&read_tx, &first_utxo.id, &last_utxo.id, None)?;
     Utxo::get_assets(&read_tx, &first_utxo.id)?;
     Utxo::parent_key(&read_tx, &first_utxo.id)?;
-    Utxo::get_tree(&read_tx, &first_utxo.id)?;
     Utxo::stream_ids_by_address(&read_tx, &first_utxo.address)?.try_collect::<Vec<UtxoPointer>>().await?;
     Utxo::stream_range(db.begin_read()?, first_utxo.id, last_utxo.id, None)?.try_collect::<Vec<Utxo>>().await?;
     Utxo::stream_by_address(db.begin_read()?, first_utxo.address, None)?.try_collect::<Vec<Utxo>>().await?;

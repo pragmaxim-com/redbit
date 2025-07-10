@@ -21,7 +21,7 @@ pub fn limit_fn_def(entity_name: &Ident, entity_type: &Type) -> FunctionDef {
                         #entity_name::last(&tx).map(|r| r.into_iter().collect())
                     },
                     LimitQuery{..} => {
-                        panic!("LimitQuery must have at least one of take, first, or last defined");
+                        Err(AppError::BadRequest("LimitQuery must have at least one of take, first, or last defined".to_string()))
                     }
                 }
             }
