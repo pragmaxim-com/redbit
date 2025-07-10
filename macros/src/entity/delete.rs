@@ -78,6 +78,8 @@ impl EntityMacros {
             }
         });
 
+        let handler_fn_name = format!("{}_{}", entity_name.to_string().to_lowercase(), fn_name);
+
         FunctionDef {
             entity_name: entity_name.clone(),
             fn_name: fn_name.clone(),
@@ -90,6 +92,7 @@ impl EntityMacros {
                     sample: quote! { #pk_type::default().encode() },
                 }])],
                 method: HttpMethod::DELETE,
+                handler_name: format_ident!("{}", handler_fn_name),
                 utoipa_responses: quote! { responses((status = OK)) },
                 handler_impl_stream: quote! {
                     Result<AppJson<()>, AppError> {

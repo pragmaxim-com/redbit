@@ -205,3 +205,24 @@ pub fn submit_struct_to_stream(stream: proc_macro2::TokenStream, dir: &str, stru
         #register
     }.into()
 }
+
+pub fn to_camel_case(input: &str) -> String {
+    let mut result = String::with_capacity(input.len());
+    for (i, word) in input.split('_').enumerate() {
+        if word.is_empty() {
+            continue; // Skip consecutive underscores
+        }
+        if i == 0 {
+            // First word is always lowercase
+            result.push_str(&word.to_lowercase());
+        } else {
+            // Capitalize the first character of each subsequent word
+            let mut chars = word.chars();
+            if let Some(first) = chars.next() {
+                result.push_str(&first.to_uppercase().to_string());
+                result.push_str(&chars.as_str().to_lowercase());
+            }
+        }
+    }
+    result
+}

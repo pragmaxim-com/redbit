@@ -33,7 +33,8 @@ through auto-generated REST API. It maximizes R/W speed while minimizing data si
 ✅ column encodings of binary columns : `hex`, `base64` \
 ✅ all types have binary (db) and human-readable (http) serde support \
 ✅ Macro derived http rest API at http://127.0.0.1:8000/swagger-ui/ with examples \
-✅ Macro derived unit tests and integration tests on axum test server
+✅ TypeScript client generated from OpenAPI spec with tests suite requesting all endpoints \
+✅ Macro derived unit tests and integration tests on axum test server and benchmarks
 
 ### Limitations
 
@@ -266,6 +267,7 @@ And R/W entire instances efficiently using indexes and dictionaries `examples/ut
 <!-- END_MAIN -->
 
 The same api is accessible through http endpoints at http://127.0.0.1:8000/swagger-ui/.
+Typescript client is generated from the OpenAPI spec, follow instructions in the [examples](examples/utxo/README.md).
 
 Performance wise, check 🔥[flamegraph](https://rawcdn.githack.com/pragmaxim-com/redbit/refs/heads/master/flamegraph.svg).
 The demo example persists data into 30 tables to allow for rich querying.

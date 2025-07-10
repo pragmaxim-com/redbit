@@ -99,7 +99,7 @@ pub fn to_http_endpoints(defs: &Vec<FunctionDef>) -> (Vec<TokenStream>, TokenStr
 }
 
 pub fn to_http_endpoint(fn_def: &FunctionDef, endpoint_def: &EndpointDef) -> HttpEndpointMacro {
-    let handler_fn_name = format_ident!("{}_{}", fn_def.entity_name.to_string().to_lowercase(), fn_def.fn_name);
+    let handler_fn_name = endpoint_def.handler_name.clone();
     let param_binding = endpoint_def.axum_bindings();
     let endpoint_name = fn_def.entity_name.to_string();
     let endpoint_path = endpoint_def.endpoint.clone();

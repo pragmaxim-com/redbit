@@ -70,6 +70,7 @@ pub fn by_dict_def(
             });
         }
     });
+    let handler_fn_name = format!("{}_{}", entity_name.to_string().to_lowercase(), fn_name);
 
     FunctionDef {
         entity_name: entity_name.clone(),
@@ -83,6 +84,7 @@ pub fn by_dict_def(
                 sample: quote! { #column_type::default().encode() },
             }])],
             method: HttpMethod::GET,
+            handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                impl IntoResponse {
                    match state.db.begin_read()
@@ -154,6 +156,7 @@ pub fn by_index_def(
             });
         }
     });
+    let handler_fn_name = format!("{}_{}", entity_name.to_string().to_lowercase(), fn_name);
 
     FunctionDef {
         entity_name: entity_name.clone(),
@@ -167,6 +170,7 @@ pub fn by_index_def(
                 sample: quote! { #column_type::default().encode() },
             }])],
             method: HttpMethod::GET,
+            handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                impl IntoResponse {
                    match state.db.begin_read()

@@ -87,6 +87,8 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
         }
     });
 
+    let handler_fn_name = format!("{}_{}", entity_name.to_string().to_lowercase(), fn_name);
+
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
@@ -104,6 +106,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
                 samples: quote! { vec![Some(#stream_query_type::sample()), None ] },
             })],
             method: HttpMethod::POST,
+            handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                impl IntoResponse {
                    match state.db.begin_read()

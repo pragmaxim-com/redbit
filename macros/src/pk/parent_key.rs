@@ -12,6 +12,8 @@ pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type) -> FunctionD
             Ok(pk.parent().clone())
         }
     };
+    let handler_fn_name = format!("{}_{}", entity_name.to_string().to_lowercase(), fn_name);
+
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
@@ -24,6 +26,7 @@ pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type) -> FunctionD
                 sample: quote! { #pk_type::default().encode() },
             }])],
             method: HttpMethod::GET,
+            handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                Result<AppJson<<#pk_type as ChildPointer>::Parent>, AppError> {
                     state.db.begin_read().map_err(AppError::from).and_then(|tx| #entity_name::#fn_name(&tx, &#pk_name)).map(AppJson)

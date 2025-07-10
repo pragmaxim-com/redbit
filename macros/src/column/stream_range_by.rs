@@ -97,6 +97,7 @@ pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, column
         }
     });
 
+    let handler_fn_name = format!("{}_{}", entity_name.to_string().to_lowercase(), fn_name);
 
     FunctionDef {
         entity_name: entity_name.clone(),
@@ -115,6 +116,7 @@ pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, column
                 samples: quote! { vec![Some(#stream_query_type::sample()), None] },
             })],
             method: HttpMethod::POST,
+            handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                impl IntoResponse {
                    match state.db.begin_read()

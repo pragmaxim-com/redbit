@@ -137,6 +137,8 @@ impl EntityMacros {
             }
         });
 
+        let handler_fn_name = format!("{}_{}", entity_name.to_string().to_lowercase(), fn_name);
+
         FunctionDef {
             entity_name: entity_name.clone(),
             fn_name: fn_name.clone(),
@@ -149,6 +151,7 @@ impl EntityMacros {
                     samples: quote! { vec![#entity_type::sample()] },
                 })],
                 method: HttpMethod::POST,
+                handler_name: format_ident!("{}", handler_fn_name),
                 handler_impl_stream: quote! {
                     Result<AppJson<#pk_type>, AppError> {
                         let db = state.db;

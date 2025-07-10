@@ -43,6 +43,8 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
         }
     });
 
+    let handler_fn_name = format!("{}_{}", entity_name.to_string().to_lowercase(), fn_name);
+
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
@@ -55,6 +57,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
                 sample: quote! { #pk_type::default().encode() },
             }])],
             method: HttpMethod::GET,
+            handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                Result<AppJson<Option<#entity_type>>, AppError> {
                     state.db.begin_read().map_err(AppError::from).and_then(|tx| #entity_name::#fn_name(&tx, &#pk_name)).map(AppJson)

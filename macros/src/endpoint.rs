@@ -7,6 +7,7 @@ pub struct EndpointDef {
     pub params: Vec<HttpParams>,
     pub endpoint: String,
     pub method: HttpMethod,
+    pub handler_name: Ident,
     pub handler_impl_stream: TokenStream,
     pub utoipa_responses: TokenStream,
 }

@@ -32,6 +32,8 @@ pub fn one2one_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
         }
     });
 
+    let handler_fn_name = format!("{}_{}", entity_name.to_string().to_lowercase(), fn_name);
+
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
@@ -50,6 +52,7 @@ pub fn one2one_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
                 sample: quote! { #pk_type::default().encode() },
             }])],
             method: HttpMethod::GET,
+            handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                Result<AppJson<#child_type>, AppError> {
                     state.db.begin_read().map_err(AppError::from).and_then(|tx| #entity_name::#fn_name(&tx, &#pk_name)).map(AppJson)
@@ -90,6 +93,8 @@ pub fn one2opt_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
         }
     });
 
+    let handler_fn_name = format!("{}_{}", entity_name.to_string().to_lowercase(), fn_name);
+
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
@@ -109,6 +114,7 @@ pub fn one2opt_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
                 sample: quote! { #pk_type::default().encode() },
             }])],
             method: HttpMethod::GET,
+            handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                Result<AppJson<Option<#child_type>>, AppError> {
                     state.db.begin_read().map_err(AppError::from).and_then(|tx| #entity_name::#fn_name(&tx, &#pk_name)).map(AppJson)
@@ -149,6 +155,8 @@ pub fn one2many_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, 
         }
     });
 
+    let handler_fn_name = format!("{}_{}", entity_name.to_string().to_lowercase(), fn_name);
+
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
@@ -166,6 +174,7 @@ pub fn one2many_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, 
                 sample: quote! { #pk_type::default().encode() },
             }])],
             method: HttpMethod::GET,
+            handler_name: format_ident!("{}", handler_fn_name),
             utoipa_responses: quote! { responses((status = OK, body = Vec<#child_type>)) },
             handler_impl_stream: quote! {
                Result<AppJson<Vec<#child_type>>, AppError> {

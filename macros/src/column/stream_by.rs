@@ -97,6 +97,8 @@ pub fn by_dict_def(
         }
     });
 
+    let handler_fn_name = format!("{}_{}", entity_name.to_string().to_lowercase(), fn_name);
+
     FunctionDef {
         entity_name: entity_name.clone(),
         fn_name: fn_name.clone(),
@@ -114,6 +116,7 @@ pub fn by_dict_def(
                 samples: quote! { vec![Some(#stream_query_type::sample()), None ] },
             })],
             method: HttpMethod::POST,
+            handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                impl IntoResponse {
                    match state.db.begin_read()
@@ -205,6 +208,7 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
             });
         }
     });
+    let handler_fn_name = format!("{}_{}", entity_name.to_string().to_lowercase(), fn_name);
 
     FunctionDef {
         entity_name: entity_name.clone(),
@@ -226,6 +230,7 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
                 })
             ],
             method: HttpMethod::POST,
+            handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                impl IntoResponse {
                    match state.db.begin_read()
