@@ -13,5 +13,5 @@ That will start the server http://127.0.0.1:8000/swagger-ui/ which is serving th
 
 Copy all the remaining client-side files and test that the typescript client generated from the OpenAPI spec works:
 ```bash
-./bin/run_client.sh
+./bin/test.sh
 ```

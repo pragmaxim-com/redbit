@@ -1,10 +1,10 @@
 use crate::endpoint::EndpointDef;
+use crate::macro_utils;
 use crate::rest::HttpParams::FromPath;
 use crate::rest::{FunctionDef, HttpMethod, PathExpr};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
-use crate::macro_utils;
 
 pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type: &Type, table: &Ident) -> FunctionDef {
     let fn_name = format_ident!("get");
@@ -61,21 +61,21 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
             handler_name: format_ident!("{}", handler_fn_name),
             client_call: Some(macro_utils::client_code(&handler_fn_name, pk_type, pk_name)),
             handler_impl_stream: quote! {
-               impl IntoResponse {
-                    match state.db.begin_read()
-                    .map_err(AppError::from)
-                    .and_then(|tx| #entity_name::#fn_name(&tx, &#pk_name) ) {
-                        Ok(Some(entity)) => { 
-                            (StatusCode::OK, AppJson(entity)).into_response() 
-                        },
-                        Ok(None) => { 
-                            let message = format!("{} not found", stringify!(#entity_name));
-                            (StatusCode::NOT_FOUND, AppJson(ErrorResponse { message })).into_response() 
-                        },
-                        Err(err) => err.into_response(),
-                    }
-                }
-             },
+              impl IntoResponse {
+                   match state.db.begin_read()
+                   .map_err(AppError::from)
+                   .and_then(|tx| #entity_name::#fn_name(&tx, &#pk_name) ) {
+                       Ok(Some(entity)) => {
+                           (StatusCode::OK, AppJson(entity)).into_response()
+                       },
+                       Ok(None) => {
+                           let message = format!("{} not found", stringify!(#entity_name));
+                           (StatusCode::NOT_FOUND, AppJson(ErrorResponse { message })).into_response()
+                       },
+                       Err(err) => err.into_response(),
+                   }
+               }
+            },
             utoipa_responses: quote! { responses((status = OK, body = #entity_type), (status = NOT_FOUND)) },
             endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), pk_name, pk_name),
         }),

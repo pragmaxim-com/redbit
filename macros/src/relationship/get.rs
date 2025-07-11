@@ -41,7 +41,7 @@ pub fn one2one_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
         fn_stream: quote! {
             pub fn #fn_name(tx: &ReadTransaction, pk: &#pk_type) -> Result<#child_type, AppError> {
                 #child_type::get(&tx, &pk).and_then(|opt| {
-                    opt.ok_or_else(|| AppError::Internal(format!("No child found for pk: {:?}", pk)))
+                    opt.ok_or_else(|| AppError::NotFound(format!("No {} found for {:?}", stringify!(#child_name), pk)))
                 })
             }
         },

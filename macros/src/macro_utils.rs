@@ -224,8 +224,8 @@ pub fn client_code(handler_fn_name: &str, pk_type: &Type, pk_name: &Ident) -> St
                 {pk_name}: openapi.components.schemas["{schema_name}"]["examples"][0]
             }},
             throwOnError: false
-        }}).then(function({{data, request, response}}) {{
-            console.log("{function_name} succeeded with status code : ", response.status);
+        }}).then(function({{data, request, response, error}}) {{
+            console.log("{function_name} succeeded with status code : ", response.status, error?.message, data);
         }}).catch(function({{message}}) {{
             console.error("{function_name} failed on error %s :", message);
         }});

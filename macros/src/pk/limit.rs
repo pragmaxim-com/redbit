@@ -37,8 +37,8 @@ pub fn limit_fn_def(entity_name: &Ident, entity_type: &Type) -> FunctionDef {
                 take: 1
             }},
             throwOnError: false
-        }}).then(function({{data, request, response}}) {{
-            console.log("{function_name} succeeded with response: ", response.status);
+        }}).then(function({{data, request, response, error}}) {{
+            console.log("{function_name} succeeded with response: ", response.status, error?.message, data);
         }}).catch(function({{message}}) {{
             console.error("{function_name} failed with error :", message);
         }});
