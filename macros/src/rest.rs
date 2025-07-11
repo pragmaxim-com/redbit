@@ -1,4 +1,4 @@
-use proc_macro2::{Ident, TokenStream};
+use proc_macro2::{Ident, Literal, TokenStream};
 use quote::{format_ident, quote};
 use std::fmt::Display;
 use syn::Type;
@@ -10,6 +10,7 @@ pub struct HttpEndpointMacro {
     pub handler_fn_name: Ident,
     pub handler: TokenStream,
     pub tests: Vec<TokenStream>,
+    pub client_call: Option<String>,
 }
 
 impl Display for HttpEndpointMacro {
@@ -77,7 +78,7 @@ impl Display for HttpMethod {
     }
 }
 
-pub fn to_http_endpoints(defs: &Vec<FunctionDef>) -> (Vec<TokenStream>, TokenStream, Vec<TokenStream>) {
+pub fn to_http_endpoints(defs: &Vec<FunctionDef>) -> (Vec<TokenStream>, TokenStream, Vec<TokenStream>, TokenStream) {
     let endpoints: Vec<HttpEndpointMacro> =
         defs.iter().filter_map(|fn_def| fn_def.endpoint_def.clone().map(|e| to_http_endpoint(fn_def, &e))).collect();
     let route_chains: Vec<TokenStream> = endpoints
@@ -88,14 +89,21 @@ pub fn to_http_endpoints(defs: &Vec<FunctionDef>) -> (Vec<TokenStream>, TokenStr
         })
         .collect();
     let endpoint_handlers: Vec<TokenStream> = endpoints.iter().map(|e| e.handler.clone()).collect();
-    let tests: Vec<TokenStream> = endpoints.into_iter().flat_map(|e| e.tests).collect();
+    let tests: Vec<TokenStream> = endpoints.iter().flat_map(|e| e.tests.clone()).collect();
+    let client_calls: Vec<String> = endpoints.into_iter().filter_map(|e| e.client_call).collect();
+    let client_calls_lit = Literal::string(&client_calls.join("\n"));
     let routes = quote! {
         pub fn routes() -> OpenApiRouter<RequestState> {
             OpenApiRouter::new()
                 #(#route_chains)*
         }
     };
-    (endpoint_handlers, routes, tests)
+    let client_calls = quote! {
+        pub fn client_calls() -> String {
+            #client_calls_lit.to_string()
+        }
+    };
+    (endpoint_handlers, routes, tests, client_calls)
 }
 
 pub fn to_http_endpoint(fn_def: &FunctionDef, endpoint_def: &EndpointDef) -> HttpEndpointMacro {
@@ -116,5 +124,10 @@ pub fn to_http_endpoint(fn_def: &FunctionDef, endpoint_def: &EndpointDef) -> Htt
         ) -> #handler_impl_stream
     };
 
-    HttpEndpointMacro { endpoint_def: endpoint_def.clone(), handler_fn_name, handler, tests: endpoint_def.generate_tests(&fn_def.fn_name) }
+    HttpEndpointMacro { 
+        endpoint_def: endpoint_def.clone(),
+        handler_fn_name, handler,
+        client_call: endpoint_def.client_call.clone(),
+        tests: endpoint_def.generate_tests(&fn_def.fn_name) 
+    }
 }

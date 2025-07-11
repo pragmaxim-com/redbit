@@ -22,6 +22,7 @@ pub struct EntityMacros {
     pub endpoint_handlers: Vec<TokenStream>,
     pub routes: TokenStream,
     pub test_suite: TokenStream,
+    pub client_calls: TokenStream
 }
 
 impl EntityMacros {
@@ -75,7 +76,7 @@ impl EntityMacros {
         let unit_tests = function_defs.iter().filter_map(|f| f.test_stream.clone()).collect::<Vec<_>>();
         let benches = function_defs.iter().filter_map(|f| f.bench_stream.clone()).collect::<Vec<_>>();
 
-        let (endpoint_handlers, routes, route_tests) = to_http_endpoints(&function_defs);
+        let (endpoint_handlers, routes, route_tests, client_calls) = to_http_endpoints(&function_defs);
         let test_suite = tests::test_suite(&entity_name, unit_tests, route_tests, benches);
 
         Ok(EntityMacros {
@@ -88,7 +89,8 @@ impl EntityMacros {
             api_functions,
             endpoint_handlers,
             routes,
-            test_suite
+            test_suite,
+            client_calls
         })
     }
 }

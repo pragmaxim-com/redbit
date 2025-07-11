@@ -117,6 +117,7 @@ pub fn by_dict_def(
             })],
             method: HttpMethod::POST,
             handler_name: format_ident!("{}", handler_fn_name),
+            client_call: None,
             handler_impl_stream: quote! {
                impl IntoResponse {
                    match state.db.begin_read()
@@ -231,6 +232,7 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
             ],
             method: HttpMethod::POST,
             handler_name: format_ident!("{}", handler_fn_name),
+            client_call: None,
             handler_impl_stream: quote! {
                impl IntoResponse {
                    match state.db.begin_read()

@@ -15,6 +15,7 @@ impl EntityMacros {
             entity_name,
             table_definitions,
             test_suite,
+            client_calls,
         } = self;
 
         quote! {
@@ -36,6 +37,8 @@ impl EntityMacros {
                 #(#compose_functions)*
                 // axum routes
                 #routes
+                // client calls are executed from node.js runtime
+                #client_calls
             }
             // unit tests and rest api tests
             #test_suite

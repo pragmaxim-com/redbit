@@ -2,7 +2,7 @@ use proc_macro::TokenStream;
 use std::env;
 use std::fs::OpenOptions;
 use proc_macro2::Ident;
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::punctuated::Punctuated;
 use syn::token::Comma;
 use syn::{Attribute, ItemStruct, Path, Type};
@@ -187,22 +187,10 @@ pub fn submit_struct_to_stream(stream: proc_macro2::TokenStream, dir: &str, stru
             Err(_) => stream.to_string(),
         };
 
-    let register = quote! {
-        inventory::submit! {
-            StructInfo {
-                name: stringify!(#struct_ident),
-                dir: #dir,
-                suffix: #suffix,
-                formatted_token_stream: #formatted_token_stream
-            }
-        }
-    };
-
     write_to_local_file(vec![formatted_token_stream], dir, &format!("{}{}", struct_ident, suffix));
 
     quote! {
         #stream
-        #register
     }.into()
 }
 
@@ -226,3 +214,23 @@ pub fn to_camel_case(input: &str) -> String {
     }
     result
 }
+
+pub fn client_code(handler_fn_name: &str, pk_type: &Type, pk_name: &Ident) -> String {
+    format!(
+        r#"
+        import {{{function_name}}} from './hey';
+        {function_name}({{
+            path: {{
+                {pk_name}: openapi.components.schemas["{schema_name}"]["examples"][0]
+            }},
+            throwOnError: false
+        }}).then(function({{data, request, response}}) {{
+            console.log("{function_name} succeeded with status code : ", response.status);
+        }}).catch(function({{message}}) {{
+            console.error("{function_name} failed on error %s :", message);
+        }});
+        "#,
+        function_name = format_ident!("{}", to_camel_case(&handler_fn_name)),
+        schema_name = quote!(#pk_type).to_string(),
+        pk_name = pk_name.to_string(),
+    )}

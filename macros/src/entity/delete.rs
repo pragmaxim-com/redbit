@@ -93,7 +93,8 @@ impl EntityMacros {
                 }])],
                 method: HttpMethod::DELETE,
                 handler_name: format_ident!("{}", handler_fn_name),
-                utoipa_responses: quote! { responses((status = OK)) },
+                client_call: None,
+                utoipa_responses: quote! { responses((status = OK), (status = NOT_FOUND)) },
                 handler_impl_stream: quote! {
                     Result<AppJson<()>, AppError> {
                         let db = state.db;

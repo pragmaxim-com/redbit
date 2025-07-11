@@ -1,0 +1,13 @@
+{
+  "type": "module",
+  "dependencies": {
+    "@hey-api/openapi-ts": "^0.78.3",
+    "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.12",
+    "@types/node-fetch": "^2.6.12",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.3"
+  }
+}

@@ -8,6 +8,7 @@ pub struct EndpointDef {
     pub endpoint: String,
     pub method: HttpMethod,
     pub handler_name: Ident,
+    pub client_call: Option<String>,
     pub handler_impl_stream: TokenStream,
     pub utoipa_responses: TokenStream,
 }

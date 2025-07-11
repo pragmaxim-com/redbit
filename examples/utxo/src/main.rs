@@ -9,7 +9,7 @@ async fn main() {
     let dir = env::temp_dir().join("redbit");
     let db = 
         Arc::new(
-            redb::Database::create(dir.join("my_db.redb"))
+            Database::create(dir.join("my_db.redb"))
                 .expect("Failed to create database")
         );
     demo::run(Arc::clone(&db)).await.expect("Db demo failed");

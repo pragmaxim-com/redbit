@@ -193,8 +193,10 @@ pub fn entity(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let stream = quote! {
         #s
         inventory::submit! {
-            RoutesInfo {
+            StructInfo {
+                name: stringify!(#struct_ident),
                 routes_fn: #struct_ident::routes,
+                client_calls: #struct_ident::client_calls,
             }
         }
     };

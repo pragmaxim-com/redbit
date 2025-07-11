@@ -152,6 +152,7 @@ impl EntityMacros {
                 })],
                 method: HttpMethod::POST,
                 handler_name: format_ident!("{}", handler_fn_name),
+                client_call: None,
                 handler_impl_stream: quote! {
                     Result<AppJson<#pk_type>, AppError> {
                         let db = state.db;

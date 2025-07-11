@@ -8,6 +8,9 @@
 pub use axum;
 pub use axum::extract;
 pub use axum::response::IntoResponse;
+pub use axum::response::Response;
+pub use axum::http::StatusCode;
+pub use axum::body::Body;
 pub use axum_streams;
 pub use axum_test;
 pub use chrono;
@@ -55,8 +58,6 @@ pub use utoipa_swagger_ui;
 
 use crate::axum::extract::rejection::JsonRejection;
 use crate::axum::extract::FromRequest;
-use crate::axum::http::StatusCode;
-use crate::axum::response::Response;
 use crate::axum::Router;
 use crate::redb::{Key, TypeName, Value};
 use crate::utoipa::OpenApi;
@@ -65,11 +66,14 @@ use bincode::Options;
 use serde::de::DeserializeOwned;
 use std::any::type_name;
 use std::cmp::Ordering;
+use std::env;
 use std::fmt::Debug;
+use std::fs::OpenOptions;
 use std::net::SocketAddr;
 use std::ops::Add;
 use std::path::PathBuf;
 use tokio::net::TcpListener;
+use std::io::Write;
 
 pub trait IndexedPointer: Clone {
     type Index: Copy + Ord + Add<Output = Self::Index> + Default;
@@ -153,6 +157,11 @@ impl std::error::Error for AppError {}
 
 impl From<redb::Error> for AppError {
     fn from(e: redb::Error) -> Self {
+        AppError::Internal(e.to_string())
+    }
+}
+impl From<http::Error> for AppError {
+    fn from(e: http::Error) -> Self {
         AppError::Internal(e.to_string())
     }
 }
@@ -248,13 +257,13 @@ where
         axum::Json(self.0).into_response()
     }
 }
+#[derive(Serialize)]
+pub struct ErrorResponse {
+    pub message: String,
+}
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
-        #[derive(Serialize)]
-        struct ErrorResponse {
-            message: String,
-        }
 
         let (status, message) = match self {
             AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg),
@@ -278,18 +287,12 @@ impl RequestState {
     }
 }
 
-pub struct RoutesInfo {
-    pub routes_fn: fn() -> OpenApiRouter<RequestState>,
-}
-
 pub struct StructInfo {
     pub name: &'static str,
-    pub dir: &'static str,
-    pub suffix: &'static str,
-    pub formatted_token_stream: &'static str
+    pub routes_fn: fn() -> OpenApiRouter<RequestState>,
+    pub client_calls: fn() -> String
 }
 
-inventory::collect!(RoutesInfo);
 inventory::collect!(StructInfo);
 
 #[derive(OpenApi)]
@@ -350,12 +353,20 @@ pub async fn build_test_server(db: Arc<Database>) -> axum_test::TestServer {
 
 pub async fn build_router(state: RequestState, extras: Option<OpenApiRouter<RequestState>>) -> Router<()> {
     let mut router: OpenApiRouter<RequestState> = OpenApiRouter::with_openapi(ApiDoc::openapi());
-    for _info in inventory::iter::<StructInfo> {
-        // let file_name = format!("{}{}", info.name, info.suffix);
-    }
-    for info in inventory::iter::<RoutesInfo> {
+    let mut client_calls: Vec<String> = Vec::new();
+    client_calls.push(
+        r#"
+        const response = await fetch("http://127.0.0.1:8000/apidoc/openapi.json");
+        if (!response.ok) throw new Error("Failed to fetch OpenAPI");
+        const openapi = await response.json();
+        "#.to_string()
+    );
+    for info in inventory::iter::<StructInfo> {
         router = router.merge((info.routes_fn)());
+        client_calls.push((info.client_calls)())
     }
+
+    write_to_local_file(client_calls, "client", "client_calls.ts");
 
     if let Some(extra) = extras {
         router = router.merge(extra);
@@ -370,4 +381,27 @@ pub async fn serve(state: RequestState, socket_addr: SocketAddr, extras: Option<
     println!("Starting server on {}", socket_addr);
     let tcp = TcpListener::bind(socket_addr).await.unwrap();
     crate::axum::serve(tcp, router).await.unwrap();
+}
+
+//TODO duplicated with `macros/src/macro_utils.rs`
+pub fn write_to_local_file(lines: Vec<String>, dir_name: &str, file_name: &str) {
+    let dir_path = env::current_dir().expect("current dir inaccessible").join("target").join("macros").join(dir_name);
+    if let Err(e) = std::fs::create_dir_all(&dir_path) {
+        eprintln!("Failed to create directory {:?}: {}", dir_path, e);
+        return;
+    }
+    let full_path = dir_path.join(file_name);
+
+    #[cfg(not(test))]
+    {
+        if let Err(e) = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&full_path)
+            .and_then(|mut file| file.write_all(lines.join("\n").as_bytes()))
+        {
+            eprintln!("Failed to write to {:?}: {}", full_path, e);
+        }
+    }
 }
