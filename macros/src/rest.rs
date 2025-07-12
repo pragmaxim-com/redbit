@@ -45,18 +45,23 @@ pub struct PathExpr {
     pub description: String,
 }
 #[derive(Clone)]
-pub struct Param {
-    pub name: Ident,
+pub struct QueryExpr {
     pub ty: Type,
+    pub extraction: TokenStream,
     pub samples: TokenStream,
-    pub description: String,
+}
+#[derive(Clone)]
+pub struct BodyExpr {
+    pub ty: Type,
+    pub extraction: TokenStream,
+    pub samples: TokenStream,
 }
 
 #[derive(Clone)]
 pub enum HttpParams {
     FromPath(Vec<PathExpr>),
-    FromQuery(Param),
-    FromBody(Param),
+    FromQuery(QueryExpr),
+    FromBody(BodyExpr),
 }
 
 #[derive(Clone)]

@@ -70,7 +70,6 @@ impl EndpointDef {
             let query_samples = query_param.unwrap().clone().samples;
             let body_param_clone = body_param.unwrap().clone();
             let body_samples = body_param_clone.samples;
-            let ty = &body_param_clone.ty;
             let test_fn_name = format_ident!("http_endpoint_with_query_and_body_{}", fn_name);
             tests.push(quote! {
                 #[tokio::test]
@@ -80,7 +79,11 @@ impl EndpointDef {
                             let query_string = serde_urlencoded::to_string(query_sample.clone()).unwrap();
                             let final_path = format!("{}?{}", #path_expr, query_string);
                             eprintln!("Testing endpoint: {} : {} with body", #method_name, final_path);
-                            let response = #server.await.method(#method_name, &final_path).json::<#ty>(&body_sample).await;
+                            let response =
+                                match &body_sample {
+                                    Some(body) => #server.await.method(#method_name, &final_path).json(&body).await,
+                                    None => #server.await.method(#method_name, &final_path).await,
+                                };
                             response.assert_status_ok();
                         }
                     }
@@ -104,13 +107,16 @@ impl EndpointDef {
         } else if body_param.is_some() {
             let body_samples = body_param.unwrap().clone().samples;
             let test_fn_name = format_ident!("http_endpoint_with_body_{}", fn_name);
-            let ty = body_param.unwrap().ty.clone();
             tests.push(quote! {
                 #[tokio::test]
                 async fn #test_fn_name() {
                     for body_sample in #body_samples {
                         eprintln!("Testing endpoint: {} : {} with body", #method_name, #path_expr);
-                        let response = #server.await.method(#method_name, &#path_expr).json::<#ty>(&body_sample).await;
+                        let response =
+                            match &body_sample {
+                                Some(body) => #server.await.method(#method_name, &#path_expr).json(&body_sample).await,
+                                None => #server.await.method(#method_name, &#path_expr).await,
+                            };
                         response.assert_status_ok();
                     }
                 }
@@ -148,17 +154,11 @@ impl EndpointDef {
                         });
                     }
                 },
-                HttpParams::FromQuery(param) => {
-                    let ty = param.clone().ty;
-                    bindings.push(quote! {
-                        extract::Query(query): extract::Query<#ty>
-                    });
+                HttpParams::FromQuery(query) => {
+                    bindings.push(query.extraction.clone());
                 }
-                HttpParams::FromBody(param) => {
-                    let ty = param.clone().ty;
-                    bindings.push(quote! {
-                        AppJson(body): AppJson<#ty>
-                    });
+                HttpParams::FromBody(body) => {
+                    bindings.push(body.extraction.clone());
                 }
             }
         }
@@ -188,9 +188,9 @@ impl EndpointDef {
                         #ty
                     });
                 }
-                HttpParams::FromBody(param) => {
+                HttpParams::FromBody(body) => {
                     let ct = Literal::string("application/json");
-                    let ty = &param.ty;
+                    let ty = &body.ty;
                     body_token = Some(quote! {
                         request_body(content = #ty, content_type = #ct)
                     });

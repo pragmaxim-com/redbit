@@ -1,5 +1,5 @@
 use crate::rest::HttpParams::{FromBody, FromQuery};
-use crate::rest::{FunctionDef, HttpMethod, Param};
+use crate::rest::{BodyExpr, FunctionDef, HttpMethod, QueryExpr};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
@@ -94,15 +94,13 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
         fn_name: fn_name.clone(),
         fn_stream,
         endpoint_def: Some(EndpointDef {
-            params: vec![FromQuery(Param {
-                name: format_ident!("query"), // TODO
+            params: vec![FromQuery(QueryExpr {
                 ty: column_query.clone(),
-                description: "Range query from/until".to_string(),
+                extraction: quote! { extract::Query(query): extract::Query<#column_query> },
                 samples: quote! { vec![#column_query::sample()] },
-            }), FromBody(Param {
-                name: format_ident!("todo"), // TODO
-                ty: syn::parse_quote! { Option<#stream_query_type> },
-                description: "Query to filter stream entities by".to_string(),
+            }), FromBody(BodyExpr {
+                ty: syn::parse_quote! { #stream_query_type },
+                extraction: quote! { MaybeJson(body): MaybeJson<#stream_query_type> },
                 samples: quote! { vec![Some(#stream_query_type::sample()), None ] },
             })],
             method: HttpMethod::POST,

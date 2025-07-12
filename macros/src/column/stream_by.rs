@@ -1,5 +1,5 @@
 use crate::rest::HttpParams::{FromBody, FromPath};
-use crate::rest::{FunctionDef, Param, HttpMethod, PathExpr};
+use crate::rest::{FunctionDef, HttpMethod, PathExpr, BodyExpr};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
@@ -109,10 +109,9 @@ pub fn by_dict_def(
                 ty: column_type.clone(),
                 description: "Secondary index column with dictionary".to_string(),
                 sample: quote! { #column_type::default().encode() },
-            }]), FromBody(Param {
-                name: format_ident!("todo"), // TODO
-                ty: syn::parse_quote! { Option<#stream_query_type> },
-                description: "Query to filter stream entities by".to_string(),
+            }]), FromBody(BodyExpr {
+                ty: syn::parse_quote! { #stream_query_type },
+                extraction: quote! { MaybeJson(body): MaybeJson<#stream_query_type> },
                 samples: quote! { vec![Some(#stream_query_type::sample()), None ] },
             })],
             method: HttpMethod::POST,
@@ -128,11 +127,11 @@ pub fn by_dict_def(
                     }
                 }
             },
-            utoipa_responses: quote! { 
+            utoipa_responses: quote! {
                 responses(
                     (status = OK, content_type = "application/json", body = #entity_type),
                     (status = 500, content_type = "application/json", body = ErrorResponse),
-                ) 
+                )
             },
             endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), column_name, column_name),
         }),
@@ -228,10 +227,9 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
                     description: "Secondary index column".to_string(),
                     sample: quote! { #column_type::default().encode() },
                 }]
-                ), FromBody(Param {
-                    name: format_ident!("todo"), // TODO 
-                    ty: syn::parse_quote! { Option<#stream_query_type> },
-                    description: "Query to filter stream entities by".to_string(),
+                ), FromBody(BodyExpr {
+                    ty: syn::parse_quote! { #stream_query_type },
+                    extraction: quote! { MaybeJson(body): MaybeJson<#stream_query_type> },
                     samples: quote! { vec![Some(#stream_query_type::sample()), None ] },
                 })
             ],
@@ -248,11 +246,11 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
                     }
                 }
             },
-            utoipa_responses: quote! { 
+            utoipa_responses: quote! {
                 responses(
                     (status = OK, content_type = "application/json", body = #entity_type),
                     (status = 500, content_type = "application/json", body = ErrorResponse),
-                ) 
+                )
             },
             endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), column_name, column_name),
         }),

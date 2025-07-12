@@ -74,6 +74,8 @@ use std::ops::Add;
 use std::path::PathBuf;
 use tokio::net::TcpListener;
 use std::io::Write;
+use axum::body::Bytes;
+use axum::extract::Request;
 
 pub trait IndexedPointer: Clone {
     type Index: Copy + Ord + Add<Output = Self::Index> + Default;
@@ -255,6 +257,32 @@ where
 {
     fn into_response(self) -> Response {
         axum::Json(self.0).into_response()
+    }
+}
+
+#[derive(Deserialize)]
+pub struct MaybeJson<T>(pub Option<T>);
+
+impl<S, T> FromRequest<S> for MaybeJson<T>
+where
+    T: DeserializeOwned,
+    S: Send + Sync,
+{
+    type Rejection = AppError;
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        let body_bytes = match Bytes::from_request(req, state).await {
+            Ok(bytes) => bytes,
+            Err(_) => return Ok(MaybeJson(None)),
+        };
+
+        if body_bytes.is_empty() {
+            return Ok(MaybeJson(None));
+        }
+
+        let parsed = serde_json::from_slice::<T>(&body_bytes).map_err(|e| AppError::BadRequest(e.to_string()))?;
+
+        Ok(MaybeJson(Some(parsed)))
     }
 }
 
