@@ -154,13 +154,18 @@ impl EntityMacros {
                 handler_name: format_ident!("{}", handler_fn_name),
                 client_call: None,
                 handler_impl_stream: quote! {
-                    Result<AppJson<#pk_type>, AppError> {
+                    Result<AppJson<()>, AppError> {
                         let db = state.db;
-                        let result = #entity_name::#fn_name(&db, &body)?;
-                        Ok(AppJson(result))
+                        #entity_name::#fn_name(&db, &body)?;
+                        Ok(AppJson(()))
                     }
                 },
-                utoipa_responses: quote! { responses((status = OK, body = #pk_type)) },
+                utoipa_responses: quote! {
+                    responses(
+                        (status = OK),
+                        (status = 500, content_type = "application/json", body = ErrorResponse),
+                    )
+                },
                 endpoint: format!("/{}", entity_name.to_string().to_lowercase()),
             }),
             test_stream,

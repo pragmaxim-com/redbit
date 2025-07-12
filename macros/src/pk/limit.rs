@@ -65,7 +65,12 @@ pub fn limit_fn_def(entity_name: &Ident, entity_type: &Type) -> FunctionDef {
                     state.db.begin_read().map_err(AppError::from).and_then(|tx| #entity_name::#fn_name(&tx, query)).map(AppJson)
                 }
             },
-            utoipa_responses: quote! { responses((status = OK, body = Vec<#entity_type>)) },
+            utoipa_responses: quote! {
+                responses(
+                    (status = OK, content_type = "application/json", body = Vec<#entity_type>),
+                    (status = 500, content_type = "application/json", body = ErrorResponse),
+                )
+            },
             endpoint: format!("/{}", entity_name.to_string().to_lowercase()),
         }),
         test_stream: None,

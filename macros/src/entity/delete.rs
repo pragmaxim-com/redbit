@@ -5,6 +5,7 @@ use crate::rest::{FunctionDef, HttpMethod, PathExpr};
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use syn::Type;
+use crate::macro_utils;
 
 impl EntityMacros {
     pub fn delete_def(entity_name: &Ident, pk_type: &Type, delete_statements: &Vec<TokenStream>) -> FunctionDef {
@@ -93,8 +94,13 @@ impl EntityMacros {
                 }])],
                 method: HttpMethod::DELETE,
                 handler_name: format_ident!("{}", handler_fn_name),
-                client_call: None,
-                utoipa_responses: quote! { responses((status = OK), (status = NOT_FOUND)) },
+                client_call: Some(macro_utils::client_code(&handler_fn_name, pk_type, pk_name)),
+                utoipa_responses: quote! {
+                    responses(
+                        (status = OK),
+                        (status = NOT_FOUND, content_type = "application/json", body = ErrorResponse),
+                    )
+                },
                 handler_impl_stream: quote! {
                     Result<AppJson<()>, AppError> {
                         let db = state.db;

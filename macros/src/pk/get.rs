@@ -69,14 +69,20 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
                            (StatusCode::OK, AppJson(entity)).into_response()
                        },
                        Ok(None) => {
-                           let message = format!("{} not found", stringify!(#entity_name));
-                           (StatusCode::NOT_FOUND, AppJson(ErrorResponse { message })).into_response()
+                            let message = format!("{} not found", stringify!(#entity_name));
+                            let response = ErrorResponse { message, code: StatusCode::NOT_FOUND.as_u16() };
+                            (StatusCode::NOT_FOUND, AppJson(response)).into_response()
                        },
                        Err(err) => err.into_response(),
                    }
                }
             },
-            utoipa_responses: quote! { responses((status = OK, body = #entity_type), (status = NOT_FOUND)) },
+            utoipa_responses: quote! { 
+                responses(
+                    (status = OK, content_type = "application/json", body = #entity_type), 
+                    (status = NOT_FOUND, content_type = "application/json", body = ErrorResponse)
+                ) 
+            },
             endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), pk_name, pk_name),
         }),
         test_stream,

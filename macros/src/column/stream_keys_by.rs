@@ -96,7 +96,12 @@ pub fn by_dict_def(
                     }
                 }
             },
-            utoipa_responses: quote! { responses((status = OK, content_type = "text/event-stream", body = #pk_type)) },
+            utoipa_responses: quote! {
+                responses(
+                    (status = OK, content_type = "application/json", body = #pk_type),
+                    (status = 500, content_type = "application/json", body = ErrorResponse),
+                )
+            },
             endpoint: format!("/{}/{}/{{{}}}/{}",
                               entity_name.to_string().to_lowercase(), column_name, column_name, pk_name
             ),
@@ -183,7 +188,12 @@ pub fn by_index_def(
                     }
                 }
             },
-            utoipa_responses: quote! { responses((status = OK, content_type = "text/event-stream", body = #pk_type)) },
+            utoipa_responses: quote! {
+                responses(
+                    (status = OK, content_type = "application/json", body = #pk_type),
+                    (status = 500, content_type = "application/json", body = ErrorResponse),
+                )
+            },
             endpoint: format!("/{}/{}/{{{}}}/{}",
                               entity_name.to_string().to_lowercase(), column_name, column_name, pk_name
             ),

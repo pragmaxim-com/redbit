@@ -257,14 +257,15 @@ where
         axum::Json(self.0).into_response()
     }
 }
-#[derive(Serialize)]
+
+#[derive(Serialize, ToSchema)]
 pub struct ErrorResponse {
     pub message: String,
+    pub code: u16,
 }
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
-
         let (status, message) = match self {
             AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg),
             AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg),
@@ -272,7 +273,7 @@ impl IntoResponse for AppError {
             AppError::Internal(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
         };
 
-        (status, AppJson(ErrorResponse { message })).into_response()
+        (status, AppJson(ErrorResponse { message, code: status.as_u16() })).into_response()
     }
 }
 
@@ -366,7 +367,11 @@ pub async fn build_router(state: RequestState, extras: Option<OpenApiRouter<Requ
         client_calls.push((info.client_calls)())
     }
 
-    write_to_local_file(client_calls, "client", "client_calls.ts");
+    let (mut client_calls_sorted, delete): (Vec<_>, Vec<_>) = client_calls.into_iter()
+        .partition(|s| !s.contains("Delete"));
+    client_calls_sorted.extend(delete);
+
+    write_to_local_file(client_calls_sorted.clone(), "client", "client_calls.ts");
 
     if let Some(extra) = extras {
         router = router.merge(extra);

@@ -59,7 +59,12 @@ pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, table: &Iden
             method: HttpMethod::HEAD,
             handler_name: format_ident!("{}", handler_fn_name),
             client_call: Some(macro_utils::client_code(&handler_fn_name, pk_type, pk_name)),
-            utoipa_responses: quote! { responses((status = OK), (status = NOT_FOUND)) },
+            utoipa_responses: quote! {
+                responses(
+                    (status = OK),
+                    (status = NOT_FOUND, content_type = "application/json", body = ErrorResponse),
+                )
+            },
             handler_impl_stream: quote! {
                 impl IntoResponse {
                     match state.db.begin_read()

@@ -118,7 +118,12 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
                     }
                 }
             },
-            utoipa_responses: quote! { responses((status = OK, content_type = "text/event-stream", body = #entity_type)) },
+            utoipa_responses: quote! {
+                responses(
+                    (status = OK, content_type = "application/json", body = #entity_type),
+                    (status = 500, content_type = "application/json", body = ErrorResponse),
+                )
+            },
             endpoint: format!("/{}/{}", entity_name.to_string().to_lowercase(), pk_name.clone()),
         }),
         test_stream,

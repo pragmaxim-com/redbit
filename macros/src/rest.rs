@@ -91,7 +91,11 @@ pub fn to_http_endpoints(defs: &Vec<FunctionDef>) -> (Vec<TokenStream>, TokenStr
     let endpoint_handlers: Vec<TokenStream> = endpoints.iter().map(|e| e.handler.clone()).collect();
     let tests: Vec<TokenStream> = endpoints.iter().flat_map(|e| e.tests.clone()).collect();
     let client_calls: Vec<String> = endpoints.into_iter().filter_map(|e| e.client_call).collect();
-    let client_calls_lit = Literal::string(&client_calls.join("\n"));
+    let (mut client_calls_sorted, delete): (Vec<_>, Vec<_>) = client_calls.into_iter()
+        .partition(|s| !s.contains("Delete"));
+    client_calls_sorted.extend(delete);
+
+    let client_calls_lit = Literal::string(&client_calls_sorted.join("\n"));
     let routes = quote! {
         pub fn routes() -> OpenApiRouter<RequestState> {
             OpenApiRouter::new()
@@ -124,10 +128,10 @@ pub fn to_http_endpoint(fn_def: &FunctionDef, endpoint_def: &EndpointDef) -> Htt
         ) -> #handler_impl_stream
     };
 
-    HttpEndpointMacro { 
+    HttpEndpointMacro {
         endpoint_def: endpoint_def.clone(),
         handler_fn_name, handler,
         client_call: endpoint_def.client_call.clone(),
-        tests: endpoint_def.generate_tests(&fn_def.fn_name) 
+        tests: endpoint_def.generate_tests(&fn_def.fn_name)
     }
 }

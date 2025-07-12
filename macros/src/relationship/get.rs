@@ -60,7 +60,12 @@ pub fn one2one_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
                     state.db.begin_read().map_err(AppError::from).and_then(|tx| #entity_name::#fn_name(&tx, &#pk_name)).map(AppJson)
                 }
             },
-            utoipa_responses: quote! { responses((status = OK, body = #child_type)) },
+            utoipa_responses: quote! {
+                responses(
+                    (status = OK, content_type = "application/json", body = #child_type),
+                    (status = NOT_FOUND, content_type = "application/json", body = ErrorResponse),
+                )
+            },
             endpoint: format!("/{}/{{{}}}/{}", entity_name.to_string().to_lowercase(), pk_name, child_name),
         }),
         test_stream,
@@ -119,11 +124,20 @@ pub fn one2opt_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
             handler_name: format_ident!("{}", handler_fn_name),
             client_call: Some(macro_utils::client_code(&handler_fn_name, pk_type, pk_name)),
             handler_impl_stream: quote! {
-               Result<AppJson<Option<#child_type>>, AppError> {
-                    state.db.begin_read().map_err(AppError::from).and_then(|tx| #entity_name::#fn_name(&tx, &#pk_name)).map(AppJson)
+               Result<AppJson<#child_type>, AppError> {
+                    state.db.begin_read().map_err(AppError::from)
+                    .and_then(|tx| #entity_name::#fn_name(&tx, &#pk_name)
+                        .and_then(|opt| {
+                            opt.ok_or_else(|| AppError::NotFound(format!("No {} found", stringify!(#child_name)))) }) )
+                    .map(AppJson)
                 }
             },
-            utoipa_responses: quote! { responses((status = OK, body = Option<#child_type>)) },
+            utoipa_responses: quote! {
+                responses(
+                    (status = OK, content_type = "application/json", body = #child_type),
+                    (status = NOT_FOUND, content_type = "application/json", body = ErrorResponse),
+                )
+            },
             endpoint: format!("/{}/{{{}}}/{}", entity_name.to_string().to_lowercase(), pk_name, child_name),
         }),
         test_stream,
@@ -179,7 +193,12 @@ pub fn one2many_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, 
             method: HttpMethod::GET,
             handler_name: format_ident!("{}", handler_fn_name),
             client_call: Some(macro_utils::client_code(&handler_fn_name, pk_type, pk_name)),
-            utoipa_responses: quote! { responses((status = OK, body = Vec<#child_type>)) },
+            utoipa_responses: quote! {
+                responses(
+                    (status = OK, content_type = "application/json", body = Vec<#child_type>),
+                    (status = 500, content_type = "application/json", body = ErrorResponse),
+                )
+            },
             handler_impl_stream: quote! {
                Result<AppJson<Vec<#child_type>>, AppError> {
                     state.db.begin_read().map_err(AppError::from).and_then(|tx| #entity_name::#fn_name(&tx, &#pk_name)).map(AppJson)

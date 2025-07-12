@@ -128,7 +128,12 @@ pub fn by_dict_def(
                     }
                 }
             },
-            utoipa_responses: quote! { responses((status = OK, content_type = "text/event-stream", body = #entity_type)) },
+            utoipa_responses: quote! { 
+                responses(
+                    (status = OK, content_type = "application/json", body = #entity_type),
+                    (status = 500, content_type = "application/json", body = ErrorResponse),
+                ) 
+            },
             endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), column_name, column_name),
         }),
         test_stream,
@@ -243,7 +248,12 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
                     }
                 }
             },
-            utoipa_responses: quote! { responses((status = OK, content_type = "text/event-stream", body = #entity_type)) },
+            utoipa_responses: quote! { 
+                responses(
+                    (status = OK, content_type = "application/json", body = #entity_type),
+                    (status = 500, content_type = "application/json", body = ErrorResponse),
+                ) 
+            },
             endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), column_name, column_name),
         }),
         test_stream,

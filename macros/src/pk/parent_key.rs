@@ -34,7 +34,12 @@ pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type) -> FunctionD
                     state.db.begin_read().map_err(AppError::from).and_then(|tx| #entity_name::#fn_name(&tx, &#pk_name)).map(AppJson)
                 }
             },
-            utoipa_responses: quote! { responses((status = OK, body = #pk_type)) },
+            utoipa_responses: quote! {
+                responses(
+                    (status = OK, content_type = "application/json", body = #pk_type),
+                    (status = 500, content_type = "application/json", body = ErrorResponse),
+                )
+            },
             endpoint: format!("/{}/{}/{{{}}}/{}", entity_name.to_string().to_lowercase(), pk_name, pk_name, fn_name),
         }),
         test_stream: None,
