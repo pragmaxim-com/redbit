@@ -154,10 +154,11 @@ impl EntityMacros {
                 handler_name: format_ident!("{}", handler_fn_name),
                 client_call: None,
                 handler_impl_stream: quote! {
-                    Result<AppJson<()>, AppError> {
-                        let db = state.db;
-                        #entity_name::#fn_name(&db, &body)?;
-                        Ok(AppJson(()))
+                    impl IntoResponse {
+                        match #entity_name::#fn_name(&state.db, &body) {
+                            Ok(pk) => Response::builder().status(StatusCode::OK).body(Body::empty()).unwrap().into_response(),
+                            Err(err) => err.into_response(),
+                        }
                     }
                 },
                 utoipa_responses: quote! {
