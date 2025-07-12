@@ -4,7 +4,8 @@ use quote::quote;
 pub fn delete_statement(table: &Ident) -> TokenStream {
     quote! {
         let mut table_col_3 = tx.open_table(#table)?;
-        let _ = table_col_3.remove(pk)?;
+        let table_col_3_old_value_opt = table_col_3.remove(pk)?;
+        removed.push(table_col_3_old_value_opt.is_some());
     }
 }
 
@@ -12,7 +13,9 @@ pub fn delete_many_statement(table: &Ident) -> TokenStream {
     quote! {
         let mut table_col_4 = tx.open_table(#table)?;
         for pk in pks.iter() {
-            table_col_4.remove(pk)?;
+            if table_col_4.remove(pk)?.is_none() {
+                removed.push(false);
+            }
         }
     }
 }
@@ -24,12 +27,13 @@ pub fn delete_index_statement(table: &Ident, index_table: &Ident) -> TokenStream
             if let Some(value_guard) = table_col_8.remove(pk)? {
                 Some(value_guard.value().clone())
             } else {
+                removed.push(false);
                 None
             }
         };
         if let Some(value) = maybe_value {
             let mut mm = tx.open_multimap_table(#index_table)?;
-            mm.remove(&value, pk)?;
+            removed.push(mm.remove(&value, pk)?);
         }
     }
 }
@@ -41,7 +45,9 @@ pub fn delete_many_index_statement(table: &Ident, index_table: &Ident) -> TokenS
         for pk in pks.iter() {
             if let Some(value_guard) = table_col_9.remove(pk)? {
                 let value = value_guard.value();
-                mm.remove(&value, pk)?;
+                removed.push(mm.remove(&value, pk)?);
+            } else {
+                removed.push(false);
             }
         }
     }
@@ -58,12 +64,16 @@ pub fn delete_dict_statement(table_dict_pk_by_pk: &Ident, table_value_to_dict_pk
         if let Some(birth_id) = birth_id_opt {
             let value_opt = value_by_dict_pk.get(&birth_id)?.map(|guard| guard.value().clone());
             if let Some(value) = value_opt {
-                dict_index.remove(&birth_id, pk)?;
+                removed.push(dict_index.remove(&birth_id, pk)?);
                 if dict_index.get(&birth_id)?.is_empty() {
                     value_to_dict_pk.remove(&value)?;
                     value_by_dict_pk.remove(&birth_id)?;
                 }
+            } else {
+                removed.push(false);
             }
+        } else {
+            removed.push(false);
         }
     }
 }
@@ -80,12 +90,16 @@ pub fn delete_many_dict_statement(table_dict_pk_by_pk: &Ident, table_value_to_di
             if let Some(birth_id) = birth_id_opt { // duplicate
                 let value_opt = value_by_dict_pk.get(&birth_id)?.map(|guard| guard.value().clone());
                 if let Some(value) = value_opt {
-                    dict_index.remove(&birth_id, pk)?;
+                    removed.push(dict_index.remove(&birth_id, pk)?);
                     if dict_index.get(&birth_id)?.is_empty() {
                         value_to_dict_pk.remove(&value)?;
                         value_by_dict_pk.remove(&birth_id)?;
                     }
+                } else {
+                    removed.push(false);
                 }
+            } else {
+                removed.push(false);
             }
         }
     }

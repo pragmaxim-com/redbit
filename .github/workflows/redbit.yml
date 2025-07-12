@@ -93,7 +93,7 @@ jobs:
 
           # Prepare formatted benchmark lines
           HEADER=$(printf "%-45s %10s\n" "function" "ops/s")
-          BODY=$(tail -n +2 benchmarks.csv | awk -F, '{ printf "%-45s %10s\n", $1, $2 }')
+          BODY=$(cat benchmarks.csv | awk -F, '{ printf "%-45s %10s\n", $1, $2 }')
           FORMATTED_BENCH="$HEADER\n-------------------------------------------------------------\n$BODY"
 
           # Escape double quotes and backslashes

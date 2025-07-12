@@ -11,9 +11,10 @@ impl EntityMacros {
     pub fn delete_def(entity_name: &Ident, pk_type: &Type, delete_statements: &Vec<TokenStream>) -> FunctionDef {
         let fn_name = format_ident!("delete");
         let fn_stream = quote! {
-            pub fn #fn_name(tx: &WriteTransaction, pk: &#pk_type) -> Result<(), AppError> {
+            pub fn #fn_name(tx: &WriteTransaction, pk: &#pk_type) -> Result<bool, AppError> {
+                let mut removed: Vec<bool> = Vec::new();
                 #(#delete_statements)*
-                Ok(())
+                Ok(!removed.contains(&false))
             }
         };
         FunctionDef { entity_name: entity_name.clone(), fn_name: fn_name.clone(), fn_stream, endpoint_def: None, test_stream: None, bench_stream: None }
@@ -22,9 +23,10 @@ impl EntityMacros {
     pub fn delete_many_def(entity_name: &Ident, pk_type: &Type, delete_many_statements: &Vec<TokenStream>) -> FunctionDef {
         let fn_name = format_ident!("delete_many");
         let fn_stream = quote! {
-            pub fn #fn_name(tx: &WriteTransaction, pks: &Vec<#pk_type>) -> Result<(), AppError> {
+            pub fn #fn_name(tx: &WriteTransaction, pks: &Vec<#pk_type>) -> Result<bool, AppError> {
+                let mut removed: Vec<bool> = Vec::new();
                 #(#delete_many_statements)*
-                Ok(())
+                Ok(!removed.contains(&false))
             }
         };
         FunctionDef { entity_name: entity_name.clone(), fn_name: fn_name.clone(), fn_stream, endpoint_def: None, test_stream: None, bench_stream: None }
@@ -39,13 +41,14 @@ impl EntityMacros {
     ) -> FunctionDef {
         let fn_name = format_ident!("delete_and_commit");
         let fn_stream = quote! {
-            pub fn #fn_name(db: &Database, pk: &#pk_type) -> Result<(), AppError> {
-               let tx = db.begin_write()?;
-               {
+            pub fn #fn_name(db: &Database, pk: &#pk_type) -> Result<bool, AppError> {
+                let tx = db.begin_write()?;
+                let mut removed: Vec<bool> = Vec::new();
+                {
                    #(#delete_statements)*
-               }
-               tx.commit()?;
-               Ok(())
+                }
+                tx.commit()?;
+                Ok(!removed.contains(&false))
            }
         };
 
@@ -57,9 +60,10 @@ impl EntityMacros {
                 for test_entity in #entity_type::sample_many(entity_count) {
                     #entity_name::store_and_commit(&db, &test_entity).expect("Failed to store and commit instance");
                     let pk = test_entity.#pk_name;
-                    #entity_name::#fn_name(&db, &pk).expect("Failed to delete and commit instance");
+                    let removed = #entity_name::#fn_name(&db, &pk).expect("Failed to delete and commit instance");
                     let read_tx = db.begin_read().expect("Failed to begin read transaction");
                     let is_empty = #entity_name::get(&read_tx, &pk).expect("Failed to get instance").is_none();
+                    assert!(removed, "Instance should be deleted");
                     assert!(is_empty, "Instance should be deleted");
                 }
             }
@@ -102,10 +106,16 @@ impl EntityMacros {
                     )
                 },
                 handler_impl_stream: quote! {
-                    Result<AppJson<()>, AppError> {
-                        let db = state.db;
-                        let result = #entity_name::#fn_name(&db, &#pk_name)?;
-                        Ok(AppJson(result))
+                    impl IntoResponse {
+                        match #entity_name::#fn_name(&state.db, &#pk_name) {
+                            Ok(true) => {
+                                Response::builder().status(StatusCode::OK).body(Body::empty()).unwrap().into_response()
+                            },
+                            Ok(false) => {
+                                Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap().into_response()
+                            },
+                            Err(err) => err.into_response(),
+                        }
                     }
                 },
                 endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), pk_name, pk_name),

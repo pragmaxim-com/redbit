@@ -14,8 +14,8 @@ through auto-generated REST API. It maximizes R/W speed while minimizing data si
 ✅ Optional dictionaries for low cardinality fields \
 ✅ One-to-One / One-to-Option / One-to-Many entities with cascade read/write/delete \
 ✅ All goodies including intuitive data ordering without writing custom codecs \
-✅ SSE streaming api with efficient querying (ie. get txs or utxos for really HOT address) \
-✅ query contraints : `eq`, `ne`, `lt`, `le`, `gt`, `ge`, `in` with logical `AND`
+✅ Http response streaming api with efficient querying (ie. get txs or utxos for really HOT address) \
+✅ Query contraints : `eq`, `ne`, `lt`, `le`, `gt`, `ge`, `in` with logical `AND`
   ```json
   {
     "header": {
@@ -29,16 +29,16 @@ through auto-generated REST API. It maximizes R/W speed while minimizing data si
     }
   }
   ```
-✅ column types : `String`, `Int`, `Vec<u8>`, `[u8; N]`, `bool`, `uuid::Uuid`, `chrono::DateTime`, `std::time::Duration` \
-✅ column encodings of binary columns : `hex`, `base64` \
-✅ all types have binary (db) and human-readable (http) serde support \
+✅ Column types : `String`, `Int`, `Vec<u8>`, `[u8; N]`, `bool`, `uuid::Uuid`, `chrono::DateTime`, `std::time::Duration` \
+✅ Column encodings of binary columns : `hex`, `base64` \
+✅ All types have binary (db) and human-readable (http) serde support \
 ✅ Macro derived http rest API at http://127.0.0.1:8000/swagger-ui/ with examples \
 ✅ TypeScript client generated from OpenAPI spec with tests suite requesting all endpoints \
 ✅ Macro derived unit tests and integration tests on axum test server and benchmarks
 
 ### Limitations
 
-❌ root key must be newtype struct with numeric inner type (that's part of the design decision to achieve fast indexing of even whole bitcoin)
+❌ Root key must be newtype struct with numeric inner type (that's part of the design decision to achieve fast indexing of even whole bitcoin)
 
 ```
 cargo run --package utxo                # to run the demo example
@@ -287,6 +287,7 @@ the operations writes :
 ```
 function                                           ops/s
 -------------------------------------------------------------
+block::_store_many                                   260
 block::_store                                        716
 block::_store_and_commit                             730
 transaction::_store_many                             878

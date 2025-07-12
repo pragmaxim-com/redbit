@@ -95,7 +95,7 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
 
     println!("Deleting blocks:");
     for block in blocks.iter() {
-        Block::delete_and_commit(&db, &block.id)?
+        Block::delete_and_commit(&db, &block.id)?;
     }
     Ok(())
 }
