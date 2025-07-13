@@ -1,32 +1,29 @@
 use crate::field::FieldMacros;
 use crate::rest::to_http_endpoints;
-use proc_macro2::{Ident, TokenStream};
-use syn::Type;
+use proc_macro2::TokenStream;
+use quote::{format_ident, quote};
+use syn::{parse_quote, ItemStruct, Type};
 
 mod store;
 mod delete;
 mod query;
 mod sample;
 mod compose;
-mod expand;
 mod tests;
 
-pub struct EntityMacros {
-    pub entity_name: Ident,
-    pub table_definitions: Vec<TokenStream>,
-    pub sample_functions: Vec<TokenStream>,
-    pub compose_functions: Vec<TokenStream>,
-    pub range_query_structs: Vec<TokenStream>,
-    pub stream_query_struct: TokenStream,
-    pub api_functions: Vec<TokenStream>,
-    pub endpoint_handlers: Vec<TokenStream>,
-    pub routes: TokenStream,
-    pub test_suite: TokenStream,
-    pub client_calls: TokenStream
-}
+pub struct EntityMacros {}
 
 impl EntityMacros {
-    pub fn new(entity_name: Ident, entity_type: Type, pk_name: Ident, pk_type: Type, stream_query_type: &Type, field_macros: Vec<FieldMacros>) -> Result<EntityMacros, syn::Error> {
+    pub fn new(item_struct: &ItemStruct) -> Result<TokenStream, syn::Error> {
+        let entity_ident = &item_struct.ident;
+        let entity_type: Type = parse_quote! { #entity_ident };
+        let stream_query_suffix = format!("StreamQuery");
+        let stream_query_ident = format_ident!("{}{}", entity_ident, &stream_query_suffix);
+        let stream_query_type: Type = syn::parse_quote! { #stream_query_ident };
+
+        let (pk, field_macros) =
+            FieldMacros::new(&item_struct, entity_ident, &entity_type, &stream_query_type, &stream_query_suffix)?;
+
         let mut field_names = Vec::new();
         let mut table_definitions = Vec::new();
         let mut range_query_structs = Vec::new();
@@ -56,41 +53,55 @@ impl EntityMacros {
         }
 
         let mut function_defs = Vec::new();
-        function_defs.push(Self::store_and_commit_def(&entity_name, &entity_type, &pk_name, &pk_type, &store_statements));
-        function_defs.push(Self::store_def(&entity_name, &entity_type, &store_statements));
-        function_defs.push(Self::store_many_def(&entity_name, &entity_type, &store_many_statements));
+        function_defs.push(Self::store_and_commit_def(entity_ident, &entity_type, &pk.name, &pk.tpe, &store_statements));
+        function_defs.push(Self::store_def(entity_ident, &entity_type, &store_statements));
+        function_defs.push(Self::store_many_def(entity_ident, &entity_type, &store_many_statements));
         function_defs.extend(column_function_defs.clone());
-        function_defs.push(Self::delete_and_commit_def(&entity_name, &entity_type, &pk_name, &pk_type, &delete_statements));
-        function_defs.push(Self::delete_def(&entity_name, &pk_type, &delete_statements));
-        function_defs.push(Self::delete_many_def(&entity_name, &pk_type, &delete_many_statements));
+        function_defs.push(Self::delete_and_commit_def(entity_ident, &entity_type, &pk.name, &pk.tpe, &delete_statements));
+        function_defs.push(Self::delete_def(entity_ident, &pk.tpe, &delete_statements));
+        function_defs.push(Self::delete_many_def(entity_ident, &pk.tpe, &delete_many_statements));
 
         let stream_query_struct = Self::query_struct_token_stream(&stream_query_type, &stream_queries);
 
-        let sample_functions = Self::sample_token_streams(&entity_name, &entity_type, &pk_type, &struct_default_inits);
-        let compose_function = Self::compose_token_stream(&entity_name, &entity_type, &pk_type, &struct_inits);
-        let compose_with_filter_function = Self::compose_with_filter_token_stream(&entity_type, &pk_type, &stream_query_type, &field_names, &struct_inits_with_query);
+        let sample_functions = Self::sample_token_streams(entity_ident, &entity_type, &pk.tpe, &struct_default_inits);
+        let compose_function = Self::compose_token_stream(entity_ident, &entity_type, &pk.tpe, &struct_inits);
+        let compose_with_filter_function = Self::compose_with_filter_token_stream(&entity_type, &pk.tpe, &stream_query_type, &field_names, &struct_inits_with_query);
         let compose_functions = vec![compose_function, compose_with_filter_function];
-        let table_definitions = table_definitions.iter().map(|table_def| table_def.definition.clone()).collect();
+        let table_definitions: Vec<TokenStream> = table_definitions.iter().map(|table_def| table_def.definition.clone()).collect();
 
         let api_functions: Vec<TokenStream> = function_defs.iter().map(|f| f.fn_stream.clone()).collect::<Vec<_>>();
         let unit_tests = function_defs.iter().filter_map(|f| f.test_stream.clone()).collect::<Vec<_>>();
         let benches = function_defs.iter().filter_map(|f| f.bench_stream.clone()).collect::<Vec<_>>();
 
         let (endpoint_handlers, routes, route_tests, client_calls) = to_http_endpoints(&function_defs);
-        let test_suite = tests::test_suite(&entity_name, unit_tests, route_tests, benches);
+        let test_suite = tests::test_suite(entity_ident, unit_tests, route_tests, benches);
 
-        Ok(EntityMacros {
-            entity_name,
-            stream_query_struct,
-            table_definitions,
-            compose_functions,
-            sample_functions,
-            range_query_structs,
-            api_functions,
-            endpoint_handlers,
-            routes,
-            test_suite,
-            client_calls
-        })
+        let stream: TokenStream =
+            quote! {
+                // StreamQuery is passed from the rest api as POST body and used to filter the stream of entities
+                #stream_query_struct
+                // Query structs to map query params into
+                #(#range_query_structs)*
+                // table definitions are not in the impl object because they are accessed globally with semantic meaning
+                #(#table_definitions)*
+                // axum endpoints cannot be in the impl object https://docs.rs/axum/latest/axum/attr.debug_handler.html#limitations
+                #(#endpoint_handlers)*
+
+                impl #entity_ident {
+                    // api functions are exposed to users
+                    #(#api_functions)*
+                    // sample functions are used to generate test data
+                    #(#sample_functions)*
+                    // compose functions build entities from db results
+                    #(#compose_functions)*
+                    // axum routes
+                    #routes
+                    // client calls are executed from node.js runtime
+                    #client_calls
+                }
+                // unit tests and rest api tests
+                #test_suite
+            }.into();
+        Ok(stream)
     }
 }

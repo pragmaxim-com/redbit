@@ -11,19 +11,15 @@ mod endpoint;
 mod field;
 mod entity;
 
+use crate::entity::EntityMacros;
+use crate::pk::PointerType;
 use proc_macro::TokenStream;
-use proc_macro_error::proc_macro_error;
-use quote::{format_ident, quote};
 use proc_macro2::Literal;
+use proc_macro_error::proc_macro_error;
+use quote::quote;
 use syn::parse::Parse;
 use syn::spanned::Spanned;
 use syn::{parse_macro_input, parse_quote, DeriveInput, Fields, ItemStruct, Type};
-use crate::column::DbColumnMacros;
-use crate::relationship::DbRelationshipMacros;
-use crate::pk::{PointerType, DbPkMacros};
-use crate::field::FieldMacros;
-use crate::field_parser::ColumnDef;
-use crate::transient::TransientMacros;
 
 #[proc_macro_attribute]
 #[proc_macro_error]
@@ -207,37 +203,6 @@ pub fn entity(_attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_error]
 pub fn derive_entity(input: TokenStream) -> TokenStream {
     let item_struct = parse_macro_input!(input as ItemStruct);
-    let entity_ident = &item_struct.ident;
-    let entity_type: syn::Type = parse_quote! { #entity_ident };
-
-    let stream_query_suffix = format!("StreamQuery");
-    let stream_query_ident = format_ident!("{}{}", entity_ident, &stream_query_suffix);
-    let stream_query_type: Type = syn::parse_quote! { #stream_query_ident };
-    let stream =
-        field_parser::get_named_fields(&item_struct)
-            .and_then(|named_fields| {
-                field_parser::get_field_macros(&named_fields, &item_struct)
-            })
-            .and_then(|(pk, field_macros)| {
-                let field_macros =
-                    field_macros.into_iter().map(|c| match c {
-                        ColumnDef::Key {field_def, fk } => {
-                            FieldMacros::Pk(DbPkMacros::new(entity_ident, &entity_type, field_def.clone(), fk.clone(), &stream_query_type))
-                        },
-                        ColumnDef::Plain(field , indexing_type) => {
-                            FieldMacros::Plain(DbColumnMacros::new(field.clone(), indexing_type.clone(), entity_ident, &entity_type, &pk.name, &pk.tpe, &stream_query_type))
-                        },
-                        ColumnDef::Relationship(field, multiplicity) => {
-                            FieldMacros::Relationship(DbRelationshipMacros::new(field.clone(), multiplicity.clone(), entity_ident, &pk.name, &pk.tpe, &stream_query_suffix))
-                        },
-                        ColumnDef::Transient(field) =>{
-                            FieldMacros::Transient(TransientMacros::new(field.clone()))
-                        }
-                    }
-                    ).collect::<Vec<FieldMacros>>();
-                entity::EntityMacros::new(entity_ident.clone(), entity_type, pk.name, pk.tpe, &stream_query_type, field_macros)
-            })
-            .map(|entity_macros| entity_macros.expand()).unwrap_or_else(|e| e.to_compile_error().into());
-
-    macro_utils::submit_struct_to_stream(stream, "entity", entity_ident, "_derive.rs")
+    let stream = EntityMacros::new(&item_struct).unwrap_or_else(|e| e.to_compile_error().into());
+    macro_utils::submit_struct_to_stream(stream, "entity", &item_struct.ident, "_derive.rs")
 }

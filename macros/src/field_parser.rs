@@ -158,10 +158,12 @@ fn parse_entity_field(field: &syn::Field) -> Result<ColumnDef, syn::Error> {
     }
 }
 
-pub fn get_field_macros(fields: &Punctuated<syn::Field, Comma>, ast: &ItemStruct) -> Result<(FieldDef, Vec<ColumnDef>), syn::Error> {
+pub fn get_field_macros(ast: &ItemStruct) -> Result<(FieldDef, Vec<ColumnDef>), syn::Error> {
     let mut pk_column: Option<FieldDef> = None;
     let mut columns: Vec<ColumnDef> = Vec::new();
 
+    let fields = get_named_fields(ast)?;
+    
     for field in fields.iter() {
         match parse_entity_field(field)? {
             ColumnDef::Key { field_def, fk } => {
