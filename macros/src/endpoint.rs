@@ -36,7 +36,6 @@ impl EndpointDef {
         };
 
         Endpoint {
-            handler_fn_name,
             handler,
             route,
             client_call: self.client_call.clone(),

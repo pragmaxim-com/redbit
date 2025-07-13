@@ -1,6 +1,7 @@
 use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use tower_http::cors;
 use utoipa_axum::router::OpenApiRouter;
 use utxo::*;
 
@@ -13,10 +14,15 @@ async fn main() {
                 .expect("Failed to create database")
         );
     demo::run(Arc::clone(&db)).await.expect("Db demo failed");
+
+    let cors = cors::CorsLayer::new()
+        .allow_origin(cors::Any) // or use a specific origin: `AllowOrigin::exact("http://localhost:5173".parse().unwrap())`
+        .allow_methods(cors::Any)
+        .allow_headers(cors::Any);
     let extra_routes =
         OpenApiRouter::new()
             .routes(utoipa_axum::routes!(routes::test_json_nl_stream));
     let state = RequestState { db: Arc::clone(&db) };
     let addr = SocketAddr::from(([127,0,0,1], 8000));
-    serve(state, addr, Some(extra_routes)).await
+    serve(state, addr, Some(extra_routes), Some(cors)).await
 }

@@ -6,7 +6,7 @@ use quote::{format_ident, quote};
 use syn::Type;
 use crate::macro_utils;
 
-pub fn delete_def(entity_name: &Ident, pk_type: &Type, delete_statements: &Vec<TokenStream>) -> FunctionDef {
+pub fn delete_def(pk_type: &Type, delete_statements: &Vec<TokenStream>) -> FunctionDef {
     let fn_name = format_ident!("delete");
     let fn_stream = quote! {
         pub fn #fn_name(tx: &WriteTransaction, pk: &#pk_type) -> Result<bool, AppError> {
@@ -18,7 +18,7 @@ pub fn delete_def(entity_name: &Ident, pk_type: &Type, delete_statements: &Vec<T
     FunctionDef { fn_stream, endpoint: None, test_stream: None, bench_stream: None }
 }
 
-pub fn delete_many_def(entity_name: &Ident, pk_type: &Type, delete_many_statements: &Vec<TokenStream>) -> FunctionDef {
+pub fn delete_many_def(pk_type: &Type, delete_many_statements: &Vec<TokenStream>) -> FunctionDef {
     let fn_name = format_ident!("delete_many");
     let fn_stream = quote! {
         pub fn #fn_name(tx: &WriteTransaction, pks: &Vec<#pk_type>) -> Result<bool, AppError> {

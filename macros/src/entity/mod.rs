@@ -15,7 +15,7 @@ pub fn new(item_struct: &ItemStruct) -> Result<TokenStream, syn::Error> {
     let entity_ident = &item_struct.ident;
     let entity_type: Type = parse_quote! { #entity_ident };
     let stream_query_type = query::stream_query_type(entity_ident);
-    let (pk, field_macros) =
+    let (pk, field_macros) = 
         FieldMacros::new(&item_struct, entity_ident, &entity_type, &stream_query_type)?;
 
     let mut field_names = Vec::new();
@@ -52,8 +52,8 @@ pub fn new(item_struct: &ItemStruct) -> Result<TokenStream, syn::Error> {
     function_defs.push(store::store_many_def(entity_ident, &entity_type, &store_many_statements));
     function_defs.extend(column_function_defs.clone());
     function_defs.push(delete::delete_and_commit_def(entity_ident, &entity_type, &pk.name, &pk.tpe, &delete_statements));
-    function_defs.push(delete::delete_def(entity_ident, &pk.tpe, &delete_statements));
-    function_defs.push(delete::delete_many_def(entity_ident, &pk.tpe, &delete_many_statements));
+    function_defs.push(delete::delete_def(&pk.tpe, &delete_statements));
+    function_defs.push(delete::delete_many_def(&pk.tpe, &delete_many_statements));
 
     let stream_query_struct = query::stream_query(&stream_query_type, &stream_queries);
     let range_query_structs = range_queries.into_iter().map(|rq| rq.stream).collect::<Vec<_>>();

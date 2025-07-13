@@ -76,6 +76,7 @@ use tokio::net::TcpListener;
 use std::io::Write;
 use axum::body::Bytes;
 use axum::extract::Request;
+use tower_http::cors::CorsLayer;
 
 pub trait IndexedPointer: Clone {
     type Index: Copy + Ord + Add<Output = Self::Index> + Default;
@@ -376,11 +377,11 @@ pub fn test_db_path(entity_name: &str) -> PathBuf {
 }
 
 pub async fn build_test_server(db: Arc<Database>) -> axum_test::TestServer {
-    let router = build_router(RequestState { db }, None).await;
+    let router = build_router(RequestState { db }, None, None).await;
     axum_test::TestServer::new(router).unwrap()
 }
 
-pub async fn build_router(state: RequestState, extras: Option<OpenApiRouter<RequestState>>) -> Router<()> {
+pub async fn build_router(state: RequestState, extras: Option<OpenApiRouter<RequestState>>, cors: Option<CorsLayer>) -> Router<()> {
     let mut router: OpenApiRouter<RequestState> = OpenApiRouter::with_openapi(ApiDoc::openapi());
     let mut client_calls: Vec<String> = Vec::new();
     client_calls.push(
@@ -404,13 +405,16 @@ pub async fn build_router(state: RequestState, extras: Option<OpenApiRouter<Requ
     if let Some(extra) = extras {
         router = router.merge(extra);
     }
+    if let Some(cors_layer) = cors {
+        router = router.layer(cors_layer);
+    }
     let (r, api) = router.split_for_parts();
 
     r.merge(SwaggerUi::new("/swagger-ui").url("/apidoc/openapi.json", api)).with_state(state)
 }
 
-pub async fn serve(state: RequestState, socket_addr: SocketAddr, extras: Option<OpenApiRouter<RequestState>>) -> () {
-    let router: Router<()> = build_router(state, extras).await;
+pub async fn serve(state: RequestState, socket_addr: SocketAddr, extras: Option<OpenApiRouter<RequestState>>, cors: Option<CorsLayer>) -> () {
+    let router: Router<()> = build_router(state, extras, cors).await;
     println!("Starting server on {}", socket_addr);
     let tcp = TcpListener::bind(socket_addr).await.unwrap();
     crate::axum::serve(tcp, router).await.unwrap();

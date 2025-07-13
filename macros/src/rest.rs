@@ -1,12 +1,10 @@
 use proc_macro2::{Ident, Literal, TokenStream};
-use quote::{format_ident, quote};
+use quote::quote;
 use std::fmt::Display;
 use syn::Type;
-use crate::endpoint::EndpointDef;
 
 #[derive(Clone)]
 pub struct Endpoint {
-    pub handler_fn_name: Ident,
     pub handler: TokenStream,
     pub route: TokenStream,
     pub tests: Vec<TokenStream>,
