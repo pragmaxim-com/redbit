@@ -1,24 +1,67 @@
-use super::EntityMacros;
-use proc_macro2::TokenStream;
-use quote::quote;
+use proc_macro2::{Ident, TokenStream};
+use quote::{format_ident, quote};
 use syn::Type;
 
-impl EntityMacros {
-    pub fn query_struct_token_stream(stream_query_type: &Type, stream_queries: &Vec<(TokenStream, TokenStream)>) -> TokenStream {
-        let definitions: Vec<TokenStream> = stream_queries.iter().map(|(def, _)| def.clone()).collect();
-        let inits: Vec<TokenStream> = stream_queries.iter().map(|(_, init)| init.clone()).collect();
-        quote! {
-            #[derive(Clone, Debug, IntoParams, Serialize, Deserialize, Default, ToSchema)]
-            pub struct #stream_query_type {
-                #(#definitions),*
-            }
-            impl #stream_query_type {
-                pub fn sample() -> Self {
-                    Self {
-                        #(#inits),*
-                    }
+static STREAM_QUERY: &str = "StreamQuery";
+
+pub fn stream_query_type(entity_ident: &Ident) -> Type {
+    let suffix = STREAM_QUERY.to_string();
+    let stream_query_type = format_ident!("{}{}", entity_ident, suffix);
+    syn::parse_quote!(#stream_query_type)
+}
+
+#[derive(Clone)]
+pub struct StreamQueryItem {
+    pub definition: TokenStream,
+    pub init: TokenStream,
+}
+
+pub fn stream_query(stream_query_ty: &Type, stream_queries: &Vec<StreamQueryItem>) -> TokenStream {
+    let definitions: Vec<TokenStream> = stream_queries.iter().map(|item| item.definition.clone()).collect();
+    let inits: Vec<TokenStream> = stream_queries.iter().map(|item| item.init.clone()).collect();
+    quote! {
+        #[derive(Clone, Debug, IntoParams, Serialize, Deserialize, Default, ToSchema)]
+        pub struct #stream_query_ty {
+            #(#definitions),*
+        }
+        impl #stream_query_ty {
+            pub fn sample() -> Self {
+                Self {
+                    #(#inits),*
                 }
             }
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct RangeQuery {
+    pub stream: TokenStream,
+    pub ty: Type,
+}
+
+pub fn range_query(entity_name: &Ident, prefix: &Ident, tpe: &Type) -> RangeQuery {
+    let entity_range_query = format_ident!("{}{}{}", entity_name.to_string(), prefix, "RangeQuery");
+    let ty = syn::parse_quote!(#entity_range_query);
+
+    let stream =
+        quote! {
+            #[derive(Clone, IntoParams, Serialize, Deserialize, Default)]
+            pub struct #entity_range_query {
+                pub from: #tpe,
+                pub until: #tpe,
+            }
+            impl #entity_range_query {
+                pub fn sample() -> Self {
+                    Self {
+                        from: #tpe::default(),
+                        until: #tpe::default().next().next().next()
+                    }
+                }
+            }
+        };
+    RangeQuery {
+        stream,
+        ty,
     }
 }

@@ -8,6 +8,7 @@ use crate::transient::TransientMacros;
 use crate::field_parser;
 use proc_macro2::{Ident, TokenStream};
 use syn::{ItemStruct, Type};
+use crate::entity::query::{RangeQuery, StreamQueryItem};
 
 pub enum FieldMacros {
     Pk(DbPkMacros),
@@ -17,17 +18,17 @@ pub enum FieldMacros {
 }
 
 impl FieldMacros {
-    pub fn new(item_struct: &ItemStruct, entity_ident: &Ident, entity_type: &Type, stream_query_type: &Type, stream_query_suffix: &str) -> Result<(FieldDef, Vec<FieldMacros>), syn::Error> {
+    pub fn new(item_struct: &ItemStruct, entity_ident: &Ident, entity_type: &Type, stream_query_ty: &Type) -> Result<(FieldDef, Vec<FieldMacros>), syn::Error> {
         let (pk, field_macros) = field_parser::get_field_macros(&item_struct)?;
         let field_macros = field_macros.into_iter().map(|c| match c {
             ColumnDef::Key {field_def, fk } => {
-                FieldMacros::Pk(DbPkMacros::new(entity_ident, entity_type, field_def.clone(), fk.clone(), &stream_query_type))
+                FieldMacros::Pk(DbPkMacros::new(entity_ident, entity_type, field_def.clone(), fk.clone(), &stream_query_ty))
             },
             ColumnDef::Plain(field , indexing_type) => {
-                FieldMacros::Plain(DbColumnMacros::new(field.clone(), indexing_type.clone(), entity_ident, entity_type, &pk.name, &pk.tpe, &stream_query_type))
+                FieldMacros::Plain(DbColumnMacros::new(field.clone(), indexing_type.clone(), entity_ident, entity_type, &pk.name, &pk.tpe, &stream_query_ty))
             },
             ColumnDef::Relationship(field, multiplicity) => {
-                FieldMacros::Relationship(DbRelationshipMacros::new(field.clone(), multiplicity.clone(), entity_ident, &pk.name, &pk.tpe, &stream_query_suffix))
+                FieldMacros::Relationship(DbRelationshipMacros::new(field.clone(), multiplicity.clone(), entity_ident, &pk.name, &pk.tpe))
             },
             ColumnDef::Transient(field) =>{
                 FieldMacros::Transient(TransientMacros::new(field.clone()))
@@ -36,7 +37,7 @@ impl FieldMacros {
         ).collect::<Vec<FieldMacros>>();
         Ok((pk, field_macros))
     }
-    
+
     pub fn field_name(&self) -> Ident {
         match self {
             FieldMacros::Pk(pk) => pk.field_def.name.clone(),
@@ -81,7 +82,7 @@ impl FieldMacros {
         }
     }
 
-    pub fn range_queries(&self) -> Vec<TokenStream> {
+    pub fn range_queries(&self) -> Vec<RangeQuery> {
         match self {
             FieldMacros::Pk(pk) => vec![pk.range_query.clone()],
             FieldMacros::Plain(column) => column.range_query.clone().into_iter().collect(),
@@ -89,7 +90,7 @@ impl FieldMacros {
         }
     }
 
-    pub fn stream_queries(&self) -> Vec<(TokenStream, TokenStream)> {
+    pub fn stream_queries(&self) -> Vec<StreamQueryItem> {
         match self {
             FieldMacros::Plain(column) => vec![column.stream_query_init.clone()],
             FieldMacros::Relationship(column) => vec![column.stream_query_init.clone()],

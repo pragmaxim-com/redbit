@@ -14,15 +14,16 @@ use crate::field_parser::{FieldDef, IndexingType};
 use crate::rest::*;
 use crate::table::TableDef;
 use proc_macro2::{Ident, TokenStream};
-use quote::{format_ident, quote};
 use syn::Type;
+use crate::entity;
+use crate::entity::query::{RangeQuery, StreamQueryItem};
 
 pub struct DbColumnMacros {
     pub field_def: FieldDef,
-    pub range_query: Option<TokenStream>,
+    pub range_query: Option<RangeQuery>,
     pub table_definitions: Vec<TableDef>,
     pub struct_init: TokenStream,
-    pub stream_query_init: (TokenStream, TokenStream),
+    pub stream_query_init: StreamQueryItem,
     pub struct_init_with_query: TokenStream,
     pub struct_default_init: TokenStream,
     pub store_statement: TokenStream,
@@ -33,16 +34,16 @@ pub struct DbColumnMacros {
 }
 
 impl DbColumnMacros {
-    pub fn new(field_def: FieldDef, indexing_type: IndexingType, entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type: &Type, stream_query_type: &Type) -> DbColumnMacros {
+    pub fn new(field_def: FieldDef, indexing_type: IndexingType, entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type: &Type, stream_query_ty: &Type) -> DbColumnMacros {
         let column_name = &field_def.name.clone();
         let column_type = &field_def.tpe.clone();
         match indexing_type {
             IndexingType::Off => DbColumnMacros::plain(field_def, entity_name, pk_name, pk_type, column_name, column_type),
             IndexingType::On { dictionary: false, range } => {
-                DbColumnMacros::index(field_def, entity_name, entity_type, pk_name, pk_type, column_name, column_type, stream_query_type, range)
+                DbColumnMacros::index(field_def, entity_name, entity_type, pk_name, pk_type, column_name, column_type, stream_query_ty, range)
             }
             IndexingType::On { dictionary: true, range: false } => {
-                DbColumnMacros::dictionary(field_def, entity_name, entity_type, pk_name, pk_type, column_name, column_type, stream_query_type)
+                DbColumnMacros::dictionary(field_def, entity_name, entity_type, pk_name, pk_type, column_name, column_type, stream_query_ty)
             }
             IndexingType::On { dictionary: true, range: true } => {
                 panic!("Range indexing on dictionary columns is not supported")
@@ -108,33 +109,17 @@ impl DbColumnMacros {
             column_type,
             &index_table_def.name,
         ));
-        let entity_column_range_query = format_ident!("{}{}RangeQuery", entity_name.to_string(), column_name.to_string());
-        let entity_column_range_query_ty = syn::parse_quote!(#entity_column_range_query);
         let mut range_query = None;
 
         if range {
-            range_query = Some(quote! {
-                #[derive(Clone, IntoParams, Serialize, Deserialize, Default)]
-                pub struct #entity_column_range_query {
-                    pub from: #column_type,
-                    pub until: #column_type,
-                }
-                impl #entity_column_range_query {
-                    pub fn sample() -> Self {
-                        Self {
-                            from: #column_type::default(),
-                            until: #column_type::default().next()
-                        }
-                    }
-                }
-            });
+            let rq = entity::query::range_query(entity_name, column_name, column_type);
             function_defs.push(stream_range_by::stream_range_by_index_def(
                 entity_name,
                 entity_type,
                 column_name,
                 column_type,
                 &index_table_def.name,
-                entity_column_range_query_ty,
+                &rq.ty,
                 stream_query_type
             ));
             function_defs.push(range_by::by_index_def(
@@ -144,6 +129,7 @@ impl DbColumnMacros {
                 column_type,
                 &index_table_def.name,
             ));
+            range_query = Some(rq);
         };
 
         DbColumnMacros {

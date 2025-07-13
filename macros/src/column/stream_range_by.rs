@@ -5,7 +5,7 @@ use quote::{format_ident, quote};
 use syn::Type;
 use crate::endpoint::EndpointDef;
 
-pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident, column_type: &Type, table: &Ident, range_query: Type, stream_query_type: &Type) -> FunctionDef {
+pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident, column_type: &Type, table: &Ident, range_query_ty: &Type, stream_query_type: &Type) -> FunctionDef {
     let fn_name = format_ident!("stream_range_by_{}", column_name);
     let fn_stream = quote! {
         pub fn #fn_name(
@@ -105,9 +105,9 @@ pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, column
         fn_stream,
         endpoint_def: Some(EndpointDef {
             params: vec![FromQuery(QueryExpr {
-                ty: range_query.clone(),
-                extraction: quote! { extract::Query(query): extract::Query<#range_query> },
-                samples: quote! { vec![#range_query::sample()] },
+                ty: range_query_ty.clone(),
+                extraction: quote! { extract::Query(query): extract::Query<#range_query_ty> },
+                samples: quote! { vec![#range_query_ty::sample()] },
             }), FromBody(BodyExpr {
                 ty: syn::parse_quote! { #stream_query_type },
                 extraction: quote! { MaybeJson(body): MaybeJson<#stream_query_type> },

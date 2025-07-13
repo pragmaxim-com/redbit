@@ -11,7 +11,6 @@ mod endpoint;
 mod field;
 mod entity;
 
-use crate::entity::EntityMacros;
 use crate::pk::PointerType;
 use proc_macro::TokenStream;
 use proc_macro2::Literal;
@@ -203,6 +202,6 @@ pub fn entity(_attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_error]
 pub fn derive_entity(input: TokenStream) -> TokenStream {
     let item_struct = parse_macro_input!(input as ItemStruct);
-    let stream = EntityMacros::new(&item_struct).unwrap_or_else(|e| e.to_compile_error().into());
+    let stream = entity::new(&item_struct).unwrap_or_else(|e| e.to_compile_error().into());
     macro_utils::submit_struct_to_stream(stream, "entity", &item_struct.ident, "_derive.rs")
 }

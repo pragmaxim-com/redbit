@@ -7,13 +7,14 @@ mod query;
 use crate::field_parser::*;
 use crate::rest::FunctionDef;
 use proc_macro2::{Ident, TokenStream};
-use quote::format_ident;
 use syn::Type;
+use crate::entity;
+use crate::entity::query::StreamQueryItem;
 
 pub struct DbRelationshipMacros {
     pub field_def: FieldDef,
     pub struct_init: TokenStream,
-    pub stream_query_init: (TokenStream, TokenStream),
+    pub stream_query_init: StreamQueryItem,
     pub struct_init_with_query: TokenStream,
     pub struct_default_init: TokenStream,
     pub store_statement: TokenStream,
@@ -24,15 +25,14 @@ pub struct DbRelationshipMacros {
 }
 
 impl DbRelationshipMacros {
-    pub fn new(field_def: FieldDef, multiplicity: Multiplicity, entity_ident: &Ident, pk_name: &Ident, pk_type: &Type, stream_query_suffix: &str) -> DbRelationshipMacros {
+    pub fn new(field_def: FieldDef, multiplicity: Multiplicity, entity_ident: &Ident, pk_name: &Ident, pk_type: &Type) -> DbRelationshipMacros {
         let child_name = &field_def.name; // e.g., "transactions"
         let child_type = &field_def.tpe; // e.g., the type `Transaction` from Vec<Transaction>
         let child_ident = match &child_type {
             Type::Path(p) => &p.path.segments.last().unwrap().ident,
             _ => panic!("Unsupported child type"),
         };
-        let child_stream_query_ident = format_ident!("{}{}", child_ident, &stream_query_suffix);
-        let child_stream_query_type: Type = syn::parse_quote! { #child_stream_query_ident };
+        let child_stream_query_type = entity::query::stream_query_type(child_ident);
         match multiplicity {
             Multiplicity::OneToOne => {
                 DbRelationshipMacros {
