@@ -47,10 +47,8 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, table: &I
     });
 
     FunctionDef {
-        entity_name: entity_name.clone(),
-        fn_name: fn_name.clone(),
         fn_stream,
-        endpoint_def: None,
+        endpoint: None,
         test_stream,
         bench_stream
     }

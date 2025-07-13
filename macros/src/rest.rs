@@ -5,34 +5,18 @@ use syn::Type;
 use crate::endpoint::EndpointDef;
 
 #[derive(Clone)]
-pub struct HttpEndpointMacro {
-    pub endpoint_def: EndpointDef,
+pub struct Endpoint {
     pub handler_fn_name: Ident,
     pub handler: TokenStream,
+    pub route: TokenStream,
     pub tests: Vec<TokenStream>,
     pub client_call: Option<String>,
 }
 
-impl Display for HttpEndpointMacro {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let method = self.endpoint_def.method.to_string().to_ascii_uppercase();
-        let prefix = format!("{}:{}", method, self.endpoint_def.endpoint);
-        let indentation = 50;
-        let pad = if prefix.len() >= indentation {
-            1 // fallback spacing if prefix is too long
-        } else {
-            indentation - prefix.len()
-        };
-        write!(f, "{}{:pad$}{}", prefix, "", self.handler_fn_name, pad = pad)
-    }
-}
-
 #[derive(Clone)]
 pub struct FunctionDef {
-    pub entity_name: Ident,
-    pub fn_name: Ident,
     pub fn_stream: TokenStream,
-    pub endpoint_def: Option<EndpointDef>,
+    pub endpoint: Option<Endpoint>,
     pub test_stream: Option<TokenStream>,
     pub bench_stream: Option<TokenStream>,
 }
@@ -83,60 +67,35 @@ impl Display for HttpMethod {
     }
 }
 
-pub fn to_http_endpoints(defs: &Vec<FunctionDef>) -> (Vec<TokenStream>, TokenStream, Vec<TokenStream>, TokenStream) {
-    let endpoints: Vec<HttpEndpointMacro> =
-        defs.iter().filter_map(|fn_def| fn_def.endpoint_def.clone().map(|e| to_http_endpoint(fn_def, &e))).collect();
-    let route_chains: Vec<TokenStream> = endpoints
-        .iter()
-        .map(|e| {
-            let function_name = &e.handler_fn_name;
-            quote! { .merge(OpenApiRouter::new().routes(utoipa_axum::routes!(#function_name))) }
-        })
-        .collect();
-    let endpoint_handlers: Vec<TokenStream> = endpoints.iter().map(|e| e.handler.clone()).collect();
-    let tests: Vec<TokenStream> = endpoints.iter().flat_map(|e| e.tests.clone()).collect();
-    let client_calls: Vec<String> = endpoints.into_iter().filter_map(|e| e.client_call).collect();
-    let (mut client_calls_sorted, delete): (Vec<_>, Vec<_>) = client_calls.into_iter()
-        .partition(|s| !s.contains("Delete"));
-    client_calls_sorted.extend(delete);
-
-    let client_calls_lit = Literal::string(&client_calls_sorted.join("\n"));
-    let routes = quote! {
-        pub fn routes() -> OpenApiRouter<RequestState> {
-            OpenApiRouter::new()
-                #(#route_chains)*
-        }
-    };
-    let client_calls = quote! {
-        pub fn client_calls() -> String {
-            #client_calls_lit.to_string()
-        }
-    };
-    (endpoint_handlers, routes, tests, client_calls)
+pub struct Rest {
+    pub endpoint_handlers: Vec<TokenStream>,
+    pub routes: TokenStream,
+    pub client_calls: TokenStream,
 }
 
-pub fn to_http_endpoint(fn_def: &FunctionDef, endpoint_def: &EndpointDef) -> HttpEndpointMacro {
-    let handler_fn_name = endpoint_def.handler_name.clone();
-    let param_binding = endpoint_def.axum_bindings();
-    let endpoint_name = fn_def.entity_name.to_string();
-    let endpoint_path = endpoint_def.endpoint.clone();
-    let handler_impl_stream = endpoint_def.handler_impl_stream.clone();
-    let method_ident = format_ident!("{}", endpoint_def.method.to_string());
-    let utoipa_responses = endpoint_def.utoipa_responses.clone();
-    let utoipa_params = endpoint_def.utoipa_params();
-    let handler = quote! {
-        #[utoipa::path(#method_ident, path = #endpoint_path, #utoipa_params, #utoipa_responses, tag = #endpoint_name)]
-        #[axum::debug_handler]
-        pub async fn #handler_fn_name(
-            extract::State(state): extract::State<RequestState>,
-            #param_binding
-        ) -> #handler_impl_stream
-    };
-
-    HttpEndpointMacro {
-        endpoint_def: endpoint_def.clone(),
-        handler_fn_name, handler,
-        client_call: endpoint_def.client_call.clone(),
-        tests: endpoint_def.generate_tests(&fn_def.fn_name)
+impl Rest {
+    pub fn new(fn_defs: &Vec<FunctionDef>) -> Self {
+        let endpoints: Vec<Endpoint> = fn_defs.iter().filter_map(|fn_def| fn_def.endpoint.clone()).collect();
+        let route_chains: Vec<TokenStream> = endpoints.iter().map(|e| e.route.clone()).collect();
+        let endpoint_handlers: Vec<TokenStream> = endpoints.iter().map(|e| e.handler.clone()).collect();
+        let client_calls: Vec<String> = endpoints.into_iter().filter_map(|e| e.client_call).collect();
+        let client_calls_lit = Literal::string(&client_calls.join("\n"));
+        let routes = quote! {
+            pub fn routes() -> OpenApiRouter<RequestState> {
+                OpenApiRouter::new()
+                    #(#route_chains)*
+            }
+        };
+        let client_calls = quote! {
+            pub fn client_calls() -> String {
+                #client_calls_lit.to_string()
+            }
+        };
+        Rest {
+            endpoint_handlers,
+            routes,
+            client_calls
+        }
     }
 }
+

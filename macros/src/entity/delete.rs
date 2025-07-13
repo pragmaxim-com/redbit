@@ -15,7 +15,7 @@ pub fn delete_def(entity_name: &Ident, pk_type: &Type, delete_statements: &Vec<T
             Ok(!removed.contains(&false))
         }
     };
-    FunctionDef { entity_name: entity_name.clone(), fn_name: fn_name.clone(), fn_stream, endpoint_def: None, test_stream: None, bench_stream: None }
+    FunctionDef { fn_stream, endpoint: None, test_stream: None, bench_stream: None }
 }
 
 pub fn delete_many_def(entity_name: &Ident, pk_type: &Type, delete_many_statements: &Vec<TokenStream>) -> FunctionDef {
@@ -27,7 +27,7 @@ pub fn delete_many_def(entity_name: &Ident, pk_type: &Type, delete_many_statemen
             Ok(!removed.contains(&false))
         }
     };
-    FunctionDef { entity_name: entity_name.clone(), fn_name: fn_name.clone(), fn_stream, endpoint_def: None, test_stream: None, bench_stream: None }
+    FunctionDef { fn_stream, endpoint: None, test_stream: None, bench_stream: None }
 }
 
 pub fn delete_and_commit_def(
@@ -84,10 +84,10 @@ pub fn delete_and_commit_def(
     let handler_fn_name = format!("{}_{}", entity_name.to_string().to_lowercase(), fn_name);
 
     FunctionDef {
-        entity_name: entity_name.clone(),
-        fn_name: fn_name.clone(),
         fn_stream,
-        endpoint_def: Some(EndpointDef {
+        endpoint: Some(EndpointDef {
+            entity_name: entity_name.clone(),
+            fn_name: fn_name.clone(),
             params: vec![FromPath(vec![PathExpr {
                 name: pk_name.clone(),
                 ty: pk_type.clone(),
@@ -117,7 +117,7 @@ pub fn delete_and_commit_def(
                 }
             },
             endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), pk_name, pk_name),
-        }),
+        }.to_endpoint()),
         test_stream,
         bench_stream
     }

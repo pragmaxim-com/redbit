@@ -1,9 +1,13 @@
 use proc_macro2::{Ident, Literal, TokenStream};
 use quote::{format_ident, quote};
+use crate::rest::FunctionDef;
 
-pub fn test_suite(entity_name: &Ident, unit_tests: Vec<TokenStream>, http_tests: Vec<TokenStream>, benches: Vec<TokenStream>) -> TokenStream {
+pub fn test_suite(entity_name: &Ident, fn_defs: &Vec<FunctionDef>) -> TokenStream {
     let entity_tests = format_ident!("{}", entity_name.to_string().to_lowercase());
     let entity_literal = Literal::string(&entity_name.to_string());
+    let http_tests = fn_defs.iter().filter_map(|f| f.endpoint.clone().map(|e| e.tests)).flatten().collect::<Vec<_>>();
+    let unit_tests = fn_defs.iter().filter_map(|f| f.test_stream.clone()).collect::<Vec<_>>();
+    let benches = fn_defs.iter().filter_map(|f| f.bench_stream.clone()).collect::<Vec<_>>();
 
     quote!{
         #[cfg(test)]

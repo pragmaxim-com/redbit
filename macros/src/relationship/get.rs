@@ -36,8 +36,6 @@ pub fn one2one_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
     let handler_fn_name = format!("{}_{}", entity_name.to_string().to_lowercase(), fn_name);
 
     FunctionDef {
-        entity_name: entity_name.clone(),
-        fn_name: fn_name.clone(),
         fn_stream: quote! {
             pub fn #fn_name(tx: &ReadTransaction, pk: &#pk_type) -> Result<#child_type, AppError> {
                 #child_type::get(&tx, &pk).and_then(|opt| {
@@ -45,7 +43,9 @@ pub fn one2one_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
                 })
             }
         },
-        endpoint_def: Some(EndpointDef {
+        endpoint: Some(EndpointDef {
+            entity_name: entity_name.clone(),
+            fn_name: fn_name.clone(),
             params: vec![FromPath(vec![PathExpr {
                 name: pk_name.clone(),
                 ty: pk_type.clone(),
@@ -67,7 +67,7 @@ pub fn one2one_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
                 )
             },
             endpoint: format!("/{}/{{{}}}/{}", entity_name.to_string().to_lowercase(), pk_name, child_name),
-        }),
+        }.to_endpoint()),
         test_stream,
         bench_stream
     }
@@ -103,8 +103,6 @@ pub fn one2opt_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
     let handler_fn_name = format!("{}_{}", entity_name.to_string().to_lowercase(), fn_name);
 
     FunctionDef {
-        entity_name: entity_name.clone(),
-        fn_name: fn_name.clone(),
         fn_stream: quote! {
             pub fn #fn_name(
                 tx: &ReadTransaction,
@@ -113,7 +111,9 @@ pub fn one2opt_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
                 #child_type::get(&tx, &pk)
             }
         },
-        endpoint_def: Some(EndpointDef {
+        endpoint: Some(EndpointDef {
+            entity_name: entity_name.clone(),
+            fn_name: fn_name.clone(),
             params: vec![FromPath(vec![PathExpr {
                 name: pk_name.clone(),
                 ty: pk_type.clone(),
@@ -139,7 +139,7 @@ pub fn one2opt_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
                 )
             },
             endpoint: format!("/{}/{{{}}}/{}", entity_name.to_string().to_lowercase(), pk_name, child_name),
-        }),
+        }.to_endpoint()),
         test_stream,
         bench_stream,
     }
@@ -175,15 +175,15 @@ pub fn one2many_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, 
     let handler_fn_name = format!("{}_{}", entity_name.to_string().to_lowercase(), fn_name);
 
     FunctionDef {
-        entity_name: entity_name.clone(),
-        fn_name: fn_name.clone(),
         fn_stream: quote! {
             pub fn #fn_name(tx: &ReadTransaction, pk: &#pk_type) -> Result<Vec<#child_type>, AppError> {
                 let (from, to) = pk.fk_range();
                 #child_type::range(&tx, &from, &to, None)
             }
         },
-        endpoint_def: Some(EndpointDef {
+        endpoint: Some(EndpointDef {
+            entity_name: entity_name.clone(),
+            fn_name: fn_name.clone(),
             params: vec![FromPath(vec![PathExpr {
                 name: pk_name.clone(),
                 ty: pk_type.clone(),
@@ -205,7 +205,7 @@ pub fn one2many_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, 
                 }
             },
             endpoint: format!("/{}/{{{}}}/{}", entity_name.to_string().to_lowercase(), pk_name, child_name),
-        }),
+        }.to_endpoint()),
         test_stream,
         bench_stream,
     }

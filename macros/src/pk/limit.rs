@@ -47,10 +47,10 @@ pub fn limit_fn_def(entity_name: &Ident, entity_type: &Type) -> FunctionDef {
     ));
 
     FunctionDef {
-        entity_name: entity_name.clone(),
-        fn_name: fn_name.clone(),
         fn_stream,
-        endpoint_def: Some(EndpointDef {
+        endpoint: Some(EndpointDef {
+            entity_name: entity_name.clone(),
+            fn_name: fn_name.clone(),
             params: vec![FromQuery(QueryExpr {
                 ty: syn::parse_quote!(LimitQuery),
                 extraction: quote! { extract::Query(query): extract::Query<LimitQuery> },
@@ -71,7 +71,7 @@ pub fn limit_fn_def(entity_name: &Ident, entity_type: &Type) -> FunctionDef {
                 )
             },
             endpoint: format!("/{}", entity_name.to_string().to_lowercase()),
-        }),
+        }.to_endpoint()),
         test_stream: None,
         bench_stream: None
     }

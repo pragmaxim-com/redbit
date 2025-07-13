@@ -64,10 +64,8 @@ pub fn get_by_dict_def(
     });
 
     FunctionDef {
-        entity_name: entity_name.clone(),
-        fn_name: fn_name.clone(),
         fn_stream,
-        endpoint_def: None,
+        endpoint: None,
         test_stream,
         bench_stream
     }
@@ -121,10 +119,8 @@ pub fn get_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &I
     });
 
     FunctionDef {
-        entity_name: entity_name.clone(),
-        fn_name: fn_name.clone(),
         fn_stream,
-        endpoint_def: None,
+        endpoint: None,
         test_stream,
         bench_stream
     }

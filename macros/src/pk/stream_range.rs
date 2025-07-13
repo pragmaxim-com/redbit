@@ -90,10 +90,10 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
     let handler_fn_name = format!("{}_{}", entity_name.to_string().to_lowercase(), fn_name);
 
     FunctionDef {
-        entity_name: entity_name.clone(),
-        fn_name: fn_name.clone(),
         fn_stream,
-        endpoint_def: Some(EndpointDef {
+        endpoint: Some(EndpointDef {
+            entity_name: entity_name.clone(),
+            fn_name: fn_name.clone(),
             params: vec![FromQuery(QueryExpr {
                 ty: range_query_ty.clone(),
                 extraction: quote! { extract::Query(query): extract::Query<#range_query_ty> },
@@ -123,7 +123,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
                 )
             },
             endpoint: format!("/{}/{}", entity_name.to_string().to_lowercase(), pk_name.clone()),
-        }),
+        }.to_endpoint()),
         test_stream,
         bench_stream
     }

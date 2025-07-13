@@ -73,10 +73,10 @@ pub fn by_dict_def(
     let handler_fn_name = format!("{}_{}", entity_name.to_string().to_lowercase(), fn_name);
 
     FunctionDef {
-        entity_name: entity_name.clone(),
-        fn_name: fn_name.clone(),
         fn_stream,
-        endpoint_def: Some(EndpointDef {
+        endpoint: Some(EndpointDef {
+            entity_name: entity_name.clone(),
+            fn_name: fn_name.clone(),
             params: vec![FromPath(vec![PathExpr {
                 name: column_name.clone(),
                 ty: column_type.clone(),
@@ -105,7 +105,7 @@ pub fn by_dict_def(
             endpoint: format!("/{}/{}/{{{}}}/{}",
                               entity_name.to_string().to_lowercase(), column_name, column_name, pk_name
             ),
-        }),
+        }.to_endpoint()),
         test_stream,
         bench_stream
     }
@@ -165,10 +165,10 @@ pub fn by_index_def(
     let handler_fn_name = format!("{}_{}", entity_name.to_string().to_lowercase(), fn_name);
 
     FunctionDef {
-        entity_name: entity_name.clone(),
-        fn_name: fn_name.clone(),
         fn_stream,
-        endpoint_def: Some(EndpointDef {
+        endpoint: Some(EndpointDef {
+            entity_name: entity_name.clone(),
+            fn_name: fn_name.clone(),
             params: vec![FromPath(vec![PathExpr {
                 name: column_name.clone(),
                 ty: column_type.clone(),
@@ -197,7 +197,7 @@ pub fn by_index_def(
             endpoint: format!("/{}/{}/{{{}}}/{}",
                               entity_name.to_string().to_lowercase(), column_name, column_name, pk_name
             ),
-        }),
+        }.to_endpoint()),
         test_stream,
         bench_stream
     }

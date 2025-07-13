@@ -60,10 +60,8 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
     });
 
     FunctionDef {
-        entity_name: entity_name.clone(),
-        fn_name: fn_name.clone(),
         fn_stream,
-        endpoint_def: None,
+        endpoint: None,
         test_stream,
         bench_stream
     }

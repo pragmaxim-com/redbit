@@ -100,10 +100,10 @@ pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, column
     let handler_fn_name = format!("{}_{}", entity_name.to_string().to_lowercase(), fn_name);
 
     FunctionDef {
-        entity_name: entity_name.clone(),
-        fn_name: fn_name.clone(),
         fn_stream,
-        endpoint_def: Some(EndpointDef {
+        endpoint: Some(EndpointDef {
+            entity_name: entity_name.clone(),
+            fn_name: fn_name.clone(),
             params: vec![FromQuery(QueryExpr {
                 ty: range_query_ty.clone(),
                 extraction: quote! { extract::Query(query): extract::Query<#range_query_ty> },
@@ -133,7 +133,7 @@ pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, column
                 )
             },
             endpoint: format!("/{}/{}", entity_name.to_string().to_lowercase(), column_name.clone()),
-        }),
+        }.to_endpoint()),
         test_stream,
         bench_stream
     }

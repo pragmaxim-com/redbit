@@ -42,10 +42,8 @@ pub fn store_def(entity_name: &Ident, entity_type: &Type, store_statements: &Vec
     });
 
     FunctionDef {
-        entity_name: entity_name.clone(),
-        fn_name: fn_name.clone(),
         fn_stream,
-        endpoint_def: None,
+        endpoint: None,
         test_stream,
         bench_stream
     }
@@ -89,10 +87,8 @@ pub fn store_many_def(entity_name: &Ident, entity_type: &Type, store_many_statem
 
 
     FunctionDef {
-        entity_name: entity_name.clone(),
-        fn_name: fn_name.clone(),
         fn_stream,
-        endpoint_def: None,
+        endpoint: None,
         test_stream,
         bench_stream
     }
@@ -138,10 +134,10 @@ pub fn store_and_commit_def(entity_name: &Ident, entity_type: &Type, pk_name: &I
     let handler_fn_name = format!("{}_{}", entity_name.to_string().to_lowercase(), fn_name);
 
     FunctionDef {
-        entity_name: entity_name.clone(),
-        fn_name: fn_name.clone(),
         fn_stream,
-        endpoint_def: Some(EndpointDef {
+        endpoint: Some(EndpointDef {
+            entity_name: entity_name.clone(),
+            fn_name: fn_name.clone(),
             params: vec![FromBody(BodyExpr {
                 ty: entity_type.clone(),
                 extraction: quote! { AppJson(body): AppJson<#entity_type> },
@@ -165,7 +161,7 @@ pub fn store_and_commit_def(entity_name: &Ident, entity_type: &Type, pk_name: &I
                 )
             },
             endpoint: format!("/{}", entity_name.to_string().to_lowercase()),
-        }),
+        }.to_endpoint()),
         test_stream,
         bench_stream
     }

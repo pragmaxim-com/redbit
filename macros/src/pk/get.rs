@@ -47,10 +47,10 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
     let handler_fn_name = format!("{}_{}", entity_name.to_string().to_lowercase(), fn_name);
 
     FunctionDef {
-        entity_name: entity_name.clone(),
-        fn_name: fn_name.clone(),
         fn_stream,
-        endpoint_def: Some(EndpointDef {
+        endpoint: Some(EndpointDef {
+            entity_name: entity_name.clone(),
+            fn_name: fn_name.clone(),
             params: vec![FromPath(vec![PathExpr {
                 name: pk_name.clone(),
                 ty: pk_type.clone(),
@@ -77,14 +77,14 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
                    }
                }
             },
-            utoipa_responses: quote! { 
+            utoipa_responses: quote! {
                 responses(
-                    (status = OK, content_type = "application/json", body = #entity_type), 
+                    (status = OK, content_type = "application/json", body = #entity_type),
                     (status = NOT_FOUND, content_type = "application/json", body = ErrorResponse)
-                ) 
+                )
             },
             endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), pk_name, pk_name),
-        }),
+        }.to_endpoint()),
         test_stream,
         bench_stream,
     }

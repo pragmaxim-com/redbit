@@ -16,10 +16,10 @@ pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type) -> FunctionD
     let handler_fn_name = format!("{}_{}", entity_name.to_string().to_lowercase(), fn_name);
 
     FunctionDef {
-        entity_name: entity_name.clone(),
-        fn_name: fn_name.clone(),
         fn_stream,
-        endpoint_def: Some(EndpointDef {
+        endpoint: Some(EndpointDef {
+            entity_name: entity_name.clone(),
+            fn_name: fn_name.clone(),
             params: vec![FromPath(vec![PathExpr {
                 name: pk_name.clone(),
                 ty: pk_type.clone(),
@@ -41,7 +41,7 @@ pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type) -> FunctionD
                 )
             },
             endpoint: format!("/{}/{}/{{{}}}/{}", entity_name.to_string().to_lowercase(), pk_name, pk_name, fn_name),
-        }),
+        }.to_endpoint()),
         test_stream: None,
         bench_stream: None
     }

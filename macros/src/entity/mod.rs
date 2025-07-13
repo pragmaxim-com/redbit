@@ -1,5 +1,5 @@
 use crate::field::FieldMacros;
-use crate::rest::to_http_endpoints;
+use crate::rest::Rest;
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{parse_quote, ItemStruct, Type};
@@ -58,18 +58,16 @@ pub fn new(item_struct: &ItemStruct) -> Result<TokenStream, syn::Error> {
     let stream_query_struct = query::stream_query(&stream_query_type, &stream_queries);
     let range_query_structs = range_queries.into_iter().map(|rq| rq.stream).collect::<Vec<_>>();
 
+    let api_functions: Vec<TokenStream> = function_defs.iter().map(|f| f.fn_stream.clone()).collect::<Vec<_>>();
     let sample_functions = sample::sample_token_streams(entity_ident, &entity_type, &pk.tpe, &struct_default_inits);
     let compose_function = compose::compose_token_stream(entity_ident, &entity_type, &pk.tpe, &struct_inits);
     let compose_with_filter_function = compose::compose_with_filter_token_stream(&entity_type, &pk.tpe, &stream_query_type, &field_names, &struct_inits_with_query);
     let compose_functions = vec![compose_function, compose_with_filter_function];
     let table_definitions: Vec<TokenStream> = table_definitions.iter().map(|table_def| table_def.definition.clone()).collect();
 
-    let api_functions: Vec<TokenStream> = function_defs.iter().map(|f| f.fn_stream.clone()).collect::<Vec<_>>();
-    let unit_tests = function_defs.iter().filter_map(|f| f.test_stream.clone()).collect::<Vec<_>>();
-    let benches = function_defs.iter().filter_map(|f| f.bench_stream.clone()).collect::<Vec<_>>();
+    let test_suite = tests::test_suite(entity_ident, &function_defs);
 
-    let (endpoint_handlers, routes, route_tests, client_calls) = to_http_endpoints(&function_defs);
-    let test_suite = tests::test_suite(entity_ident, unit_tests, route_tests, benches);
+    let Rest { endpoint_handlers, routes, client_calls} = Rest::new(&function_defs);
 
     let stream: TokenStream =
         quote! {

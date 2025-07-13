@@ -61,10 +61,8 @@ pub fn by_dict_def(
     });
 
     FunctionDef {
-        entity_name: entity_name.clone(),
-        fn_name: fn_name.clone(),
         fn_stream,
-        endpoint_def: None,
+        endpoint: None,
         test_stream,
         bench_stream
     }
@@ -114,10 +112,8 @@ pub fn by_index_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, column
     });
 
     FunctionDef {
-        entity_name: entity_name.clone(),
-        fn_name: fn_name.clone(),
         fn_stream,
-        endpoint_def: None,
+        endpoint: None,
         test_stream,
         bench_stream
     }
