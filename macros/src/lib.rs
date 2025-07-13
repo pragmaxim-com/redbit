@@ -187,13 +187,6 @@ pub fn entity(_attr: TokenStream, item: TokenStream) -> TokenStream {
     });
     let stream = quote! {
         #s
-        inventory::submit! {
-            StructInfo {
-                name: stringify!(#struct_ident),
-                routes_fn: #struct_ident::routes,
-                client_calls: #struct_ident::client_calls,
-            }
-        }
     };
     macro_utils::submit_struct_to_stream(stream, "entity", struct_ident, "_attr.rs")
 }
@@ -202,6 +195,20 @@ pub fn entity(_attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_error]
 pub fn derive_entity(input: TokenStream) -> TokenStream {
     let item_struct = parse_macro_input!(input as ItemStruct);
-    let stream = entity::new(&item_struct).unwrap_or_else(|e| e.to_compile_error().into());
+    let struct_ident = &item_struct.ident;
+    let (multiplicity, s) = entity::new(&item_struct).unwrap_or_else(|e| (None, e.to_compile_error().into()));
+    let root = multiplicity.is_none();
+    let stream = quote! {
+        #s
+        inventory::submit! {
+            StructInfo {
+                name: stringify!(#struct_ident),
+                root: #root,
+                routes_fn: #struct_ident::routes,
+                client_calls: #struct_ident::client_calls,
+            }
+        }
+    };
+
     macro_utils::submit_struct_to_stream(stream, "entity", &item_struct.ident, "_derive.rs")
 }

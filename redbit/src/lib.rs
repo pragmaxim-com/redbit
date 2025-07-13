@@ -5,6 +5,9 @@
 //! The library provides methods for storing, retrieving, and deleting entities based on primary keys (PKs) and secondary indexes,
 //! supporting one-to-one and one-to-many relationships.
 //!
+
+mod schema;
+
 pub use axum;
 pub use axum::extract;
 pub use axum::response::IntoResponse;
@@ -319,6 +322,7 @@ impl RequestState {
 
 pub struct StructInfo {
     pub name: &'static str,
+    pub root: bool,
     pub routes_fn: fn() -> OpenApiRouter<RequestState>,
     pub client_calls: fn() -> String
 }
@@ -391,7 +395,11 @@ pub async fn build_router(state: RequestState, extras: Option<OpenApiRouter<Requ
         const openapi = await response.json();
         "#.to_string()
     );
+    let mut root: Option<String> = None;
     for info in inventory::iter::<StructInfo> {
+        if info.root {
+            root = Some(info.name.to_string());
+        }
         router = router.merge((info.routes_fn)());
         client_calls.push((info.client_calls)())
     }
@@ -408,9 +416,14 @@ pub async fn build_router(state: RequestState, extras: Option<OpenApiRouter<Requ
     if let Some(cors_layer) = cors {
         router = router.layer(cors_layer);
     }
-    let (r, api) = router.split_for_parts();
+    let (r, openapi) = router.split_for_parts();
 
-    r.merge(SwaggerUi::new("/swagger-ui").url("/apidoc/openapi.json", api)).with_state(state)
+    if let Some(root_name) = root {
+        let schema = schema::load(&openapi, root_name).expect("Failed to load schema");
+        write_to_local_file(vec![schema], "client", "schema.json");
+    }
+
+    r.merge(SwaggerUi::new("/swagger-ui").url("/apidoc/openapi.json", openapi)).with_state(state)
 }
 
 pub async fn serve(state: RequestState, socket_addr: SocketAddr, extras: Option<OpenApiRouter<RequestState>>, cors: Option<CorsLayer>) -> () {

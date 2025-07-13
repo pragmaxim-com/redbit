@@ -158,28 +158,28 @@ fn parse_entity_field(field: &syn::Field) -> Result<ColumnDef, syn::Error> {
     }
 }
 
-pub fn get_field_macros(ast: &ItemStruct) -> Result<(FieldDef, Vec<ColumnDef>), syn::Error> {
-    let mut pk_column: Option<FieldDef> = None;
+pub fn get_field_macros(ast: &ItemStruct) -> Result<((FieldDef, Option<Multiplicity>), Vec<ColumnDef>), syn::Error> {
+    let mut key_column: Option<(FieldDef, Option<Multiplicity>)> = None;
     let mut columns: Vec<ColumnDef> = Vec::new();
 
     let fields = get_named_fields(ast)?;
-    
+
     for field in fields.iter() {
         match parse_entity_field(field)? {
             ColumnDef::Key { field_def, fk } => {
-                if pk_column.is_some() {
+                if key_column.is_some() {
                     return Err(syn::Error::new(field.span(), "Multiple `#[pk]` columns found; only one is allowed"));
                 }
-                pk_column = Some(field_def.clone());
+                key_column = Some((field_def.clone(), fk.clone()));
                 columns.push(ColumnDef::Key { field_def, fk });
             }
             column => columns.push(column),
         }
     }
 
-    let pk = pk_column.ok_or_else(|| syn::Error::new(ast.span(), "`#[pk]` attribute not found on any column. Exactly one column must have `#[pk]`."))?;
+    let key = key_column.ok_or_else(|| syn::Error::new(ast.span(), "`#[pk]` or `#[fk] attribute not found on any column."))?;
 
-    Ok((pk, columns))
+    Ok((key, columns))
 }
 
 /// Extracts and validates the required fields (parent & index) for root or pointer.

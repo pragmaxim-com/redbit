@@ -1,4 +1,5 @@
 use crate::field::FieldMacros;
+use crate::field_parser::Multiplicity;
 use crate::rest::Rest;
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -11,11 +12,11 @@ mod sample;
 mod compose;
 mod tests;
 
-pub fn new(item_struct: &ItemStruct) -> Result<TokenStream, syn::Error> {
+pub fn new(item_struct: &ItemStruct) -> Result<(Option<Multiplicity>, TokenStream), syn::Error> {
     let entity_ident = &item_struct.ident;
     let entity_type: Type = parse_quote! { #entity_ident };
     let stream_query_type = query::stream_query_type(entity_ident);
-    let (pk, field_macros) = 
+    let ((pk, multiplicity), field_macros) = 
         FieldMacros::new(&item_struct, entity_ident, &entity_type, &stream_query_type)?;
 
     let mut field_names = Vec::new();
@@ -95,5 +96,5 @@ pub fn new(item_struct: &ItemStruct) -> Result<TokenStream, syn::Error> {
             // unit tests and rest api tests
             #test_suite
         }.into();
-    Ok(stream)
+    Ok((multiplicity, stream))
 }
