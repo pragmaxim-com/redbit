@@ -41,7 +41,7 @@ pub struct RangeQuery {
     pub ty: Type,
 }
 
-pub fn range_query(entity_name: &Ident, field_ident: &Ident, tpe: &Type) -> RangeQuery {
+pub fn pk_range_query(entity_name: &Ident, field_ident: &Ident, tpe: &Type) -> RangeQuery {
     let prefix = macro_utils::to_camel_case(&field_ident.to_string(), true);
     let entity_range_query = format_ident!("{}{}{}", entity_name.to_string(), prefix, "RangeQuery");
     let ty = syn::parse_quote!(#entity_range_query);
@@ -57,7 +57,34 @@ pub fn range_query(entity_name: &Ident, field_ident: &Ident, tpe: &Type) -> Rang
                 pub fn sample() -> Self {
                     Self {
                         from: #tpe::default(),
-                        until: #tpe::default().next().next().next()
+                        until: #tpe::default().next_index().next_index().next_index()
+                    }
+                }
+            }
+        };
+    RangeQuery {
+        stream,
+        ty,
+    }
+}
+
+pub fn col_range_query(entity_name: &Ident, field_ident: &Ident, tpe: &Type) -> RangeQuery {
+    let prefix = macro_utils::to_camel_case(&field_ident.to_string(), true);
+    let entity_range_query = format_ident!("{}{}{}", entity_name.to_string(), prefix, "RangeQuery");
+    let ty = syn::parse_quote!(#entity_range_query);
+
+    let stream =
+        quote! {
+            #[derive(Clone, IntoParams, Serialize, Deserialize, Default)]
+            pub struct #entity_range_query {
+                pub from: #tpe,
+                pub until: #tpe,
+            }
+            impl #entity_range_query {
+                pub fn sample() -> Self {
+                    Self {
+                        from: #tpe::default(),
+                        until: #tpe::default().next_value().next_value().next_value()
                     }
                 }
             }

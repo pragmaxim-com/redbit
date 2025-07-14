@@ -26,7 +26,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
             let entity_count: usize = 3;
             let write_tx = db.begin_write().expect("Failed to begin write transaction");
             let from_value = #pk_type::default();
-            let until_value = #pk_type::default().next().next().next();
+            let until_value = #pk_type::default().next_index().next_index().next_index();
             let pks = #entity_name::#fn_name(&write_tx, &from_value, &until_value).expect("Failed to get PKs in range");
             let test_pks: Vec<#pk_type> = #entity_type::sample_many(entity_count).iter().map(|e| e.#pk_name.clone()).collect();
             assert_eq!(test_pks, pks, "Expected PKs to be returned for the given range");
@@ -40,7 +40,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
             let db = DB.clone();
             let write_tx = db.begin_write().expect("Failed to begin write transaction");
             let from_value = #pk_type::default();
-            let until_value = #pk_type::default().next().next().next();
+            let until_value = #pk_type::default().next_index().next_index().next_index();
             b.iter(|| {
                 #entity_name::#fn_name(&write_tx, &from_value, &until_value).expect("Failed to get PKs in range");
             });

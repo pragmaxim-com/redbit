@@ -112,7 +112,7 @@ impl DbColumnMacros {
         let mut range_query = None;
 
         if range {
-            let rq = entity::query::range_query(entity_name, column_name, column_type);
+            let rq = entity::query::col_range_query(entity_name, column_name, column_type);
             function_defs.push(stream_range_by::stream_range_by_index_def(
                 entity_name,
                 entity_type,

@@ -11,7 +11,10 @@ pub fn new(struct_name: &Ident, parent_field: Field, index_field: Field) -> Toke
         impl IndexedPointer for #struct_name {
             type Index = #index_type;
             fn index(&self) -> Self::Index { self.#index_name }
-            fn next(&self) -> Self { #struct_name { #parent_name: self.#parent_name.clone(), #index_name: self.#index_name + 1 } }
+            fn next_index(&self) -> Self { #struct_name { #parent_name: self.#parent_name.clone(), #index_name: self.#index_name + 1 } }
+            fn rollback_or_init(&self, n: u32) -> Self {
+                #struct_name { #parent_name: self.#parent_name.rollback_or_init(n), #index_name: 0 }
+            }
         }
         impl ChildPointer for #struct_name {
             type Parent = #parent_type;

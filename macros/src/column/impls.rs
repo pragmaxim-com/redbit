@@ -140,7 +140,7 @@ pub fn generate_column_impls(
         }
 
         impl IterableColumn for #struct_ident {
-            fn next(&self) -> Self {
+            fn next_value(&self) -> Self {
                 #iterable_code
             }
         }

@@ -15,7 +15,7 @@ pub fn sample_token_streams(entity_name: &Ident, entity_type: &Type, pk_type: &T
                 std::iter::successors(Some((#pk_type::default(), None)), |(prev_pointer, _)| {
                     let new_entity = #entity_type::sample_with(prev_pointer, sample_index);
                     sample_index += 1;
-                    Some((prev_pointer.next(), Some(new_entity)))
+                    Some((prev_pointer.next_index(), Some(new_entity)))
                 })
                 .filter_map(|(_, instance)| instance)
                 .take(n)

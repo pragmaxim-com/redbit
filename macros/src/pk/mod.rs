@@ -1,5 +1,6 @@
 mod exists;
 mod get;
+mod tail;
 mod take;
 mod first;
 mod filter;
@@ -52,6 +53,7 @@ impl DbPkMacros {
         function_defs.push(get::fn_def(entity_name, entity_type, &pk_name, &pk_type, &table_def.name));
         function_defs.push(filter::fn_def(entity_name, entity_type, &pk_type, &table_def.name, stream_query_ty));
         function_defs.push(take::fn_def(entity_name, entity_type, &table_def.name));
+        function_defs.push(tail::fn_def(entity_name, entity_type, &table_def.name));
         function_defs.push(first::fn_def(entity_name, entity_type, &table_def.name));
         function_defs.push(last::fn_def(entity_name, entity_type, &table_def.name));
         function_defs.push(limit::limit_fn_def(entity_name, entity_type));
@@ -64,7 +66,7 @@ impl DbPkMacros {
             _ => {}
         };
 
-        let range_query = entity::query::range_query(entity_name, &pk_name, &pk_type);
+        let range_query = entity::query::pk_range_query(entity_name, &pk_name, &pk_type);
         function_defs.push(range::fn_def(entity_name, entity_type, &pk_type, &table_def.name, stream_query_ty));
         function_defs.push(stream_range::fn_def(entity_name, entity_type, &pk_name, &pk_type, &table_def.name, &range_query.ty, stream_query_ty));
         function_defs.push(pk_range::fn_def(entity_name, entity_type, &pk_name, &pk_type, &table_def.name));

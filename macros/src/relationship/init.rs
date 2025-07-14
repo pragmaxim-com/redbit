@@ -85,8 +85,8 @@ pub fn one2many_relation_default_init(child_name: &Ident, child_type: &Type) -> 
         #child_name:  {
             let (from, _) = pk.fk_range();
             let sample_0 = #child_type::sample_with(&from, sample_index);
-            let sample_1 = #child_type::sample_with(&from.next(), sample_index);
-            let sample_2 = #child_type::sample_with(&from.next().next(), sample_index);
+            let sample_1 = #child_type::sample_with(&from.next_index(), sample_index);
+            let sample_2 = #child_type::sample_with(&from.next_index().next_index(), sample_index);
             vec![sample_0, sample_1, sample_2]
         }
     }

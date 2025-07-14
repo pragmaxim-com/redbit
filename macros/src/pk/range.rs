@@ -37,7 +37,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, table: &I
             let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let from_value = #pk_type::default();
-            let until_value = #pk_type::default().next().next();
+            let until_value = #pk_type::default().next_index().next_index();
             let entities = #entity_name::#fn_name(&read_tx, &from_value, &until_value, None).expect("Failed to get entities by range");
             let expected_entities = #entity_type::sample_many(2);
             assert_eq!(entities, expected_entities, "Expected entities to be returned for the given range");
@@ -47,7 +47,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, table: &I
             let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let from_value = #pk_type::default();
-            let until_value = #pk_type::default().next().next().next();
+            let until_value = #pk_type::default().next_index().next_index().next_index();
             let query = #stream_query_type::sample();
             let entities = #entity_name::#fn_name(&read_tx, &from_value, &until_value, Some(query.clone())).expect("Failed to get entities by range");
             let expected_entities = vec![#entity_type::sample()];
@@ -62,7 +62,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, table: &I
             let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let from_value = #pk_type::default();
-            let until_value = #pk_type::default().next().next().next();
+            let until_value = #pk_type::default().next_index().next_index().next_index();
             let query = #stream_query_type::sample();
             b.iter(|| {
                 #entity_name::#fn_name(&read_tx, &from_value, &until_value, Some(query.clone())).expect("Failed to get entities by range");

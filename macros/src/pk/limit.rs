@@ -15,6 +15,9 @@ pub fn limit_fn_def(entity_name: &Ident, entity_type: &Type) -> FunctionDef {
                     LimitQuery{take: Some(n), ..} => {
                         #entity_name::take(&tx, n)
                     },
+                    LimitQuery{tail: Some(n), ..} => {
+                        #entity_name::tail(&tx, n)
+                    },
                     LimitQuery{first: Some(true), ..} => {
                         #entity_name::first(&tx).map(|r| r.into_iter().collect())
                     },
@@ -22,7 +25,7 @@ pub fn limit_fn_def(entity_name: &Ident, entity_type: &Type) -> FunctionDef {
                         #entity_name::last(&tx).map(|r| r.into_iter().collect())
                     },
                     LimitQuery{..} => {
-                        Err(AppError::BadRequest("LimitQuery must have at least one of take, first, or last defined".to_string()))
+                        Err(AppError::BadRequest("LimitQuery must have one of take, tail, first, or last defined".to_string()))
                     }
                 }
             }

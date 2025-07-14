@@ -38,7 +38,13 @@ pub fn plain_init_with_query(column_name: &Ident, table: &Ident) -> TokenStream 
 
 pub fn plain_default_init(column_name: &Ident, column_type: &Type) -> TokenStream {
     quote! {
-        #column_name: #column_type::default()
+        #column_name: {
+            let mut value = <#column_type as Default>::default();
+            for _ in 0..sample_index {
+                value = <#column_type as IterableColumn>::next_value(&value);
+            }
+            value
+        }
     }
 }
 
@@ -82,7 +88,7 @@ pub fn index_default_init(column_name: &Ident, column_type: &Type) -> TokenStrea
         #column_name: {
             let mut value = <#column_type as Default>::default();
             for _ in 0..sample_index {
-                value = <#column_type as IterableColumn>::next(&value);
+                value = <#column_type as IterableColumn>::next_value(&value);
             }
             value
         }
@@ -136,7 +142,7 @@ pub fn dict_default_init(column_name: &Ident, column_type: &Type) -> TokenStream
         #column_name: {
             let mut value = <#column_type as Default>::default();
             for _ in 0..sample_index {
-                value = <#column_type as IterableColumn>::next(&value);
+                value = <#column_type as IterableColumn>::next_value(&value);
             }
             value
         }

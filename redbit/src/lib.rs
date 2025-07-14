@@ -58,6 +58,7 @@ pub use utoipa::ToSchema;
 pub use utoipa_axum;
 pub use utoipa_axum::router::OpenApiRouter;
 pub use utoipa_swagger_ui;
+pub use std::collections::VecDeque;
 
 use crate::axum::extract::rejection::JsonRejection;
 use crate::axum::extract::FromRequest;
@@ -84,7 +85,8 @@ use tower_http::cors::CorsLayer;
 pub trait IndexedPointer: Clone {
     type Index: Copy + Ord + Add<Output = Self::Index> + Default;
     fn index(&self) -> Self::Index;
-    fn next(&self) -> Self;
+    fn next_index(&self) -> Self;
+    fn rollback_or_init(&self, n: u32) -> Self;
 }
 
 pub trait RootPointer: IndexedPointer {
@@ -108,13 +110,26 @@ where
     CH::Parent: IndexedPointer + Clone,
 {
     fn fk_range(&self) -> (CH, CH) {
-        (CH::from_parent(self.clone(), CH::Index::default()), CH::from_parent(self.clone().next(), CH::Index::default()))
+        (CH::from_parent(self.clone(), CH::Index::default()), CH::from_parent(self.clone().next_index(), CH::Index::default()))
     }
 }
 
 pub trait IterableColumn: Sized {
-    fn next(&self) -> Self;
+    fn next_value(&self) -> Self;
 }
+macro_rules! impl_iterable_column_for_primitive {
+    ($($t:ty),*) => {
+        $(
+            impl IterableColumn for $t {
+                fn next_value(&self) -> Self {
+                    self.wrapping_add(1)
+                }
+            }
+        )*
+    };
+}
+
+impl_iterable_column_for_primitive!(u8, u16, u32, u64, usize, i8, i16, i32, i64, isize);
 
 pub trait UrlEncoded {
     fn encode(&self) -> String;
@@ -338,6 +353,8 @@ pub struct LimitQuery {
     #[param(required = false)]
     pub take: Option<usize>,
     #[param(required = false)]
+    pub tail: Option<usize>,
+    #[param(required = false)]
     pub last: Option<bool>,
     #[param(required = false)]
     pub first: Option<bool>,
@@ -345,7 +362,7 @@ pub struct LimitQuery {
 
 impl LimitQuery {
     pub fn sample() -> LimitQuery {
-        LimitQuery { take: Some(1), last: None, first: None }
+        LimitQuery { take: Some(1), tail: None, last: None, first: None }
     }
 }
 
