@@ -16,7 +16,6 @@ pub use redbit::*;
 #[pointer_key(u8)] pub struct AssetPointer(UtxoPointer);
 
 #[column] pub struct Hash(pub String);
-#[column] pub struct PolicyId(pub String);
 #[column("base64")] pub struct Address(pub [u8; 32]);
 #[column("hex")] pub struct Datum(pub Vec<u8>);
 #[column] pub struct AssetName(pub String);
@@ -51,11 +50,9 @@ pub struct BlockHeader {
     #[column(range)]
     pub timestamp: Timestamp,
     #[column(range)]
-    pub time: Time,
+    pub mining_time: Time, // just to demonstrate a different type
     #[column]
     pub duration: Duration,
-    #[column(index)]
-    pub merkle_root: Hash,
     #[column]
     pub nonce: u64,
 }
@@ -101,6 +98,4 @@ pub struct Asset {
     pub amount: u64,
     #[column(dictionary)]
     pub name: AssetName,
-    #[column(dictionary)]
-    pub policy_id: PolicyId,
 }

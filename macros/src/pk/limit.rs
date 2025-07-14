@@ -30,20 +30,20 @@ pub fn limit_fn_def(entity_name: &Ident, entity_type: &Type) -> FunctionDef {
 
     let handler_fn_name = format!("{}_{}", entity_name.to_string().to_lowercase(), fn_name);
     let client_code = Some(format!(
-        r#"
-        import {{{function_name}}} from './hey';
-        {function_name}({{
-            query: {{
-                take: 1
-            }},
-            throwOnError: false
-        }}).then(function({{data, request, response, error}}) {{
-            console.log("{function_name} succeeded with response: ", response.status, error?.message, data);
-        }}).catch(function({{message}}) {{
-            console.error("{function_name} failed with error :", message);
-        }});
-        "#,
-        function_name = format_ident!("{}", macro_utils::to_camel_case(&handler_fn_name)),
+r#"
+import {{{function_name}}} from './hey';
+{function_name}({{
+    query: {{
+        take: 1
+    }},
+    throwOnError: false
+}}).then(function({{data, request, response, error}}) {{
+    console.log("{function_name} succeeded with response: ", response.status, error?.message, data);
+}}).catch(function({{message}}) {{
+    console.error("{function_name} failed with error :", message);
+}});
+"#,
+function_name = format_ident!("{}", macro_utils::to_camel_case(&handler_fn_name, false)),
     ));
 
     FunctionDef {

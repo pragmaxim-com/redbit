@@ -35,10 +35,12 @@ pub fn new(struct_name: &Ident, index_field: Field) -> TokenStream {
         impl PartialSchema for #struct_name {
             fn schema() -> openapi::RefOr<openapi::schema::Schema> {
                 use openapi::schema::*;
+                use openapi::extensions::ExtensionsBuilder;
                 Schema::Object(
                     ObjectBuilder::new()
                         .schema_type(SchemaType::Type(Type::Integer))
                         .examples(vec![0])
+                        .extensions(Some(ExtensionsBuilder::new().add("key", "pk").build()))
                         .build()
                 ).into()
             }

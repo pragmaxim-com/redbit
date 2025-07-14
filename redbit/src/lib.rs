@@ -330,6 +330,7 @@ pub struct StructInfo {
 inventory::collect!(StructInfo);
 
 #[derive(OpenApi)]
+#[openapi(info(license(name = "MIT")))]
 pub struct ApiDoc;
 
 #[derive(IntoParams, Serialize, Deserialize, Default)]
@@ -389,11 +390,11 @@ pub async fn build_router(state: RequestState, extras: Option<OpenApiRouter<Requ
     let mut router: OpenApiRouter<RequestState> = OpenApiRouter::with_openapi(ApiDoc::openapi());
     let mut client_calls: Vec<String> = Vec::new();
     client_calls.push(
-        r#"
-        const response = await fetch("http://127.0.0.1:8000/apidoc/openapi.json");
-        if (!response.ok) throw new Error("Failed to fetch OpenAPI");
-        const openapi = await response.json();
-        "#.to_string()
+r#"
+const response = await fetch("http://127.0.0.1:8000/apidoc/openapi.json");
+if (!response.ok) throw new Error("Failed to fetch OpenAPI");
+const openapi = await response.json();
+"#.to_string()
     );
     let mut root: Option<String> = None;
     for info in inventory::iter::<StructInfo> {

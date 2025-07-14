@@ -33,14 +33,12 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
 
     BlockHeader::get_by_hash(&read_tx, &first_block_header.hash)?;
     BlockHeader::get_by_timestamp(&read_tx, &first_block_header.timestamp)?;
-    BlockHeader::get_by_merkle_root(&read_tx, &first_block_header.merkle_root)?;
     BlockHeader::take(&read_tx, 100)?;
     BlockHeader::get(&read_tx, &first_block_header.id)?;
     BlockHeader::range(&read_tx, &first_block_header.id, &last_block_header.id, None)?;
     BlockHeader::range_by_timestamp(&read_tx, &first_block_header.timestamp, &last_block_header.timestamp)?;
     BlockHeader::stream_by_hash(db.begin_read()?, first_block_header.hash, None)?.try_collect::<Vec<BlockHeader>>().await?;
     BlockHeader::stream_by_timestamp(db.begin_read()?, first_block_header.timestamp, None)?.try_collect::<Vec<BlockHeader>>().await?;
-    BlockHeader::stream_by_merkle_root(db.begin_read()?, first_block_header.merkle_root, None)?.try_collect::<Vec<BlockHeader>>().await?;
     BlockHeader::stream_range(db.begin_read()?, first_block_header.id, last_block_header.id, None)?.try_collect::<Vec<BlockHeader>>().await?;
     BlockHeader::stream_range_by_timestamp(db.begin_read()?, first_block_header.timestamp, last_block_header.timestamp, None)?.try_collect::<Vec<BlockHeader>>().await?;
 
@@ -82,14 +80,10 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
     let last_asset = Asset::last(&read_tx)?.unwrap();
 
     Asset::get_by_name(&read_tx, &first_asset.name)?;
-    Asset::get_by_policy_id(&read_tx, &first_asset.policy_id)?;
-    Asset::get_ids_by_policy_id(&read_tx, &first_asset.policy_id)?;
     Asset::take(&read_tx, 100)?;
     Asset::get(&read_tx, &first_asset.id)?;
     Asset::range(&read_tx, &first_asset.id, &last_asset.id, None)?;
     Asset::parent_key(&read_tx, &first_asset.id)?;
-    Asset::stream_ids_by_policy_id(&read_tx, &first_asset.policy_id)?.try_collect::<Vec<AssetPointer>>().await?;
-    Asset::stream_by_policy_id(db.begin_read()?, first_asset.policy_id, None)?.try_collect::<Vec<Asset>>().await?;
     Asset::stream_by_name(db.begin_read()?, first_asset.name, None)?.try_collect::<Vec<Asset>>().await?;
     Asset::stream_range(db.begin_read()?, first_asset.id, last_asset.id, None)?.try_collect::<Vec<Asset>>().await?;
 

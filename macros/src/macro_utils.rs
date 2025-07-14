@@ -194,15 +194,21 @@ pub fn submit_struct_to_stream(stream: proc_macro2::TokenStream, dir: &str, stru
     }.into()
 }
 
-pub fn to_camel_case(input: &str) -> String {
+pub fn to_camel_case(input: &str, upper_first_char: bool) -> String {
     let mut result = String::with_capacity(input.len());
     for (i, word) in input.split('_').enumerate() {
         if word.is_empty() {
             continue; // Skip consecutive underscores
         }
         if i == 0 {
-            // First word is always lowercase
-            result.push_str(&word.to_lowercase());
+            if upper_first_char {
+                let mut chars: Vec<char> = word.to_lowercase().chars().collect();
+                chars[0] = chars[0].to_uppercase().nth(0).unwrap();
+                let upper_first_char_word: String = chars.into_iter().collect();
+                result.push_str(&upper_first_char_word);
+            } else {
+                result.push_str(&word.to_lowercase());
+            }
         } else {
             // Capitalize the first character of each subsequent word
             let mut chars = word.chars();
@@ -217,20 +223,20 @@ pub fn to_camel_case(input: &str) -> String {
 
 pub fn client_code(handler_fn_name: &str, pk_type: &Type, pk_name: &Ident) -> String {
     format!(
-        r#"
-        import {{{function_name}}} from './hey';
-        {function_name}({{
-            path: {{
-                {pk_name}: openapi.components.schemas["{schema_name}"]["examples"][0]
-            }},
-            throwOnError: false
-        }}).then(function({{data, request, response, error}}) {{
-            console.log("{function_name} succeeded with status code : ", response.status, error?.message, data);
-        }}).catch(function({{message}}) {{
-            console.error("{function_name} failed on error %s :", message);
-        }});
-        "#,
-        function_name = format_ident!("{}", to_camel_case(&handler_fn_name)),
+r#"
+import {{{function_name}}} from './hey';
+{function_name}({{
+    path: {{
+        {pk_name}: openapi.components.schemas["{schema_name}"]["examples"][0]
+    }},
+    throwOnError: false
+}}).then(function({{data, request, response, error}}) {{
+    console.log("{function_name} succeeded with status code : ", response.status, error?.message, data);
+}}).catch(function({{message}}) {{
+    console.error("{function_name} failed on error %s :", message);
+}});
+"#,
+        function_name = format_ident!("{}", to_camel_case(&handler_fn_name, false)),
         schema_name = quote!(#pk_type).to_string(),
         pk_name = pk_name.to_string(),
     )}
