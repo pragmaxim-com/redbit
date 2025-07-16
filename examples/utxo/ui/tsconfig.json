@@ -1,9 +1,10 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
+    "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "Node",
     "esModuleInterop": true,
+    "jsx": "react-jsx",
     "forceConsistentCasingInFileNames": true,
     "strict": true,
     "skipLibCheck": true,
@@ -12,7 +13,8 @@
     "sourceMap": true,
   },
   "include": [
-    "./client/**/*",
+    "src",
+    "./client/**/*"
   ],
   "exclude": ["./node_modules"]
 }
