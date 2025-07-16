@@ -35,17 +35,17 @@ pub fn limit_fn_def(entity_name: &Ident, entity_type: &Type) -> FunctionDef {
     fn client_call(query: &str, handler_fn_name: &str) -> String {
         format!(
     r#"
-    it("it makes {function_name} with query {query}", async () => {{
-        client.{function_name}({{
+    it("it executes {function_name} with query {query}", async () => {{
+        const {{data, response, error}} = await client.{function_name}({{
             query: {{
                 {query}
             }},
             throwOnError: false
-        }}).then(function({{data, request, response, error}}) {{
-            console.log("{function_name} with {query} succeeded with response: ", response.status, error?.message, data);
-        }}).catch(function({{message}}) {{
-            console.error("{function_name} with {query} failed with error :", message);
         }});
+        if (error) console.error("{function_name} with query {query} failed with %d on error %s :", response.status, error?.message);
+        expect(response.status).toBe(200);
+        expect(error).toBeUndefined();
+        expect(data).toBeDefined();
     }});
     "#,
     function_name = format_ident!("{}", macro_utils::to_camel_case(handler_fn_name, false)),

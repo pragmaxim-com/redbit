@@ -4,6 +4,7 @@ use crate::rest::HttpParams::FromBody;
 use crate::rest::{BodyExpr, FunctionDef, HttpMethod};
 use quote::{format_ident, quote};
 use syn::Type;
+use crate::macro_utils;
 
 pub fn store_def(entity_name: &Ident, entity_type: &Type, store_statements: &Vec<TokenStream>) -> FunctionDef {
     let fn_name = format_ident!("store");
@@ -132,6 +133,24 @@ pub fn store_and_commit_def(entity_name: &Ident, entity_type: &Type, pk_name: &I
     });
 
     let handler_fn_name = format!("{}_{}", entity_name.to_string().to_lowercase(), fn_name);
+    fn client_call(entity_type: &Type, handler_fn_name: &str) -> String {
+        format!(
+            r#"
+    it("it executes {function_name}", async () => {{
+        const {{data, response, error}} = await client.{function_name}({{
+            body: generateExample("{entity}", defs!),
+            throwOnError: false
+        }});
+        if (error) console.error("{function_name} failed with %d on error %s :", response.status, error?.message);
+        expect(response.status).toBe(200);
+        expect(error).toBeUndefined();
+        expect(data).toBeDefined();
+    }});
+    "#,
+            function_name = format_ident!("{}", macro_utils::to_camel_case(handler_fn_name, false)),
+            entity = quote!(#entity_type).to_string(),
+        )
+    }
 
     FunctionDef {
         fn_stream,
@@ -145,7 +164,7 @@ pub fn store_and_commit_def(entity_name: &Ident, entity_type: &Type, pk_name: &I
             })],
             method: HttpMethod::POST,
             handler_name: format_ident!("{}", handler_fn_name),
-            client_calls: vec![],
+            client_calls: vec![client_call(entity_type, &handler_fn_name)],
             handler_impl_stream: quote! {
                 impl IntoResponse {
                     match #entity_name::#fn_name(&state.db, &body) {

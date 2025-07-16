@@ -33,17 +33,28 @@ through auto-generated REST API. It maximizes R/W speed while minimizing data si
 ✅ Column encodings of binary columns : `hex`, `base64` \
 ✅ All types have binary (db) and human-readable (http) serde support \
 ✅ Macro derived http rest API at http://127.0.0.1:8000/swagger-ui/ with examples \
-✅ TypeScript client generated from OpenAPI spec with tests suite requesting all endpoints \
-✅ Macro derived unit tests and integration tests on axum test server and benchmarks
+✅ Macro derived unit tests and integration tests on axum test server and benchmarks \
+✅ TypeScript client generated from OpenAPI spec with tests suite requesting all endpoints 
 
 ### Limitations
 
 ❌ Root key must be newtype struct with numeric inner type (that's part of the design decision to achieve fast indexing of even whole bitcoin)
 
+
+### Development
+
+```bash
+cd examples/utxo
+cargo test       # to let all the self-generated tests run (including http layer)
+cargo bench      # to run benchmarks
+cargo run        # to run the demo example and start the server
+
+cd ui
+./bin/build.sh   # builds the typescript client from openapi spec
+npm run test     # executes requests to all http endpoints
 ```
-cargo run --package utxo                # to run the demo example
-cargo test --package utxo               # to let all the self-generated tests run (including http layer)
-```
+
+Hundreds of frontend/backend derived tests and benchmarks are executed.
 
 Let's say we want to persist and query blockchain data using Redbit, declare annotated Structs `examples/utxo/src/lib.rs`:
 
@@ -267,7 +278,6 @@ And R/W entire instances efficiently using indexes and dictionaries `examples/ut
 <!-- END_MAIN -->
 
 The same api is accessible through http endpoints at http://127.0.0.1:8000/swagger-ui/.
-Typescript client is generated from the OpenAPI spec, follow instructions in the [examples](examples/utxo/README.md).
 
 Performance wise, check 🔥[flamegraph](https://rawcdn.githack.com/pragmaxim-com/redbit/refs/heads/master/flamegraph.svg).
 The demo example persists data into 30 tables to allow for rich querying.

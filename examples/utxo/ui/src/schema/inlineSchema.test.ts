@@ -1,13 +1,12 @@
-import { inlineSchema } from "./inlineSchema";
+import {inlineSchema} from "./inlineSchema";
 import { describe, it, expect, beforeAll } from "vitest";
 import {OpenAPIV3_1} from "openapi-types";
+import {fetchSchema} from "./schema";
 
 let openapi: OpenAPIV3_1.Document;
 
 beforeAll(async () => {
-    const res = await fetch("http://127.0.0.1:8000/apidoc/openapi.json");
-    if (!res.ok) throw new Error("Failed to fetch OpenAPI schema");
-    openapi = (await res.json()) as OpenAPIV3_1.Document;
+    openapi = await fetchSchema("http://127.0.0.1:8000/apidoc/openapi.json")
 });
 
 function isArraySchemaObject(
@@ -24,13 +23,11 @@ function isArraySchemaObject(
 
 describe("resolveSchema", () => {
     it("resolves refs and transforms schema correctly", () => {
-        const root = openapi.components?.schemas?.Block;
         const defs = openapi.components?.schemas;
 
-        expect(root).toBeDefined();
         expect(defs).toBeDefined();
 
-        const inlined = inlineSchema(root!, defs!);
+        const inlined = inlineSchema("Block", defs!);
 
         expect("properties" in inlined).toBe(true);
         const props = (inlined as OpenAPIV3_1.SchemaObject).properties!;

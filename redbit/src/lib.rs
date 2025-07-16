@@ -437,11 +437,12 @@ fn write_client_tests() {
         r#"
 import * as client from '.';
 import { describe, it, expect } from "vitest";
+import {generateExample} from "../schema/generateExample";
+import {fetchSchema} from "../schema/schema";
 
 describe("test client", async () => {
-    const response = await fetch("http://127.0.0.1:8000/apidoc/openapi.json");
-    if (!response.ok) throw new Error("Failed to fetch OpenAPI");
-    const openapi = await response.json();
+    const openapi = await fetchSchema("http://127.0.0.1:8000/apidoc/openapi.json");
+    const defs = openapi.components?.schemas;
     "#.to_string()
     );
     for info in inventory::iter::<StructInfo> {

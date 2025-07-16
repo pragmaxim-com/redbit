@@ -224,17 +224,17 @@ pub fn to_camel_case(input: &str, upper_first_char: bool) -> String {
 pub fn client_call(handler_fn_name: &str, pk_type: &Type, pk_name: &Ident) -> String {
     format!(
     r#"
-    it("it makes {function_name}", async () => {{
-        client.{function_name}({{
+    it("it executes {function_name}", async () => {{
+        const {{data, response, error}} = await client.{function_name}({{
             path: {{
-                {pk_name}: openapi.components.schemas["{schema_name}"]["examples"][0]
+                {pk_name}: (defs!["{schema_name}"] as any).examples?.[0]
             }},
             throwOnError: false
-        }}).then(function({{data, request, response, error}}) {{
-            console.log("{function_name} succeeded with status code : ", response.status, error?.message, data);
-        }}).catch(function({{message}}) {{
-            console.error("{function_name} failed on error %s :", message);
         }});
+        if (error) console.error("{function_name} failed with %d on error %s :", response.status, error?.message);
+        expect(response.status).toBe(200);
+        expect(error).toBeUndefined();
+        expect(data).toBeDefined();
     }});
     "#,
         function_name = format_ident!("{}", to_camel_case(&handler_fn_name, false)),

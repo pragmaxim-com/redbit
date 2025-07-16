@@ -12,10 +12,7 @@ export function resolveRef(ref: string, defs: SchemaMap): SchemaObjectOrRef | un
 /**
  * Recursively inlines $refs and nested schemas
  */
-function inlineValueRefs(
-    val: SchemaObjectOrRef,
-    defs: SchemaMap
-): SchemaObjectOrRef {
+function inlineValueRefs(val: SchemaObjectOrRef, defs: SchemaMap): SchemaObjectOrRef {
     if (Array.isArray(val)) {
         return val.map((v) => inlineValueRefs(v, defs)) as any;
     }
@@ -24,7 +21,7 @@ function inlineValueRefs(
         if ("$ref" in val) {
             const resolved = resolveRef(val.$ref, defs);
             if (!resolved) throw new Error(`Unresolved $ref: ${val.$ref}`);
-            return inlineSchema(resolved, defs);
+            return inlineSchemaRec(resolved, defs);
         }
 
         // At this point, val is a SchemaObject, not a ReferenceObject
@@ -55,28 +52,12 @@ function inlineValueRefs(
     return val;
 }
 
-/**
- * Entry point for inlining a schema
- */
-export function inlineSchema(schema: SchemaObjectOrRef, defs: SchemaMap): SchemaObjectOrRef {
-    const cloned = JSON.parse(JSON.stringify(schema)) as SchemaObjectOrRef;
-    return inlineValueRefs(cloned, defs);
+export function inlineSchema(root: string, defs: SchemaMap): any {
+    const rootSchema = defs[root];
+    return inlineSchemaRec(rootSchema, defs)
 }
 
-/**
- * Fetches and inlines a schema from an OpenAPI URL
- */
-export async function loadInlineOpenApiSchema(openapiUrl: string, rootSchemaName: string): Promise<SchemaObjectOrRef> {
-    const res = await fetch(openapiUrl);
-    if (!res.ok) throw new Error("Failed to fetch OpenAPI JSON");
-
-    const openapi = (await res.json()) as OpenAPIV3_1.Document;
-    const defs = openapi.components?.schemas;
-    if (!defs) throw new Error("Missing components.schemas in OpenAPI doc");
-
-    const root = defs[rootSchemaName];
-    if (!root) throw new Error(`Root schema "${rootSchemaName}" not found`);
-
-    console.log(`Inlining root schema: ${rootSchemaName}`);
-    return inlineSchema(root, defs);
+function inlineSchemaRec(schema: SchemaObjectOrRef, defs: SchemaMap): SchemaObjectOrRef {
+    const cloned = JSON.parse(JSON.stringify(schema)) as SchemaObjectOrRef;
+    return inlineValueRefs(cloned, defs);
 }

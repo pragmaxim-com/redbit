@@ -8,7 +8,12 @@ function isReferenceObject(schema: unknown): schema is OpenAPIV3_1.ReferenceObje
     return typeof schema === 'object' && schema !== null && '$ref' in schema;
 }
 
-export function generateExample(
+export function generateExample(root: string, defs: SchemaMap): any {
+    const rootSchema = defs[root];
+    return generateExampleRec(rootSchema, defs)
+}
+
+export function generateExampleRec(
     schema: SchemaObjectOrRef,
     defs: SchemaMap,
     path: string = ''
@@ -16,7 +21,7 @@ export function generateExample(
     if (isReferenceObject(schema)) {
         const resolved = resolveRef(schema.$ref, defs);
         if (!resolved) throw new Error(`Unresolved $ref: ${schema.$ref} at ${path}`);
-        return generateExample(resolved, defs, path);
+        return generateExampleRec(resolved, defs, path);
     }
 
     if (schema.example !== undefined) {
@@ -33,7 +38,7 @@ export function generateExample(
         if (Array.isArray(variants)) {
             for (const variant of variants) {
                 try {
-                    return generateExample(variant, defs, `${path}.${discriminator}[i]`);
+                    return generateExampleRec(variant, defs, `${path}.${discriminator}[i]`);
                 } catch (e) {
                     // try next
                 }
@@ -49,7 +54,7 @@ export function generateExample(
 
         const result: Record<string, any> = {};
         for (const [key, propSchema] of Object.entries(schema.properties)) {
-            result[key] = generateExample(propSchema, defs, `${path}.${key}`);
+            result[key] = generateExampleRec(propSchema, defs, `${path}.${key}`);
         }
         return result;
     }
@@ -58,7 +63,7 @@ export function generateExample(
         if (!schema.items) {
             throw new Error(`Missing .items and .example at ${path}`);
         }
-        return [generateExample(schema.items, defs, `${path}[]`)];
+        return [generateExampleRec(schema.items, defs, `${path}[]`)];
     }
 
     return getPrimitiveFallbackExample(schema, path);
