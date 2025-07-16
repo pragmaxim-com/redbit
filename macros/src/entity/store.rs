@@ -145,7 +145,7 @@ pub fn store_and_commit_def(entity_name: &Ident, entity_type: &Type, pk_name: &I
             })],
             method: HttpMethod::POST,
             handler_name: format_ident!("{}", handler_fn_name),
-            client_call: None,
+            client_calls: vec![],
             handler_impl_stream: quote! {
                 impl IntoResponse {
                     match #entity_name::#fn_name(&state.db, &body) {

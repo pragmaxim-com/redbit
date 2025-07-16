@@ -1,0 +1,28 @@
+error: cannot find attribute `entity` in this scope
+ --> tests/failing/missing_columns_struct.rs:2:3
+  |
+2 | #[entity]
+  |   ^^^^^^
+  |
+help: consider importing this attribute macro
+  |
+2 + use redbit::entity;
+  |
+
+error: cannot find attribute `pk` in this scope
+ --> tests/failing/missing_columns_struct.rs:4:7
+  |
+4 |     #[pk]
+  |       ^^
+
+error[E0412]: cannot find type `ParentPK` in this scope
+ --> tests/failing/missing_columns_struct.rs:5:9
+  |
+5 |     id: ParentPK,
+  |         ^^^^^^^^ not found in this scope
+
+error[E0601]: `main` function not found in crate `$CRATE`
+ --> tests/failing/missing_columns_struct.rs:6:2
+  |
+6 | }
+  |  ^ consider adding a `main` function to `$DIR/tests/failing/missing_columns_struct.rs`

@@ -5,9 +5,6 @@
 //! The library provides methods for storing, retrieving, and deleting entities based on primary keys (PKs) and secondary indexes,
 //! supporting one-to-one and one-to-many relationships.
 //!
-
-mod schema;
-
 pub use axum;
 pub use axum::extract;
 pub use axum::response::IntoResponse;
@@ -21,6 +18,7 @@ pub use futures;
 pub use futures::stream::{self, StreamExt};
 pub use futures_util::stream::TryStreamExt;
 pub use http;
+pub use http::HeaderValue;
 pub use inventory;
 pub use macros::column;
 pub use macros::entity;
@@ -405,50 +403,53 @@ pub async fn build_test_server(db: Arc<Database>) -> axum_test::TestServer {
 
 pub async fn build_router(state: RequestState, extras: Option<OpenApiRouter<RequestState>>, cors: Option<CorsLayer>) -> Router<()> {
     let mut router: OpenApiRouter<RequestState> = OpenApiRouter::with_openapi(ApiDoc::openapi());
-    let mut client_calls: Vec<String> = Vec::new();
-    client_calls.push(
-r#"
-const response = await fetch("http://127.0.0.1:8000/apidoc/openapi.json");
-if (!response.ok) throw new Error("Failed to fetch OpenAPI");
-const openapi = await response.json();
-"#.to_string()
-    );
-    let mut root: Option<String> = None;
     for info in inventory::iter::<StructInfo> {
-        if info.root {
-            root = Some(info.name.to_string());
-        }
         router = router.merge((info.routes_fn)());
-        client_calls.push((info.client_calls)())
     }
-
-    let (mut client_calls_sorted, delete): (Vec<_>, Vec<_>) = client_calls.into_iter()
-        .partition(|s| !s.contains("Delete"));
-    client_calls_sorted.extend(delete);
-
-    write_to_local_file(client_calls_sorted.clone(), "client", "client_calls.ts");
 
     if let Some(extra) = extras {
         router = router.merge(extra);
     }
-    if let Some(cors_layer) = cors {
-        router = router.layer(cors_layer);
-    }
     let (r, openapi) = router.split_for_parts();
 
-    if let Some(root_name) = root {
-        let schema = schema::load(&openapi, root_name).expect("Failed to load schema");
-        write_to_local_file(vec![schema], "client", "schema.json");
-    }
+    let merged = r
+        .merge(SwaggerUi::new("/swagger-ui").url("/apidoc/openapi.json", openapi))
+        .with_state(state);
 
-    r.merge(SwaggerUi::new("/swagger-ui").url("/apidoc/openapi.json", openapi)).with_state(state)
+    if let Some(cors_layer) = cors {
+        merged.layer(cors_layer)
+    } else {
+        merged
+    }
 }
 
 pub async fn serve(state: RequestState, socket_addr: SocketAddr, extras: Option<OpenApiRouter<RequestState>>, cors: Option<CorsLayer>) -> () {
     let router: Router<()> = build_router(state, extras, cors).await;
+    write_client_tests();
     println!("Starting server on {}", socket_addr);
     let tcp = TcpListener::bind(socket_addr).await.unwrap();
     crate::axum::serve(tcp, router).await.unwrap();
+}
+
+fn write_client_tests() {
+    let mut client_calls: Vec<String> = Vec::new();
+    client_calls.push(
+        r#"
+import * as client from '.';
+import { describe, it, expect } from "vitest";
+
+describe("test client", async () => {
+    const response = await fetch("http://127.0.0.1:8000/apidoc/openapi.json");
+    if (!response.ok) throw new Error("Failed to fetch OpenAPI");
+    const openapi = await response.json();
+    "#.to_string()
+    );
+    for info in inventory::iter::<StructInfo> {
+        client_calls.push((info.client_calls)())
+    }
+    client_calls.push("});".to_string());
+
+    write_to_local_file(client_calls.clone(), "client", "client_calls.ts");
 }
 
 //TODO duplicated with `macros/src/macro_utils.rs`

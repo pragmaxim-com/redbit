@@ -58,7 +58,7 @@ pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, table: &Iden
             }])],
             method: HttpMethod::HEAD,
             handler_name: format_ident!("{}", handler_fn_name),
-            client_call: Some(macro_utils::client_code(&handler_fn_name, pk_type, pk_name)),
+            client_calls: vec![macro_utils::client_call(&handler_fn_name, pk_type, pk_name)],
             utoipa_responses: quote! {
                 responses(
                     (status = OK),

@@ -1,0 +1,40 @@
+error: cannot find attribute `entity` in this scope
+ --> tests/failing/only_transient_column_struct.rs:1:3
+  |
+1 | #[entity]
+  |   ^^^^^^
+  |
+help: consider importing this attribute macro
+  |
+1 + use redbit::entity;
+  |
+
+error: cannot find attribute `pk` in this scope
+ --> tests/failing/only_transient_column_struct.rs:3:7
+  |
+3 |     #[pk]
+  |       ^^
+
+error: cannot find attribute `column` in this scope
+ --> tests/failing/only_transient_column_struct.rs:5:7
+  |
+5 |     #[column(transient)]
+  |       ^^^^^^
+  |
+  = note: `column` is in scope, but it is a function-like macro
+help: consider importing this attribute macro
+  |
+1 + use redbit::column;
+  |
+
+error[E0412]: cannot find type `ParentPK` in this scope
+ --> tests/failing/only_transient_column_struct.rs:4:9
+  |
+4 |     id: ParentPK,
+  |         ^^^^^^^^ not found in this scope
+
+error[E0601]: `main` function not found in crate `$CRATE`
+ --> tests/failing/only_transient_column_struct.rs:7:2
+  |
+7 | }
+  |  ^ consider adding a `main` function to `$DIR/tests/failing/only_transient_column_struct.rs`

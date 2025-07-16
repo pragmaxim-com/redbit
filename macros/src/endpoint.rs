@@ -10,7 +10,7 @@ pub struct EndpointDef {
     pub endpoint: String,
     pub method: HttpMethod,
     pub handler_name: Ident,
-    pub client_call: Option<String>,
+    pub client_calls: Vec<String>,
     pub handler_impl_stream: TokenStream,
     pub utoipa_responses: TokenStream,
 }
@@ -38,7 +38,7 @@ impl EndpointDef {
         Endpoint {
             handler,
             route,
-            client_call: self.client_call.clone(),
+            client_calls: self.client_calls.clone(),
             tests: self.generate_tests()
         }
     }

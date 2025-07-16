@@ -221,21 +221,22 @@ pub fn to_camel_case(input: &str, upper_first_char: bool) -> String {
     result
 }
 
-pub fn client_code(handler_fn_name: &str, pk_type: &Type, pk_name: &Ident) -> String {
+pub fn client_call(handler_fn_name: &str, pk_type: &Type, pk_name: &Ident) -> String {
     format!(
-r#"
-import {{{function_name}}} from './hey';
-{function_name}({{
-    path: {{
-        {pk_name}: openapi.components.schemas["{schema_name}"]["examples"][0]
-    }},
-    throwOnError: false
-}}).then(function({{data, request, response, error}}) {{
-    console.log("{function_name} succeeded with status code : ", response.status, error?.message, data);
-}}).catch(function({{message}}) {{
-    console.error("{function_name} failed on error %s :", message);
-}});
-"#,
+    r#"
+    it("it makes {function_name}", async () => {{
+        client.{function_name}({{
+            path: {{
+                {pk_name}: openapi.components.schemas["{schema_name}"]["examples"][0]
+            }},
+            throwOnError: false
+        }}).then(function({{data, request, response, error}}) {{
+            console.log("{function_name} succeeded with status code : ", response.status, error?.message, data);
+        }}).catch(function({{message}}) {{
+            console.error("{function_name} failed on error %s :", message);
+        }});
+    }});
+    "#,
         function_name = format_ident!("{}", to_camel_case(&handler_fn_name, false)),
         schema_name = quote!(#pk_type).to_string(),
         pk_name = pk_name.to_string(),

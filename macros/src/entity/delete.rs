@@ -96,7 +96,7 @@ pub fn delete_and_commit_def(
             }])],
             method: HttpMethod::DELETE,
             handler_name: format_ident!("{}", handler_fn_name),
-            client_call: Some(macro_utils::client_code(&handler_fn_name, pk_type, pk_name)),
+            client_calls: vec![macro_utils::client_call(&handler_fn_name, pk_type, pk_name)],
             utoipa_responses: quote! {
                 responses(
                     (status = OK),

@@ -28,7 +28,7 @@ pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type) -> FunctionD
             }])],
             method: HttpMethod::GET,
             handler_name: format_ident!("{}", handler_fn_name),
-            client_call: Some(macro_utils::client_code(&handler_fn_name, pk_type, pk_name)),
+            client_calls: vec![macro_utils::client_call(&handler_fn_name, pk_type, pk_name)],
             handler_impl_stream: quote! {
                Result<AppJson<<#pk_type as ChildPointer>::Parent>, AppError> {
                     state.db.begin_read().map_err(AppError::from).and_then(|tx| #entity_name::#fn_name(&tx, &#pk_name)).map(AppJson)

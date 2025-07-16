@@ -8,7 +8,7 @@ pub struct Endpoint {
     pub handler: TokenStream,
     pub route: TokenStream,
     pub tests: Vec<TokenStream>,
-    pub client_call: Option<String>,
+    pub client_calls: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -76,8 +76,8 @@ impl Rest {
         let endpoints: Vec<Endpoint> = fn_defs.iter().filter_map(|fn_def| fn_def.endpoint.clone()).collect();
         let route_chains: Vec<TokenStream> = endpoints.iter().map(|e| e.route.clone()).collect();
         let endpoint_handlers: Vec<TokenStream> = endpoints.iter().map(|e| e.handler.clone()).collect();
-        let client_calls: Vec<String> = endpoints.into_iter().filter_map(|e| e.client_call).collect();
-        let client_calls_lit = Literal::string(&client_calls.join("\n"));
+        let client_calls: Vec<String> = endpoints.into_iter().flat_map(|e| e.client_calls).collect();
+        let client_calls_lit = Literal::string(&client_calls.join(""));
         let routes = quote! {
             pub fn routes() -> OpenApiRouter<RequestState> {
                 OpenApiRouter::new()

@@ -59,7 +59,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
             }])],
             method: HttpMethod::GET,
             handler_name: format_ident!("{}", handler_fn_name),
-            client_call: Some(macro_utils::client_code(&handler_fn_name, pk_type, pk_name)),
+            client_calls: vec![macro_utils::client_call(&handler_fn_name, pk_type, pk_name)],
             handler_impl_stream: quote! {
               impl IntoResponse {
                    match state.db.begin_read()
