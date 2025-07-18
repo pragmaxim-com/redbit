@@ -10,10 +10,9 @@ pub use redbit::*;
 
 #[root_key] pub struct Height(pub u32);
 
-#[pointer_key(u16)] pub struct TxPointer(Height);
-#[pointer_key(u16)] pub struct UtxoPointer(TxPointer);
-#[pointer_key(u16)] pub struct InputPointer(TxPointer);
-#[pointer_key(u8)] pub struct AssetPointer(UtxoPointer);
+#[pointer_key(u16)] pub struct BlockPointer(Height);
+#[pointer_key(u16)] pub struct TransactionPointer(BlockPointer);
+#[pointer_key(u8)] pub struct UtxoPointer(TransactionPointer);
 
 #[column] pub struct Hash(pub String);
 #[column("base64")] pub struct Address(pub [u8; 32]);
@@ -60,7 +59,7 @@ pub struct BlockHeader {
 #[entity]
 pub struct Transaction {
     #[fk(one2many)]
-    pub id: TxPointer,
+    pub id: BlockPointer,
     #[column(index)]
     pub hash: Hash,
     pub utxos: Vec<Utxo>,
@@ -72,7 +71,7 @@ pub struct Transaction {
 #[entity]
 pub struct Utxo {
     #[fk(one2many)]
-    pub id: UtxoPointer,
+    pub id: TransactionPointer,
     #[column]
     pub amount: u64,
     #[column(index)]
@@ -85,7 +84,7 @@ pub struct Utxo {
 #[entity]
 pub struct InputRef {
     #[fk(one2opt)]
-    pub id: TxPointer,
+    pub id: BlockPointer,
     #[column(index)]
     pub hash: Hash, // just dummy values
 }
@@ -93,7 +92,7 @@ pub struct InputRef {
 #[entity]
 pub struct Asset {
     #[fk(one2many)]
-    pub id: AssetPointer,
+    pub id: UtxoPointer,
     #[column]
     pub amount: u64,
     #[column(dictionary)]

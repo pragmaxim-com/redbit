@@ -151,10 +151,10 @@ fn it_should_get_entities_by_range_on_pk() {
 
     let read_tx = db.begin_read().unwrap();
 
-    let block_pointer_1 = Height(1);
-    let block_pointer_2 = Height(2);
-    let block_pointer_3 = Height(3);
-    let actual_blocks = Block::range(&read_tx, &block_pointer_1, &block_pointer_3, None).expect("Failed to range by PK");
+    let height_1 = Height(1);
+    let height_2 = Height(2);
+    let height_3 = Height(3);
+    let actual_blocks = Block::range(&read_tx, &height_1, &height_3, None).expect("Failed to range by PK");
     let expected_blocks: Vec<Block> = vec![blocks[1].clone(), blocks[2].clone()];
 
     assert_eq!(expected_blocks.len(), actual_blocks.len());
@@ -162,8 +162,8 @@ fn it_should_get_entities_by_range_on_pk() {
     assert_eq!(actual_blocks[1].transactions.len(), 3);
     assert_eq!(expected_blocks, actual_blocks);
 
-    let tx_pointer_1 = TxPointer::from_parent(block_pointer_1, 1);
-    let tx_pointer_2 = TxPointer::from_parent(block_pointer_2, 3);
+    let tx_pointer_1 = BlockPointer::from_parent(height_1, 1);
+    let tx_pointer_2 = BlockPointer::from_parent(height_2, 3);
     let actual_transactions = Transaction::range(&read_tx, &tx_pointer_1, &tx_pointer_2, None).expect("Failed to range by PK");
     let mut expected_transactions: Vec<Transaction> = Vec::new();
     expected_transactions.extend(blocks[1].transactions.clone().into_iter().filter(|t| t.id.index >= 1));

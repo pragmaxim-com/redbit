@@ -108,7 +108,7 @@ pub fn one2opt_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
                 tx: &ReadTransaction,
                 pk: &#pk_type
             ) -> Result<Option<#child_type>, AppError> {
-                #child_type::get(&tx, &pk)
+                #child_type::get(&tx, pk)
             }
         },
         endpoint: Some(EndpointDef {
