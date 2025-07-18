@@ -2,12 +2,18 @@ use proc_macro2::{Ident, Literal, TokenStream};
 use quote::{format_ident, quote};
 use crate::rest::FunctionDef;
 
-pub fn test_suite(entity_name: &Ident, fn_defs: &Vec<FunctionDef>) -> TokenStream {
+pub fn test_suite(entity_name: &Ident, parent_entity: Option<Ident>, fn_defs: &Vec<FunctionDef>) -> TokenStream {
     let entity_tests = format_ident!("{}", entity_name.to_string().to_lowercase());
     let entity_literal = Literal::string(&entity_name.to_string());
     let http_tests = fn_defs.iter().filter_map(|f| f.endpoint.clone().map(|e| e.tests)).flatten().collect::<Vec<_>>();
     let unit_tests = fn_defs.iter().filter_map(|f| f.test_stream.clone()).collect::<Vec<_>>();
     let benches = fn_defs.iter().filter_map(|f| f.bench_stream.clone()).collect::<Vec<_>>();
+
+    let (sample_count, sample_entity) =
+        match parent_entity {
+            Some(parent) => (1usize, parent),
+            None => (3usize, entity_name.clone()),
+        };
 
     quote!{
         #[cfg(test)]
@@ -25,9 +31,9 @@ pub fn test_suite(entity_name: &Ident, fn_defs: &Vec<FunctionDef>) -> TokenStrea
                 static DB: Lazy<Arc<Database>> = Lazy::new(|| {
                     let db_path = test_db_path(#entity_literal);
                     let db = Database::create(db_path).expect("Failed to create database");
-                    let entities = #entity_name::sample_many(3);
+                    let entities = #sample_entity::sample_many(#sample_count);
                     for entity in entities {
-                        #entity_name::store_and_commit(&db, &entity).expect("Failed to persist entity");
+                        #sample_entity::store_and_commit(&db, &entity).expect("Failed to persist entity");
                     }
                     Arc::new(db)
                 });
@@ -35,9 +41,9 @@ pub fn test_suite(entity_name: &Ident, fn_defs: &Vec<FunctionDef>) -> TokenStrea
                 static DB_DELETE: Lazy<Arc<Database>> = Lazy::new(|| {
                     let db_path = test_db_path(#entity_literal);
                     let db = Database::create(db_path).expect("Failed to create database");
-                    let entities = #entity_name::sample_many(3);
+                    let entities = #sample_entity::sample_many(#sample_count);
                     for entity in entities {
-                        #entity_name::store_and_commit(&db, &entity).expect("Failed to persist entity");
+                        #sample_entity::store_and_commit(&db, &entity).expect("Failed to persist entity");
                     }
                     Arc::new(db)
                 });

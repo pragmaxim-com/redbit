@@ -5,8 +5,12 @@ use crate::macro_utils;
 
 static STREAM_QUERY: &str = "StreamQuery";
 
-pub fn stream_query_type(entity_ident: &Ident) -> Type {
+pub fn stream_query_type(entity_type: &Type) -> Type {
     let suffix = STREAM_QUERY.to_string();
+    let entity_ident = match entity_type {
+        Type::Path(p) => p.path.segments.last().unwrap().ident.clone(),
+        _ => panic!("Unsupported entity type for stream query"),
+    };
     let stream_query_type = format_ident!("{}{}", entity_ident, suffix);
     syn::parse_quote!(#stream_query_type)
 }

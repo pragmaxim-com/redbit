@@ -44,7 +44,7 @@ pub struct DbPkMacros {
 }
 
 impl DbPkMacros {
-    pub fn new(entity_name: &Ident, entity_type: &Type, field_def: FieldDef, fk: Option<Multiplicity>, stream_query_ty: &Type) -> Self {
+    pub fn new(entity_name: &Ident, entity_type: &Type, field_def: FieldDef, multiplicity: Option<Multiplicity>, stream_query_ty: &Type) -> Self {
         let pk_name = field_def.name.clone();
         let pk_type = field_def.tpe.clone();
         let table_def = TableDef::pk(entity_name, &pk_name, &pk_type);
@@ -59,7 +59,7 @@ impl DbPkMacros {
         function_defs.push(limit::limit_fn_def(entity_name, entity_type));
         function_defs.push(exists::fn_def(entity_name, &pk_name, &pk_type, &table_def.name));
 
-        match fk {
+        match multiplicity {
             Some(Multiplicity::OneToMany) => {
                 function_defs.push(parent_key::fn_def(entity_name, &pk_name, &pk_type));
             }

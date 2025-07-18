@@ -1,5 +1,5 @@
 use crate::column::DbColumnMacros;
-use crate::field_parser::{ColumnDef, FieldDef, Multiplicity};
+use crate::field_parser::{ColumnDef, KeyDef, Multiplicity, ParentDef};
 use crate::pk::DbPkMacros;
 use crate::relationship::DbRelationshipMacros;
 use crate::rest::FunctionDef;
@@ -8,6 +8,7 @@ use crate::transient::TransientMacros;
 use crate::field_parser;
 use proc_macro2::{Ident, TokenStream};
 use syn::{ItemStruct, Type};
+use crate::entity::query;
 use crate::entity::query::{RangeQuery, StreamQueryItem};
 
 pub enum FieldMacros {
@@ -18,24 +19,54 @@ pub enum FieldMacros {
 }
 
 impl FieldMacros {
-    pub fn new(item_struct: &ItemStruct, entity_ident: &Ident, entity_type: &Type, stream_query_ty: &Type) -> Result<((FieldDef, Option<Multiplicity>), Vec<FieldMacros>), syn::Error> {
-        let ((key, m), field_macros) = field_parser::get_field_macros(&item_struct)?;
+    pub fn new(
+        item_struct: &ItemStruct,
+        entity_ident: &Ident,
+        entity_type: &Type,
+        stream_query_ty: &Type,
+    ) -> Result<(KeyDef, Option<ParentDef>, Vec<FieldMacros>), syn::Error> {
+        let (key_def, field_macros) = field_parser::get_field_macros(&item_struct)?;
+        let parent_def =
+            match key_def.clone() {
+                KeyDef::Fk{ field_def: _, multiplicity: Multiplicity::OneToMany , parent_type: Some(parent_ty)} => Some(ParentDef {
+                    stream_query_ty: query::stream_query_type(&parent_ty),
+                    parent_type: parent_ty.clone(),
+                    parent_ident: match parent_ty {
+                        Type::Path(p) => p.path.segments.last().unwrap().ident.clone(),
+                        _ => panic!("Unsupported parent type"),
+                    },
+                }),
+                _ => None
+            };
+        let field_def = key_def.field_def();
         let field_macros = field_macros.into_iter().map(|c| match c {
-            ColumnDef::Key {field_def, fk } => {
-                FieldMacros::Pk(DbPkMacros::new(entity_ident, entity_type, field_def.clone(), fk.clone(), &stream_query_ty))
+            ColumnDef::Key(KeyDef::Pk(field_def)) => {
+                FieldMacros::Pk(DbPkMacros::new(entity_ident, entity_type, field_def, None, &stream_query_ty))
+            },
+            ColumnDef::Key(KeyDef::Fk{ field_def, multiplicity, parent_type: _}) => {
+                FieldMacros::Pk(DbPkMacros::new(entity_ident, entity_type, field_def, Some(multiplicity), &stream_query_ty))
             },
             ColumnDef::Plain(field , indexing_type) => {
-                FieldMacros::Plain(DbColumnMacros::new(field.clone(), indexing_type.clone(), entity_ident, entity_type, &key.name, &key.tpe, &stream_query_ty))
+                FieldMacros::Plain(
+                    DbColumnMacros::new(
+                        field.clone(),
+                        indexing_type.clone(),
+                        entity_ident,
+                        entity_type,
+                        &field_def.name,
+                        &field_def.tpe,
+                        stream_query_ty,
+                        parent_def.clone()
+                    ))
             },
             ColumnDef::Relationship(field, multiplicity) => {
-                FieldMacros::Relationship(DbRelationshipMacros::new(field.clone(), multiplicity.clone(), entity_ident, &key.name, &key.tpe))
+                FieldMacros::Relationship(DbRelationshipMacros::new(field.clone(), multiplicity.clone(), entity_ident, &field_def.name, &field_def.tpe))
             },
-            ColumnDef::Transient(field) =>{
+            ColumnDef::Transient(field) => {
                 FieldMacros::Transient(TransientMacros::new(field.clone()))
             }
-        }
-        ).collect::<Vec<FieldMacros>>();
-        Ok(((key, m), field_macros))
+        }).collect::<Vec<FieldMacros>>();
+        Ok((key_def, parent_def, field_macros))
     }
 
     pub fn field_name(&self) -> Ident {

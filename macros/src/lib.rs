@@ -196,8 +196,11 @@ pub fn entity(_attr: TokenStream, item: TokenStream) -> TokenStream {
 pub fn derive_entity(input: TokenStream) -> TokenStream {
     let item_struct = parse_macro_input!(input as ItemStruct);
     let struct_ident = &item_struct.ident;
-    let (multiplicity, s) = entity::new(&item_struct).unwrap_or_else(|e| (None, e.to_compile_error().into()));
-    let root = multiplicity.is_none();
+    let (key_def, s) = match entity::new(&item_struct) {
+        Ok(result) => result,
+        Err(e) => return e.to_compile_error().into(),
+    };
+    let root = key_def.is_root();
     let stream = quote! {
         #s
         inventory::submit! {

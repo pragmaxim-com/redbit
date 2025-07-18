@@ -7,49 +7,49 @@ use crate::endpoint::EndpointDef;
 
 pub fn by_dict_def(
     entity_name: &Ident,
-    entity_type: &Type,
     column_name: &Ident,
     column_type: &Type,
     value_to_dict_pk: &Ident,
     dict_index_table: &Ident,
-    stream_query_type: &Type
+    stream_parent_query_type: &Type,
+    parent_type: &Type,
+    parent_ident: &Ident,
 ) -> FunctionDef {
-    let fn_name = format_ident!("stream_by_{}", column_name);
+    let fn_name = format_ident!("stream_{}s_by_{}", parent_ident.to_string().to_lowercase(), column_name);
     let fn_stream = quote! {
-        pub fn #fn_name(tx: ReadTransaction, val: #column_type, query: Option<#stream_query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#entity_type, AppError>> + Send + 'static>>, AppError> {
+        pub fn #fn_name(tx: ReadTransaction, val: #column_type, query: Option<#stream_parent_query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#parent_type, AppError>> + Send + 'static>>, AppError> {
             let val2birth = tx.open_table(#value_to_dict_pk)?;
             let birth_guard = val2birth.get(&val)?;
-
-            let iter_box: Box<dyn Iterator<Item = Result<_, redb::StorageError>> + Send> = if let Some(g) = birth_guard {
+            let mut unique_parent_pointers = Vec::new();
+            if let Some(g) = birth_guard {
                 let birth_id = g.value().clone();
                 let birth2pks = tx.open_multimap_table(#dict_index_table)?;
-                Box::new(birth2pks.get(&birth_id)?)
-            } else {
-                Box::new(std::iter::empty())
+                let mm_value = birth2pks.get(&birth_id)?;
+                for guard in mm_value {
+                    let pk = guard?.value().clone();
+                    unique_parent_pointers.push(pk.parent);
+                }
             };
-
+            unique_parent_pointers.dedup();
             let stream = futures::stream::unfold(
-                (iter_box, tx, query),
+                (unique_parent_pointers.into_iter(), tx, query),
                 |(mut iter, tx, query)| async move {
                     match iter.next() {
-                        Some(Ok(guard)) => {
-                            let pk = guard.value().clone();
+                        Some(parent_pointer) => {
                             if let Some(ref stream_query) = query {
-                                match Self::compose_with_filter(&tx, &pk, stream_query) {
+                                match #parent_type::compose_with_filter(&tx, &parent_pointer, stream_query) {
                                     Ok(Some(entity)) => Some((Ok(entity), (iter, tx, query))),
                                     Ok(None) => None,
                                     Err(e) => Some((Err(e), (iter, tx, query))),
                                 }
                             } else {
-                                Some((Self::compose(&tx, &pk), (iter, tx, query)))
+                                Some((#parent_type::compose(&tx, &parent_pointer), (iter, tx, query)))
                             }
                         }
-                        Some(Err(e)) => Some((Err(AppError::from(e)), (iter, tx, query))),
                         None => None,
                     }
                 },
             ).boxed();
-
             Ok(stream)
         }
     };
@@ -62,21 +62,21 @@ pub fn by_dict_def(
             let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
-            let entity_stream = #entity_name::#fn_name(read_tx, val, None).expect("Failed to get entities by dictionary index");
-            let entities = entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
-            let expected_entities = vec![#entity_type::sample()];
-            assert_eq!(expected_entities, entities, "Expected entities to be returned for the given dictionary index");
+            let entity_stream = #entity_name::#fn_name(read_tx, val, None).expect("Failed to get parent entities by dictionary index");
+            let parent_entities = entity_stream.try_collect::<Vec<#parent_type>>().await.expect("Failed to collect parent entity stream");
+            let expected_entities = vec![#parent_type::sample()];
+            assert_eq!(expected_entities, parent_entities, "Expected parent entities to be returned for the given dictionary index");
         }
         #[tokio::test]
         async fn #test_with_filter_fn_name() {
             let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
-            let query = #stream_query_type::sample();
-            let entity_stream = #entity_name::#fn_name(read_tx, val, Some(query.clone())).expect("Failed to get entities by index");
-            let entities = entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
-            let expected_entities = vec![#entity_type::sample()];
-            assert_eq!(entities, expected_entities, "Only the default valued entity, filter is set for default values, query: {:?}", query);
+            let query = #stream_parent_query_type::sample();
+            let entity_stream = #entity_name::#fn_name(read_tx, val, Some(query.clone())).expect("Failed to get parent entities by index");
+            let parent_entities = entity_stream.try_collect::<Vec<#parent_type>>().await.expect("Failed to collect parent entity stream");
+            let expected_entities = vec![#parent_type::sample()];
+            assert_eq!(expected_entities, parent_entities, "Only the default valued parent entity, filter is set for default values, query: {:?}", query);
         }
     });
 
@@ -86,12 +86,12 @@ pub fn by_dict_def(
         fn #bench_fn_name(b: &mut Bencher) {
             let rt = Runtime::new().unwrap();
             let db = DB.clone();
-            let query = #stream_query_type::sample();
+            let query = #stream_parent_query_type::sample();
             b.iter(|| {
                 rt.block_on(async {
                     let read_tx = db.begin_read().unwrap();
-                    let entity_stream = #entity_name::#fn_name(read_tx, #column_type::default(), Some(query.clone())).expect("Failed to get entities by index");
-                    entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
+                    let parent_entity_stream = #entity_name::#fn_name(read_tx, #column_type::default(), Some(query.clone())).expect("Failed to get parent entities by index");
+                    parent_entity_stream.try_collect::<Vec<#parent_type>>().await.expect("Failed to collect parent entity stream");
                 })
             });
         }
@@ -110,9 +110,9 @@ pub fn by_dict_def(
                 description: "Secondary index column with dictionary".to_string(),
                 sample: quote! { #column_type::default().encode() },
             }]), FromBody(BodyExpr {
-                ty: syn::parse_quote! { #stream_query_type },
-                extraction: quote! { MaybeJson(body): MaybeJson<#stream_query_type> },
-                samples: quote! { vec![Some(#stream_query_type::sample()), None ] },
+                ty: syn::parse_quote! { #stream_parent_query_type },
+                extraction: quote! { MaybeJson(body): MaybeJson<#stream_parent_query_type> },
+                samples: quote! { vec![Some(#stream_parent_query_type::sample()), None ] },
             })],
             method: HttpMethod::POST,
             handler_name: format_ident!("{}", handler_fn_name),
@@ -129,44 +129,56 @@ pub fn by_dict_def(
             },
             utoipa_responses: quote! {
                 responses(
-                    (status = OK, content_type = "application/x-ndjson", body = #entity_type),
+                    (status = OK, content_type = "application/x-ndjson", body = #parent_type),
                     (status = 500, content_type = "application/x-ndjson", body = ErrorResponse),
                 )
             },
-            endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), column_name, column_name),
+            endpoint: format!("/{}/{}/{}/{{{}}}", parent_ident.to_string().to_lowercase(), entity_name.to_string().to_lowercase(), column_name, column_name),
         }.to_endpoint()),
         test_stream,
         bench_stream
     }
 }
 
-pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident, column_type: &Type, table: &Ident, stream_query_type: &Type) -> FunctionDef {
-    let fn_name = format_ident!("stream_by_{}", column_name);
+pub fn by_index_def(
+    entity_name: &Ident,
+    column_name: &Ident,
+    column_type: &Type,
+    table: &Ident,
+    stream_parent_query_type: &Type,
+    parent_type: &Type,
+    parent_ident: &Ident,
+) -> FunctionDef {
+    let fn_name = format_ident!("stream_{}s_by_{}", parent_ident.to_string().to_lowercase(), column_name);
     let fn_stream = quote! {
-        pub fn #fn_name(tx: ReadTransaction, val: #column_type, query: Option<#stream_query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#entity_type, AppError>> + Send + 'static>>, AppError> {
+        pub fn #fn_name(tx: ReadTransaction, val: #column_type, query: Option<#stream_parent_query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#parent_type, AppError>> + Send + 'static>>, AppError> {
             let mm_table = tx.open_multimap_table(#table).map_err(AppError::from)?;
             let iter = mm_table.get(&val).map_err(AppError::from)?;
-
-            let stream = futures::stream::unfold((iter, tx, query), |(mut iter, tx, query)| async move {
-                match iter.next() {
-                    Some(Ok(guard)) => {
-                        let pk = guard.value().clone();
-                        if let Some(ref stream_query) = query {
-                            match Self::compose_with_filter(&tx, &pk, stream_query) {
-                                Ok(Some(entity)) => Some((Ok(entity), (iter, tx, query))),
-                                Ok(None) => None,
-                                Err(e) => Some((Err(e), (iter, tx, query))),
+            let mut unique_parent_pointers = Vec::new();
+            for guard in iter {
+                let pk = guard?.value().clone();
+                unique_parent_pointers.push(pk.parent);
+            }
+            unique_parent_pointers.dedup();
+            let stream = futures::stream::unfold(
+                (unique_parent_pointers.into_iter(), tx, query),
+                |(mut iter, tx, query)| async move {
+                    match iter.next() {
+                        Some(parent_pointer) => {
+                            if let Some(ref stream_query) = query {
+                                match #parent_type::compose_with_filter(&tx, &parent_pointer, stream_query) {
+                                    Ok(Some(entity)) => Some((Ok(entity), (iter, tx, query))),
+                                    Ok(None) => None,
+                                    Err(e) => Some((Err(e), (iter, tx, query))),
+                                }
+                            } else {
+                                Some((#parent_type::compose(&tx, &parent_pointer), (iter, tx, query)))
                             }
-                        } else {
-                            Some((Self::compose(&tx, &pk), (iter, tx, query)))
                         }
+                        None => None,
                     }
-                    Some(Err(e)) => Some((Err(AppError::from(e)), (iter, tx, query))),
-                    None => None,
-                }
-            })
-            .boxed();
-
+                },
+            ).boxed();
             Ok(stream)
         }
     };
@@ -178,21 +190,21 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
             let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
-            let entity_stream = #entity_name::#fn_name(read_tx, val, None).expect("Failed to get entities by index");
-            let entities = entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
-            let expected_entities = vec![#entity_type::sample()];
-            assert_eq!(expected_entities, entities, "Expected entities to be returned for the given index");
+            let entity_stream = #entity_name::#fn_name(read_tx, val, None).expect("Failed to get parent entities by index");
+            let parent_entities = entity_stream.try_collect::<Vec<#parent_type>>().await.expect("Failed to collect parent entity stream");
+            let expected_entities = vec![#parent_type::sample()];
+            assert_eq!(expected_entities, parent_entities, "Expected parent entities to be returned for the given index");
         }
         #[tokio::test]
         async fn #test_with_filter_fn_name() {
             let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
-            let query = #stream_query_type::sample();
-            let entity_stream = #entity_name::#fn_name(read_tx, val, Some(query.clone())).expect("Failed to get entities by index");
-            let entities = entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
-            let expected_entities = vec![#entity_type::sample()];
-            assert_eq!(entities, expected_entities, "Only the default valued entity, filter is set for default values, query: {:?}", query);
+            let query = #stream_parent_query_type::sample();
+            let entity_stream = #entity_name::#fn_name(read_tx, val, Some(query.clone())).expect("Failed to get parent entities by index");
+            let parent_entities = entity_stream.try_collect::<Vec<#parent_type>>().await.expect("Failed to collect parent entity stream");
+            let expected_entities = vec![#parent_type::sample()];
+            assert_eq!(expected_entities, parent_entities, "Only the default valued parent entity, filter is set for default values, query: {:?}", query);
         }
     });
 
@@ -202,12 +214,12 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
         fn #bench_fn_name(b: &mut Bencher) {
             let rt = Runtime::new().unwrap();
             let db = DB.clone();
-            let query = #stream_query_type::sample();
+            let query = #stream_parent_query_type::sample();
             b.iter(|| {
                 rt.block_on(async {
                     let read_tx = db.begin_read().unwrap();
-                    let entity_stream = #entity_name::#fn_name(read_tx, #column_type::default(), Some(query.clone())).expect("Failed to get entities by index");
-                    entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
+                    let parent_entity_stream = #entity_name::#fn_name(read_tx, #column_type::default(), Some(query.clone())).expect("Failed to get parent entities by index");
+                    parent_entity_stream.try_collect::<Vec<#parent_type>>().await.expect("Failed to collect parent entity stream");
                 })
             });
         }
@@ -227,9 +239,9 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
                     sample: quote! { #column_type::default().encode() },
                 }]
                 ), FromBody(BodyExpr {
-                    ty: syn::parse_quote! { #stream_query_type },
-                    extraction: quote! { MaybeJson(body): MaybeJson<#stream_query_type> },
-                    samples: quote! { vec![Some(#stream_query_type::sample()), None ] },
+                    ty: syn::parse_quote! { #stream_parent_query_type },
+                    extraction: quote! { MaybeJson(body): MaybeJson<#stream_parent_query_type> },
+                    samples: quote! { vec![Some(#stream_parent_query_type::sample()), None ] },
                 })
             ],
             method: HttpMethod::POST,
@@ -247,11 +259,11 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
             },
             utoipa_responses: quote! {
                 responses(
-                    (status = OK, content_type = "application/x-ndjson", body = #entity_type),
-                    (status = 500, content_type = "application/x-ndjson", body = ErrorResponse),
+                    (status = OK, content_type = "application/json", body = #parent_type),
+                    (status = 500, content_type = "application/json", body = ErrorResponse),
                 )
             },
-            endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), column_name, column_name),
+            endpoint: format!("/{}/{}/{}/{{{}}}", parent_ident.to_string().to_lowercase(), entity_name.to_string().to_lowercase(), column_name, column_name),
         }.to_endpoint()),
         test_stream,
         bench_stream

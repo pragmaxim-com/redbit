@@ -1,11 +1,12 @@
 use proc_macro2::Ident;
+use quote::ToTokens;
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::Comma;
 use syn::{Data, DeriveInput, Field, Fields, GenericArgument, ItemStruct, PathArguments, Type};
 use crate::pk::PointerType;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone)]
 pub enum Multiplicity {
     OneToOption,
     OneToOne,
@@ -13,9 +14,36 @@ pub enum Multiplicity {
 }
 
 #[derive(Clone)]
+pub struct ParentDef {
+    pub parent_type: Type,
+    pub parent_ident: Ident,
+    pub stream_query_ty: Type
+}
+
+#[derive(Clone)]
 pub struct FieldDef {
     pub name: Ident,
     pub tpe: Type,
+}
+
+#[derive(Clone)]
+pub enum KeyDef {
+    Pk(FieldDef),
+    Fk { field_def: FieldDef, multiplicity: Multiplicity, parent_type: Option<Type> },
+}
+impl KeyDef {
+    pub fn is_root(&self) -> bool {
+        match self {
+            KeyDef::Pk(_) => true,
+            KeyDef::Fk { .. } => false,
+        }
+    }
+    pub fn field_def(&self) -> &FieldDef {
+        match self {
+            KeyDef::Pk(field_def) => field_def,
+            KeyDef::Fk { field_def, .. } => field_def,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -26,7 +54,7 @@ pub enum IndexingType {
 
 #[derive(Clone)]
 pub enum ColumnDef {
-    Key { field_def: FieldDef, fk: Option<Multiplicity> },
+    Key(KeyDef),
     Plain(FieldDef, IndexingType),
     Relationship(FieldDef, Multiplicity),
     Transient(FieldDef),
@@ -39,6 +67,37 @@ pub fn get_named_fields(ast: &ItemStruct) -> Result<Punctuated<syn::Field, Comma
     }
 }
 
+pub fn extract_base_type_from_pointer(field: &Field) -> Result<Type, syn::Error> {
+    match &field.ty {
+        Type::Path(type_path) => {
+            if let Some(seg) = type_path.path.segments.last() {
+                let ident_str = seg.ident.to_string();
+
+                if let Some(base_name) = ident_str.strip_suffix("Pointer") {
+                    syn::parse_str::<Type>(base_name).map_err(|e| {
+                        syn::Error::new_spanned(&seg.ident, format!("Failed to parse key type `{}`: {}", base_name, e))
+                    })
+                } else {
+                    Err(syn::Error::new_spanned(
+                        &seg.ident,
+                        format!("Expected Key type of format `ParentPointer`, found `{}`", ident_str),
+                    ))
+                }
+            } else {
+                Err(syn::Error::new_spanned(
+                    &type_path.path,
+                    format!("Expected Key type of format `ParentPointer`, found `{:?}`", type_path.to_token_stream())
+                ))
+            }
+        }
+        other => Err(syn::Error::new_spanned(
+            other,
+            format!("Expected Key type of format `ParentPointer`, found `{:?}`", other.to_token_stream()),
+        )),
+    }
+}
+
+
 fn parse_entity_field(field: &syn::Field) -> Result<ColumnDef, syn::Error> {
     match &field.ident {
         None => Err(syn::Error::new(field.span(), "Unnamed fields not supported")),
@@ -46,25 +105,28 @@ fn parse_entity_field(field: &syn::Field) -> Result<ColumnDef, syn::Error> {
             let column_type = field.ty.clone();
             for attr in &field.attrs {
                 if attr.path().is_ident("pk") {
-                    let field = FieldDef { name: column_name.clone(), tpe: column_type.clone() };
-                    return Ok(ColumnDef::Key { field_def: field.clone(), fk: None });
+                    let key_def = KeyDef::Pk(FieldDef { name: column_name.clone(), tpe: column_type.clone() });
+                    return Ok(ColumnDef::Key(key_def));
                 } else if attr.path().is_ident("fk") {
-                    let mut fk = None;
+                    let mut multiplicity = None;
+                    let mut parent_type = None;
                     let _ = attr.parse_nested_meta(|nested| {
                         if nested.path.is_ident("one2many") {
-                            fk = Some(Multiplicity::OneToMany);
+                            multiplicity = Some(Multiplicity::OneToMany);
+                            parent_type = Some(extract_base_type_from_pointer(field)?);
                         } else if nested.path.is_ident("one2one") {
-                            fk = Some(Multiplicity::OneToOne);
+                            multiplicity = Some(Multiplicity::OneToOne);
                         } else if nested.path.is_ident("one2opt") {
-                            fk = Some(Multiplicity::OneToOption);
+                            multiplicity = Some(Multiplicity::OneToOption);
                         }
                         Ok(())
                     });
-                    if fk.is_none() {
-                        return Err(syn::Error::new(attr.span(), "Foreign key must specify either `one2many` or `one2one`"));
+                    return if let Some(m) = multiplicity {
+                        let field = FieldDef { name: column_name.clone(), tpe: column_type.clone() };
+                        Ok(ColumnDef::Key(KeyDef::Fk { field_def: field.clone(), multiplicity: m, parent_type }))
+                    } else {
+                        Err(syn::Error::new(attr.span(), "Foreign key must specify either `one2many` or `one2one`"))
                     }
-                    let field = FieldDef { name: column_name.clone(), tpe: column_type.clone() };
-                    return Ok(ColumnDef::Key { field_def: field.clone(), fk });
                 } else if attr.path().is_ident("column") {
                     let field = FieldDef { name: column_name.clone(), tpe: column_type.clone() };
                     let mut indexing = ColumnDef::Plain(field.clone(), IndexingType::Off);
@@ -101,11 +163,11 @@ fn parse_entity_field(field: &syn::Field) -> Result<ColumnDef, syn::Error> {
                                         qself: None,
                                         path: syn::Path::from(inner_type),
                                     });
-                                    let field = FieldDef {
+                                    let field_def = FieldDef {
                                         name: column_name.clone(),
                                         tpe: type_path,
                                     };
-                                    return Ok(ColumnDef::Relationship(field, Multiplicity::OneToMany));
+                                    return Ok(ColumnDef::Relationship(field_def, Multiplicity::OneToMany));
                                 }
                             }
                         }
@@ -158,20 +220,20 @@ fn parse_entity_field(field: &syn::Field) -> Result<ColumnDef, syn::Error> {
     }
 }
 
-pub fn get_field_macros(ast: &ItemStruct) -> Result<((FieldDef, Option<Multiplicity>), Vec<ColumnDef>), syn::Error> {
-    let mut key_column: Option<(FieldDef, Option<Multiplicity>)> = None;
+pub fn get_field_macros(ast: &ItemStruct) -> Result<(KeyDef, Vec<ColumnDef>), syn::Error> {
+    let mut key_column: Option<KeyDef> = None;
     let mut columns: Vec<ColumnDef> = Vec::new();
 
     let fields = get_named_fields(ast)?;
 
     for field in fields.iter() {
         match parse_entity_field(field)? {
-            ColumnDef::Key { field_def, fk } => {
+            ColumnDef::Key(key_def) => {
                 if key_column.is_some() {
                     return Err(syn::Error::new(field.span(), "Multiple `#[pk]` columns found; only one is allowed"));
                 }
-                key_column = Some((field_def.clone(), fk.clone()));
-                columns.push(ColumnDef::Key { field_def, fk });
+                key_column = Some(key_def.clone());
+                columns.push(ColumnDef::Key(key_def));
             }
             column => columns.push(column),
         }

@@ -28,11 +28,7 @@ impl DbRelationshipMacros {
     pub fn new(field_def: FieldDef, multiplicity: Multiplicity, entity_ident: &Ident, pk_name: &Ident, pk_type: &Type) -> DbRelationshipMacros {
         let child_name = &field_def.name; // e.g., "transactions"
         let child_type = &field_def.tpe; // e.g., the type `Transaction` from Vec<Transaction>
-        let child_ident = match &child_type {
-            Type::Path(p) => &p.path.segments.last().unwrap().ident,
-            _ => panic!("Unsupported child type"),
-        };
-        let child_stream_query_type = entity::query::stream_query_type(child_ident);
+        let child_stream_query_type = entity::query::stream_query_type(child_type);
         match multiplicity {
             Multiplicity::OneToOne => {
                 DbRelationshipMacros {

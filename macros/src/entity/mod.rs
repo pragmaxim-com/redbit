@@ -1,5 +1,5 @@
 use crate::field::FieldMacros;
-use crate::field_parser::Multiplicity;
+use crate::field_parser::{KeyDef};
 use crate::rest::Rest;
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -12,13 +12,13 @@ mod sample;
 mod compose;
 mod tests;
 
-pub fn new(item_struct: &ItemStruct) -> Result<(Option<Multiplicity>, TokenStream), syn::Error> {
+pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, TokenStream), syn::Error> {
     let entity_ident = &item_struct.ident;
     let entity_type: Type = parse_quote! { #entity_ident };
-    let stream_query_type = query::stream_query_type(entity_ident);
-    let ((pk, multiplicity), field_macros) = 
+    let stream_query_type = query::stream_query_type(&entity_type);
+    let (key_def, parent_def, field_macros) =
         FieldMacros::new(&item_struct, entity_ident, &entity_type, &stream_query_type)?;
-
+    let key = key_def.field_def();
     let mut field_names = Vec::new();
     let mut table_definitions = Vec::new();
     let mut range_queries = Vec::new();
@@ -48,25 +48,26 @@ pub fn new(item_struct: &ItemStruct) -> Result<(Option<Multiplicity>, TokenStrea
     }
 
     let mut function_defs = Vec::new();
-    function_defs.push(store::store_and_commit_def(entity_ident, &entity_type, &pk.name, &pk.tpe, &store_statements));
+    function_defs.push(store::store_and_commit_def(entity_ident, &entity_type, &key.name, &key.tpe, &store_statements));
     function_defs.push(store::store_def(entity_ident, &entity_type, &store_statements));
     function_defs.push(store::store_many_def(entity_ident, &entity_type, &store_many_statements));
     function_defs.extend(column_function_defs.clone());
-    function_defs.push(delete::delete_and_commit_def(entity_ident, &entity_type, &pk.name, &pk.tpe, &delete_statements));
-    function_defs.push(delete::delete_def(&pk.tpe, &delete_statements));
-    function_defs.push(delete::delete_many_def(&pk.tpe, &delete_many_statements));
+    function_defs.push(delete::delete_and_commit_def(entity_ident, &entity_type, &key.name, &key.tpe, &delete_statements));
+    function_defs.push(delete::delete_def(&key.tpe, &delete_statements));
+    function_defs.push(delete::delete_many_def(&key.tpe, &delete_many_statements));
 
     let stream_query_struct = query::stream_query(&stream_query_type, &stream_queries);
     let range_query_structs = range_queries.into_iter().map(|rq| rq.stream).collect::<Vec<_>>();
 
     let api_functions: Vec<TokenStream> = function_defs.iter().map(|f| f.fn_stream.clone()).collect::<Vec<_>>();
-    let sample_functions = sample::sample_token_streams(entity_ident, &entity_type, &pk.tpe, &struct_default_inits);
-    let compose_function = compose::compose_token_stream(entity_ident, &entity_type, &pk.tpe, &struct_inits);
-    let compose_with_filter_function = compose::compose_with_filter_token_stream(&entity_type, &pk.tpe, &stream_query_type, &field_names, &struct_inits_with_query);
+    let sample_functions = sample::sample_token_streams(entity_ident, &entity_type, &key.tpe, &struct_default_inits);
+    let compose_function = compose::compose_token_stream(entity_ident, &entity_type, &key.tpe, &struct_inits);
+    let compose_with_filter_function = compose::compose_with_filter_token_stream(&entity_type, &key.tpe, &stream_query_type, &field_names, &struct_inits_with_query);
     let compose_functions = vec![compose_function, compose_with_filter_function];
     let table_definitions: Vec<TokenStream> = table_definitions.iter().map(|table_def| table_def.definition.clone()).collect();
 
-    let test_suite = tests::test_suite(entity_ident, &function_defs);
+    let parent_ident = parent_def.map(|p|p.parent_ident);
+    let test_suite = tests::test_suite(entity_ident, parent_ident, &function_defs);
 
     let Rest { endpoint_handlers, routes, client_calls} = Rest::new(&function_defs);
 
@@ -96,5 +97,5 @@ pub fn new(item_struct: &ItemStruct) -> Result<(Option<Multiplicity>, TokenStrea
             // unit tests and rest api tests
             #test_suite
         }.into();
-    Ok((multiplicity, stream))
+    Ok((key_def, stream))
 }
