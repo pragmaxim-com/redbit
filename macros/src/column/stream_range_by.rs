@@ -5,7 +5,7 @@ use quote::{format_ident, quote};
 use syn::Type;
 use crate::endpoint::EndpointDef;
 
-pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident, column_type: &Type, table: &Ident, range_query_ty: &Type, stream_query_type: &Type) -> FunctionDef {
+pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident, column_type: &Type, pk_type: &Type, table: &Ident, range_query_ty: &Type, stream_query_type: &Type) -> FunctionDef {
     let fn_name = format_ident!("stream_range_by_{}", column_name);
     let fn_stream = quote! {
         pub fn #fn_name(
@@ -68,13 +68,15 @@ pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, column
         async fn #test_with_filter_fn_name() {
             let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let pk = #pk_type::default();
             let from_value = #column_type::default();
             let until_value = #column_type::default().next_value().next_value().next_value();
             let query = #stream_query_type::sample();
             let entity_stream = #entity_name::#fn_name(read_tx, from_value, until_value, Some(query.clone())).expect("Failed to range entities by index");
             let entities = entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
-            let expected_entities = vec![#entity_type::sample()];
-            assert_eq!(entities, expected_entities, "Only the default valued entity, filter is set for default values, query: {:?}", query);
+            let expected_entity = #entity_type::sample_with_query(&pk, 0, &query).expect("Failed to create sample entity with query");
+            assert_eq!(entities.len(), 1, "Expected only one entity to be returned for the given range by with filter");
+            assert_eq!(entities[0], expected_entity, "RangeBy result is not equal to sample because it is filtered, query: {:?}", query);
         }
     });
 

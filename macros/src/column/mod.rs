@@ -27,6 +27,7 @@ pub struct DbColumnMacros {
     pub stream_query_init: StreamQueryItem,
     pub struct_init_with_query: TokenStream,
     pub struct_default_init: TokenStream,
+    pub struct_default_init_with_query: TokenStream,
     pub store_statement: TokenStream,
     pub store_many_statement: TokenStream,
     pub delete_statement: TokenStream,
@@ -77,7 +78,8 @@ impl DbColumnMacros {
             table_definitions: vec![table_def.clone()],
             struct_init: init::plain_init(column_name, &table_def.name),
             struct_init_with_query: init::plain_init_with_query(column_name, &table_def.name),
-            struct_default_init: init::plain_default_init(column_name, column_type),
+            struct_default_init: init::default_init(column_name, column_type),
+            struct_default_init_with_query: init::default_init_with_query(column_name, column_type),
             store_statement: store::store_statement(pk_name, column_name, &table_def.name),
             store_many_statement: store::store_many_statement(pk_name, column_name, &table_def.name),
             delete_statement: delete::delete_statement(&table_def.name),
@@ -103,9 +105,9 @@ impl DbColumnMacros {
 
         let mut function_defs: Vec<FunctionDef> = Vec::new();
         function_defs.push(get_by::get_by_index_def(entity_name, entity_type, column_name, column_type, &index_table_def.name));
-        function_defs.push(stream_by::by_index_def(entity_name, entity_type, column_name, column_type, &index_table_def.name, stream_query_type));
+        function_defs.push(stream_by::by_index_def(entity_name, entity_type, column_name, column_type, pk_type, &index_table_def.name, stream_query_type));
         if let Some(ParentDef { parent_type, parent_ident, stream_query_ty }) = parent_def {
-            function_defs.push(stream_parents_by::by_index_def(entity_name, column_name, column_type, &index_table_def.name, &stream_query_ty, &parent_type, &parent_ident));
+            function_defs.push(stream_parents_by::by_index_def(entity_name, column_name, column_type, pk_type, &index_table_def.name, &stream_query_ty, &parent_type, &parent_ident));
         }
         function_defs.push(get_keys_by::by_index_def(
             entity_name,
@@ -132,6 +134,7 @@ impl DbColumnMacros {
                 entity_type,
                 column_name,
                 column_type,
+                pk_type,
                 &index_table_def.name,
                 &rq.ty,
                 stream_query_type
@@ -153,7 +156,8 @@ impl DbColumnMacros {
             table_definitions: vec![plain_table_def.clone(), index_table_def.clone()],
             struct_init: init::index_init(column_name, &plain_table_def.name),
             struct_init_with_query: init::index_init_with_query(column_name, &plain_table_def.name),
-            struct_default_init: init::index_default_init(column_name, column_type),
+            struct_default_init: init::default_init(column_name, column_type),
+            struct_default_init_with_query: init::default_init_with_query(column_name, column_type),
             store_statement: store::store_index_def(column_name, pk_name, &plain_table_def.name, &index_table_def.name),
             store_many_statement: store::store_many_index_def(column_name, pk_name, &plain_table_def.name, &index_table_def.name),
             delete_statement: delete::delete_index_statement(&plain_table_def.name, &index_table_def.name),
@@ -193,6 +197,7 @@ impl DbColumnMacros {
             entity_type,
             column_name,
             column_type,
+            pk_type,
             &value_to_dict_pk_table_def.name,
             &dict_index_table_def.name,
             &stream_query_type
@@ -203,6 +208,7 @@ impl DbColumnMacros {
                     entity_name,
                     column_name,
                     column_type,
+                    pk_type,
                     &value_to_dict_pk_table_def.name,
                     &dict_index_table_def.name,
                     &stream_query_ty,
@@ -247,7 +253,8 @@ impl DbColumnMacros {
                 &dict_pk_by_pk_table_def.name,
                 &value_by_dict_pk_table_def.name,
             ),
-            struct_default_init: init::dict_default_init(column_name, column_type),
+            struct_default_init_with_query: init::default_init_with_query(column_name, column_type),
+            struct_default_init: init::default_init(column_name, column_type),
             store_statement: store::store_dict_def(
                 column_name,
                 pk_name,

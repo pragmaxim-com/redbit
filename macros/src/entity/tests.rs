@@ -29,8 +29,7 @@ pub fn test_suite(entity_name: &Ident, parent_entity: Option<Ident>, fn_defs: &V
                 }
 
                 static DB: Lazy<Arc<Database>> = Lazy::new(|| {
-                    let db_path = test_db_path(#entity_literal);
-                    let db = Database::create(db_path).expect("Failed to create database");
+                    let db = test_db();
                     let entities = #sample_entity::sample_many(#sample_count);
                     for entity in entities {
                         #sample_entity::store_and_commit(&db, &entity).expect("Failed to persist entity");
@@ -39,8 +38,7 @@ pub fn test_suite(entity_name: &Ident, parent_entity: Option<Ident>, fn_defs: &V
                 });
 
                 static DB_DELETE: Lazy<Arc<Database>> = Lazy::new(|| {
-                    let db_path = test_db_path(#entity_literal);
-                    let db = Database::create(db_path).expect("Failed to create database");
+                    let db = test_db();
                     let entities = #sample_entity::sample_many(#sample_count);
                     for entity in entities {
                         #sample_entity::store_and_commit(&db, &entity).expect("Failed to persist entity");

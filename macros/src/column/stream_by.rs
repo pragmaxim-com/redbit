@@ -10,6 +10,7 @@ pub fn by_dict_def(
     entity_type: &Type,
     column_name: &Ident,
     column_type: &Type,
+    pk_type: &Type,
     value_to_dict_pk: &Ident,
     dict_index_table: &Ident,
     stream_query_type: &Type
@@ -72,11 +73,13 @@ pub fn by_dict_def(
             let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
+            let pk = #pk_type::default();
             let query = #stream_query_type::sample();
             let entity_stream = #entity_name::#fn_name(read_tx, val, Some(query.clone())).expect("Failed to get entities by index");
             let entities = entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
-            let expected_entities = vec![#entity_type::sample()];
-            assert_eq!(entities, expected_entities, "Only the default valued entity, filter is set for default values, query: {:?}", query);
+            let expected_entity = #entity_type::sample_with_query(&pk, 0, &query).expect("Failed to create sample entity with query");
+            assert_eq!(entities.len(), 1, "Expected only one entity to be returned for the given dictionary index with filter");
+            assert_eq!(entities[0], expected_entity, "Dict result is not equal to sample because it is filtered, query: {:?}", query);
         }
     });
 
@@ -140,7 +143,7 @@ pub fn by_dict_def(
     }
 }
 
-pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident, column_type: &Type, table: &Ident, stream_query_type: &Type) -> FunctionDef {
+pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident, column_type: &Type, pk_type: &Type, table: &Ident, stream_query_type: &Type) -> FunctionDef {
     let fn_name = format_ident!("stream_by_{}", column_name);
     let fn_stream = quote! {
         pub fn #fn_name(tx: ReadTransaction, val: #column_type, query: Option<#stream_query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#entity_type, AppError>> + Send + 'static>>, AppError> {
@@ -188,11 +191,13 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
             let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
+            let pk = #pk_type::default();
             let query = #stream_query_type::sample();
             let entity_stream = #entity_name::#fn_name(read_tx, val, Some(query.clone())).expect("Failed to get entities by index");
             let entities = entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
-            let expected_entities = vec![#entity_type::sample()];
-            assert_eq!(entities, expected_entities, "Only the default valued entity, filter is set for default values, query: {:?}", query);
+            let expected_entity = #entity_type::sample_with_query(&pk, 0, &query).expect("Failed to create sample entity with query");
+            assert_eq!(entities.len(), 1, "Expected only one entity to be returned for the given index with filter");
+            assert_eq!(entities[0], expected_entity, "Indexed result is not equal to sample because it is filtered, query: {:?}", query);
         }
     });
 

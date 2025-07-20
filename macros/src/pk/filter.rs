@@ -23,10 +23,11 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, table: &I
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let query = #stream_query_type::sample();
             let pk_default = #pk_type::default();
-            let pk_default_next = #pk_type::default().next_index();
             let entity = #entity_name::#fn_name(&read_tx, &pk_default, &query).expect("Failed to get entity by PK").expect("Expected entity to exist");
-            assert_eq!(entity, #entity_type::sample(), "Entity PK does not match the requested PK");
+            let expected_entity = #entity_type::sample_with_query(&pk_default, 0, &query).expect("Failed to create sample entity with query");
+            assert_eq!(entity, expected_entity, "Entity PK does not match the requested PK");
 
+            let pk_default_next = #pk_type::default().next_index();
             let entity_opt = #entity_name::#fn_name(&read_tx, &pk_default_next, &query).expect("Failed to get entity by PK");
             assert_eq!(entity_opt, None, "Filter is set for default value {:?}", query);
         }

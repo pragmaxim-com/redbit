@@ -9,6 +9,7 @@ pub fn by_dict_def(
     entity_name: &Ident,
     column_name: &Ident,
     column_type: &Type,
+    pk_type: &Type,
     value_to_dict_pk: &Ident,
     dict_index_table: &Ident,
     stream_parent_query_type: &Type,
@@ -72,11 +73,14 @@ pub fn by_dict_def(
             let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
+            let pk = #pk_type::default();
+            let parent_pk = pk.parent();
             let query = #stream_parent_query_type::sample();
             let entity_stream = #entity_name::#fn_name(read_tx, val, Some(query.clone())).expect("Failed to get parent entities by index");
             let parent_entities = entity_stream.try_collect::<Vec<#parent_type>>().await.expect("Failed to collect parent entity stream");
-            let expected_entities = vec![#parent_type::sample()];
-            assert_eq!(expected_entities, parent_entities, "Only the default valued parent entity, filter is set for default values, query: {:?}", query);
+            let expected_entity = #parent_type::sample_with_query(&parent_pk, 0, &query).expect("Failed to create sample entity with query");
+            assert_eq!(parent_entities.len(), 1, "Expected only one parent entity to be returned for the given dictionary index with filter");
+            assert_eq!(parent_entities[0], expected_entity, "Dict result is not equal to sample because it is filtered, query: {:?}", query);
         }
     });
 
@@ -144,6 +148,7 @@ pub fn by_index_def(
     entity_name: &Ident,
     column_name: &Ident,
     column_type: &Type,
+    pk_type: &Type,
     table: &Ident,
     stream_parent_query_type: &Type,
     parent_type: &Type,
@@ -200,11 +205,14 @@ pub fn by_index_def(
             let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
+            let pk = #pk_type::default();
+            let parent_pk = pk.parent();
             let query = #stream_parent_query_type::sample();
             let entity_stream = #entity_name::#fn_name(read_tx, val, Some(query.clone())).expect("Failed to get parent entities by index");
             let parent_entities = entity_stream.try_collect::<Vec<#parent_type>>().await.expect("Failed to collect parent entity stream");
-            let expected_entities = vec![#parent_type::sample()];
-            assert_eq!(expected_entities, parent_entities, "Only the default valued parent entity, filter is set for default values, query: {:?}", query);
+            let expected_entity = #parent_type::sample_with_query(&parent_pk, 0, &query).expect("Failed to create sample entity with query");
+            assert_eq!(parent_entities.len(), 1, "Expected only one parent entity to be returned for the given index with filter");
+            assert_eq!(parent_entities[0], expected_entity, "Indexed result is not equal to sample because it is filtered, query: {:?}", query);
         }
     });
 

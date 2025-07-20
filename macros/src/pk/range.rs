@@ -46,12 +46,14 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, table: &I
         fn #test_with_filter_fn_name() {
             let db = DB.clone();
             let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let pk = #pk_type::default();
             let from_value = #pk_type::default();
             let until_value = #pk_type::default().next_index().next_index().next_index();
             let query = #stream_query_type::sample();
             let entities = #entity_name::#fn_name(&read_tx, &from_value, &until_value, Some(query.clone())).expect("Failed to get entities by range");
-            let expected_entities = vec![#entity_type::sample()];
-            assert_eq!(entities, expected_entities, "Only the default valued entity, filter is set for default values, query: {:?}", query);
+            let expected_entity = #entity_type::sample_with_query(&pk, 0, &query).expect("Failed to create sample entity with query");
+            assert_eq!(entities.len(), 1, "Expected only one entity to be returned for the given range with filter");
+            assert_eq!(entities[0], expected_entity, "Range result is not equal to sample because it is filtered, query: {:?}", query);
         }
     });
 

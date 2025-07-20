@@ -2,6 +2,37 @@ use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::Type;
 
+pub fn default_init_expr(column_type: &Type) -> TokenStream {
+    quote! {
+        {
+            let mut value = <#column_type as Default>::default();
+            for _ in 0..sample_index {
+                value = <#column_type as IterableColumn>::next_value(&value);
+            }
+            value
+        }
+    }
+}
+
+pub fn default_init(column_name: &Ident, column_type: &Type) -> TokenStream {
+    let default_expr = default_init_expr(column_type);
+    quote! {
+        #column_name: #default_expr
+    }
+}
+
+pub fn default_init_with_query(column_name: &Ident, column_type: &Type) -> TokenStream {
+    let default_expr = default_init_expr(column_type);
+    quote! {
+        let #column_name = #default_expr;
+        if let Some(filter_op) = stream_query.#column_name.clone() {
+            if !filter_op.matches(&#column_name) {
+                return None;
+            }
+        }
+    }
+}
+
 pub fn plain_init_expr(table: &Ident) -> TokenStream {
     quote! {
         {
@@ -36,19 +67,6 @@ pub fn plain_init_with_query(column_name: &Ident, table: &Ident) -> TokenStream 
     }
 }
 
-pub fn plain_default_init(column_name: &Ident, column_type: &Type) -> TokenStream {
-    quote! {
-        #column_name: {
-            let mut value = <#column_type as Default>::default();
-            for _ in 0..sample_index {
-                value = <#column_type as IterableColumn>::next_value(&value);
-            }
-            value
-        }
-    }
-}
-
-
 pub fn index_init_expr(table: &Ident) -> TokenStream {
     quote! {
         {
@@ -80,18 +98,6 @@ pub fn index_init(column_name: &Ident, table: &Ident) -> TokenStream {
     let init_expr = index_init_expr(table);
     quote! {
         #column_name: #init_expr
-    }
-}
-
-pub fn index_default_init(column_name: &Ident, column_type: &Type) -> TokenStream {
-    quote! {
-        #column_name: {
-            let mut value = <#column_type as Default>::default();
-            for _ in 0..sample_index {
-                value = <#column_type as IterableColumn>::next_value(&value);
-            }
-            value
-        }
     }
 }
 
@@ -137,14 +143,3 @@ pub fn dict_init_with_query(column_name: &Ident, table_dict_pk_by_pk: &Ident, ta
     }
 }
 
-pub fn dict_default_init(column_name: &Ident, column_type: &Type) -> TokenStream {
-    quote! {
-        #column_name: {
-            let mut value = <#column_type as Default>::default();
-            for _ in 0..sample_index {
-                value = <#column_type as IterableColumn>::next_value(&value);
-            }
-            value
-        }
-    }
-}

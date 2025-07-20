@@ -26,6 +26,7 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, TokenStream), syn::Error
     let mut struct_inits = Vec::new();
     let mut struct_inits_with_query = Vec::new();
     let mut struct_default_inits = Vec::new();
+    let mut struct_default_inits_with_query = Vec::new();
     let mut store_statements = Vec::new();
     let mut delete_statements = Vec::new();
     let mut store_many_statements = Vec::new();
@@ -40,6 +41,7 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, TokenStream), syn::Error
         struct_inits.push(column.struct_init());
         struct_inits_with_query.push(column.struct_init_with_query());
         struct_default_inits.push(column.struct_default_init());
+        struct_default_inits_with_query.push(column.struct_default_init_with_query());
         store_statements.extend(column.store_statements());
         delete_statements.extend(column.delete_statements());
         store_many_statements.extend(column.store_many_statements());
@@ -60,7 +62,7 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, TokenStream), syn::Error
     let range_query_structs = range_queries.into_iter().map(|rq| rq.stream).collect::<Vec<_>>();
 
     let api_functions: Vec<TokenStream> = function_defs.iter().map(|f| f.fn_stream.clone()).collect::<Vec<_>>();
-    let sample_functions = sample::sample_token_streams(entity_ident, &entity_type, &key.tpe, &struct_default_inits);
+    let sample_functions = sample::sample_token_streams(entity_ident, &entity_type, &key.tpe, &stream_query_type, &struct_default_inits, &struct_default_inits_with_query, &field_names);
     let compose_function = compose::compose_token_stream(entity_ident, &entity_type, &key.tpe, &struct_inits);
     let compose_with_filter_function = compose::compose_with_filter_token_stream(&entity_type, &key.tpe, &stream_query_type, &field_names, &struct_inits_with_query);
     let compose_functions = vec![compose_function, compose_with_filter_function];

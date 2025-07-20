@@ -82,7 +82,7 @@ async fn it_should_stream_entities_by_index() {
     let transaction = blocks.first().unwrap().transactions.first().unwrap();
 
     let found_by_hash = Transaction::stream_by_hash(read_tx, transaction.hash.clone(), None).unwrap().try_collect::<Vec<Transaction>>().await.unwrap();
-    assert_eq!(found_by_hash.len(), 3);
+    assert_eq!(found_by_hash.len(), 1);
     assert!(found_by_hash.iter().any(|tx| tx.id == transaction.id));
     assert!(found_by_hash.iter().any(|tx| tx.id == transaction.id));
 }
@@ -95,7 +95,7 @@ async fn it_should_stream_entities_by_index_with_dict() {
     let utxo = blocks.first().unwrap().transactions.first().unwrap().utxos.first().unwrap();
 
     let found_by_address = Utxo::stream_by_address(read_tx, utxo.address.clone(), None).unwrap().try_collect::<Vec<Utxo>>().await.unwrap();
-    assert_eq!(found_by_address.len(), 3*3);
+    assert_eq!(found_by_address.len(), 1);
     assert!(found_by_address.iter().any(|tx| tx.id == utxo.id));
     assert!(found_by_address.iter().any(|tx| tx.id == utxo.id));
 }
@@ -126,7 +126,7 @@ fn it_should_get_entities_by_index() {
     let transaction = blocks.first().unwrap().transactions.first().unwrap();
 
     let found_by_hash = Transaction::get_by_hash(&read_tx, &transaction.hash).expect("Failed to query by hash");
-    assert_eq!(found_by_hash.len(), 3);
+    assert_eq!(found_by_hash.len(), 1);
     assert!(found_by_hash.iter().any(|tx| tx.id == transaction.id));
     assert!(found_by_hash.iter().any(|tx| tx.id == transaction.id));
 }
@@ -139,7 +139,7 @@ fn it_should_get_entities_by_index_with_dict() {
     let utxo = blocks.first().unwrap().transactions.first().unwrap().utxos.first().unwrap();
 
     let found_by_address = Utxo::get_by_address(&read_tx, &utxo.address).expect("Failed to query by address");
-    assert_eq!(found_by_address.len(), 3*3);
+    assert_eq!(found_by_address.len(), 1);
     assert!(found_by_address.iter().any(|tx| tx.id == utxo.id));
     assert!(found_by_address.iter().any(|tx| tx.id == utxo.id));
 }

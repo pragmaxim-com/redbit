@@ -105,6 +105,15 @@ impl FieldMacros {
         }
     }
 
+    pub fn struct_default_init_with_query(&self) -> TokenStream {
+        match self {
+            FieldMacros::Pk(pk) => pk.struct_default_init_with_query.clone(),
+            FieldMacros::Plain(column) => column.struct_default_init_with_query.clone(),
+            FieldMacros::Relationship(relationship) => relationship.struct_default_init_with_query.clone(),
+            FieldMacros::Transient(transient) => transient.struct_default_init_with_query.clone(),
+        }
+    }
+
     pub fn table_definitions(&self) -> Vec<TableDef> {
         match self {
             FieldMacros::Pk(pk) => vec![pk.table_def.clone()],

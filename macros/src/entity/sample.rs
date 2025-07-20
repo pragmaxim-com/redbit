@@ -2,7 +2,7 @@ use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::Type;
 
-pub fn sample_token_streams(entity_name: &Ident, entity_type: &Type, pk_type: &Type, struct_default_inits: &Vec<TokenStream>) -> Vec<TokenStream> {
+pub fn sample_token_streams(entity_name: &Ident, entity_type: &Type, pk_type: &Type, stream_query_type: &Type, struct_default_inits: &Vec<TokenStream>, struct_default_inits_with_query: &Vec<TokenStream>, field_names: &Vec<Ident>) -> Vec<TokenStream> {
     vec![
         quote! {
             pub fn sample() -> Self {
@@ -27,6 +27,17 @@ pub fn sample_token_streams(entity_name: &Ident, entity_type: &Type, pk_type: &T
                 #entity_name {
                     #(#struct_default_inits),*
                 }
+            }
+        },
+        quote! {
+            pub fn sample_with_query(pk: &#pk_type, sample_index: usize, stream_query: &#stream_query_type) -> Option<#entity_type> {
+                // First: fetch & filter every column, short‑circuit on mismatch
+                #(#struct_default_inits_with_query)*
+                Some(
+                    #entity_type {
+                        #(#field_names,)*
+                    }
+                )
             }
         },
     ]
