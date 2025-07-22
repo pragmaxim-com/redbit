@@ -54,7 +54,7 @@ cd ui
 npm run test     # executes requests to all http endpoints
 ```
 
-Hundreds of frontend/backend derived tests and benchmarks are executed so that if any redbit app derived from the definition compiles,
+The example has close to 500 frontend/backend derived tests and 130 benchmarks, so that if any redbit app derived from the definition compiles,
 it is transparent, well tested and benched already.
 
 Let's say we want to persist and query blockchain data using Redbit, declare annotated Structs `examples/utxo/src/lib.rs`:

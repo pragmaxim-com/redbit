@@ -98,7 +98,8 @@ function buildResponses(
 function buildExampleEndpointParams(
     paramDefs: ParamDefinition[],
     requestBody: Endpoint['requestBody'],
-    defs: SchemaMap
+    defs: SchemaMap,
+    streaming: boolean
 ): Record<string, any>[] {
     const required = paramDefs.filter(p => p.required);
     const optional = paramDefs.filter(p => !p.required);
@@ -107,7 +108,7 @@ function buildExampleEndpointParams(
         ...optional.map(p => [...required, p])
     ];
     return variants.map(paramsList => {
-        const args: any = { throwOnError: false };
+        const args: any = streaming ? { throwOnError: false, parseAs: 'stream' } : { throwOnError: false };
         paramsList.forEach(p => {
             args[p.in] = args[p.in] || {};
             args[p.in][p.name] = p.example !== undefined
@@ -138,7 +139,7 @@ function buildEndpoint(
     const paramDefs = buildParamDefinitions(op.parameters || [], defs);
     const requestBody = buildRequestBody(op.requestBody as OpenAPIV3_1.RequestBodyObject, defs);
     const { responseSchemas, responseMediaTypes, streaming } = buildResponses(op.responses, defs);
-    const exampleParams = buildExampleEndpointParams(paramDefs, requestBody, defs);
+    const exampleParams = buildExampleEndpointParams(paramDefs, requestBody, defs, streaming);
 
     return {
         operationId,

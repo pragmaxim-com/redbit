@@ -10,9 +10,6 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
     let fn_stream =
         quote! {
             pub fn #fn_name(tx: ReadTransaction, from: #pk_type, until: #pk_type, query: Option<#stream_query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#entity_type, AppError>> + Send + 'static>>, AppError> {
-                if from >= until {
-                    return Err(AppError::BadRequest("Range cannot be empty".to_string()));
-                }
                 let table_pk_9 = tx.open_table(#table)?;
                 let range = from..until;
                 let iter_box = Box::new(table_pk_9.range::<#pk_type>(range)?);

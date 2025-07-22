@@ -14,10 +14,6 @@ pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, column
             until: #column_type,
             query: Option<#stream_query_type>
         ) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#entity_type, AppError>> + Send + 'static>>, AppError> {
-            if from >= until {
-                return Err(AppError::BadRequest("Range cannot be empty".to_string()));
-            }
-
             let mm_table = tx.open_multimap_table(#table)?;
             let outer_iter = mm_table.range::<#column_type>(from..until)?;
             let outer_stream = futures::stream::iter(outer_iter).map_err(AppError::from);
