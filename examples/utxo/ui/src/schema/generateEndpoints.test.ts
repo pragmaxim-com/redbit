@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import type { OpenAPIV3_1 } from 'openapi-types';
-import { generateEndpoints, Endpoint, ParamInfo } from './generateEndpoints';
+import { generateEndpoints, Endpoint, ParamDefinition } from './generateEndpoints';
 import { SchemaMap } from './inlineSchema';
 import { fetchSchema } from './schema';
 
@@ -20,14 +20,6 @@ beforeAll(async () => {
 });
 
 describe('inlinePaths unit tests', () => {
-    it('ignores paths without operationId', () => {
-        const raw: OpenAPIV3_1.PathsObject = {
-            '/nop': { get: {} as any }
-        };
-        const result = generateEndpoints(raw, defs);
-        expect(Object.keys(result)).toHaveLength(0);
-    });
-
     it('parses a GET with path param and response', () => {
         const raw: OpenAPIV3_1.PathsObject = {
             '/item/{id}': {
@@ -51,8 +43,8 @@ describe('inlinePaths unit tests', () => {
         expect(ep.method).toBe('GET');
         expect(ep.path).toBe('/item/{id}');
         // params
-        expect(ep.params).toHaveLength(1);
-        const p: ParamInfo = ep.params[0];
+        expect(ep.paramDefs).toHaveLength(1);
+        const p: ParamDefinition = ep.paramDefs[0];
         expect(p.name).toBe('id');
         expect(p.in).toBe('path');
         expect(p.required).toBe(true);
@@ -106,7 +98,7 @@ describe('inlinePaths unit tests', () => {
         };
         const result = generateEndpoints(raw, defs);
         const ep = result.simple_delete;
-        expect(ep.params).toHaveLength(0);
+        expect(ep.paramDefs).toHaveLength(0);
         expect(ep.requestBody).toBeUndefined();
         // 204 with no content => no responseSchemas entry
         expect(ep.responseSchemas['204']).toBeUndefined();
@@ -137,6 +129,6 @@ describe('inlinePaths with real OpenAPI schema', () => {
         // asset_limit operation
         expect(ep).toBeDefined();
         // should have multiple query params
-        expect(ep?.params.some(p => p.in === 'query')).toBe(true);
+        expect(ep?.paramDefs.some(p => p.in === 'query')).toBe(true);
     });
 });

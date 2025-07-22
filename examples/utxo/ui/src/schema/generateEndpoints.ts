@@ -1,15 +1,13 @@
-// inlinePaths.ts
 import type { OpenAPIV3_1 } from "openapi-types";
 import { inlineValueRefs, SchemaMap } from "./inlineSchema";
+import { generateExample } from "./generateExample";
 
-// --- Types ---
 export type InlineSchema = OpenAPIV3_1.SchemaObject;
 
-export interface ParamInfo {
+export interface ParamDefinition {
     name: string;
     in: "path" | "query" | "header" | "cookie";
     required: boolean;
-    /** name of the referenced component if original schema was a $ref */
     refName?: string;
     example?: any;
     schema: InlineSchema;
@@ -21,7 +19,8 @@ export interface Endpoint {
     title: string;
     method: string;
     path: string;
-    params: ParamInfo[];
+    paramDefs: ParamDefinition[];
+    exampleParams: Record<string, any>[];
     requestBody?: { schema: InlineSchema; refName?: string; example?: any; mediaType: string };
     responseSchemas: Record<string, InlineSchema>;
     responseMediaTypes: Record<string, string>;
@@ -31,7 +30,6 @@ export interface Endpoint {
 
 export type EndpointMap = Record<string, Endpoint>;
 
-// --- Helpers ---
 function pickMedia(content: Record<string, any>) {
     const keys = Object.keys(content);
     const jsonKey = keys.find(k => /json$/i.test(k));
@@ -44,47 +42,86 @@ function toCamel(s: string): string {
     return s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
 }
 
-function buildParams(params: (OpenAPIV3_1.ReferenceObject | OpenAPIV3_1.ParameterObject)[], defs: SchemaMap): ParamInfo[] {
-    return params.map(p => {
-        const param = p as OpenAPIV3_1.ParameterObject;
-        const rawSchema = (param as any).schema;
-        const refName = rawSchema?.$ref?.split('/').pop();
-        const schema = inlineValueRefs(rawSchema || {}, defs) as InlineSchema;
-        return {
-            name: param.name,
-            in: param.in as any,
-            required: Boolean(param.required),
-            refName,
-            example: (param as any).example,
-            schema,
-        };
-    });
+function buildParamDefinitions(
+    params: (OpenAPIV3_1.ReferenceObject | OpenAPIV3_1.ParameterObject)[],
+    defs: SchemaMap
+): ParamDefinition[] {
+    return params
+        .filter(p => !("$ref" in p))
+        .map(p => {
+            const param = p as OpenAPIV3_1.ParameterObject;
+            const rawSchema = (param as any).schema || {};
+            const refName = rawSchema.$ref?.split('/').pop();
+            const schema = inlineValueRefs(rawSchema, defs) as InlineSchema;
+            return {
+                name: param.name,
+                in: param.in as any,
+                required: Boolean(param.required),
+                refName,
+                example: (param as any).example,
+                schema,
+            };
+        });
 }
 
-function buildRequestBody(rb: OpenAPIV3_1.RequestBodyObject | undefined, defs: SchemaMap, opId: string) {
+function buildRequestBody(
+    rb: OpenAPIV3_1.RequestBodyObject | undefined,
+    defs: SchemaMap
+) {
     if (!rb) return undefined;
     const media = pickMedia(rb.content as any);
     if (!media) return undefined;
-    const refName = media.schema.$ref?.split('/').pop();
     const schema = inlineValueRefs(media.schema, defs) as InlineSchema;
+    const refName = media.schema.$ref?.split('/').pop();
     return { schema, refName, example: media.example, mediaType: media.mediaType };
 }
 
-function buildResponses(responses: OpenAPIV3_1.ResponsesObject | undefined, defs: SchemaMap) {
-    const schemas: Record<string, InlineSchema> = {};
-    const mediaTypes: Record<string, string> = {};
+function buildResponses(
+    responses: OpenAPIV3_1.ResponsesObject | undefined,
+    defs: SchemaMap
+) {
+    const responseSchemas: Record<string, InlineSchema> = {};
+    const responseMediaTypes: Record<string, string> = {};
     let streaming = false;
     for (const [code, resp] of Object.entries(responses || {})) {
         const r = resp as OpenAPIV3_1.ResponseObject;
         if (!r.content) continue;
         const media = pickMedia(r.content as any);
         if (!media) continue;
-        const schema = inlineValueRefs(media.schema, defs) as InlineSchema;
-        schemas[code] = schema;
-        mediaTypes[code] = media.mediaType;
-        if (media.mediaType === 'application/x-ndjson') streaming = true;
+        responseSchemas[code] = inlineValueRefs(media.schema, defs) as InlineSchema;
+        responseMediaTypes[code] = media.mediaType;
+        if (/ndjson$/i.test(media.mediaType)) streaming = true;
     }
-    return { schemas, mediaTypes, streaming };
+    return { responseSchemas, responseMediaTypes, streaming };
+}
+
+function buildExampleEndpointParams(
+    paramDefs: ParamDefinition[],
+    requestBody: Endpoint['requestBody'],
+    defs: SchemaMap
+): Record<string, any>[] {
+    const required = paramDefs.filter(p => p.required);
+    const optional = paramDefs.filter(p => !p.required);
+    const variants: ParamDefinition[][] = [
+        [...required, ...optional],
+        ...optional.map(p => [...required, p])
+    ];
+    return variants.map(paramsList => {
+        const args: any = { throwOnError: false };
+        paramsList.forEach(p => {
+            args[p.in] = args[p.in] || {};
+            args[p.in][p.name] = p.example !== undefined
+                ? p.example
+                : generateExample(p.refName || p.name, defs);
+        });
+        if (requestBody) {
+            const key = requestBody.refName || '';
+            args.body = requestBody.example !== undefined
+                ? requestBody.example
+                : generateExample(key, defs);
+        }
+        return args;
+    });
 }
 
 function buildEndpoint(
@@ -92,17 +129,16 @@ function buildEndpoint(
     method: string,
     op: OpenAPIV3_1.OperationObject,
     defs: SchemaMap
-): Endpoint | undefined {
-    if (!op?.operationId) return undefined;
-
-    const operationId = op.operationId;
+): Endpoint {
+    const operationId = op.operationId!;
     const methodName = toCamel(operationId);
     const title = op.summary || op.description || operationId;
     const tags = op.tags || [];
 
-    const params = buildParams(op.parameters || [], defs);
-    const requestBody = buildRequestBody(op.requestBody as OpenAPIV3_1.RequestBodyObject, defs, operationId);
-    const { schemas: responseSchemas, mediaTypes: responseMediaTypes, streaming } = buildResponses(op.responses, defs);
+    const paramDefs = buildParamDefinitions(op.parameters || [], defs);
+    const requestBody = buildRequestBody(op.requestBody as OpenAPIV3_1.RequestBodyObject, defs);
+    const { responseSchemas, responseMediaTypes, streaming } = buildResponses(op.responses, defs);
+    const exampleParams = buildExampleEndpointParams(paramDefs, requestBody, defs);
 
     return {
         operationId,
@@ -110,7 +146,8 @@ function buildEndpoint(
         title,
         method: method.toUpperCase(),
         path,
-        params,
+        paramDefs,
+        exampleParams,
         requestBody,
         responseSchemas,
         responseMediaTypes,
@@ -121,15 +158,12 @@ function buildEndpoint(
 
 export function generateEndpoints(raw: OpenAPIV3_1.PathsObject, defs: SchemaMap): EndpointMap {
     const map: EndpointMap = {};
-
     for (const [path, pathItem] of Object.entries(raw)) {
         if (!pathItem) continue;
-
         Object.entries(pathItem).forEach(([method, opObj]) => {
             const ep = buildEndpoint(path, method, opObj as OpenAPIV3_1.OperationObject, defs);
-            if (ep) map[ep.operationId] = ep;
+            map[ep.operationId] = ep;
         });
     }
-
     return map;
 }
