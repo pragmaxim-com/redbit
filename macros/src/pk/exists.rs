@@ -4,7 +4,6 @@ use crate::rest::{FunctionDef, HttpMethod, PathExpr};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
-use crate::macro_utils;
 
 pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, table: &Ident) -> FunctionDef {
     let fn_name = format_ident!("exists");
@@ -58,7 +57,6 @@ pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, table: &Iden
             }])],
             method: HttpMethod::HEAD,
             handler_name: format_ident!("{}", handler_fn_name),
-            client_calls: vec![macro_utils::client_call(&handler_fn_name, pk_type, pk_name)],
             utoipa_responses: quote! {
                 responses(
                     (status = OK),

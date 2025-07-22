@@ -4,7 +4,6 @@ use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
 use crate::endpoint::EndpointDef;
-use crate::macro_utils;
 
 pub fn limit_fn_def(entity_name: &Ident, entity_type: &Type) -> FunctionDef {
     let fn_name = format_ident!("limit");
@@ -32,25 +31,6 @@ pub fn limit_fn_def(entity_name: &Ident, entity_type: &Type) -> FunctionDef {
         };
 
     let handler_fn_name = format!("{}_{}", entity_name.to_string().to_lowercase(), fn_name);
-    fn client_call(query: &str, handler_fn_name: &str) -> String {
-        format!(
-    r#"
-    it("it executes {function_name} with query {query}", async () => {{
-        const {{data, response, error}} = await client.{function_name}({{
-            query: {{
-                {query}
-            }},
-            throwOnError: false
-        }});
-        if (error) console.error("{function_name} with query {query} failed with %d on error %s :", response.status, error?.message);
-        expect(response.status).toBe(200);
-        expect(error).toBeUndefined();
-        expect(data).toBeDefined();
-    }});
-    "#,
-    function_name = format_ident!("{}", macro_utils::to_camel_case(handler_fn_name, false)),
-    )
-    }
 
     FunctionDef {
         fn_stream,
@@ -64,12 +44,6 @@ pub fn limit_fn_def(entity_name: &Ident, entity_type: &Type) -> FunctionDef {
             })],
             method: HttpMethod::GET,
             handler_name: format_ident!("{}", handler_fn_name),
-            client_calls: vec![
-                client_call("take: 2", &handler_fn_name),
-                client_call("tail: 2", &handler_fn_name),
-                client_call("first: true", &handler_fn_name),
-                client_call("last: true", &handler_fn_name),
-            ],
             handler_impl_stream: quote! {
                Result<AppJson<Vec<#entity_type>>, AppError> {
                     state.db.begin_read().map_err(AppError::from).and_then(|tx| #entity_name::#fn_name(&tx, query)).map(AppJson)

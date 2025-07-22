@@ -208,7 +208,6 @@ pub fn derive_entity(input: TokenStream) -> TokenStream {
                 name: stringify!(#struct_ident),
                 root: #root,
                 routes_fn: #struct_ident::routes,
-                client_calls: #struct_ident::client_calls,
             }
         }
     };

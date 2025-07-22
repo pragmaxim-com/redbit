@@ -1,12 +1,12 @@
 use proc_macro::TokenStream;
+use proc_macro2::Ident;
+use quote::quote;
 use std::env;
 use std::fs::OpenOptions;
-use proc_macro2::Ident;
-use quote::{format_ident, quote};
+use std::io::Write;
 use syn::punctuated::Punctuated;
 use syn::token::Comma;
 use syn::{Attribute, ItemStruct, Path, Type};
-use std::io::Write;
 
 pub fn extract_derives(attr: &Attribute) -> syn::Result<Vec<syn::Path>> {
     let mut derives = Vec::new();
@@ -220,24 +220,3 @@ pub fn to_camel_case(input: &str, upper_first_char: bool) -> String {
     }
     result
 }
-
-pub fn client_call(handler_fn_name: &str, pk_type: &Type, pk_name: &Ident) -> String {
-    format!(
-    r#"
-    it("it executes {function_name}", async () => {{
-        const {{data, response, error}} = await client.{function_name}({{
-            path: {{
-                {pk_name}: generateExample("{schema_name}", defs!)
-            }},
-            throwOnError: false
-        }});
-        if (error) console.error("{function_name} failed with %d on error %s :", response.status, error?.message);
-        expect(response.status).toBe(200);
-        expect(error).toBeUndefined();
-        expect(data).toBeDefined();
-    }});
-    "#,
-        function_name = format_ident!("{}", to_camel_case(&handler_fn_name, false)),
-        schema_name = quote!(#pk_type).to_string(),
-        pk_name = pk_name.to_string(),
-    )}

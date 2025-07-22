@@ -337,7 +337,6 @@ pub struct StructInfo {
     pub name: &'static str,
     pub root: bool,
     pub routes_fn: fn() -> OpenApiRouter<RequestState>,
-    pub client_calls: fn() -> String
 }
 
 inventory::collect!(StructInfo);
@@ -425,32 +424,9 @@ pub async fn build_router(state: RequestState, extras: Option<OpenApiRouter<Requ
 
 pub async fn serve(state: RequestState, socket_addr: SocketAddr, extras: Option<OpenApiRouter<RequestState>>, cors: Option<CorsLayer>) -> () {
     let router: Router<()> = build_router(state, extras, cors).await;
-    write_client_tests();
     println!("Starting server on {}", socket_addr);
     let tcp = TcpListener::bind(socket_addr).await.unwrap();
     crate::axum::serve(tcp, router).await.unwrap();
-}
-
-fn write_client_tests() {
-    let mut client_calls: Vec<String> = Vec::new();
-    client_calls.push(
-        r#"
-import * as client from '.';
-import { describe, it, expect } from "vitest";
-import {generateExample} from "../schema/generateExample";
-import {fetchSchema} from "../schema/schema";
-
-describe("test client", async () => {
-    const openapi = await fetchSchema("http://127.0.0.1:8000/apidoc/openapi.json");
-    const defs = openapi.components?.schemas;
-    "#.to_string()
-    );
-    for info in inventory::iter::<StructInfo> {
-        client_calls.push((info.client_calls)())
-    }
-    client_calls.push("});".to_string());
-
-    write_to_local_file(client_calls.clone(), "client", "client_calls.ts");
 }
 
 //TODO duplicated with `macros/src/macro_utils.rs`

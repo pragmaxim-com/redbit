@@ -85,7 +85,6 @@ pub fn by_dict_def(
             }])],
             method: HttpMethod::GET,
             handler_name: format_ident!("{}", handler_fn_name),
-            client_calls: vec![],
             handler_impl_stream: quote! {
                impl IntoResponse {
                    match state.db.begin_read()
@@ -177,7 +176,6 @@ pub fn by_index_def(
             }])],
             method: HttpMethod::GET,
             handler_name: format_ident!("{}", handler_fn_name),
-            client_calls: vec![],
             handler_impl_stream: quote! {
                impl IntoResponse {
                    match state.db.begin_read()

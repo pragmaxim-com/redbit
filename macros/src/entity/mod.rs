@@ -71,7 +71,7 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, TokenStream), syn::Error
     let parent_ident = parent_def.map(|p|p.parent_ident);
     let test_suite = tests::test_suite(entity_ident, parent_ident, &function_defs);
 
-    let Rest { endpoint_handlers, routes, client_calls} = Rest::new(&function_defs);
+    let Rest { endpoint_handlers, routes} = Rest::new(&function_defs);
 
     let stream: TokenStream =
         quote! {
@@ -93,8 +93,6 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, TokenStream), syn::Error
                 #(#compose_functions)*
                 // axum routes
                 #routes
-                // client calls are executed from node.js runtime
-                #client_calls
             }
             // unit tests and rest api tests
             #test_suite

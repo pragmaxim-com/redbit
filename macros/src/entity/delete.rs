@@ -4,7 +4,6 @@ use crate::rest::{FunctionDef, HttpMethod, PathExpr};
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use syn::Type;
-use crate::macro_utils;
 
 pub fn delete_def(pk_type: &Type, delete_statements: &Vec<TokenStream>) -> FunctionDef {
     let fn_name = format_ident!("delete");
@@ -96,7 +95,6 @@ pub fn delete_and_commit_def(
             }])],
             method: HttpMethod::DELETE,
             handler_name: format_ident!("{}", handler_fn_name),
-            client_calls: vec![macro_utils::client_call(&handler_fn_name, pk_type, pk_name)],
             utoipa_responses: quote! {
                 responses(
                     (status = OK),

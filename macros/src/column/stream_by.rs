@@ -119,7 +119,6 @@ pub fn by_dict_def(
             })],
             method: HttpMethod::POST,
             handler_name: format_ident!("{}", handler_fn_name),
-            client_calls: vec![],
             handler_impl_stream: quote! {
                impl IntoResponse {
                    match state.db.begin_read()
@@ -133,7 +132,7 @@ pub fn by_dict_def(
             utoipa_responses: quote! {
                 responses(
                     (status = OK, content_type = "application/x-ndjson", body = #entity_type),
-                    (status = 500, content_type = "application/x-ndjson", body = ErrorResponse),
+                    (status = 500, content_type = "application/json", body = ErrorResponse),
                 )
             },
             endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), column_name, column_name),
@@ -239,7 +238,6 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
             ],
             method: HttpMethod::POST,
             handler_name: format_ident!("{}", handler_fn_name),
-            client_calls: vec![],
             handler_impl_stream: quote! {
                impl IntoResponse {
                    match state.db.begin_read()
@@ -253,7 +251,7 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
             utoipa_responses: quote! {
                 responses(
                     (status = OK, content_type = "application/x-ndjson", body = #entity_type),
-                    (status = 500, content_type = "application/x-ndjson", body = ErrorResponse),
+                    (status = 500, content_type = "application/json", body = ErrorResponse),
                 )
             },
             endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), column_name, column_name),

@@ -1,4 +1,4 @@
-use proc_macro2::{Ident, Literal, TokenStream};
+use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use std::fmt::Display;
 use syn::Type;
@@ -8,7 +8,6 @@ pub struct Endpoint {
     pub handler: TokenStream,
     pub route: TokenStream,
     pub tests: Vec<TokenStream>,
-    pub client_calls: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -68,7 +67,6 @@ impl Display for HttpMethod {
 pub struct Rest {
     pub endpoint_handlers: Vec<TokenStream>,
     pub routes: TokenStream,
-    pub client_calls: TokenStream,
 }
 
 impl Rest {
@@ -76,23 +74,15 @@ impl Rest {
         let endpoints: Vec<Endpoint> = fn_defs.iter().filter_map(|fn_def| fn_def.endpoint.clone()).collect();
         let route_chains: Vec<TokenStream> = endpoints.iter().map(|e| e.route.clone()).collect();
         let endpoint_handlers: Vec<TokenStream> = endpoints.iter().map(|e| e.handler.clone()).collect();
-        let client_calls: Vec<String> = endpoints.into_iter().flat_map(|e| e.client_calls).collect();
-        let client_calls_lit = Literal::string(&client_calls.join(""));
         let routes = quote! {
             pub fn routes() -> OpenApiRouter<RequestState> {
                 OpenApiRouter::new()
                     #(#route_chains)*
             }
         };
-        let client_calls = quote! {
-            pub fn client_calls() -> String {
-                #client_calls_lit.to_string()
-            }
-        };
         Rest {
             endpoint_handlers,
             routes,
-            client_calls
         }
     }
 }

@@ -4,7 +4,6 @@ use crate::rest::{FunctionDef, HttpMethod, PathExpr};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
-use crate::macro_utils;
 
 pub fn one2one_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, pk_name: &Ident, pk_type: &Type) -> FunctionDef {
     let fn_name = format_ident!("get_{}", child_name);
@@ -54,7 +53,6 @@ pub fn one2one_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
             }])],
             method: HttpMethod::GET,
             handler_name: format_ident!("{}", handler_fn_name),
-            client_calls: vec![macro_utils::client_call(&handler_fn_name, pk_type, pk_name)],
             handler_impl_stream: quote! {
                Result<AppJson<#child_type>, AppError> {
                     state.db.begin_read().map_err(AppError::from).and_then(|tx| #entity_name::#fn_name(&tx, &#pk_name)).map(AppJson)
@@ -122,7 +120,6 @@ pub fn one2opt_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
             }])],
             method: HttpMethod::GET,
             handler_name: format_ident!("{}", handler_fn_name),
-            client_calls: vec![macro_utils::client_call(&handler_fn_name, pk_type, pk_name)],
             handler_impl_stream: quote! {
                Result<AppJson<#child_type>, AppError> {
                     state.db.begin_read().map_err(AppError::from)
@@ -192,7 +189,6 @@ pub fn one2many_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, 
             }])],
             method: HttpMethod::GET,
             handler_name: format_ident!("{}", handler_fn_name),
-            client_calls: vec![macro_utils::client_call(&handler_fn_name, pk_type, pk_name)],
             utoipa_responses: quote! {
                 responses(
                     (status = OK, content_type = "application/json", body = Vec<#child_type>),
