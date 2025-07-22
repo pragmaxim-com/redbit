@@ -1,7 +1,7 @@
 import type { OpenAPIV3_1 } from "openapi-types";
 
 type SchemaObjectOrRef = OpenAPIV3_1.SchemaObject | OpenAPIV3_1.ReferenceObject;
-type SchemaMap = Record<string, SchemaObjectOrRef>;
+export type SchemaMap = Record<string, SchemaObjectOrRef>;
 
 export function resolveRef(ref: string, defs: SchemaMap): SchemaObjectOrRef | undefined {
     const match = ref.match(/^#\/components\/schemas\/(.+)$/);
@@ -12,7 +12,7 @@ export function resolveRef(ref: string, defs: SchemaMap): SchemaObjectOrRef | un
 /**
  * Recursively inlines $refs and nested schemas
  */
-function inlineValueRefs(val: SchemaObjectOrRef, defs: SchemaMap): SchemaObjectOrRef {
+export function inlineValueRefs(val: SchemaObjectOrRef, defs: SchemaMap): SchemaObjectOrRef {
     if (Array.isArray(val)) {
         return val.map((v) => inlineValueRefs(v, defs)) as any;
     }
@@ -52,7 +52,7 @@ function inlineValueRefs(val: SchemaObjectOrRef, defs: SchemaMap): SchemaObjectO
     return val;
 }
 
-export function inlineSchema(root: string, defs: SchemaMap): any {
+export function inlineSchema(root: string, defs: SchemaMap): SchemaObjectOrRef {
     const rootSchema = defs[root];
     return inlineSchemaRec(rootSchema, defs)
 }

@@ -348,13 +348,13 @@ pub struct ApiDoc;
 
 #[derive(IntoParams, Serialize, Deserialize, Default)]
 pub struct LimitQuery {
-    #[param(required = false)]
+    #[param(required = false, example = 10)]
     pub take: Option<usize>,
-    #[param(required = false)]
+    #[param(required = false, example = 10)]
     pub tail: Option<usize>,
-    #[param(required = false)]
+    #[param(required = false, example = true)]
     pub last: Option<bool>,
-    #[param(required = false)]
+    #[param(required = false, example = true)]
     pub first: Option<bool>,
 }
 

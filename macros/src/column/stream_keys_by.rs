@@ -99,7 +99,7 @@ pub fn by_dict_def(
             utoipa_responses: quote! {
                 responses(
                     (status = OK, content_type = "application/x-ndjson", body = #pk_type),
-                    (status = 500, content_type = "application/x-ndjson", body = ErrorResponse),
+                    (status = 500, content_type = "application/json", body = ErrorResponse),
                 )
             },
             endpoint: format!("/{}/{}/{{{}}}/{}",
@@ -190,7 +190,7 @@ pub fn by_index_def(
             },
             utoipa_responses: quote! {
                 responses(
-                    (status = OK, content_type = "application/json", body = #pk_type),
+                    (status = OK, content_type = "application/x-ndjson", body = #pk_type),
                     (status = 500, content_type = "application/json", body = ErrorResponse),
                 )
             },

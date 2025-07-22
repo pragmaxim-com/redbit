@@ -227,7 +227,7 @@ pub fn client_call(handler_fn_name: &str, pk_type: &Type, pk_name: &Ident) -> St
     it("it executes {function_name}", async () => {{
         const {{data, response, error}} = await client.{function_name}({{
             path: {{
-                {pk_name}: (defs!["{schema_name}"] as any).examples?.[0]
+                {pk_name}: generateExample("{schema_name}", defs!)
             }},
             throwOnError: false
         }});

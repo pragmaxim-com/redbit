@@ -16,7 +16,7 @@ pub struct NumberChunk {
     get,
     path = "/events",
     responses(
-        (status = 200, description = "stream of heartbeat events", content_type = "application/json", body = NumberChunk)
+        (status = 200, description = "stream of heartbeat events", content_type = "application/x-ndjson", body = NumberChunk)
     )
 )]
 pub async fn test_json_nl_stream() -> impl IntoResponse {

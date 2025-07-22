@@ -134,10 +134,10 @@ pub fn by_dict_def(
             utoipa_responses: quote! {
                 responses(
                     (status = OK, content_type = "application/x-ndjson", body = #parent_type),
-                    (status = 500, content_type = "application/x-ndjson", body = ErrorResponse),
+                    (status = 500, content_type = "application/json", body = ErrorResponse),
                 )
             },
-            endpoint: format!("/{}/{}/{}/{{{}}}", parent_ident.to_string().to_lowercase(), entity_name.to_string().to_lowercase(), column_name, column_name),
+            endpoint: format!("/{}/{}/{{{}}}/{}", entity_name.to_string().to_lowercase(), column_name, column_name, parent_ident.to_string().to_lowercase()),
         }.to_endpoint()),
         test_stream,
         bench_stream
@@ -267,11 +267,11 @@ pub fn by_index_def(
             },
             utoipa_responses: quote! {
                 responses(
-                    (status = OK, content_type = "application/json", body = #parent_type),
+                    (status = OK, content_type = "application/x-ndjson", body = #parent_type),
                     (status = 500, content_type = "application/json", body = ErrorResponse),
                 )
             },
-            endpoint: format!("/{}/{}/{}/{{{}}}", parent_ident.to_string().to_lowercase(), entity_name.to_string().to_lowercase(), column_name, column_name),
+            endpoint: format!("/{}/{}/{{{}}}/{}", entity_name.to_string().to_lowercase(), column_name, column_name, parent_ident.to_string().to_lowercase()),
         }.to_endpoint()),
         test_stream,
         bench_stream
