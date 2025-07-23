@@ -18,10 +18,10 @@ describe('Hey-API JSON client calls', () => {
 
     testEndpoints.forEach(ep => {
         ep.exampleParams.forEach(param => {
-            it(`${ep.methodName}() → ${ep.method} ${ep.path}`, async () => {
-                const { data, response, error } = await (client as any)[ep.methodName](param);
+            it(`${ep.heyClientMethodName}() → ${ep.method} ${ep.path}`, async () => {
+                const { data, response, error } = await (client as any)[ep.heyClientMethodName](param);
                 if (response.status !== 200) {
-                    console.error(`Error calling ${ep.streaming} ${ep.methodName}(${JSON.stringify(param)})`);
+                    console.error(`Error calling ${ep.streaming} ${ep.heyClientMethodName}(${JSON.stringify(param)})`);
                     console.error('Response:', response);
                     console.error('Error:', error);
                 }

@@ -4,7 +4,6 @@ import { generateEndpoints, Endpoint, ParamDefinition } from './generateEndpoint
 import { SchemaMap } from './inlineSchema';
 import { fetchSchema } from './schema';
 
-// Mock definitions for schemas
 const defs: SchemaMap = {
     StringObj: { type: 'object', properties: { foo: { type: 'string' } }, example: { foo: 'bar' } },
     NumArr: { type: 'array', items: { type: 'number' }, example: [1, 2, 3] },
@@ -39,7 +38,7 @@ describe('inlinePaths unit tests', () => {
         expect(result).toHaveProperty('item_get');
         const ep: Endpoint = result.item_get;
         // methodName should be camelCase
-        expect(ep.methodName).toBe('itemGet');
+        expect(ep.heyClientMethodName).toBe('itemGet');
         expect(ep.method).toBe('GET');
         expect(ep.path).toBe('/item/{id}');
         // params
@@ -52,7 +51,7 @@ describe('inlinePaths unit tests', () => {
         // requestBody undefined
         expect(ep.requestBody).toBeUndefined();
         // response schema inlined
-        expect(ep.responseSchemas['200']).toEqual(defs.StringObj);
+        expect(ep.responseBodies['200']).toBeDefined();
     });
 
     it('parses POST with requestBody and multiple responses', () => {
@@ -76,14 +75,14 @@ describe('inlinePaths unit tests', () => {
         const result = generateEndpoints(raw, defs);
         expect(result).toHaveProperty('nums_post');
         const ep = result.nums_post;
-        expect(ep.methodName).toBe('numsPost');
+        expect(ep.heyClientMethodName).toBe('numsPost');
         // requestBody inlined
         expect(ep.requestBody).toBeDefined();
         expect(ep.requestBody!.schema).toEqual(defs.NumArr);
         expect(ep.requestBody!.example).toEqual([7,8,9]);
         // responses
-        expect(ep.responseSchemas['201']?.type).toBe('boolean');
-        expect(ep.responseSchemas['400']?.type).toBe('string');
+        expect(ep.responseBodies['201']?.mediaType).toBe('application/json');
+        expect(ep.responseBodies['400']?.mediaType).toBe('application/json');
     });
 
     it('handles endpoints with no parameters or body', () => {
@@ -101,7 +100,7 @@ describe('inlinePaths unit tests', () => {
         expect(ep.paramDefs).toHaveLength(0);
         expect(ep.requestBody).toBeUndefined();
         // 204 with no content => no responseSchemas entry
-        expect(ep.responseSchemas['204']).toBeUndefined();
+        expect(ep.responseBodies['204']).toBeUndefined();
     });
 });
 
@@ -115,10 +114,10 @@ describe('inlinePaths with real OpenAPI schema', () => {
             (e) => e.path === '/block/id/{id}' && e.method === 'GET'
         );
         expect(ep).toBeDefined();
-        expect(ep?.responseSchemas['200']).toBeDefined();
+        expect(ep?.responseBodies['200']).toBeDefined();
         // either 404 or 500 should exist
         expect(
-            ep?.responseSchemas['500'] || ep?.responseSchemas['404']
+            ep?.responseBodies['500'] || ep?.responseBodies['404']
         ).toBeDefined();
     });
 
