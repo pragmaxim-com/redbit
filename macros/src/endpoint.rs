@@ -216,10 +216,9 @@ impl EndpointDef {
                     });
                 }
                 HttpParams::FromBody(body) => {
-                    let ct = Literal::string("application/json");
                     let ty = &body.ty;
                     body_token = Some(quote! {
-                        request_body(content = #ty, content_type = #ct)
+                        request_body = #ty
                     });
                 }
             }

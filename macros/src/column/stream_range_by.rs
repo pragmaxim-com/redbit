@@ -107,7 +107,7 @@ pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, column
                 extraction: quote! { extract::Query(query): extract::Query<#range_query_ty> },
                 samples: quote! { vec![#range_query_ty::sample()] },
             }), FromBody(BodyExpr {
-                ty: syn::parse_quote! { #stream_query_type },
+                ty: syn::parse_quote! { Option<#stream_query_type> },
                 extraction: quote! { MaybeJson(body): MaybeJson<#stream_query_type> },
                 samples: quote! { vec![Some(#stream_query_type::sample()), None] },
             })],

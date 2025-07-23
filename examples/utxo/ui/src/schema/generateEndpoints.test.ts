@@ -34,6 +34,21 @@ describe('Hey-API JSON client calls', () => {
                 expect(error).toBeUndefined();
                 expect(data).toBeDefined();
             });
+
+            if (ep.streaming) {
+                it(`${ep.heyClientMethodName}() → ${ep.method} ${ep.path}`, async () => {
+                    param.body = null;
+                    const { data, response, error } = await (client as any)[ep.heyClientMethodName](param);
+                    if (response.status !== 200) {
+                        console.error(`Error calling ${ep.streaming} ${ep.heyClientMethodName}(${JSON.stringify(param)})`);
+                        console.error('Response:', response);
+                        console.error('Error:', error);
+                    }
+                    expect(response.status).toBe(200);
+                    expect(error).toBeUndefined();
+                    expect(data).toBeDefined();
+                 });
+            }
         });
     });
 });

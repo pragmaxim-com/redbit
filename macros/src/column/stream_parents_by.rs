@@ -114,7 +114,7 @@ pub fn by_dict_def(
                 description: "Secondary index column with dictionary".to_string(),
                 sample: quote! { #column_type::default().encode() },
             }]), FromBody(BodyExpr {
-                ty: syn::parse_quote! { #stream_parent_query_type },
+                ty: syn::parse_quote! { Option<#stream_parent_query_type> },
                 extraction: quote! { MaybeJson(body): MaybeJson<#stream_parent_query_type> },
                 samples: quote! { vec![Some(#stream_parent_query_type::sample()), None ] },
             })],
@@ -246,7 +246,7 @@ pub fn by_index_def(
                     sample: quote! { #column_type::default().encode() },
                 }]
                 ), FromBody(BodyExpr {
-                    ty: syn::parse_quote! { #stream_parent_query_type },
+                    ty: syn::parse_quote! { Option<#stream_parent_query_type> },
                     extraction: quote! { MaybeJson(body): MaybeJson<#stream_parent_query_type> },
                     samples: quote! { vec![Some(#stream_parent_query_type::sample()), None ] },
                 })

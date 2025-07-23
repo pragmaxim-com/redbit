@@ -98,7 +98,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
                 extraction: quote! { extract::Query(query): extract::Query<#range_query_ty> },
                 samples: quote! { vec![#range_query_ty::sample()] },
             }), FromBody(BodyExpr {
-                ty: syn::parse_quote! { #stream_query_type },
+                ty: syn::parse_quote! { Option<#stream_query_type> },
                 extraction: quote! { MaybeJson(body): MaybeJson<#stream_query_type> },
                 samples: quote! { vec![Some(#stream_query_type::sample()), None ] },
             })],

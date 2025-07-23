@@ -113,7 +113,7 @@ pub fn by_dict_def(
                 description: "Secondary index column with dictionary".to_string(),
                 sample: quote! { #column_type::default().encode() },
             }]), FromBody(BodyExpr {
-                ty: syn::parse_quote! { #stream_query_type },
+                ty: syn::parse_quote! { Option<#stream_query_type> },
                 extraction: quote! { MaybeJson(body): MaybeJson<#stream_query_type> },
                 samples: quote! { vec![Some(#stream_query_type::sample()), None ] },
             })],
@@ -231,7 +231,7 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
                     sample: quote! { #column_type::default().encode() },
                 }]
                 ), FromBody(BodyExpr {
-                    ty: syn::parse_quote! { #stream_query_type },
+                    ty: syn::parse_quote! { Option<#stream_query_type> },
                     extraction: quote! { MaybeJson(body): MaybeJson<#stream_query_type> },
                     samples: quote! { vec![Some(#stream_query_type::sample()), None ] },
                 })

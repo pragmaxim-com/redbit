@@ -75,7 +75,7 @@ function buildExampleEndpointParams(
     const required = paramDefs.filter(p => p.required);
     const optional = paramDefs.filter(p => !p.required);
     const variants: ParamDefinition[][] = [
-        [...required, ...optional],
+        [...required],
         ...optional.map(p => [...required, p])
     ];
     return variants.map(paramsList => {
