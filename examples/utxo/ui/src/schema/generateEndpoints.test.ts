@@ -1,22 +1,43 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import type { OpenAPIV3_1 } from 'openapi-types';
-import { generateEndpoints, Endpoint, ParamDefinition } from './generateEndpoints';
-import { SchemaMap } from './inlineSchema';
-import { fetchSchema } from './schema';
+import {generateEndpoints, Endpoint, ParamDefinition} from './generateEndpoints';
+import {fetchSchema, SchemaMap} from './schema';
+import * as client from "../hey";
 
-const defs: SchemaMap = {
+const mockDefs: SchemaMap = {
     StringObj: { type: 'object', properties: { foo: { type: 'string' } }, example: { foo: 'bar' } },
-    NumArr: { type: 'array', items: { type: 'number' }, example: [1, 2, 3] },
+    NumArr: { type: 'array', items: { type: 'number' }, examples: [[7,8,9]] },
 };
 
-let openapi: OpenAPIV3_1.Document;
-let endpoints: ReturnType<typeof generateEndpoints>;
+const openapi: OpenAPIV3_1.Document = await fetchSchema('http://127.0.0.1:8000/apidoc/openapi.json');
+const realDefs: SchemaMap = openapi.components?.schemas as any;
+const endpoints = generateEndpoints(openapi.paths!, realDefs);
+const realEndpoints: Endpoint[] = Object.values(endpoints).filter(ep => ep.method !== 'DELETE');
 
-beforeAll(async () => {
-    openapi = await fetchSchema('http://127.0.0.1:8000/apidoc/openapi.json');
-    const defs: SchemaMap = openapi.components?.schemas as any;
-    endpoints = generateEndpoints(openapi.paths!, defs);
+
+describe('Hey-API JSON client calls', () => {
+    it('has endpoints to test', () => {
+        expect(realEndpoints.length).toBeGreaterThan(0);
+    });
+
+    realEndpoints.forEach(ep => {
+        ep.exampleParams.forEach(param => {
+            it(`${ep.heyClientMethodName}() → ${ep.method} ${ep.path}`, async () => {
+                const { data, response, error } = await (client as any)[ep.heyClientMethodName](param);
+                if (response.status !== 200) {
+                    console.error(`Error calling ${ep.streaming} ${ep.heyClientMethodName}(${JSON.stringify(param)})`);
+                    console.error('Response:', response);
+                    console.error('Error:', error);
+                }
+
+                expect(response.status).toBe(200);
+                expect(error).toBeUndefined();
+                expect(data).toBeDefined();
+            });
+        });
+    });
 });
+
 
 describe('inlinePaths unit tests', () => {
     it('parses a GET with path param and response', () => {
@@ -34,7 +55,7 @@ describe('inlinePaths unit tests', () => {
                 } as any
             }
         };
-        const result = generateEndpoints(raw, defs);
+        const result = generateEndpoints(raw, mockDefs);
         expect(result).toHaveProperty('item_get');
         const ep: Endpoint = result.item_get;
         // methodName should be camelCase
@@ -47,7 +68,7 @@ describe('inlinePaths unit tests', () => {
         expect(p.name).toBe('id');
         expect(p.in).toBe('path');
         expect(p.required).toBe(true);
-        expect(p.example).toBe('xyz');
+        expect(p.schema.examples![0]).toBe('xyz');
         // requestBody undefined
         expect(ep.requestBody).toBeUndefined();
         // response schema inlined
@@ -72,14 +93,14 @@ describe('inlinePaths unit tests', () => {
                 } as any
             }
         };
-        const result = generateEndpoints(raw, defs);
+        const result = generateEndpoints(raw, mockDefs);
         expect(result).toHaveProperty('nums_post');
         const ep = result.nums_post;
         expect(ep.heyClientMethodName).toBe('numsPost');
         // requestBody inlined
         expect(ep.requestBody).toBeDefined();
-        expect(ep.requestBody!.schema).toEqual(defs.NumArr);
-        expect(ep.requestBody!.example).toEqual([7,8,9]);
+        expect(ep.requestBody!.schema).toEqual(mockDefs.NumArr);
+        expect(ep.requestBody!.schema.examples![0]).toEqual([7,8,9]);
         // responses
         expect(ep.responseBodies['201']?.mediaType).toBe('application/json');
         expect(ep.responseBodies['400']?.mediaType).toBe('application/json');
@@ -95,7 +116,7 @@ describe('inlinePaths unit tests', () => {
                 } as any
             }
         };
-        const result = generateEndpoints(raw, defs);
+        const result = generateEndpoints(raw, mockDefs);
         const ep = result.simple_delete;
         expect(ep.paramDefs).toHaveLength(0);
         expect(ep.requestBody).toBeUndefined();

@@ -1,6 +1,5 @@
 import type { OpenAPIV3_1 } from "openapi-types";
-import { inlineValueRefs, SchemaMap } from "./inlineSchema";
-import {generateExampleRec} from "./generateExample";
+import {inlineSchemaWithExample, SchemaMap} from "./schema";
 
 export type InlinedSchema = OpenAPIV3_1.SchemaObject;
 
@@ -8,13 +7,11 @@ export interface ParamDefinition {
     name: string;
     in: "path" | "query" | "header" | "cookie";
     required: boolean;
-    example: any;
     schema: InlinedSchema;
 }
 
 interface Body {
     schema: InlinedSchema;
-    example: any;
     mediaType: string;
     streaming: boolean;
 }
@@ -41,10 +38,9 @@ function getBody(content: Record<string, any>, defs: SchemaMap): Body {
     const jsonKey = keys.find(k => /json$/i.test(k));
     const mediaType = jsonKey || keys[0];
     const entry = content[mediaType];
-    const schema = inlineValueRefs(entry.schema, defs) as InlinedSchema;
-    const example = entry.example ? entry.example : generateExampleRec(schema, defs);
+    const schema = inlineSchemaWithExample(entry.schema, defs, entry.example) as InlinedSchema;
     const streaming = (/ndjson$/i.test(mediaType));
-    return { mediaType, schema, example, streaming };
+    return { mediaType, schema, streaming };
 }
 
 function toCamel(s: string): string {
@@ -53,13 +49,11 @@ function toCamel(s: string): string {
 
 function buildParamDef(param: OpenAPIV3_1.ParameterObject, defs: SchemaMap): ParamDefinition {
     const rawSchema = param.schema || {};
-    const schema = inlineValueRefs(rawSchema, defs) as InlinedSchema;
-    const example = param.example ? param.example : generateExampleRec(schema, defs)
+    const schema = inlineSchemaWithExample(rawSchema, defs, param.example) as InlinedSchema;
     return {
         name: param.name,
         in: param.in as any,
         required: Boolean(param.required),
-        example,
         schema,
     };
 }
@@ -88,10 +82,10 @@ function buildExampleEndpointParams(
         const args: any = streaming ? { throwOnError: false, parseAs: 'stream' } : { throwOnError: false };
         paramsList.forEach(p => {
             args[p.in] = args[p.in] || {};
-            args[p.in][p.name] = p.example;
+            args[p.in][p.name] = p.schema.examples![0];
         });
         if (requestBody) {
-            args.body = requestBody.example;
+            args.body = requestBody.schema.examples![0];
         }
         return args;
     });

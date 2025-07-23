@@ -1,63 +1,40 @@
 import type { OpenAPIV3_1 } from "openapi-types";
+import {COMPOSITES, isRef, resolveRef, SchemaMap, SchemaOrRef} from "./schema";
 
-type SchemaObjectOrRef = OpenAPIV3_1.SchemaObject | OpenAPIV3_1.ReferenceObject;
-export type SchemaMap = Record<string, SchemaObjectOrRef>;
+// inline all refs in a pure SchemaObject
+export function inlineValueRefs(val: SchemaOrRef, defs: SchemaMap): OpenAPIV3_1.SchemaObject {
+    if (isRef(val)) return inlineValueRefs(resolveRef(val.$ref, defs), defs);
 
-export function resolveRef(ref: string, defs: SchemaMap): SchemaObjectOrRef | undefined {
-    const match = ref.match(/^#\/components\/schemas\/(.+)$/);
-    if (!match) return undefined;
-    return defs[match[1]];
-}
+    // now a SchemaObject
+    const schema = { ...(val as OpenAPIV3_1.SchemaObject) };
 
-/**
- * Recursively inlines $refs and nested schemas
- */
-export function inlineValueRefs(val: SchemaObjectOrRef, defs: SchemaMap): SchemaObjectOrRef {
-    if (Array.isArray(val)) {
-        return val.map((v) => inlineValueRefs(v, defs)) as any;
+    // inline composite keywords
+    COMPOSITES.forEach(k => {
+        const arr = (schema as any)[k];
+        if (Array.isArray(arr)) (schema as any)[k] = arr.map(s => inlineValueRefs(s, defs));
+    });
+
+    // inline properties
+    if (schema.properties) {
+        Object.entries(schema.properties).forEach(([k, v]) => {
+            schema.properties![k] = inlineValueRefs(v, defs);
+        });
     }
 
-    if (typeof val === "object" && val !== null) {
-        if ("$ref" in val) {
-            const resolved = resolveRef(val.$ref, defs);
-            if (!resolved) throw new Error(`Unresolved $ref: ${val.$ref}`);
-            return inlineSchemaRec(resolved, defs);
-        }
-
-        // At this point, val is a SchemaObject, not a ReferenceObject
-        const newVal: OpenAPIV3_1.SchemaObject = { ...val };
-
-        for (const keyword of ["oneOf", "anyOf", "allOf"] as const) {
-            if (Array.isArray(newVal[keyword])) {
-                newVal[keyword] = newVal[keyword]!.map((sub) =>
-                    inlineValueRefs(sub, defs)
-                );
-            }
-        }
-
-        if (newVal.properties) {
-            const inlinedProps: Record<string, SchemaObjectOrRef> = {};
-            for (const [key, prop] of Object.entries(newVal.properties)) {
-                inlinedProps[key] = inlineValueRefs(prop, defs);
-            }
-            newVal.properties = inlinedProps;
-        }
-
-        if (newVal.type === "array" && typeof newVal.items !== "undefined") {
-            newVal.items = inlineValueRefs(newVal.items, defs);
-        }
-        return newVal;
+    // inline array items
+    if (schema.type === "array" && schema.items) {
+        schema.items = inlineValueRefs(schema.items as any, defs);
     }
 
-    return val;
+    return schema;
 }
 
-export function inlineSchema(root: string, defs: SchemaMap): SchemaObjectOrRef {
+export function inlineSchema(root: string, defs: SchemaMap): OpenAPIV3_1.SchemaObject {
     const rootSchema = defs[root];
     return inlineSchemaRec(rootSchema, defs)
 }
 
-function inlineSchemaRec(schema: SchemaObjectOrRef, defs: SchemaMap): SchemaObjectOrRef {
-    const cloned = JSON.parse(JSON.stringify(schema)) as SchemaObjectOrRef;
+function inlineSchemaRec(schema: SchemaOrRef, defs: SchemaMap): OpenAPIV3_1.SchemaObject {
+    const cloned = JSON.parse(JSON.stringify(schema)) as SchemaOrRef;
     return inlineValueRefs(cloned, defs);
 }
