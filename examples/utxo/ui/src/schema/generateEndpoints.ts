@@ -10,7 +10,13 @@ export interface ParamDefinition {
     schema: InlinedSchema;
 }
 
-interface Body {
+interface RequestBody {
+    schema: InlinedSchema;
+    required: boolean;
+    mediaType: string;
+}
+
+interface ResponseBody {
     schema: InlinedSchema;
     mediaType: string;
     streaming: boolean;
@@ -23,17 +29,18 @@ export interface Endpoint {
     method: string;
     path: string;
     paramDefs: ParamDefinition[];
-    exampleParams: Record<string, any>[];
-    requestBody?: Body;
-    responseBodies: Record<string, Body | undefined>;
+    exampleParams: Record<string, Record<string, any>>;
+    requestBody?: RequestBody;
+    responseBodies: Record<string, ResponseBody | undefined>;
     streaming: boolean;
     tags: string[];
 }
 
 export type EndpointMap = Record<string, Endpoint>;
 
-function getBody(content: Record<string, any>, defs: SchemaMap): Body {
-    if (!content) throw new Error('Body must have content defined');
+function getResponseBody(r: OpenAPIV3_1.ResponseObject, defs: SchemaMap): ResponseBody {
+    const content = r.content as Record<string, any>;
+    if (!content) throw new Error('Response body must have content defined');
     const keys = Object.keys(content);
     const jsonKey = keys.find(k => /json$/i.test(k));
     const mediaType = jsonKey || keys[0];
@@ -41,6 +48,18 @@ function getBody(content: Record<string, any>, defs: SchemaMap): Body {
     const schema = inlineSchemaWithExample(entry.schema, defs, entry.example) as InlinedSchema;
     const streaming = (/ndjson$/i.test(mediaType));
     return { mediaType, schema, streaming };
+}
+
+function getRequestBody(r: OpenAPIV3_1.RequestBodyObject, defs: SchemaMap): RequestBody {
+    const content = r.content as Record<string, any>;
+    const required = Boolean(r.required);
+    if (!content) throw new Error('Request body must have content defined');
+    const keys = Object.keys(content);
+    const jsonKey = keys.find(k => /json$/i.test(k));
+    const mediaType = jsonKey || keys[0];
+    const entry = content[mediaType];
+    const schema = inlineSchemaWithExample(entry.schema, defs, entry.example) as InlinedSchema;
+    return { mediaType, required, schema };
 }
 
 function toCamel(s: string): string {
@@ -58,36 +77,49 @@ function buildParamDef(param: OpenAPIV3_1.ParameterObject, defs: SchemaMap): Par
 }
 
 function buildResponses(responses: OpenAPIV3_1.ResponsesObject | undefined, defs: SchemaMap) {
-    const responseBodies: Record<string, Body | undefined> = {};
+    const responseBodies: Record<string, ResponseBody | undefined> = {};
     for (const [code, resp] of Object.entries(responses || {})) {
         const r = resp as OpenAPIV3_1.ResponseObject;
-        responseBodies[code] = r.content ? getBody(r.content, defs) : undefined;
+        responseBodies[code] = r.content ? getResponseBody(r, defs) : undefined;
     }
     return responseBodies;
 }
-
 function buildExampleEndpointParams(
     paramDefs: ParamDefinition[],
-    streaming: boolean,
-    requestBody?: Body
-): Record<string, any>[] {
+    responseStreaming: boolean,
+    requestBody?: RequestBody
+): Record<string, Record<string, any>> {
     const required = paramDefs.filter(p => p.required);
     const optional = paramDefs.filter(p => !p.required);
-    const variants: ParamDefinition[][] = [
-        [...required],
-        ...optional.map(p => [...required, p])
+    const variants: { title: string; params: ParamDefinition[] }[] = [
+        { title: 'all', params: [...required] },
+        ...optional.map(p => ({ title: p.name, params: [...required, p] }))
     ];
-    return variants.map(paramsList => {
-        const args: any = streaming ? { throwOnError: false, parseAs: 'stream' } : { throwOnError: false };
-        paramsList.forEach(p => {
+
+    const argsMap: Record<string, Record<string, any>> = {};
+
+    variants.forEach(variant => {
+        const { title, params } = variant;
+        // build base args
+        const args: any = { throwOnError: false };
+        if (responseStreaming) args.parseAs = 'stream';
+        // populate params
+        params.forEach(p => {
             args[p.in] = args[p.in] || {};
-            args[p.in][p.name] = p.schema.examples![0];
+            args[p.in][p.name] = p.schema.examples?.[0];
         });
-        if (requestBody) {
-            args.body = requestBody.schema.examples![0];
+        // handle body examples
+        if (requestBody?.schema.examples) {
+            requestBody.schema.examples.forEach((bodyEx, idx) => {
+                const key = `${title}, body${idx}`;
+                argsMap[key] = { ...args, body: bodyEx };
+            });
+        } else {
+            argsMap[title] = args;
         }
-        return args;
     });
+
+    return argsMap;
 }
 
 function buildEndpoint(path: string, method: string, op: OpenAPIV3_1.OperationObject, defs: SchemaMap): Endpoint {
@@ -99,7 +131,7 @@ function buildEndpoint(path: string, method: string, op: OpenAPIV3_1.OperationOb
 
     const paramDefs = parameters.map(p => buildParamDef(p, defs));
     const requestBody =
-        op.requestBody ? getBody((op.requestBody as OpenAPIV3_1.RequestBodyObject).content, defs) : undefined;
+        op.requestBody ? getRequestBody(op.requestBody as OpenAPIV3_1.RequestBodyObject, defs) : undefined;
 
     const responseBodies = buildResponses(op.responses, defs);
     const streaming = responseBodies['200']?.streaming || false;
