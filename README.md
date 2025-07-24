@@ -34,7 +34,8 @@ through auto-generated REST API. It maximizes R/W speed while minimizing data si
 ✅ All types have binary (db) and human-readable (http) serde support \
 ✅ Macro derived http rest API at http://127.0.0.1:8000/swagger-ui/ with examples \
 ✅ Macro derived unit tests and integration tests on axum test server and benchmarks \
-✅ TypeScript client generated from OpenAPI spec with tests suite requesting all endpoints 
+✅ TypeScript client generated from OpenAPI spec with tests suite requesting all endpoints \
+✅ For other features, check the [redbit-ui](http://github.com/pragmaxim-com/redbit-ui)
 
 ### Limitations
 
@@ -48,13 +49,11 @@ cd examples/utxo
 cargo test       # to let all the self-generated tests run (including http layer)
 cargo bench      # to run benchmarks
 cargo run        # to run the demo example and start the server
-
-cd ui
-./bin/build.sh   # builds the typescript client from openapi spec
-npm run test     # executes requests to all http endpoints
 ```
 
-The example has close to 500 frontend/backend derived tests and 130 benchmarks, so that if any redbit app derived from the definition compiles,
+Check the [redbit-ui](http://github.com/pragmaxim-com/redbit-ui) for frontend dev.
+
+The utxo example has close to 500 frontend/backend derived tests and 130 benchmarks, so that if any redbit app derived from the definition compiles,
 it is transparent, well tested and benched already.
 
 Let's say we want to persist and query blockchain data using Redbit, declare annotated Structs `examples/utxo/src/lib.rs`:
