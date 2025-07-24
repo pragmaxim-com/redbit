@@ -48,8 +48,7 @@ function toCamel(s: string): string {
 }
 
 function buildParamDef(param: OpenAPIV3_1.ParameterObject, defs: SchemaMap): ParamDefinition {
-    const rawSchema = param.schema || {};
-    const schema = inlineSchemaWithExample(rawSchema, defs, param.example) as InlinedSchema;
+    const schema = inlineSchemaWithExample(param.schema!, defs, param.example) as InlinedSchema;
     return {
         name: param.name,
         in: param.in as any,

@@ -97,20 +97,21 @@ impl EndpointDef {
             let query_samples = query_param.unwrap().clone().samples;
             let body_param_clone = body_param.unwrap().clone();
             let body_samples = body_param_clone.samples;
+            let body_required = body_param_clone.required;
             let test_fn_name = format_ident!("http_endpoint_with_query_and_body_{}", &self.fn_name);
             tests.push(quote! {
                 #[tokio::test]
                 async fn #test_fn_name() {
                     for query_sample in #query_samples {
+                        let query_string = serde_urlencoded::to_string(query_sample.clone()).unwrap();
+                        let final_path = format!("{}?{}", #path_expr, query_string);
+                        eprintln!("Testing endpoint: {} : {} with body", #method_name, final_path);
                         for body_sample in #body_samples {
-                            let query_string = serde_urlencoded::to_string(query_sample.clone()).unwrap();
-                            let final_path = format!("{}?{}", #path_expr, query_string);
-                            eprintln!("Testing endpoint: {} : {} with body", #method_name, final_path);
-                            let response =
-                                match &body_sample {
-                                    Some(body) => #server.await.method(#method_name, &final_path).json(&body).await,
-                                    None => #server.await.method(#method_name, &final_path).await,
-                                };
+                            let response = #server.await.method(#method_name, &final_path).json(&body_sample).await;
+                            response.assert_status_ok();
+                        }
+                        if (!#body_required) {
+                            let response = #server.await.method(#method_name, &final_path).await;
                             response.assert_status_ok();
                         }
                     }
@@ -132,18 +133,20 @@ impl EndpointDef {
                     }
                 });
         } else if body_param.is_some() {
-            let body_samples = body_param.unwrap().clone().samples;
+            let body_param_clone = body_param.unwrap().clone();
+            let body_samples = body_param_clone.samples;
+            let body_required = body_param_clone.required;
             let test_fn_name = format_ident!("http_endpoint_with_body_{}", &self.fn_name);
             tests.push(quote! {
                 #[tokio::test]
                 async fn #test_fn_name() {
                     for body_sample in #body_samples {
                         eprintln!("Testing endpoint: {} : {} with body", #method_name, #path_expr);
-                        let response =
-                            match &body_sample {
-                                Some(body) => #server.await.method(#method_name, &#path_expr).json(&body_sample).await,
-                                None => #server.await.method(#method_name, &#path_expr).await,
-                            };
+                        let response = #server.await.method(#method_name, &#path_expr).json(&body_sample).await;
+                        response.assert_status_ok();
+                    }
+                    if (!#body_required) {
+                        let response = #server.await.method(#method_name, &#path_expr).await;
                         response.assert_status_ok();
                     }
                 }

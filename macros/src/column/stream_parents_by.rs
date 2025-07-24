@@ -116,7 +116,8 @@ pub fn by_dict_def(
             }]), FromBody(BodyExpr {
                 ty: syn::parse_quote! { Option<#stream_parent_query_type> },
                 extraction: quote! { MaybeJson(body): MaybeJson<#stream_parent_query_type> },
-                samples: quote! { vec![Some(#stream_parent_query_type::sample()), None ] },
+                samples: quote! { vec![#stream_parent_query_type::sample()] },
+                required: false,
             })],
             method: HttpMethod::POST,
             handler_name: format_ident!("{}", handler_fn_name),
@@ -248,7 +249,8 @@ pub fn by_index_def(
                 ), FromBody(BodyExpr {
                     ty: syn::parse_quote! { Option<#stream_parent_query_type> },
                     extraction: quote! { MaybeJson(body): MaybeJson<#stream_parent_query_type> },
-                    samples: quote! { vec![Some(#stream_parent_query_type::sample()), None ] },
+                    samples: quote! { vec![#stream_parent_query_type::sample()] },
+                    required: false,
                 })
             ],
             method: HttpMethod::POST,

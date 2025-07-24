@@ -141,7 +141,8 @@ pub fn store_and_commit_def(entity_name: &Ident, entity_type: &Type, pk_name: &I
             params: vec![FromBody(BodyExpr {
                 ty: entity_type.clone(),
                 extraction: quote! { AppJson(body): AppJson<#entity_type> },
-                samples: quote! { vec![Some(#entity_type::sample())] },
+                samples: quote! { vec![#entity_type::sample()] },
+                required: true,
             })],
             method: HttpMethod::POST,
             handler_name: format_ident!("{}", handler_fn_name),

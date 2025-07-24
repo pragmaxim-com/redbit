@@ -1,6 +1,6 @@
 import type {OpenAPIV3_1} from "openapi-types";
 import {inlineValueRefs} from "./inlineSchema";
-import {generateExampleRec} from "./generateExample";
+import {generateExamplesRec} from "./generateExample";
 
 export type SchemaOrRef = OpenAPIV3_1.SchemaObject | OpenAPIV3_1.ReferenceObject;
 export type SchemaMap = Record<string, SchemaOrRef>;
@@ -34,6 +34,6 @@ export function isRef(s: any): s is OpenAPIV3_1.ReferenceObject {
  */
 export function inlineSchemaWithExample(val: SchemaOrRef, defs: SchemaMap, example: any): OpenAPIV3_1.SchemaObject {
     const schema = inlineValueRefs(val, defs);
-    schema.examples = [example || generateExampleRec(schema, defs)];
+    schema.examples = example ? [example] : generateExamplesRec(schema, defs);
     return schema;
 }

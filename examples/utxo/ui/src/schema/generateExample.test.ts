@@ -1,4 +1,4 @@
-import { generateExample } from "./generateExample";
+import { generateExamples } from "./generateExample";
 import { describe, it, expect, beforeAll } from "vitest";
 import {OpenAPIV3_1} from "openapi-types";
 import {fetchSchema} from "./schema";
@@ -15,7 +15,8 @@ describe("generateExample", () => {
 
         expect(defs).toBeDefined();
 
-        const example = generateExample("Block", defs!);
+        const examples = generateExamples("Block", defs!);
+        const example = examples[0];
 
         expect(example).toBeDefined();
         expect(typeof example).toBe("object");

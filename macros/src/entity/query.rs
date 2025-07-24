@@ -26,6 +26,7 @@ pub fn stream_query(stream_query_ty: &Type, stream_queries: &Vec<StreamQueryItem
     let inits: Vec<TokenStream> = stream_queries.iter().map(|item| item.init.clone()).collect();
     quote! {
         #[derive(Clone, Debug, IntoParams, Serialize, Deserialize, Default, ToSchema)]
+        #[schema(example = json!(#stream_query_ty::sample()))]
         pub struct #stream_query_ty {
             #(#definitions),*
         }

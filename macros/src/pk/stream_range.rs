@@ -100,7 +100,8 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
             }), FromBody(BodyExpr {
                 ty: syn::parse_quote! { Option<#stream_query_type> },
                 extraction: quote! { MaybeJson(body): MaybeJson<#stream_query_type> },
-                samples: quote! { vec![Some(#stream_query_type::sample()), None ] },
+                samples: quote! { vec![#stream_query_type::sample()] },
+                required: false,
             })],
             method: HttpMethod::POST,
             handler_name: format_ident!("{}", handler_fn_name),

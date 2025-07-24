@@ -36,6 +36,7 @@ pub struct BodyExpr {
     pub ty: Type,
     pub extraction: TokenStream,
     pub samples: TokenStream,
+    pub required: bool,
 }
 
 #[derive(Clone)]
