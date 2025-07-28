@@ -8,11 +8,10 @@ use utxo::*;
 #[tokio::main]
 async fn main() {
     let dir = env::temp_dir().join("redbit");
-    let db = 
-        Arc::new(
-            Database::create(dir.join("my_db.redb"))
-                .expect("Failed to create database")
-        );
+    if !dir.exists() {
+        std::fs::create_dir_all(dir.clone()).unwrap();
+    }
+    let db = Arc::new(Database::create(dir.join("my_db.redb")).expect("Failed to create database"));
     demo::run(Arc::clone(&db)).await.expect("Db demo failed");
 
     let cors = cors::CorsLayer::new()
