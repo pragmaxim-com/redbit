@@ -5,6 +5,9 @@
 //! The library provides methods for storing, retrieving, and deleting entities based on primary keys (PKs) and secondary indexes,
 //! supporting one-to-one and one-to-many relationships.
 //!
+
+pub mod query;
+
 pub use axum;
 pub use axum::extract;
 pub use axum::response::IntoResponse;
@@ -20,6 +23,7 @@ pub use futures_util::stream::TryStreamExt;
 pub use http;
 pub use http::HeaderValue;
 pub use inventory;
+pub use query::*;
 pub use macros::column;
 pub use macros::entity;
 pub use macros::pointer_key;
@@ -344,24 +348,6 @@ inventory::collect!(StructInfo);
 #[derive(OpenApi)]
 #[openapi(info(license(name = "MIT")))]
 pub struct ApiDoc;
-
-#[derive(IntoParams, Serialize, Deserialize, Default)]
-pub struct LimitQuery {
-    #[param(required = false, example = 10)]
-    pub take: Option<usize>,
-    #[param(required = false, example = 10)]
-    pub tail: Option<usize>,
-    #[param(required = false, example = true)]
-    pub last: Option<bool>,
-    #[param(required = false, example = true)]
-    pub first: Option<bool>,
-}
-
-impl LimitQuery {
-    pub fn sample() -> LimitQuery {
-        LimitQuery { take: Some(1), tail: None, last: None, first: None }
-    }
-}
 
 #[derive(Debug, Clone, ToSchema, Serialize, Deserialize)]
 pub enum FilterOp<T> {

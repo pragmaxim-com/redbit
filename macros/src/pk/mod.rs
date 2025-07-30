@@ -11,7 +11,6 @@ mod pk_range;
 mod store;
 mod delete;
 mod parent_key;
-mod limit;
 mod init;
 pub mod pointer_impls;
 pub mod root_impls;
@@ -57,7 +56,6 @@ impl DbPkMacros {
         function_defs.push(tail::fn_def(entity_name, entity_type, &table_def.name));
         function_defs.push(first::fn_def(entity_name, entity_type, &table_def.name));
         function_defs.push(last::fn_def(entity_name, entity_type, &table_def.name));
-        function_defs.push(limit::limit_fn_def(entity_name, entity_type));
         function_defs.push(exists::fn_def(entity_name, &pk_name, &pk_type, &table_def.name));
 
         match multiplicity {

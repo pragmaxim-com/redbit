@@ -228,7 +228,7 @@ impl EndpointDef {
         }
 
         let params_part = if params_tokens.is_empty() {
-            quote! {}
+            quote! { params() }
         } else {
             quote! {
                 params( #(#params_tokens),* )
