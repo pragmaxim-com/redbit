@@ -11,6 +11,8 @@ pub fn generate_column_impls(
 ) -> (TokenStream, Option<Attribute>) {
     let hex_encoding = Literal::string("hex");
     let base64_encoding = Literal::string("base64");
+    let base58_encoding = Literal::string("base58");
+    let bech32_encoding = Literal::string("bech32");
     let kind = crate::macro_utils::classify_inner_type(inner_type);
     let encoding_raw = binary_encoding_opt.unwrap_or_else(|| hex_encoding.clone());
     let binary_encoding_literal = match encoding_raw {
@@ -18,7 +20,11 @@ pub fn generate_column_impls(
             Literal::string(&"serde_with::hex::Hex"),
         l if l.to_string() == base64_encoding.to_string() =>
             Literal::string(&"serde_with::base64::Base64"),
-        _ => panic!("Unknown encoding '{}'. Expected 'hex' or 'base64'.", encoding_raw),
+        l if l.to_string() == base58_encoding.to_string() =>
+            Literal::string("crate::serde_enc::Base58"),
+        l if l.to_string() == bech32_encoding.to_string() =>
+            Literal::string("crate::serde_enc::Bech32"),
+        _ => panic!("Unknown encoding '{}'. Expected 'hex', 'base64', 'base58', or 'bech32'.", encoding_raw),
     };
 
     let mut schema_example = quote! { vec![Some(serde_json::json!(#struct_ident::default().encode()))] };

@@ -12,7 +12,7 @@ through auto-generated REST API. It maximizes R/W speed while minimizing data si
 
 ✅ Querying and ranging by secondary index \
 ✅ Optional dictionaries for low cardinality fields \
-✅ One-to-One / One-to-Option / One-to-Many entities with cascade read/write/delete \
+✅ `One-to-One` / `One-to-Option` / `One-to-Many` entities with cascade read/write/delete \
 ✅ All goodies including intuitive data ordering without writing custom codecs \
 ✅ Http response streaming api with efficient querying (ie. get txs or utxos for really HOT address) \
 ✅ Query contraints : `eq`, `ne`, `lt`, `le`, `gt`, `ge`, `in` with logical `AND`
@@ -30,7 +30,8 @@ through auto-generated REST API. It maximizes R/W speed while minimizing data si
   }
   ```
 ✅ Column types : `String`, `Int`, `Vec<u8>`, `[u8; N]`, `bool`, `uuid::Uuid`, `chrono::DateTime`, `std::time::Duration` \
-✅ Column encodings of binary columns : `hex`, `base64` \
+✅ Optional column is basically `One-to-Option` relationship, we build a table for optional "values" \
+✅ Column encodings of binary columns : `hex`, `base64`, `base58`, `bech32` \
 ✅ All types have binary (db) and human-readable (http) serde support \
 ✅ Macro derived http rest API at http://127.0.0.1:8000/swagger-ui/ with examples \
 ✅ Macro derived unit tests and integration tests on axum test server and benchmarks \

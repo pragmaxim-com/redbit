@@ -7,13 +7,14 @@
 //!
 
 pub mod query;
+pub mod serde_enc;
 
 pub use axum;
+pub use axum::body::Body;
 pub use axum::extract;
+pub use axum::http::StatusCode;
 pub use axum::response::IntoResponse;
 pub use axum::response::Response;
-pub use axum::http::StatusCode;
-pub use axum::body::Body;
 pub use axum_streams;
 pub use axum_test;
 pub use chrono;
@@ -23,7 +24,6 @@ pub use futures_util::stream::TryStreamExt;
 pub use http;
 pub use http::HeaderValue;
 pub use inventory;
-pub use query::*;
 pub use macros::column;
 pub use macros::entity;
 pub use macros::pointer_key;
@@ -32,6 +32,7 @@ pub use macros::Entity;
 pub use macros::PointerKey;
 pub use macros::RootKey;
 pub use once_cell;
+pub use query::*;
 pub use rand;
 pub use redb;
 pub use redb::Database;
@@ -49,6 +50,7 @@ pub use serde::Serializer;
 pub use serde_json;
 pub use serde_urlencoded;
 pub use serde_with;
+pub use std::collections::VecDeque;
 pub use std::pin::Pin;
 pub use std::sync::Arc;
 pub use urlencoding;
@@ -60,7 +62,6 @@ pub use utoipa::ToSchema;
 pub use utoipa_axum;
 pub use utoipa_axum::router::OpenApiRouter;
 pub use utoipa_swagger_ui;
-pub use std::collections::VecDeque;
 
 use crate::axum::extract::rejection::JsonRejection;
 use crate::axum::extract::FromRequest;
@@ -68,6 +69,8 @@ use crate::axum::Router;
 use crate::redb::{Key, TypeName, Value};
 use crate::utoipa::OpenApi;
 use crate::utoipa_swagger_ui::SwaggerUi;
+use axum::body::Bytes;
+use axum::extract::Request;
 use bincode::Options;
 use serde::de::DeserializeOwned;
 use std::any::type_name;
@@ -75,13 +78,11 @@ use std::cmp::Ordering;
 use std::env;
 use std::fmt::Debug;
 use std::fs::OpenOptions;
+use std::io::Write;
 use std::net::SocketAddr;
 use std::ops::Add;
 use std::path::PathBuf;
 use tokio::net::TcpListener;
-use std::io::Write;
-use axum::body::Bytes;
-use axum::extract::Request;
 use tower_http::cors::CorsLayer;
 
 pub trait IndexedPointer: Clone {
