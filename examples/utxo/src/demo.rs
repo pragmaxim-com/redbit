@@ -18,14 +18,14 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
     let last_block = Block::last(&read_tx)?.unwrap();
 
     Block::take(&read_tx, 100)?;
-    Block::get(&read_tx, &first_block.id)?;
-    Block::range(&read_tx, &first_block.id, &last_block.id, None)?;
-    Block::get_transactions(&read_tx, &first_block.id)?;
-    Block::get_header(&read_tx, &first_block.id)?;
-    Block::exists(&read_tx, &first_block.id)?;
+    Block::get(&read_tx, &first_block.height)?;
+    Block::range(&read_tx, &first_block.height, &last_block.height, None)?;
+    Block::get_transactions(&read_tx, &first_block.height)?;
+    Block::get_header(&read_tx, &first_block.height)?;
+    Block::exists(&read_tx, &first_block.height)?;
     Block::first(&read_tx)?;
     Block::last(&read_tx)?;
-    Block::stream_range(db.begin_read()?, first_block.id, last_block.id, None)?.try_collect::<Vec<Block>>().await?;
+    Block::stream_range(db.begin_read()?, first_block.height, last_block.height, None)?.try_collect::<Vec<Block>>().await?;
 
     println!("Querying block headers:");
     let first_block_header = BlockHeader::first(&read_tx)?.unwrap();
@@ -34,12 +34,12 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
     BlockHeader::get_by_hash(&read_tx, &first_block_header.hash)?;
     BlockHeader::get_by_timestamp(&read_tx, &first_block_header.timestamp)?;
     BlockHeader::take(&read_tx, 100)?;
-    BlockHeader::get(&read_tx, &first_block_header.id)?;
-    BlockHeader::range(&read_tx, &first_block_header.id, &last_block_header.id, None)?;
+    BlockHeader::get(&read_tx, &first_block_header.height)?;
+    BlockHeader::range(&read_tx, &first_block_header.height, &last_block_header.height, None)?;
     BlockHeader::range_by_timestamp(&read_tx, &first_block_header.timestamp, &last_block_header.timestamp)?;
     BlockHeader::stream_by_hash(db.begin_read()?, first_block_header.hash, None)?.try_collect::<Vec<BlockHeader>>().await?;
     BlockHeader::stream_by_timestamp(db.begin_read()?, first_block_header.timestamp, None)?.try_collect::<Vec<BlockHeader>>().await?;
-    BlockHeader::stream_range(db.begin_read()?, first_block_header.id, last_block_header.id, None)?.try_collect::<Vec<BlockHeader>>().await?;
+    BlockHeader::stream_range(db.begin_read()?, first_block_header.height, last_block_header.height, None)?.try_collect::<Vec<BlockHeader>>().await?;
     BlockHeader::stream_range_by_timestamp(db.begin_read()?, first_block_header.timestamp, last_block_header.timestamp, None)?.try_collect::<Vec<BlockHeader>>().await?;
 
     println!("Querying transactions:");
@@ -94,7 +94,7 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
 
     println!("Deleting blocks:");
     for block in blocks.iter() {
-        Block::delete_and_commit(&db, &block.id)?;
+        Block::delete_and_commit(&db, &block.height)?;
     }
     Ok(())
 }

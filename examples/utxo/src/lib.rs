@@ -33,7 +33,7 @@ pub struct TempInputRef {
 #[entity]
 pub struct Block {
     #[pk]
-    pub id: Height,
+    pub height: Height,
     pub header: BlockHeader,
     pub transactions: Vec<Transaction>,
     #[column(transient)]
@@ -43,7 +43,7 @@ pub struct Block {
 #[entity]
 pub struct BlockHeader {
     #[fk(one2one)]
-    pub id: Height,
+    pub height: Height,
     #[column(index)]
     pub hash: Hash,
     #[column(range)]

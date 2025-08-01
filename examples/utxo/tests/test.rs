@@ -4,8 +4,8 @@ use utxo::*;
 #[test]
 fn each_entity_should_have_a_default_sample() {
     let block = Block::sample();
-    assert_eq!(block.id.0, 0);
-    assert_eq!(block.header.id, block.id);
+    assert_eq!(block.height.0, 0);
+    assert_eq!(block.header.height, block.height);
     assert_eq!(block.transactions.len(), 3);
     for (idx, tx) in block.transactions.iter().enumerate() {
         assert_eq!(tx.id.index as usize, idx);
@@ -42,8 +42,8 @@ fn it_should_commit_multiple_blocks_in_a_single_tx() {
 fn it_should_get_entity_by_unique_id() {
     let (blocks, db) = init_temp_db("db_test");
     let block = blocks.first().unwrap();
-    let found_by_id = Block::get(&db.begin_read().unwrap(), &block.id).expect("Failed to query by ID").unwrap();
-    assert_eq!(found_by_id.id, block.id);
+    let found_by_id = Block::get(&db.begin_read().unwrap(), &block.height).expect("Failed to query by ID").unwrap();
+    assert_eq!(found_by_id.height, block.height);
     assert_eq!(found_by_id.transactions, block.transactions);
     assert_eq!(found_by_id.header, block.header);
 }
@@ -52,14 +52,14 @@ fn it_should_get_entity_by_unique_id() {
 fn it_should_delete_entity_by_unique_id() {
     let (blocks, db) = init_temp_db("db_test");
     let block = blocks.first().unwrap();
-    let found_by_id = Block::get(&db.begin_read().unwrap(), &block.id).expect("Failed to query by ID").unwrap();
-    assert_eq!(found_by_id.id, block.id);
+    let found_by_id = Block::get(&db.begin_read().unwrap(), &block.height).expect("Failed to query by ID").unwrap();
+    assert_eq!(found_by_id.height, block.height);
 
-    Block::delete_and_commit(&db, &block.id).expect("Failed to delete by ID");
+    Block::delete_and_commit(&db, &block.height).expect("Failed to delete by ID");
 
     let read_tx = db.begin_read().unwrap();
 
-    let block_not_found = Block::get(&read_tx, &block.id).expect("Failed to query by ID after deletion").is_none();
+    let block_not_found = Block::get(&read_tx, &block.height).expect("Failed to query by ID after deletion").is_none();
     assert!(block_not_found);
 
     let transitive_entities_not_found = block.transactions.iter().any(|tx| {
@@ -181,7 +181,7 @@ fn it_should_get_related_one_to_many_entities() {
     let block = blocks.first().unwrap();
 
     let expected_transactions: Vec<Transaction> = block.transactions.clone();
-    let transactions = Block::get_transactions(&read_tx, &block.id).expect("Failed to get transactions");
+    let transactions = Block::get_transactions(&read_tx, &block.height).expect("Failed to get transactions");
 
     let expected_utxos: Vec<Utxo> = expected_transactions.iter().flat_map(|t| t.utxos.clone()).collect();
     let utxos: Vec<Utxo> = transactions.iter().flat_map(|t| t.utxos.clone()).collect();
@@ -201,7 +201,7 @@ fn it_should_get_related_one_to_one_entity() {
     let block = blocks.first().unwrap();
 
     let expected_header: BlockHeader = block.header.clone();
-    let header = Block::get_header(&read_tx, &block.id).expect("Failed to get header");
+    let header = Block::get_header(&read_tx, &block.height).expect("Failed to get header");
 
     assert_eq!(expected_header, header);
 }
@@ -212,12 +212,12 @@ fn it_should_override_entity() {
     let read_tx = db.begin_read().unwrap();
     let block = blocks.first().unwrap();
 
-    let loaded_block = Block::get(&read_tx, &block.id).expect("Failed to get by ID").unwrap();
+    let loaded_block = Block::get(&read_tx, &block.height).expect("Failed to get by ID").unwrap();
 
     assert_eq!(block, &loaded_block);
 
     Block::store_and_commit(&db, &block).expect("Failed to delete by ID");
-    let loaded_block2 = Block::get(&read_tx, &block.id).expect("Failed to get by ID").unwrap();
+    let loaded_block2 = Block::get(&read_tx, &block.height).expect("Failed to get by ID").unwrap();
 
     assert_eq!(block, &loaded_block2);
 }
@@ -233,8 +233,8 @@ fn it_should_get_first_and_last_entity() {
     let first_block_header = BlockHeader::first(&read_tx).expect("Failed to get first header").unwrap();
     let last_block_header = BlockHeader::last(&read_tx).expect("Failed to get last header").unwrap();
 
-    assert_eq!(blocks.first().unwrap().id, first_block.id);
-    assert_eq!(blocks.last().unwrap().id, last_block.id);
+    assert_eq!(blocks.first().unwrap().height, first_block.height);
+    assert_eq!(blocks.last().unwrap().height, last_block.height);
     
     assert_eq!(blocks.first().unwrap().header, first_block_header);
     assert_eq!(blocks.last().unwrap().header, last_block_header);
