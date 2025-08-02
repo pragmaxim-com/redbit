@@ -6,6 +6,7 @@ use serde_with::{DeserializeAs, SerializeAs};
 pub struct BtcBase58;
 
 impl SerializeAs<Vec<u8>> for BtcBase58 {
+    #[inline]
     fn serialize_as<S>(source: &Vec<u8>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -15,59 +16,63 @@ impl SerializeAs<Vec<u8>> for BtcBase58 {
 }
 
 impl<'de> DeserializeAs<'de, Vec<u8>> for BtcBase58 {
+    #[inline]
     fn deserialize_as<D>(deserializer: D) -> Result<Vec<u8>, D::Error>
     where
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        bs58::decode(s)
+        bs58::decode(&s)
             .with_check(None)
             .into_vec()
-            .map_err(serde::de::Error::custom)
+            .map_err(|e| serde::de::Error::custom(format!(
+                "Base58 decode error: {} (input: {}) - ensure this is a valid legacy Bitcoin address (Base58Check, 25 bytes including version and checksum)",
+                e, s
+            )))
     }
 }
 
-//
-// Bech32 / Bech32m encoding for Bitcoin SegWit addresses
 #[allow(dead_code)]
 pub struct BtcBech32;
 
 impl SerializeAs<Vec<u8>> for BtcBech32 {
+    #[inline]
     fn serialize_as<S>(source: &Vec<u8>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let hrp = hrp::BC;
-
         let version = match source.len() {
-            20 => segwit::VERSION_0, // P2WPKH
-            32 => {
-                // Prefer Taproot for 32-byte program
-                segwit::VERSION_1
-            }
+            20 => segwit::VERSION_0,
+            32 => segwit::VERSION_1,
             _ => {
                 return Err(serde::ser::Error::custom(format!(
-                    "unsupported witness program length {}",
-                    source.len()
+                    "Unsupported witness program length: {} (bytes: {:x?}) - expected 20 bytes (P2WPKH) or 32 bytes (P2TR). If you see 25 bytes, it's likely a Base58Check-encoded legacy address payload.",
+                    source.len(), source
                 )))
             }
         };
-
-        let encoded = segwit::encode(hrp, version, source)
-            .map_err(serde::ser::Error::custom)?;
+        let encoded = segwit::encode(hrp::BC, version, source)
+            .map_err(|e| serde::ser::Error::custom(format!(
+                "Bech32 encode error: {} (bytes: {:x?}) - check witness program version and length",
+                e, source
+            )))?;
         serializer.serialize_str(&encoded)
     }
 }
 
 impl<'de> DeserializeAs<'de, Vec<u8>> for BtcBech32 {
+    #[inline]
     fn deserialize_as<D>(deserializer: D) -> Result<Vec<u8>, D::Error>
     where
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        let (_hrp, _version, program) = segwit::decode(&s)
-            .map_err(serde::de::Error::custom)?;
-        Ok(program)
+        segwit::decode(&s)
+            .map(|(_, _, program)| program)
+            .map_err(|e| serde::de::Error::custom(format!(
+                "Bech32 decode error: {} (input: {}) - ensure this is a valid Bech32m address with correct HRP and witness version",
+                e, s
+            )))
     }
 }
 
@@ -75,35 +80,27 @@ impl<'de> DeserializeAs<'de, Vec<u8>> for BtcBech32 {
 pub struct Btc;
 
 impl SerializeAs<Vec<u8>> for Btc {
+    #[inline]
     fn serialize_as<S>(source: &Vec<u8>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        if source.first() == Some(&0x00) || source.first() == Some(&0x05) {
-            // Legacy Base58Check
-            return serializer.serialize_str(&bs58::encode(source).with_check().into_string());
-        }
-
-        // Assume it's a witness program → Bech32 encoding
-        let hrp = hrp::BC;
-
-        let version = match source.len() {
-            20 => segwit::VERSION_0, // P2WPKH
+        match source.len() {
+            20 => {
+                let encoded = segwit::encode(hrp::BC, segwit::VERSION_0, source)
+                    .map_err(|e| serde::ser::Error::custom(format!("Bech32 encode error: {}", e)))?;
+                serializer.serialize_str(&encoded)
+            }
             32 => {
-                // Prefer Taproot (v1) for 32-byte program
-                segwit::VERSION_1
+                let encoded = segwit::encode(hrp::BC, segwit::VERSION_1, source)
+                    .map_err(|e| serde::ser::Error::custom(format!("Bech32 encode error: {}", e)))?;
+                serializer.serialize_str(&encoded)
             }
-            _ => {
-                return Err(serde::ser::Error::custom(format!(
-                    "unsupported Bitcoin address bytes length {}",
-                    source.len()
-                )))
+            21 | 25 if matches!(source.first(), Some(0x00) | Some(0x05)) => {
+                serializer.serialize_str(&bs58::encode(source).with_check().into_string())
             }
-        };
-
-        let encoded = segwit::encode(hrp, version, source)
-            .map_err(serde::ser::Error::custom)?;
-        serializer.serialize_str(&encoded)
+            _ => serializer.serialize_str(&bs58::encode(source).with_check().into_string()),
+        }
     }
 }
 
@@ -114,17 +111,18 @@ impl<'de> DeserializeAs<'de, Vec<u8>> for Btc {
     {
         let s = String::deserialize(deserializer)?;
 
-        // Try Bech32 first
         if let Ok((_hrp, _version, program)) = segwit::decode(&s) {
             return Ok(program);
         }
 
-        // Try Base58Check
         if let Ok(vec) = bs58::decode(&s).with_check(None).into_vec() {
             return Ok(vec);
         }
 
-        Err(serde::de::Error::custom("invalid Bitcoin address format"))
+        Err(serde::de::Error::custom(format!(
+            "Invalid Bitcoin address format: {} - could not decode as Bech32 or Base58Check. Expected formats: P2WPKH/P2TR Bech32 or legacy P2PKH/P2SH Base58Check (25 bytes).",
+            s
+        )))
     }
 }
 
