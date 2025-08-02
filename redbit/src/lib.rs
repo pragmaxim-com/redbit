@@ -9,6 +9,7 @@
 pub mod query;
 pub mod btc_serde_enc;
 pub mod cardano_serde_enc;
+pub mod utf8_serde_enc;
 
 pub use axum;
 pub use axum::body::Body;

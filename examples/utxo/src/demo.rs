@@ -63,7 +63,6 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
     let last_utxo = Utxo::last(&read_tx)?.unwrap();
 
     Utxo::get_by_btc_address(&read_tx, &first_utxo.btc_address)?;
-    Utxo::get_by_fixed_bytes(&read_tx, &first_utxo.fixed_bytes)?;
     Utxo::get_ids_by_btc_address(&read_tx, &first_utxo.btc_address)?;
     Utxo::take(&read_tx, 100)?;
     Utxo::get(&read_tx, &first_utxo.id)?;
@@ -73,10 +72,8 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
     Utxo::stream_ids_by_btc_address(&read_tx, &first_utxo.btc_address)?.try_collect::<Vec<TransactionPointer>>().await?;
     Utxo::stream_range(db.begin_read()?, first_utxo.id, last_utxo.id, None)?.try_collect::<Vec<Utxo>>().await?;
     Utxo::stream_by_btc_address(db.begin_read()?, first_utxo.btc_address.clone(), None)?.try_collect::<Vec<Utxo>>().await?;
-    Utxo::stream_by_fixed_bytes(db.begin_read()?, first_utxo.fixed_bytes.clone(), None)?.try_collect::<Vec<Utxo>>().await?;
     // even streaming parents is possible
     Utxo::stream_transactions_by_btc_address(db.begin_read()?, first_utxo.btc_address, None)?.try_collect::<Vec<Transaction>>().await?;
-    Utxo::stream_transactions_by_fixed_bytes(db.begin_read()?, first_utxo.fixed_bytes, None)?.try_collect::<Vec<Transaction>>().await?;
 
     println!("Querying assets:");
     let first_asset = Asset::first(&read_tx)?.unwrap();

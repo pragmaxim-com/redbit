@@ -46,6 +46,7 @@ pub fn generate_column_impls(
             default_code = match binary_encoding.as_ref() {
                 "hex" => quote! { Self(b"a".to_vec()) },
                 "base64" => quote! { Self(b"a".to_vec()) },
+                "utf-8" => quote! { Self(b"a".to_vec()) },
                 "btc_addr" => quote! { Self(btc_serde_enc::btc_base58_p2pkh_payload()) },
                 "btc_bech32" => quote! { Self(btc_serde_enc::btc_bech32_p2wpkh_payload()) },
                 "btc_base58" => quote! { Self(btc_serde_enc::btc_base58_p2sh_payload()) },
