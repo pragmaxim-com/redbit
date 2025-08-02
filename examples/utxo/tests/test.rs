@@ -94,7 +94,7 @@ async fn it_should_stream_entities_by_index_with_dict() {
     let read_tx = db.begin_read().unwrap();
     let utxo = blocks.first().unwrap().transactions.first().unwrap().utxos.first().unwrap();
 
-    let found_by_address = Utxo::stream_by_address(read_tx, utxo.address.clone(), None).unwrap().try_collect::<Vec<Utxo>>().await.unwrap();
+    let found_by_address = Utxo::stream_by_btc_address(read_tx, utxo.btc_address.clone(), None).unwrap().try_collect::<Vec<Utxo>>().await.unwrap();
     assert_eq!(found_by_address.len(), 1);
     assert!(found_by_address.iter().any(|tx| tx.id == utxo.id));
     assert!(found_by_address.iter().any(|tx| tx.id == utxo.id));
@@ -138,7 +138,7 @@ fn it_should_get_entities_by_index_with_dict() {
     let read_tx = db.begin_read().unwrap();
     let utxo = blocks.first().unwrap().transactions.first().unwrap().utxos.first().unwrap();
 
-    let found_by_address = Utxo::get_by_address(&read_tx, &utxo.address).expect("Failed to query by address");
+    let found_by_address = Utxo::get_by_btc_address(&read_tx, &utxo.btc_address).expect("Failed to query by address");
     assert_eq!(found_by_address.len(), 1);
     assert!(found_by_address.iter().any(|tx| tx.id == utxo.id));
     assert!(found_by_address.iter().any(|tx| tx.id == utxo.id));

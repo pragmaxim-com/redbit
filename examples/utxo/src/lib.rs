@@ -15,8 +15,9 @@ pub use redbit::*;
 #[pointer_key(u8)] pub struct UtxoPointer(TransactionPointer);
 
 #[column] pub struct Hash(pub String);
-#[column("btc_addr")] pub struct Address(pub Vec<u8>);
-#[column("hex")] pub struct Datum(pub [u8; 32]);
+#[column("btc_addr")] pub struct BtcAddress(pub Vec<u8>);
+#[column("cardano_addr")] pub struct CardanoAddress(pub Vec<u8>);
+#[column("hex")] pub struct SomeFixedBytes(pub [u8; 32]);
 #[column] pub struct AssetName(pub String);
 #[column] pub struct Time(pub chrono::DateTime<chrono::Utc>);
 #[column] pub struct Duration(pub std::time::Duration);
@@ -75,9 +76,11 @@ pub struct Utxo {
     #[column]
     pub amount: u64,
     #[column(index)]
-    pub datum: Datum,
+    pub fixed_bytes: SomeFixedBytes,
     #[column(dictionary)]
-    pub address: Address,
+    pub btc_address: BtcAddress,
+    #[column(dictionary)]
+    pub cardano_address: CardanoAddress,
     pub assets: Vec<Asset>,
 }
 

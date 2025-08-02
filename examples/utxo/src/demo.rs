@@ -62,21 +62,21 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
     let first_utxo = Utxo::first(&read_tx)?.unwrap();
     let last_utxo = Utxo::last(&read_tx)?.unwrap();
 
-    Utxo::get_by_address(&read_tx, &first_utxo.address)?;
-    Utxo::get_by_datum(&read_tx, &first_utxo.datum)?;
-    Utxo::get_ids_by_address(&read_tx, &first_utxo.address)?;
+    Utxo::get_by_btc_address(&read_tx, &first_utxo.btc_address)?;
+    Utxo::get_by_fixed_bytes(&read_tx, &first_utxo.fixed_bytes)?;
+    Utxo::get_ids_by_btc_address(&read_tx, &first_utxo.btc_address)?;
     Utxo::take(&read_tx, 100)?;
     Utxo::get(&read_tx, &first_utxo.id)?;
     Utxo::range(&read_tx, &first_utxo.id, &last_utxo.id, None)?;
     Utxo::get_assets(&read_tx, &first_utxo.id)?;
     Utxo::parent_key(&read_tx, &first_utxo.id)?;
-    Utxo::stream_ids_by_address(&read_tx, &first_utxo.address)?.try_collect::<Vec<TransactionPointer>>().await?;
+    Utxo::stream_ids_by_btc_address(&read_tx, &first_utxo.btc_address)?.try_collect::<Vec<TransactionPointer>>().await?;
     Utxo::stream_range(db.begin_read()?, first_utxo.id, last_utxo.id, None)?.try_collect::<Vec<Utxo>>().await?;
-    Utxo::stream_by_address(db.begin_read()?, first_utxo.address.clone(), None)?.try_collect::<Vec<Utxo>>().await?;
-    Utxo::stream_by_datum(db.begin_read()?, first_utxo.datum.clone(), None)?.try_collect::<Vec<Utxo>>().await?;
+    Utxo::stream_by_btc_address(db.begin_read()?, first_utxo.btc_address.clone(), None)?.try_collect::<Vec<Utxo>>().await?;
+    Utxo::stream_by_fixed_bytes(db.begin_read()?, first_utxo.fixed_bytes.clone(), None)?.try_collect::<Vec<Utxo>>().await?;
     // even streaming parents is possible
-    Utxo::stream_transactions_by_address(db.begin_read()?, first_utxo.address, None)?.try_collect::<Vec<Transaction>>().await?;
-    Utxo::stream_transactions_by_datum(db.begin_read()?, first_utxo.datum, None)?.try_collect::<Vec<Transaction>>().await?;
+    Utxo::stream_transactions_by_btc_address(db.begin_read()?, first_utxo.btc_address, None)?.try_collect::<Vec<Transaction>>().await?;
+    Utxo::stream_transactions_by_fixed_bytes(db.begin_read()?, first_utxo.fixed_bytes, None)?.try_collect::<Vec<Transaction>>().await?;
 
     println!("Querying assets:");
     let first_asset = Asset::first(&read_tx)?.unwrap();

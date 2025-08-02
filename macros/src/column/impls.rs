@@ -46,9 +46,12 @@ pub fn generate_column_impls(
             default_code = match binary_encoding.as_ref() {
                 "hex" => quote! { Self(b"a".to_vec()) },
                 "base64" => quote! { Self(b"a".to_vec()) },
-                "btc_addr" => quote! { Self(serde_enc::base58_p2pkh_payload()) },
-                "bech32" => quote! { Self(serde_enc::bech32_p2wpkh_payload()) },
-                "base58" => quote! { Self(serde_enc::base58_p2sh_payload()) },
+                "btc_addr" => quote! { Self(btc_serde_enc::btc_base58_p2pkh_payload()) },
+                "btc_bech32" => quote! { Self(btc_serde_enc::btc_bech32_p2wpkh_payload()) },
+                "btc_base58" => quote! { Self(btc_serde_enc::btc_base58_p2sh_payload()) },
+                "cardano_addr" => quote! { Self(cardano_serde_enc::cardano_bech32_addr_payload()) },
+                "cardano_bech32" => quote! { Self(cardano_serde_enc::cardano_bech32_stake_payload()) },
+                "cardano_base58" => quote! { Self(cardano_serde_enc::cardano_base58_legacy_payload()) },
                 _ => panic!("Unsupported binary encoding for byte vector: {}", binary_encoding),
             };
             let binary_encoding_literal = Literal::string(serde_encoding(&binary_encoding));

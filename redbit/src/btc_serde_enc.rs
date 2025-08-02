@@ -3,9 +3,9 @@ use serde::{Deserialize, Deserializer, Serializer};
 use serde_with::{DeserializeAs, SerializeAs};
 
 #[allow(dead_code)]
-pub struct Base58;
+pub struct BtcBase58;
 
-impl SerializeAs<Vec<u8>> for Base58 {
+impl SerializeAs<Vec<u8>> for BtcBase58 {
     fn serialize_as<S>(source: &Vec<u8>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -14,7 +14,7 @@ impl SerializeAs<Vec<u8>> for Base58 {
     }
 }
 
-impl<'de> DeserializeAs<'de, Vec<u8>> for Base58 {
+impl<'de> DeserializeAs<'de, Vec<u8>> for BtcBase58 {
     fn deserialize_as<D>(deserializer: D) -> Result<Vec<u8>, D::Error>
     where
         D: Deserializer<'de>,
@@ -30,9 +30,9 @@ impl<'de> DeserializeAs<'de, Vec<u8>> for Base58 {
 //
 // Bech32 / Bech32m encoding for Bitcoin SegWit addresses
 #[allow(dead_code)]
-pub struct Bech32;
+pub struct BtcBech32;
 
-impl SerializeAs<Vec<u8>> for Bech32 {
+impl SerializeAs<Vec<u8>> for BtcBech32 {
     fn serialize_as<S>(source: &Vec<u8>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -59,7 +59,7 @@ impl SerializeAs<Vec<u8>> for Bech32 {
     }
 }
 
-impl<'de> DeserializeAs<'de, Vec<u8>> for Bech32 {
+impl<'de> DeserializeAs<'de, Vec<u8>> for BtcBech32 {
     fn deserialize_as<D>(deserializer: D) -> Result<Vec<u8>, D::Error>
     where
         D: Deserializer<'de>,
@@ -127,13 +127,14 @@ impl<'de> DeserializeAs<'de, Vec<u8>> for Btc {
         Err(serde::de::Error::custom("invalid Bitcoin address format"))
     }
 }
+
 /// Helper to create a default byte vector
 fn default_bytes() -> Vec<u8> {
     (0..64).map(|i| i as u8).collect()
 }
 
 /// Deterministic P2PKH payload (Base58Check, version 0x00)
-pub fn base58_p2pkh_payload() -> Vec<u8> {
+pub fn btc_base58_p2pkh_payload() -> Vec<u8> {
     let random_bytes = default_bytes();
     let mut payload = vec![0x00];
     payload.extend_from_slice(&random_bytes[..20]); // 20-byte hash160
@@ -141,7 +142,7 @@ pub fn base58_p2pkh_payload() -> Vec<u8> {
 }
 
 /// Deterministic P2SH payload (Base58Check, version 0x05)
-pub fn base58_p2sh_payload() -> Vec<u8> {
+pub fn btc_base58_p2sh_payload() -> Vec<u8> {
     let random_bytes = default_bytes();
     let mut payload = vec![0x05];
     payload.extend_from_slice(&random_bytes[..20]);
@@ -149,19 +150,19 @@ pub fn base58_p2sh_payload() -> Vec<u8> {
 }
 
 /// Deterministic P2WPKH witness program (Bech32, version 0, 20 bytes)
-pub fn bech32_p2wpkh_payload() -> Vec<u8> {
+pub fn btc_bech32_p2wpkh_payload() -> Vec<u8> {
     let random_bytes = default_bytes();
     random_bytes[..20].to_vec()
 }
 
 /// Deterministic P2WSH witness program (Bech32, version 0, 32 bytes)
-pub fn bech32_p2wsh_payload() -> Vec<u8> {
+pub fn btc_bech32_p2wsh_payload() -> Vec<u8> {
     let random_bytes = default_bytes();
     random_bytes[..32].to_vec()
 }
 
 /// Deterministic Taproot witness program (Bech32m, version 1, 32 bytes)
-pub fn bech32_p2tr_payload() -> Vec<u8> {
+pub fn btc_bech32_p2tr_payload() -> Vec<u8> {
     let random_bytes = default_bytes();
     random_bytes[..32].to_vec()
 }
@@ -178,13 +179,13 @@ mod tests {
     #[serde_as]
     #[derive(Debug, PartialEq, Serialize, Deserialize)]
     struct Base58Wrap(
-        #[serde_as(as = "Base58")] Vec<u8>
+        #[serde_as(as = "BtcBase58")] Vec<u8>
     );
 
     #[serde_as]
     #[derive(Debug, PartialEq, Serialize, Deserialize)]
     struct Bech32Wrap(
-        #[serde_as(as = "Bech32")] Vec<u8>
+        #[serde_as(as = "BtcBech32")] Vec<u8>
     );
 
     #[serde_as]
