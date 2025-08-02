@@ -10,15 +10,15 @@ mod transient;
 mod endpoint;
 mod field;
 mod entity;
+mod encoding;
 
 use crate::pk::PointerType;
 use proc_macro::TokenStream;
-use proc_macro2::Literal;
 use proc_macro_error::proc_macro_error;
 use quote::quote;
 use syn::parse::Parse;
 use syn::spanned::Spanned;
-use syn::{parse_macro_input, parse_quote, DeriveInput, Fields, ItemStruct, Type};
+use syn::{parse_macro_input, parse_quote, DeriveInput, Fields, ItemStruct, Lit, Type};
 
 #[proc_macro_attribute]
 #[proc_macro_error]
@@ -30,7 +30,7 @@ pub fn column(attr: TokenStream, item: TokenStream) -> TokenStream {
         match &mut input.fields {
             Fields::Unnamed(fields) if fields.unnamed.len() == 1 => {
                 let (impls, maybe_field_attr) =
-                    column::impls::generate_column_impls(struct_ident, &fields.unnamed[0].ty, attr_args.literal);
+                    column::impls::generate_column_impls(struct_ident, &fields.unnamed[0].ty, attr_args.encoding);
 
                 if let Some(attr) = maybe_field_attr {
                     input.attrs.push(syn::parse_quote! { #[serde_with::serde_as] });
@@ -57,16 +57,21 @@ pub fn column(attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 struct EncodingAttr {
-    literal: Option<Literal>,
+    encoding: Option<String>,
 }
 
 impl Parse for EncodingAttr {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         if input.is_empty() {
-            Ok(EncodingAttr { literal: None })
+            Ok(EncodingAttr { encoding: None })
         } else {
-            let literal: Literal = input.parse()?;
-            Ok(EncodingAttr { literal: Some(literal) })
+            let literal: Lit = input.parse()?;
+            match literal {
+                Lit::Str(lit_str) => Ok(EncodingAttr {
+                    encoding: Some(lit_str.value()), // unquoted, unescaped
+                }),
+                _ => Err(syn::Error::new_spanned(literal, "Expected a string literal")),
+            }
         }
     }
 }

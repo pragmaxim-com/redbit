@@ -15,8 +15,8 @@ pub use redbit::*;
 #[pointer_key(u8)] pub struct UtxoPointer(TransactionPointer);
 
 #[column] pub struct Hash(pub String);
-#[column("base64")] pub struct Address(pub [u8; 32]);
-#[column("hex")] pub struct Datum(pub Vec<u8>);
+#[column("btc_addr")] pub struct Address(pub Vec<u8>);
+#[column("hex")] pub struct Datum(pub [u8; 32]);
 #[column] pub struct AssetName(pub String);
 #[column] pub struct Time(pub chrono::DateTime<chrono::Utc>);
 #[column] pub struct Duration(pub std::time::Duration);

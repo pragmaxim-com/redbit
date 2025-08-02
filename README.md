@@ -31,7 +31,7 @@ through auto-generated REST API. It maximizes R/W speed while minimizing data si
   ```
 ✅ Column types : `String`, `Int`, `Vec<u8>`, `[u8; N]`, `bool`, `uuid::Uuid`, `chrono::DateTime`, `std::time::Duration` \
 ✅ Optional column is basically `One-to-Option` relationship, we build a table for optional "values" \
-✅ Column encodings of binary columns : `hex`, `base64`, `base58`, `bech32` \
+✅ Column encodings of binary columns : `hex`, `base64`, `base58`, `bech32`, `btc_addr` (base58 | bech32) \
 ✅ All types have binary (db) and human-readable (http) serde support \
 ✅ Macro derived http rest API at http://127.0.0.1:8000/swagger-ui/ with examples \
 ✅ Macro derived unit tests and integration tests on axum test server and benchmarks \
