@@ -10,7 +10,6 @@ mod transient;
 mod endpoint;
 mod field;
 mod entity;
-mod encoding;
 
 use crate::pk::PointerType;
 use proc_macro::TokenStream;

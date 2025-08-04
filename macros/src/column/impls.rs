@@ -1,7 +1,6 @@
 use proc_macro2::{Literal, Ident, TokenStream};
 use quote::quote;
 use syn::{Attribute, Type};
-use crate::encoding::*;
 use crate::macro_utils::InnerKind;
 
 pub fn generate_column_impls(
@@ -21,12 +20,20 @@ pub fn generate_column_impls(
 
     match kind {
         InnerKind::ByteArray(len) => {
-            default_code = match binary_encoding.as_ref() {
-                "hex" => quote! { Self([0u8; #len]) },
-                "base64" => quote! { Self([0u8; #len]) },
-                _ => panic!("Unsupported binary encoding for fixed sized array: {}", binary_encoding),
+            let(encoding, example) = match binary_encoding.as_ref() {
+                "hex" => ("serde_with::hex::Hex", quote! { Self([0u8; #len]) }),
+                "base64" => ("serde_with::base64::Base64", quote! { Self([0u8; #len]) }),
+                "utf-8" => ("redbit::utf8_serde_enc::Utf8", quote! { Self([0u8; #len]) }),
+                custom=> {
+                    let (encoding, example) =
+                        custom
+                            .split_once(' ')
+                            .expect("Expected encoding 'hex', 'base64', 'utf-8' or custom one in tuple format with example : 'serde_with::base64::Base64 foo'");
+                    (encoding, quote! { Self(#example.as_bytes().to_vec()) })
+                },
             };
-            let binary_encoding_literal = Literal::string(serde_encoding(&binary_encoding));
+            let binary_encoding_literal = Literal::string(encoding);
+            default_code = example;
             struct_attr = Some(syn::parse_quote! { #[serde_as(as = #binary_encoding_literal)] });
             url_encoded_code = quote! { serde_json::to_string(&self).unwrap().trim_matches('"').to_string() };
             iterable_code = quote! {
@@ -43,19 +50,26 @@ pub fn generate_column_impls(
             };
         }
         InnerKind::VecU8 => {
-            default_code = match binary_encoding.as_ref() {
-                "hex" => quote! { Self(b"a".to_vec()) },
-                "base64" => quote! { Self(b"a".to_vec()) },
-                "utf-8" => quote! { Self(b"a".to_vec()) },
-                "btc_addr" => quote! { Self(btc_serde_enc::btc_base58_p2pkh_payload()) },
-                "btc_bech32" => quote! { Self(btc_serde_enc::btc_bech32_p2wpkh_payload()) },
-                "btc_base58" => quote! { Self(btc_serde_enc::btc_base58_p2sh_payload()) },
-                "cardano_addr" => quote! { Self(cardano_serde_enc::cardano_bech32_addr_payload()) },
-                "cardano_bech32" => quote! { Self(cardano_serde_enc::cardano_bech32_stake_payload()) },
-                "cardano_base58" => quote! { Self(cardano_serde_enc::cardano_base58_legacy_payload()) },
-                _ => panic!("Unsupported binary encoding for byte vector: {}", binary_encoding),
+            let(encoding, example) = match binary_encoding.as_ref() {
+                "hex" => ("serde_with::hex::Hex", quote! { Self(b"a".to_vec()) }),
+                "base64" => ("serde_with::base64::Base64", quote! { Self(b"a".to_vec()) }),
+                "utf-8" => ("redbit::utf8_serde_enc::Utf8", quote! { Self(b"a".to_vec()) }),
+                "btc_addr" => ("redbit::btc_serde_enc::Btc", quote! { Self(btc_serde_enc::btc_base58_p2pkh_payload()) }),
+                "btc_bech32" => ("redbit::btc_serde_enc::BtcBase58", quote! { Self(btc_serde_enc::btc_bech32_p2wpkh_payload()) }),
+                "btc_base58" => ("redbit::btc_serde_enc::BtcBech32", quote! { Self(btc_serde_enc::btc_base58_p2sh_payload()) }),
+                "cardano_addr" => ("redbit::cardano_serde_enc::Cardano", quote! { Self(cardano_serde_enc::cardano_bech32_addr_payload()) }),
+                "cardano_bech32" => ("redbit::cardano_serde_enc::CardanoBech32", quote! { Self(cardano_serde_enc::cardano_bech32_stake_payload()) }),
+                "cardano_base58" => ("redbit::cardano_serde_enc::CardanoBase58", quote! { Self(cardano_serde_enc::cardano_base58_legacy_payload()) }),
+                custom=> {
+                    let (encoding, example) =
+                        custom
+                            .split_once(' ')
+                            .expect("Expected encoding 'hex', 'base64', 'utf-8' or custom one in tuple format with example : 'serde_with::base64::Base64 foo'");
+                    (encoding, quote! { Self(#example.as_bytes().to_vec()) })
+                },
             };
-            let binary_encoding_literal = Literal::string(serde_encoding(&binary_encoding));
+            let binary_encoding_literal = Literal::string(encoding);
+            default_code = example;
             struct_attr = Some(syn::parse_quote! { #[serde_as(as = #binary_encoding_literal)] });
             url_encoded_code = quote! { serde_json::to_string(&self).unwrap().trim_matches('"').to_string() };
             iterable_code = quote! {
