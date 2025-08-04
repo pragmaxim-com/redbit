@@ -1,8 +1,20 @@
 use serde::{Serializer, Deserialize, Deserializer};
 use std::str;
+use crate::ByteVecColumnSerde;
 
 #[allow(dead_code)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct Utf8;
+
+impl ByteVecColumnSerde for Utf8 {
+    fn decoded_example() -> Vec<u8> {
+        Self::encoded_example().as_bytes().to_vec()
+    }
+
+    fn encoded_example() -> String {
+        "a".to_string()
+    }
+}
 
 impl<'a> serde_with::SerializeAs<Vec<u8>> for Utf8 {
     #[inline]

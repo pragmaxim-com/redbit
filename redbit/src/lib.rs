@@ -7,9 +7,9 @@
 //!
 
 pub mod query;
-pub mod btc_serde_enc;
-pub mod cardano_serde_enc;
 pub mod utf8_serde_enc;
+pub mod hex_serde_enc;
+pub mod base64_serde_enc;
 
 pub use axum;
 pub use axum::body::Body;
@@ -138,6 +138,11 @@ impl_iterable_column_for_primitive!(u8, u16, u32, u64, usize, i8, i16, i32, i64,
 
 pub trait UrlEncoded {
     fn encode(&self) -> String;
+}
+
+pub trait ByteVecColumnSerde {
+    fn decoded_example() -> Vec<u8>;
+    fn encoded_example() -> String;
 }
 
 #[derive(Debug)]
