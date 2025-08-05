@@ -22,7 +22,7 @@ pub fn new(struct_name: &Ident, index_field: Field) -> TokenStream {
         }
 
         impl UrlEncoded for #struct_name {
-            fn encode(&self) -> String {
+            fn url_encode(&self) -> String {
                 format!("{}", self.0)
             }
         }

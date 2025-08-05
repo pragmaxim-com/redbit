@@ -8,8 +8,9 @@ rand = "0.9.0"
 redbit = { path = "../../redbit" }
 axum = {  version = "0.8.4", features = ["default", "macros"] }
 serde = { version = "1.0.219", features = ["derive"] }
+bincode = "2.0.1"
 tokio = { version = "1.45.1", features = ["full"] }
 tokio-stream = "0.1.17"
 futures = "0.3.31"
-serde_with = {  version = "3.14.0", features = ["hex", "chrono_0_4", "base64", "time_0_3"] }
+serde_with = {  version = "3.14.0", features = ["hex", "base64", "time_0_3"] }
 tower-http = { version = "0.6.6", features = ["cors"] }

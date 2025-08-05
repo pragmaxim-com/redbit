@@ -25,7 +25,7 @@ pub fn new(struct_name: &Ident, parent_field: Field, index_field: Field) -> Toke
 
         impl Into<String> for #struct_name {
             fn into(self) -> String {
-                self.encode()
+                self.url_encode()
             }
         }
 
@@ -49,8 +49,8 @@ pub fn new(struct_name: &Ident, parent_field: Field, index_field: Field) -> Toke
         }
 
         impl UrlEncoded for #struct_name {
-            fn encode(&self) -> String {
-                format!("{}-{}", self.#parent_name.encode(), self.#index_name)
+            fn url_encode(&self) -> String {
+                format!("{}-{}", self.#parent_name.url_encode(), self.#index_name)
             }
         }
 
@@ -61,7 +61,7 @@ pub fn new(struct_name: &Ident, parent_field: Field, index_field: Field) -> Toke
                 Schema::Object(
                     ObjectBuilder::new()
                         .schema_type(SchemaType::Type(Type::String))
-                        .examples(vec![Self::default().encode()])
+                        .examples(vec![Self::default().url_encode()])
                         .extensions(Some(ExtensionsBuilder::new().add("key", "fk").build()))
                         .build()
                 ).into()

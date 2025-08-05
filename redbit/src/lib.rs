@@ -19,6 +19,8 @@ pub use axum::response::IntoResponse;
 pub use axum::response::Response;
 pub use axum_streams;
 pub use axum_test;
+pub use bincode::Encode;
+pub use bincode::Decode;
 pub use chrono;
 pub use futures;
 pub use futures::stream::{self, StreamExt};
@@ -73,7 +75,7 @@ use crate::utoipa::OpenApi;
 use crate::utoipa_swagger_ui::SwaggerUi;
 use axum::body::Bytes;
 use axum::extract::Request;
-use bincode::Options;
+use bincode::{decode_from_slice, encode_to_vec};
 use serde::de::DeserializeOwned;
 use std::any::type_name;
 use std::cmp::Ordering;
@@ -137,7 +139,7 @@ macro_rules! impl_iterable_column_for_primitive {
 impl_iterable_column_for_primitive!(u8, u16, u32, u64, usize, i8, i16, i32, i64, isize);
 
 pub trait UrlEncoded {
-    fn encode(&self) -> String;
+    fn url_encode(&self) -> String;
 }
 
 pub trait ByteVecColumnSerde {
@@ -222,20 +224,21 @@ impl From<redb::CommitError> for AppError {
     }
 }
 
+/// Wrapper type to handle keys and values using bincode serialization
 #[derive(Debug)]
 pub struct Bincode<T>(pub T);
 
 impl<T> Value for Bincode<T>
 where
-    T: Debug + Serialize + for<'a> Deserialize<'a>,
+    T: Debug + Encode + Decode<()>,
 {
     type SelfType<'a>
-        = T
+    = T
     where
         Self: 'a;
 
     type AsBytes<'a>
-        = Vec<u8>
+    = Vec<u8>
     where
         Self: 'a;
 
@@ -247,7 +250,9 @@ where
     where
         Self: 'a,
     {
-        bincode::options().with_big_endian().with_fixint_encoding().deserialize(data).expect("Unable to deserialize value")
+        decode_from_slice(data, bincode::config::standard())
+            .unwrap()
+            .0
     }
 
     fn as_bytes<'a, 'b: 'a>(value: &'a Self::SelfType<'b>) -> Self::AsBytes<'a>
@@ -255,7 +260,7 @@ where
         Self: 'a,
         Self: 'b,
     {
-        bincode::options().with_big_endian().with_fixint_encoding().serialize(value).expect("Unable to serialize value")
+        encode_to_vec(value, bincode::config::standard()).unwrap()
     }
 
     fn type_name() -> TypeName {
@@ -265,7 +270,7 @@ where
 
 impl<T> Key for Bincode<T>
 where
-    T: Debug + Serialize + DeserializeOwned + Ord,
+    T: Debug + Decode<()> + Encode + Ord,
 {
     fn compare(data1: &[u8], data2: &[u8]) -> Ordering {
         Self::from_bytes(data1).cmp(&Self::from_bytes(data2))

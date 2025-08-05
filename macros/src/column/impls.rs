@@ -11,7 +11,7 @@ pub fn generate_column_impls(
     let kind = crate::macro_utils::classify_inner_type(inner_type);
 
     let binary_encoding = binary_encoding_opt.unwrap_or_else(|| "hex".to_string());
-    let mut schema_example = quote! { vec![Some(serde_json::json!(#struct_ident::default().encode()))] };
+    let mut schema_example = quote! { vec![Some(serde_json::json!(#struct_ident::default().url_encode()))] };
     let mut struct_attr: Option<Attribute> = None;
     let mut schema_type = quote! { SchemaType::Type(Type::String) };
     let mut default_code = quote! { Self(Default::default()) };
@@ -111,7 +111,7 @@ pub fn generate_column_impls(
                 Self(uuid::Uuid::from_bytes(bytes))
             };
         }
-        InnerKind::UtcDateTime => {
+/*        InnerKind::UtcDateTime => {
             struct_attr = Some(syn::parse_quote! { #[serde_as(as = "serde_with::TimestampMilliSeconds<i64>")] });
             default_code = quote! { Self(chrono::DurationRound::duration_trunc(chrono::Utc::now(), chrono::TimeDelta::hours(1)).unwrap().to_utc()) };
             schema_type = quote! { SchemaType::Type(Type::Integer) };
@@ -119,7 +119,7 @@ pub fn generate_column_impls(
             schema_example = quote! { vec![Some(0)] };
             iterable_code = quote! { Self(self.0 + chrono::Duration::milliseconds(1)) };
         }
-        InnerKind::Time => {
+*/        InnerKind::Time => {
             struct_attr = Some(syn::parse_quote! { #[serde_as(as = "serde_with::DurationMilliSeconds")] });
             default_code = quote! { Self(std::time::Duration::from_secs(0)) };
             schema_type = quote! { SchemaType::Type(Type::Integer) };
@@ -143,7 +143,7 @@ pub fn generate_column_impls(
 
     let impls = quote! {
         impl UrlEncoded for #struct_ident {
-            fn encode(&self) -> String {
+            fn url_encode(&self) -> String {
                 #url_encoded_code
             }
         }

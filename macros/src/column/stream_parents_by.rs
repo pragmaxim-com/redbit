@@ -112,7 +112,7 @@ pub fn by_dict_def(
                 name: column_name.clone(),
                 ty: column_type.clone(),
                 description: "Secondary index column with dictionary".to_string(),
-                sample: quote! { #column_type::default().encode() },
+                sample: quote! { #column_type::default().url_encode() },
             }]), FromBody(BodyExpr {
                 ty: syn::parse_quote! { Option<#stream_parent_query_type> },
                 extraction: quote! { MaybeJson(body): MaybeJson<#stream_parent_query_type> },
@@ -244,7 +244,7 @@ pub fn by_index_def(
                     name: column_name.clone(),
                     ty: column_type.clone(),
                     description: "Secondary index column".to_string(),
-                    sample: quote! { #column_type::default().encode() },
+                    sample: quote! { #column_type::default().url_encode() },
                 }]
                 ), FromBody(BodyExpr {
                     ty: syn::parse_quote! { Option<#stream_parent_query_type> },

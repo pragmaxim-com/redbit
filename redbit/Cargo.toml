@@ -10,7 +10,7 @@ name = "redbit"
 macros = { path = "../macros" }
 thiserror = "2.0.12"
 redb = "2.6.2"
-bincode = "1.3.3"
+bincode = "2.0.1"
 serde = { version = "1.0.219", features = ["derive"] }
 axum = {  version = "0.8.4", features = ["default", "macros"] }
 tokio = { version = "1.45.1", features = ["full"] }

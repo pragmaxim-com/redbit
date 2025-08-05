@@ -14,10 +14,11 @@ pub use redbit::*;
 #[pointer_key(u16)] pub struct TransactionPointer(BlockPointer);
 #[pointer_key(u8)] pub struct UtxoPointer(TransactionPointer);
 
+// #[column] pub struct Time(pub chrono::DateTime<chrono::Utc>);
+
 #[column("hex")] pub struct Hash(pub [u8; 32]);
 #[column("base64")] pub struct Address(pub Vec<u8>);
 #[column("utf-8")] pub struct AssetName(pub Vec<u8>); // String is supported but this is more efficient
-#[column] pub struct Time(pub chrono::DateTime<chrono::Utc>);
 #[column] pub struct Duration(pub std::time::Duration);
 #[column]
 #[derive(Copy, Hash)]
@@ -48,8 +49,6 @@ pub struct BlockHeader {
     #[column(range)]
     pub timestamp: Timestamp,
     #[column(range)]
-    pub mining_time: Time, // just to demonstrate a different type
-    #[column]
     pub duration: Duration,
     #[column]
     pub nonce: u64,

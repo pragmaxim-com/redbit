@@ -53,7 +53,7 @@ pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, table: &Iden
                 name: pk_name.clone(),
                 ty: pk_type.clone(),
                 description: "Primary key".to_string(),
-                sample: quote! { #pk_type::default().encode() },
+                sample: quote! { #pk_type::default().url_encode() },
             }])],
             method: HttpMethod::HEAD,
             handler_name: format_ident!("{}", handler_fn_name),

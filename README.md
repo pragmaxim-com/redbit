@@ -1,7 +1,7 @@
 Built for blazing fast persistence of terra bytes of structured data on a single machine
 while offering rich querying capabilities, e.g. bitcoin/blockchain data. Blockchains need rich and often
 analytical queries which is done through explorers because indexing speed of even embedded/in-process (not through socket) 
-analytical db like [DuckDB](https://duckdb.org/) right on the node would be an order of magnitude slower than a hand-made solution on top of 
+analytical db like [DuckDB](https://duckdb.org/) right on the node would be still slower than a hand-made solution on top of 
 [Redb](https://github.com/cberner/redb) or [RocksDb](https://rocksdb.org/).
 
 Redbit reads struct annotations and derives code necessary for persisting and querying structured data into/from
@@ -29,7 +29,7 @@ through auto-generated REST API. It maximizes R/W speed while minimizing data si
     }
   }
   ```
-✅ Column types : `String`, `Int`, `Vec<u8>`, `[u8; N]`, `bool`, `uuid::Uuid`, `chrono::DateTime`, `std::time::Duration` \
+✅ Column types : `String`, `Int`, `Vec<u8>`, `[u8; N]`, `bool`, `uuid::Uuid`, `std::time::Duration` \
 ✅ Optional column is basically `One-to-Option` relationship, we build a table for optional "values" \
 ✅ Column encodings of binary columns : `hex`, `base64`, `utf-8` + custom impl of `ByteVecColumnSerde` \
 ✅ All types have binary (db) and human-readable (http) serde support \

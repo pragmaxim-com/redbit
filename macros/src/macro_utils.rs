@@ -137,7 +137,7 @@ pub fn classify_inner_type(ty: &Type) -> InnerKind {
     } else if is_uuid(ty) {
         InnerKind::Uuid
     } else if is_datetime_utc(ty) {
-        InnerKind::UtcDateTime
+        InnerKind::Other // not existing Bincode impls
     } else if is_time(ty) {
         InnerKind::Time
     } else {
@@ -153,7 +153,7 @@ pub enum InnerKind {
     Integer,
     Bool,
     Uuid,
-    UtcDateTime,
+   // UtcDateTime,
     Time,
     Other,
 }

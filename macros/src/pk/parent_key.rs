@@ -23,7 +23,7 @@ pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type) -> FunctionD
                 name: pk_name.clone(),
                 ty: pk_type.clone(),
                 description: "Primary key of the owner entity".to_string(),
-                sample: quote! { #pk_type::default().encode() },
+                sample: quote! { #pk_type::default().url_encode() },
             }])],
             method: HttpMethod::GET,
             handler_name: format_ident!("{}", handler_fn_name),

@@ -36,7 +36,7 @@ pub fn column(attr: TokenStream, item: TokenStream) -> TokenStream {
                     fields.unnamed[0].attrs.push(attr);
                 }
 
-                macro_utils::merge_struct_derives(&mut input, syn::parse_quote![Clone, Eq, Ord, PartialEq, PartialOrd, Debug, Serialize, Deserialize]);
+                macro_utils::merge_struct_derives(&mut input, syn::parse_quote![Clone, Eq, Ord, PartialEq, PartialOrd, Debug, Decode, Encode, Serialize, Deserialize]);
                 quote! {
                     #input
                     #impls
@@ -44,7 +44,7 @@ pub fn column(attr: TokenStream, item: TokenStream) -> TokenStream {
             },
             _ => {
                 macro_utils::merge_struct_derives(&mut input, syn::parse_quote![
-                    Serialize, Deserialize, Debug, Clone, PartialEq, Eq, utoipa::ToSchema
+                    Decode, Encode, Serialize, Deserialize, Debug, Clone, PartialEq, Eq, utoipa::ToSchema
                 ]);
                 quote! {
                     #input
@@ -116,7 +116,7 @@ pub fn pointer_key(attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     let stream = quote! {
-        #[derive(PointerKey, Clone, Debug, Default, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
+        #[derive(PointerKey, Clone, Debug, Default, Decode, Encode, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
         #[serde(into = "String", try_from = "String")]
         #vis struct #struct_ident {
             pub parent: #parent_type,
@@ -155,7 +155,7 @@ pub fn root_key(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let struct_ident = &s.ident;
     s.attrs.retain(|a| !a.path().is_ident("derive"));
     s.attrs.insert(0, parse_quote! {
-        #[derive(RootKey, Clone, Debug, Default, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
+        #[derive(RootKey, Clone, Debug, Decode, Encode, Default, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
     });
     let stream = quote!(#s);
     macro_utils::submit_struct_to_stream(stream, "pk", struct_ident, "_attr.rs")
