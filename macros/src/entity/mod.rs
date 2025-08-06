@@ -1,7 +1,7 @@
 use crate::field::FieldMacros;
 use crate::field_parser::{KeyDef};
 use crate::rest::Rest;
-use proc_macro2::TokenStream;
+use proc_macro2::{TokenStream};
 use quote::quote;
 use syn::{parse_quote, ItemStruct, Type};
 
@@ -11,6 +11,7 @@ mod delete;
 mod sample;
 mod compose;
 mod tests;
+mod info;
 
 pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, TokenStream), syn::Error> {
     let entity_ident = &item_struct.ident;
@@ -20,7 +21,7 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, TokenStream), syn::Error
         FieldMacros::new(&item_struct, entity_ident, &entity_type, &stream_query_type)?;
     let key = key_def.field_def();
     let mut field_names = Vec::new();
-    let mut table_definitions = Vec::new();
+    let mut table_defs = Vec::new();
     let mut range_queries = Vec::new();
     let mut stream_queries = Vec::new();
     let mut struct_inits = Vec::new();
@@ -33,20 +34,20 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, TokenStream), syn::Error
     let mut delete_many_statements = Vec::new();
     let mut column_function_defs = Vec::new();
 
-    for column in field_macros.iter() {
-        field_names.push(column.field_name().clone());
-        table_definitions.extend(column.table_definitions());
-        range_queries.extend(column.range_queries());
-        stream_queries.extend(column.stream_queries());
-        struct_inits.push(column.struct_init());
-        struct_inits_with_query.push(column.struct_init_with_query());
-        struct_default_inits.push(column.struct_default_init());
-        struct_default_inits_with_query.push(column.struct_default_init_with_query());
-        store_statements.extend(column.store_statements());
-        delete_statements.extend(column.delete_statements());
-        store_many_statements.extend(column.store_many_statements());
-        delete_many_statements.extend(column.delete_many_statements());
-        column_function_defs.extend(column.function_defs())
+    for field_macro in field_macros.iter() {
+        field_names.push(field_macro.field_name().clone());
+        table_defs.extend(field_macro.table_definitions());
+        range_queries.extend(field_macro.range_queries());
+        stream_queries.extend(field_macro.stream_queries());
+        struct_inits.push(field_macro.struct_init());
+        struct_inits_with_query.push(field_macro.struct_init_with_query());
+        struct_default_inits.push(field_macro.struct_default_init());
+        struct_default_inits_with_query.push(field_macro.struct_default_init_with_query());
+        store_statements.extend(field_macro.store_statements());
+        delete_statements.extend(field_macro.delete_statements());
+        store_many_statements.extend(field_macro.store_many_statements());
+        delete_many_statements.extend(field_macro.delete_many_statements());
+        column_function_defs.extend(field_macro.function_defs())
     }
 
     let mut function_defs = Vec::new();
@@ -57,6 +58,7 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, TokenStream), syn::Error
     function_defs.push(delete::delete_and_commit_def(entity_ident, &entity_type, &key.name, &key.tpe, &delete_statements));
     function_defs.push(delete::delete_def(&key.tpe, &delete_statements));
     function_defs.push(delete::delete_many_def(&key.tpe, &delete_many_statements));
+    function_defs.push(info::table_info_fn(entity_ident, &table_defs));
 
     let stream_query_struct = query::stream_query(&stream_query_type, &stream_queries);
     let range_query_structs = range_queries.into_iter().map(|rq| rq.stream).collect::<Vec<_>>();
@@ -66,7 +68,7 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, TokenStream), syn::Error
     let compose_function = compose::compose_token_stream(entity_ident, &entity_type, &key.tpe, &struct_inits);
     let compose_with_filter_function = compose::compose_with_filter_token_stream(&entity_type, &key.tpe, &stream_query_type, &field_names, &struct_inits_with_query);
     let compose_functions = vec![compose_function, compose_with_filter_function];
-    let table_definitions: Vec<TokenStream> = table_definitions.iter().map(|table_def| table_def.definition.clone()).collect();
+    let table_definitions: Vec<TokenStream> = table_defs.iter().map(|table_def| table_def.definition.clone()).collect();
 
     let parent_ident = parent_def.map(|p|p.parent_ident);
     let test_suite = tests::test_suite(entity_ident, parent_ident, &function_defs);

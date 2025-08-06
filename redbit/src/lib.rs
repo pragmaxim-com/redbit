@@ -42,7 +42,9 @@ pub use redb;
 pub use redb::Database;
 pub use redb::MultimapTableDefinition;
 pub use redb::ReadTransaction;
+pub use redb::ReadOnlyTable;
 pub use redb::ReadableMultimapTable;
+pub use redb::ReadableTableMetadata;
 pub use redb::ReadableTable;
 pub use redb::TableDefinition;
 pub use redb::WriteTransaction;
@@ -140,6 +142,18 @@ impl_iterable_column_for_primitive!(u8, u16, u32, u64, usize, i8, i16, i32, i64,
 
 pub trait UrlEncoded {
     fn url_encode(&self) -> String;
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct TableInfo {
+    pub table_name: String,
+    pub multimap: bool,
+    pub tree_height: u32,
+    pub leaf_pages: u64,
+    pub branch_pages: u64,
+    pub stored_leaf_bytes: u64,
+    pub metadata_bytes: u64,
+    pub fragmented_bytes: u64,
 }
 
 pub trait ByteVecColumnSerde {

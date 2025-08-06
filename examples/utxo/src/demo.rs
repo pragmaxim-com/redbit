@@ -13,7 +13,6 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
 
     let read_tx = db.begin_read()?;
 
-    println!("Querying blocks:");
     let first_block = Block::first(&read_tx)?.unwrap();
     let last_block = Block::last(&read_tx)?.unwrap();
 
@@ -27,7 +26,12 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
     Block::last(&read_tx)?;
     Block::stream_range(db.begin_read()?, first_block.height, last_block.height, None)?.try_collect::<Vec<Block>>().await?;
 
-    println!("Querying block headers:");
+    let block_infos = Block::table_info(&db)?;
+    println!("Block persisted with tables :");
+    for info in block_infos {
+        println!("{}", serde_json::to_string_pretty(&info).unwrap());
+    }
+
     let first_block_header = BlockHeader::first(&read_tx)?.unwrap();
     let last_block_header = BlockHeader::last(&read_tx)?.unwrap();
 
@@ -42,7 +46,12 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
     BlockHeader::stream_range(db.begin_read()?, first_block_header.height, last_block_header.height, None)?.try_collect::<Vec<BlockHeader>>().await?;
     BlockHeader::stream_range_by_timestamp(db.begin_read()?, first_block_header.timestamp, last_block_header.timestamp, None)?.try_collect::<Vec<BlockHeader>>().await?;
 
-    println!("Querying transactions:");
+    let block_header_infos = BlockHeader::table_info(&db)?;
+    println!("\nBlock header persisted with tables :");
+    for info in block_header_infos {
+        println!("{}", serde_json::to_string_pretty(&info).unwrap());
+    }
+
     let first_transaction = Transaction::first(&read_tx)?.unwrap();
     let last_transaction = Transaction::last(&read_tx)?.unwrap();
 
@@ -57,8 +66,13 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
     Transaction::stream_ids_by_hash(&read_tx, &first_transaction.hash)?.try_collect::<Vec<BlockPointer>>().await?;
     Transaction::stream_by_hash(db.begin_read()?, first_transaction.hash.clone(), None)?.try_collect::<Vec<Transaction>>().await?;
     Transaction::stream_range(db.begin_read()?, first_transaction.id, last_transaction.id, None)?.try_collect::<Vec<Transaction>>().await?;
-    
-    println!("Querying utxos:");
+
+    let transaction_infos = Transaction::table_info(&db)?;
+    println!("\nTransaction persisted with tables :");
+    for info in transaction_infos {
+        println!("{}", serde_json::to_string_pretty(&info).unwrap());
+    }
+
     let first_utxo = Utxo::first(&read_tx)?.unwrap();
     let last_utxo = Utxo::last(&read_tx)?.unwrap();
 
@@ -75,7 +89,12 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
     // even streaming parents is possible
     Utxo::stream_transactions_by_address(db.begin_read()?, first_utxo.address, None)?.try_collect::<Vec<Transaction>>().await?;
 
-    println!("Querying assets:");
+    let utxo_infos = Utxo::table_info(&db)?;
+    println!("\nUtxo persisted with tables :");
+    for info in utxo_infos {
+        println!("{}", serde_json::to_string_pretty(&info).unwrap());
+    }
+
     let first_asset = Asset::first(&read_tx)?.unwrap();
     let last_asset = Asset::last(&read_tx)?.unwrap();
 
@@ -89,7 +108,14 @@ pub async fn run(db: Arc<Database>) -> Result<(), AppError> {
     // even streaming parents is possible
     Asset::stream_utxos_by_name(db.begin_read()?, first_asset.name, None)?.try_collect::<Vec<Utxo>>().await?;
 
-    println!("Deleting blocks:");
+    let asset_infos = Asset::table_info(&db)?;
+    println!("\nAsset persisted with tables :");
+    for info in asset_infos {
+        println!("{}", serde_json::to_string_pretty(&info).unwrap());
+    }
+
+
+    println!("\nDeleting blocks:");
     for block in blocks.iter() {
         Block::delete_and_commit(&db, &block.height)?;
     }

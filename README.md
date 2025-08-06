@@ -269,7 +269,17 @@ The same api is accessible through http endpoints at http://127.0.0.1:8000/swagg
 Performance wise, check 🔥[flamegraph](https://rawcdn.githack.com/pragmaxim-com/redbit/refs/heads/master/flamegraph.svg).
 The demo example persists data into 30 tables to allow for rich querying.
 
-### ⏱️ Benchmark Summary
+### ⏱️ Benchmark Summary (results from github servers)
+
+Indexing speed in logs is the **average**, for example, the first ~ 100k **bitcoin** blocks with just one Tx are indexed slowly because 
+indexing is optimized for the big blocks.
+
+If node and indexer each uses its own SSD, then the throughput reaches :
+
+ - 2.0GHz & NVMe on PCIe Gen3 : `~ 3 000 Inputs+outputs+assets / s`
+ - 3.0GHz & NVMe on PCIe Gen4 : `~ 7 000 Inputs+outputs+assets / s`
+ - 4.0GHz & NVMe on PCIe Gen5 : `~ 15 000 Inputs+outputs+assets / s`
+
 The slowest `block::_store_many` operation in this context persists 3 blocks of 3 transactions of 1 input and 3 utxos of 3 assets, ie.
 the operations writes :
 - 3 blocks

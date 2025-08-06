@@ -5,6 +5,7 @@ use syn::Type;
 #[derive(Clone, Debug)]
 pub struct TableDef {
     pub name: Ident,
+    pub multimap: bool,
     pub definition: TokenStream,
 }
 
@@ -18,6 +19,7 @@ impl TableDef {
         };
         TableDef {
             name,
+            multimap: false,
             definition
         }
     }
@@ -35,6 +37,7 @@ impl TableDef {
     };
         TableDef {
             name,
+            multimap: false,
             definition
         }
     }
@@ -47,6 +50,7 @@ impl TableDef {
     };
         TableDef {
             name,
+            multimap: true,
             definition
         }
     }
@@ -60,6 +64,7 @@ impl TableDef {
         };
         TableDef {
             name,
+            multimap: true,
             definition
         }
     }
@@ -73,6 +78,7 @@ impl TableDef {
         };
         TableDef {
             name,
+            multimap: false,
             definition
         }
     }
@@ -85,6 +91,7 @@ impl TableDef {
     };
         TableDef {
             name,
+            multimap: false,
             definition
         }
     }
@@ -102,6 +109,7 @@ impl TableDef {
     };
         TableDef {
             name,
+            multimap: false,
             definition
         }
     }
