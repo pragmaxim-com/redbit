@@ -89,6 +89,7 @@ use std::net::SocketAddr;
 use std::ops::Add;
 use std::path::PathBuf;
 use tokio::net::TcpListener;
+use tokio::sync::watch;
 use tower_http::cors::CorsLayer;
 
 pub trait IndexedPointer: Clone {
@@ -435,11 +436,27 @@ pub async fn build_router(state: RequestState, extras: Option<OpenApiRouter<Requ
     }
 }
 
-pub async fn serve(state: RequestState, socket_addr: SocketAddr, extras: Option<OpenApiRouter<RequestState>>, cors: Option<CorsLayer>) -> () {
+pub async fn serve(
+    state: RequestState,
+    socket_addr: SocketAddr,
+    extras: Option<OpenApiRouter<RequestState>>,
+    cors: Option<CorsLayer>,
+    shutdown: watch::Receiver<bool>,
+) {
     let router: Router<()> = build_router(state, extras, cors).await;
     println!("Starting server on {}", socket_addr);
     let tcp = TcpListener::bind(socket_addr).await.unwrap();
-    crate::axum::serve(tcp, router).await.unwrap();
+
+    // spawn shutdown watcher future
+    let mut shutdown = shutdown.clone();
+    axum::serve(tcp, router)
+        .with_graceful_shutdown(async move {
+            if shutdown.changed().await.is_ok() && *shutdown.borrow() {
+                println!("Shutting down server...");
+            }
+        })
+        .await
+        .unwrap();
 }
 
 //TODO duplicated with `macros/src/macro_utils.rs`

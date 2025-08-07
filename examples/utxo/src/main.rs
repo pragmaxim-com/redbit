@@ -1,6 +1,8 @@
 use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use chain_syncer::combine;
+use tokio::sync::watch;
 use tower_http::cors;
 use utoipa_axum::router::OpenApiRouter;
 use utxo::*;
@@ -12,7 +14,6 @@ async fn main() {
         std::fs::create_dir_all(dir.clone()).unwrap();
     }
     let db = Arc::new(Database::create(dir.join("my_db.redb")).expect("Failed to create database"));
-    demo::run(Arc::clone(&db)).await.expect("Db demo failed");
 
     let cors = cors::CorsLayer::new()
         .allow_origin(cors::Any) // or use a specific origin: `AllowOrigin::exact("http://localhost:5173".parse().unwrap())`
@@ -23,5 +24,9 @@ async fn main() {
             .routes(utoipa_axum::routes!(routes::test_json_nl_stream));
     let state = RequestState { db: Arc::clone(&db) };
     let addr = SocketAddr::from(([127,0,0,1], 8000));
-    serve(state, addr, Some(extra_routes), Some(cors)).await
+    let (shutdown_tx, shutdown_rx) = watch::channel(false);
+    let indexing_f = demo::run(Arc::clone(&db));
+    let server_f = serve(state, addr, Some(extra_routes), Some(cors), shutdown_rx.clone());
+
+    combine::futures(indexing_f, server_f, shutdown_tx).await;
 }
