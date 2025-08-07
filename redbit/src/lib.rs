@@ -451,7 +451,7 @@ pub async fn serve(
     let mut shutdown = shutdown.clone();
     axum::serve(tcp, router)
         .with_graceful_shutdown(async move {
-            if shutdown.changed().await.is_ok() && *shutdown.borrow() {
+            if shutdown.changed().await.is_ok() {
                 println!("Shutting down server...");
             }
         })
