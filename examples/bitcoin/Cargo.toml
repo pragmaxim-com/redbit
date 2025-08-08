@@ -1,5 +1,5 @@
 [package]
-name = "bitcoin-explorer"
+name = "bitcoin"
 version = "1.0.2"
 edition = "2024"
 

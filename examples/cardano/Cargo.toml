@@ -1,5 +1,5 @@
 [package]
-name = "cardano-explorer"
+name = "cardano"
 version = "1.0.2"
 edition = "2024"
 

@@ -40,7 +40,8 @@ export BITCOIN__API_PASSWORD="bar"
 ```
 Then : 
 ```
-cargo run
+cargo build --release
+../../target/release/bitcoin 
 ```
 
 Indexing might crash especially on laptops with Node running locally and not being synced yet.

@@ -307,9 +307,11 @@ indexing is optimized for the big blocks.
 
 If node and indexer each uses its own SSD, then the throughput reaches :
 
- - 2.0GHz & NVMe on PCIe Gen3 : `~ 3 000 Inputs+outputs+assets / s`
- - 3.0GHz & NVMe on PCIe Gen4 : `~ 7 000 Inputs+outputs+assets / s`
- - 4.0GHz & NVMe on PCIe Gen5 : `~ 15 000 Inputs+outputs+assets / s`
+ - 2.0GHz & NVMe on PCIe Gen3 : `~ 9 000 Inputs+outputs+assets / s`
+ - 3.0GHz & NVMe on PCIe Gen4 : `~ 15 000 Inputs+outputs+assets / s`
+ - 4.0GHz & NVMe on PCIe Gen5 : `~ 28 000 Inputs+outputs+assets / s`
+
+In a nutshell, whole bitcoin up to height ~ 0.9M can be indexed in a day on a PCIe Gen5 SSD with 4.0GHz CPU.
 
 The slowest `block::_store_many` operation in this context persists 3 blocks of 3 transactions of 1 input and 3 utxos of 3 assets, ie.
 the operations writes :
