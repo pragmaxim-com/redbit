@@ -33,7 +33,7 @@ jobs:
             cargo-${{ runner.os }}-
 
       - name: Run tests
-        run: cargo +nightly test --package utxo
+        run: cargo +nightly test --package demo
 
   performance:
     runs-on: ubuntu-latest
@@ -57,7 +57,7 @@ jobs:
 
       - name: Run Built-in Rust Benchmarks and Extract Metrics
         run: |
-          cargo +nightly bench --package utxo -- --nocapture | tee bench_output.txt
+          cargo +nightly bench --package demo -- --nocapture | tee bench_output.txt
           
           # Extract and process lines with `bench:`
           grep 'bench:' bench_output.txt | while read -r line; do
@@ -78,8 +78,8 @@ jobs:
 
       - name: Update README
         run: |
-          LIB_CONTENT=$(cat examples/utxo/src/lib.rs | sed 's/^/    /')
-          MAIN_CONTENT=$(cat examples/utxo/src/demo.rs | sed 's/^/    /')
+          LIB_CONTENT=$(cat examples/demo/src/lib.rs | sed 's/^/    /')
+          MAIN_CONTENT=$(cat examples/demo/src/run.rs | sed 's/^/    /')
 
           # Update BEGIN_LIB and BEGIN_MAIN sections
           awk -v lib_content="$LIB_CONTENT" -v main_content="$MAIN_CONTENT" '
