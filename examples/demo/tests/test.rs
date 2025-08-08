@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use utxo::*;
+use demo::*;
 
 #[test]
 fn each_entity_should_have_a_default_sample() {

@@ -5,7 +5,8 @@
 - always start with modelling the problem with types and ideally abstract data types. When we have optimal, correct and meaningful model, we should progress further with functions
 - always ask if not certain about the specification, better stop and ask than coding something wrong
 - document each function with one smart sentence
-- always review the code from performance and memory usage perspective 
+- always review the code from performance and memory usage perspective
+- avoid reformatting my code so I can diff it easily
 
 ### Rust best practices
 

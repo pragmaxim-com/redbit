@@ -1,0 +1,2 @@
+api_host = "http://127.0.0.1:9053"
+api_key = "foo"

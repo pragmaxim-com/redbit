@@ -2,7 +2,7 @@
 extern crate test;
 
 pub mod data;
-pub mod demo;
+pub mod run;
 pub mod routes;
 
 pub use data::*;

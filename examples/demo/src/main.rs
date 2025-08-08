@@ -1,11 +1,11 @@
 use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use chain_syncer::combine;
+use syncer::combine;
 use tokio::sync::watch;
 use tower_http::cors;
 use utoipa_axum::router::OpenApiRouter;
-use utxo::*;
+use demo::*;
 
 #[tokio::main]
 async fn main() {
@@ -25,7 +25,7 @@ async fn main() {
     let state = RequestState { db: Arc::clone(&db) };
     let addr = SocketAddr::from(([127,0,0,1], 8000));
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
-    let indexing_f = demo::run(Arc::clone(&db));
+    let indexing_f = run::with_db(Arc::clone(&db));
     let server_f = serve(state, addr, Some(extra_routes), Some(cors), shutdown_rx.clone());
 
     combine::futures(indexing_f, server_f, shutdown_tx).await;
