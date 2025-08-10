@@ -2,13 +2,13 @@ use syncer::api::{BlockPersistence, BlockProvider};
 use syncer::{info, settings};
 use std::{env, fs, sync::Arc, time::Duration};
 
-use bitcoin_explorer::block_persistence::BtcBlockPersistence;
-use bitcoin_explorer::block_provider::BtcBlockProvider;
-use bitcoin_explorer::btc_client::{BtcBlock, BtcClient};
-use bitcoin_explorer::config::BitcoinConfig;
-use bitcoin_explorer::model::{Block, Height};
-use bitcoin_explorer::storage;
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
+use btc::block_persistence::BtcBlockPersistence;
+use btc::block_provider::BtcBlockProvider;
+use btc::btc_client::{BtcBlock, BtcClient};
+use btc::config::BitcoinConfig;
+use btc::model::{Block, Height};
+use btc::storage;
 
 fn criterion_benchmark(c: &mut Criterion) {
     let app_config = settings::AppConfig::new("config/settings").unwrap();

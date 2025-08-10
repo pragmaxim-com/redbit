@@ -46,6 +46,14 @@ pub enum HttpParams {
     FromBody(BodyExpr),
 }
 
+#[derive(Clone, strum_macros::Display)]
+pub enum EndpointTag {
+    MetaRead,
+    DataRead,
+    DataWrite,
+    DataDelete,
+}
+
 #[derive(Clone)]
 pub enum HttpMethod {
     GET,

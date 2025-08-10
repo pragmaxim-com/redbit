@@ -1,5 +1,5 @@
 use crate::endpoint::EndpointDef;
-use crate::rest::{FunctionDef, HttpMethod};
+use crate::rest::{EndpointTag, FunctionDef, HttpMethod};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
@@ -45,7 +45,8 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
     FunctionDef {
         fn_stream,
         endpoint: Some(EndpointDef {
-            entity_name: entity_name.clone(),
+            _entity_name: entity_name.clone(),
+            tag: EndpointTag::DataRead,
             fn_name: fn_name.clone(),
             params: vec![],
             method: HttpMethod::GET,

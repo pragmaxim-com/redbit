@@ -10,12 +10,12 @@ use std::env;
 use std::sync::Arc;
 use tokio::sync::watch;
 use tower_http::cors;
-use bitcoin_explorer::block_persistence::BtcBlockPersistence;
-use bitcoin_explorer::block_provider::BtcBlockProvider;
-use bitcoin_explorer::btc_client::{BtcBlock, BtcClient};
-use bitcoin_explorer::config::BitcoinConfig;
-use bitcoin_explorer::model::Block;
-use bitcoin_explorer::storage;
+use btc::block_persistence::BtcBlockPersistence;
+use btc::block_provider::BtcBlockProvider;
+use btc::btc_client::{BtcBlock, BtcClient};
+use btc::config::BitcoinConfig;
+use btc::model::Block;
+use btc::storage;
 
 async fn maybe_run_server(http_conf: HttpSettings, db: Arc<Database>, shutdown: watch::Receiver<bool>) -> () {
     if http_conf.enable {

@@ -1,5 +1,5 @@
 use crate::rest::HttpParams::{FromBody, FromQuery};
-use crate::rest::{BodyExpr, FunctionDef, HttpMethod, QueryExpr};
+use crate::rest::{BodyExpr, EndpointTag, FunctionDef, HttpMethod, QueryExpr};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
@@ -91,7 +91,8 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
     FunctionDef {
         fn_stream,
         endpoint: Some(EndpointDef {
-            entity_name: entity_name.clone(),
+            _entity_name: entity_name.clone(),
+            tag: EndpointTag::DataRead,
             fn_name: fn_name.clone(),
             params: vec![FromQuery(QueryExpr {
                 ty: range_query_ty.clone(),

@@ -1,7 +1,7 @@
 use proc_macro2::{Ident, TokenStream};
 use crate::endpoint::EndpointDef;
 use crate::rest::HttpParams::FromBody;
-use crate::rest::{BodyExpr, FunctionDef, HttpMethod};
+use crate::rest::{BodyExpr, EndpointTag, FunctionDef, HttpMethod};
 use quote::{format_ident, quote};
 use syn::Type;
 
@@ -136,7 +136,8 @@ pub fn store_and_commit_def(entity_name: &Ident, entity_type: &Type, pk_name: &I
     FunctionDef {
         fn_stream,
         endpoint: Some(EndpointDef {
-            entity_name: entity_name.clone(),
+            _entity_name: entity_name.clone(),
+            tag: EndpointTag::DataWrite,
             fn_name: fn_name.clone(),
             params: vec![FromBody(BodyExpr {
                 ty: entity_type.clone(),

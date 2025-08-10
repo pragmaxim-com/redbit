@@ -1,10 +1,11 @@
 use proc_macro2::{Ident, Literal, TokenStream};
 use quote::{format_ident, quote};
-use crate::rest::{Endpoint, HttpMethod, HttpParams, PathExpr};
+use crate::rest::{Endpoint, EndpointTag, HttpMethod, HttpParams, PathExpr};
 
 #[derive(Clone)]
 pub struct EndpointDef {
-    pub entity_name: Ident,
+    pub _entity_name: Ident,
+    pub tag: EndpointTag,
     pub fn_name: Ident,
     pub params: Vec<HttpParams>,
     pub endpoint: String,
@@ -17,7 +18,7 @@ pub struct EndpointDef {
 impl EndpointDef {
     pub fn to_endpoint(&self) -> Endpoint {
         let handler_fn_name = self.handler_name.clone();
-        let endpoint_name = &self.entity_name.to_string();
+        let endpoint_tag = format!("{}", self.tag.to_string());
         let endpoint_path = &self.endpoint.clone();
         let handler_impl_stream = &self.handler_impl_stream.clone();
         let method_ident = format_ident!("{}", &self.method.to_string());
@@ -26,7 +27,7 @@ impl EndpointDef {
         let utoipa_params = &self.utoipa_params();
         let route = quote! { .merge(OpenApiRouter::new().routes(utoipa_axum::routes!(#handler_fn_name))) };
         let handler = quote! {
-            #[utoipa::path(#method_ident, path = #endpoint_path, #utoipa_params, #utoipa_responses, tag = #endpoint_name)]
+            #[utoipa::path(#method_ident, path = #endpoint_path, #utoipa_params, #utoipa_responses, tag = #endpoint_tag)]
             #[axum::debug_handler]
             pub async fn #handler_fn_name(
                 extract::State(state): extract::State<RequestState>,

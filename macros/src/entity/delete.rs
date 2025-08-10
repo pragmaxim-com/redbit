@@ -1,6 +1,6 @@
 use crate::endpoint::EndpointDef;
 use crate::rest::HttpParams::FromPath;
-use crate::rest::{FunctionDef, HttpMethod, PathExpr};
+use crate::rest::{EndpointTag, FunctionDef, HttpMethod, PathExpr};
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use syn::Type;
@@ -85,7 +85,8 @@ pub fn delete_and_commit_def(
     FunctionDef {
         fn_stream,
         endpoint: Some(EndpointDef {
-            entity_name: entity_name.clone(),
+            _entity_name: entity_name.clone(),
+            tag: EndpointTag::DataDelete,
             fn_name: fn_name.clone(),
             params: vec![FromPath(vec![PathExpr {
                 name: pk_name.clone(),

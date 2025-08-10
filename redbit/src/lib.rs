@@ -148,7 +148,7 @@ pub trait UrlEncoded {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct TableInfo {
     pub table_name: String,
-    pub multimap: bool,
+    pub table_type: String,
     pub tree_height: u32,
     pub leaf_pages: u64,
     pub branch_pages: u64,

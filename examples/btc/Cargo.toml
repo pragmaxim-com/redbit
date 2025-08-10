@@ -1,10 +1,10 @@
 [package]
-name = "bitcoin"
+name = "btc"
 version = "1.0.2"
 edition = "2024"
 
 [[bench]]
-name = "bitcoin_benchmark"
+name = "btc_benchmark"
 harness = false
 
 [dev-dependencies]

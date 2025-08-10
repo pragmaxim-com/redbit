@@ -1,5 +1,5 @@
 use crate::rest::HttpParams::{FromBody, FromPath};
-use crate::rest::{FunctionDef, HttpMethod, PathExpr, BodyExpr};
+use crate::rest::{FunctionDef, HttpMethod, PathExpr, BodyExpr, EndpointTag};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
@@ -105,7 +105,8 @@ pub fn by_dict_def(
     FunctionDef {
         fn_stream,
         endpoint: Some(EndpointDef {
-            entity_name: entity_name.clone(),
+            _entity_name: entity_name.clone(),
+            tag: EndpointTag::DataRead,
             fn_name: fn_name.clone(),
             params: vec![FromPath(vec![PathExpr {
                 name: column_name.clone(),
@@ -222,7 +223,8 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
     FunctionDef {
         fn_stream,
         endpoint: Some(EndpointDef {
-            entity_name: entity_name.clone(),
+            _entity_name: entity_name.clone(),
+            tag: EndpointTag::DataRead,
             fn_name: fn_name.clone(),
             params: vec![
                 FromPath(vec![PathExpr {

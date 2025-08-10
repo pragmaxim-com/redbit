@@ -2,10 +2,21 @@ use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use syn::Type;
 
+#[derive(Clone, Debug, strum_macros::Display)]
+pub enum TableType {
+    Pk,
+    Plain,
+    Index,
+    DictIndex,
+    ValueByDictPk,
+    ValueToDictPk,
+    DictPkByPk,
+}
+
 #[derive(Clone, Debug)]
 pub struct TableDef {
     pub name: Ident,
-    pub multimap: bool,
+    pub table_type: TableType,
     pub definition: TokenStream,
 }
 
@@ -19,7 +30,7 @@ impl TableDef {
         };
         TableDef {
             name,
-            multimap: false,
+            table_type: TableType::Pk,
             definition
         }
     }
@@ -37,7 +48,7 @@ impl TableDef {
     };
         TableDef {
             name,
-            multimap: false,
+            table_type: TableType::Plain,
             definition
         }
     }
@@ -50,7 +61,7 @@ impl TableDef {
     };
         TableDef {
             name,
-            multimap: true,
+            table_type: TableType::Index,
             definition
         }
     }
@@ -64,7 +75,7 @@ impl TableDef {
         };
         TableDef {
             name,
-            multimap: true,
+            table_type: TableType::DictIndex,
             definition
         }
     }
@@ -78,7 +89,7 @@ impl TableDef {
         };
         TableDef {
             name,
-            multimap: false,
+            table_type: TableType::ValueByDictPk,
             definition
         }
     }
@@ -87,12 +98,12 @@ impl TableDef {
         let name = format_ident!("{}_{}_TO_DICT_PK", entity_name.to_string().to_uppercase(), column_name.to_string().to_uppercase());
         let name_str = &name.to_string();
         let definition = quote! {
-        pub const #name: TableDefinition<'static, Bincode<#column_type>, Bincode<#pk_type>> = TableDefinition::new(#name_str);
-    };
+            pub const #name: TableDefinition<'static, Bincode<#column_type>, Bincode<#pk_type>> = TableDefinition::new(#name_str);
+        };
         TableDef {
             name,
-            multimap: false,
-            definition
+            table_type: TableType::ValueToDictPk,
+            definition,
         }
     }
 
@@ -109,7 +120,7 @@ impl TableDef {
     };
         TableDef {
             name,
-            multimap: false,
+            table_type: TableType::DictPkByPk,
             definition
         }
     }

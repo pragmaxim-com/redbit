@@ -18,4 +18,4 @@ serde = { version = "1.0.219", features = ["derive"] }
 tokio = { version = "1.45.1", features = ["full"] }
 
 [workspace]
-members = ["macros", "redbit", "syncer", "examples/demo", "examples/cardano", "examples/bitcoin", "examples/ergo"]
+members = ["macros", "redbit", "syncer", "examples/demo", "examples/cardano", "examples/btc", "examples/ergo"]
