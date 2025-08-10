@@ -69,6 +69,7 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, TokenStream), syn::Error
     let compose_with_filter_function = compose::compose_with_filter_token_stream(&entity_type, &key.tpe, &stream_query_type, &field_names, &struct_inits_with_query);
     let compose_functions = vec![compose_function, compose_with_filter_function];
     let table_definitions: Vec<TokenStream> = table_defs.iter().map(|table_def| table_def.definition.clone()).collect();
+    let table_cache_definitions: Vec<TokenStream> = table_defs.iter().flat_map(|table_def| table_def.cache.clone().map(|c| c.1)).collect();
 
     let parent_ident = parent_def.map(|p|p.parent_ident);
     let test_suite = tests::test_suite(entity_ident, parent_ident, &function_defs);
@@ -83,6 +84,8 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, TokenStream), syn::Error
             #(#range_query_structs)*
             // table definitions are not in the impl object because they are accessed globally with semantic meaning
             #(#table_definitions)*
+            // dictionary tables have cache
+            #(#table_cache_definitions)*
             // axum endpoints cannot be in the impl object https://docs.rs/axum/latest/axum/attr.debug_handler.html#limitations
             #(#endpoint_handlers)*
 

@@ -49,7 +49,7 @@ impl KeyDef {
 #[derive(Clone)]
 pub enum IndexingType {
     Off,
-    On { dictionary: bool, range: bool },
+    On { dictionary: bool, range: bool, cache_size: Option<usize> },
 }
 
 #[derive(Clone)]
@@ -134,11 +134,21 @@ fn parse_entity_field(field: &syn::Field) -> Result<ColumnDef, syn::Error> {
                         if nested.path.is_ident("transient") {
                             indexing = ColumnDef::Transient(field.clone());
                         } else if nested.path.is_ident("index") {
-                            indexing = ColumnDef::Plain(field.clone(), IndexingType::On { dictionary: false, range: false });
+                            indexing = ColumnDef::Plain(field.clone(), IndexingType::On { dictionary: false, range: false, cache_size: None });
                         } else if nested.path.is_ident("dictionary") {
-                            indexing = ColumnDef::Plain(field.clone(), IndexingType::On { dictionary: true, range: false });
+                            let mut cache_size = None;
+                            if nested.input.peek(syn::token::Paren) {
+                                nested.parse_nested_meta(|inner_nested| {
+                                    if inner_nested.path.is_ident("cache") {
+                                        let lit: syn::LitInt = inner_nested.value()?.parse()?;
+                                        cache_size = Some(lit.base10_parse::<usize>()?);
+                                    }
+                                    Ok(())
+                                })?;
+                            }
+                            indexing = ColumnDef::Plain(field.clone(), IndexingType::On { dictionary: true, range: false, cache_size });
                         } else if nested.path.is_ident("range") {
-                            indexing = ColumnDef::Plain(field.clone(), IndexingType::On { dictionary: false, range: true });
+                            indexing = ColumnDef::Plain(field.clone(), IndexingType::On { dictionary: false, range: true, cache_size: None });
                         }
                         Ok(())
                     });

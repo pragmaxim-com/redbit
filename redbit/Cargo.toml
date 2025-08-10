@@ -33,3 +33,4 @@ urlencoding = "2.1.3"
 once_cell = "1.20.2"
 chrono = "0.4.37"
 tower-http = { version = "0.6.6", features = ["cors"] }
+lru = "0.16.0"

@@ -16,6 +16,7 @@ pub enum TableType {
 #[derive(Clone, Debug)]
 pub struct TableDef {
     pub name: Ident,
+    pub cache: Option<(Ident, TokenStream)>,
     pub table_type: TableType,
     pub definition: TokenStream,
 }
@@ -26,10 +27,11 @@ impl TableDef {
         let name_str = name.to_string();
         let definition =
             quote! {
-            pub const #name: TableDefinition<'static, Bincode<#pk_type>, ()> = TableDefinition::new(#name_str);
-        };
+                pub const #name: TableDefinition<'static, Bincode<#pk_type>, ()> = TableDefinition::new(#name_str);
+            };
         TableDef {
             name,
+            cache: None,
             table_type: TableType::Pk,
             definition
         }
@@ -44,10 +46,11 @@ impl TableDef {
     );
         let name_str = &name.to_string();
         let definition = quote! {
-        pub const #name: TableDefinition<'static, Bincode<#pk_type>, Bincode<#column_type>> = TableDefinition::new(#name_str);
-    };
+            pub const #name: TableDefinition<'static, Bincode<#pk_type>, Bincode<#column_type>> = TableDefinition::new(#name_str);
+        };
         TableDef {
             name,
+            cache: None,
             table_type: TableType::Plain,
             definition
         }
@@ -57,10 +60,11 @@ impl TableDef {
         let name = format_ident!("{}_{}_INDEX", entity_name.to_string().to_uppercase(), column_name.to_string().to_uppercase());
         let name_str = &name.to_string();
         let definition = quote! {
-        pub const #name: MultimapTableDefinition<'static, Bincode<#column_type>, Bincode<#pk_type>> = MultimapTableDefinition::new(#name_str);
-    };
+            pub const #name: MultimapTableDefinition<'static, Bincode<#column_type>, Bincode<#pk_type>> = MultimapTableDefinition::new(#name_str);
+        };
         TableDef {
             name,
+            cache: None,
             table_type: TableType::Index,
             definition
         }
@@ -70,11 +74,12 @@ impl TableDef {
         let name = format_ident!("{}_{}_DICT_INDEX", entity_name.to_string().to_uppercase(), column_name.to_string().to_uppercase());
         let name_str = &name.to_string();
         let definition =
-            quote! {
+        quote! {
             pub const #name: MultimapTableDefinition<'static, Bincode<#pk_type>, Bincode<#pk_type>>= MultimapTableDefinition::new(#name_str);
         };
         TableDef {
             name,
+            cache: None,
             table_type: TableType::DictIndex,
             definition
         }
@@ -89,19 +94,33 @@ impl TableDef {
         };
         TableDef {
             name,
+            cache: None,
             table_type: TableType::ValueByDictPk,
             definition
         }
     }
 
-    pub fn value_to_dict_pk_table_def(entity_name: &Ident, column_name: &Ident, column_type: &Type, pk_type: &Type) -> TableDef {
+    pub fn value_to_dict_pk_table_def(entity_name: &Ident, column_name: &Ident, column_type: &Type, pk_type: &Type, cache_size_opt: Option<usize>) -> TableDef {
         let name = format_ident!("{}_{}_TO_DICT_PK", entity_name.to_string().to_uppercase(), column_name.to_string().to_uppercase());
         let name_str = &name.to_string();
         let definition = quote! {
             pub const #name: TableDefinition<'static, Bincode<#column_type>, Bincode<#pk_type>> = TableDefinition::new(#name_str);
         };
+
+        let cache = cache_size_opt.map(|cache_size| {
+            let cache_name = format_ident!("{}_CACHE", name);
+            let cache_definition = quote! {
+                pub static #cache_name: std::sync::LazyLock<std::sync::Mutex<LruCache<#column_type, #pk_type>>> =
+                    std::sync::LazyLock::new(|| std::sync::Mutex::new(
+                        LruCache::new(std::num::NonZeroUsize::new(#cache_size).expect("cache size must be > 0"))
+                    ));
+            };
+            (cache_name, cache_definition)
+        });
+
         TableDef {
             name,
+            cache,
             table_type: TableType::ValueToDictPk,
             definition,
         }
@@ -116,10 +135,11 @@ impl TableDef {
         );
         let name_str = &name.to_string();
         let definition = quote! {
-        pub const #name: TableDefinition<'static, Bincode<#pk_type>, Bincode<#pk_type>> = TableDefinition::new(#name_str);
-    };
+            pub const #name: TableDefinition<'static, Bincode<#pk_type>, Bincode<#pk_type>> = TableDefinition::new(#name_str);
+        };
         TableDef {
             name,
+            cache: None,
             table_type: TableType::DictPkByPk,
             definition
         }

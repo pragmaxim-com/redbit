@@ -36,7 +36,7 @@ pub fn column(attr: TokenStream, item: TokenStream) -> TokenStream {
                     fields.unnamed[0].attrs.push(attr);
                 }
 
-                macro_utils::merge_struct_derives(&mut input, syn::parse_quote![Clone, Eq, Ord, PartialEq, PartialOrd, Debug, Decode, Encode, Serialize, Deserialize]);
+                macro_utils::merge_struct_derives(&mut input, syn::parse_quote![Clone, Hash, Eq, Ord, PartialEq, PartialOrd, Debug, Decode, Encode, Serialize, Deserialize]);
                 quote! {
                     #input
                     #impls
@@ -44,7 +44,7 @@ pub fn column(attr: TokenStream, item: TokenStream) -> TokenStream {
             },
             _ => {
                 macro_utils::merge_struct_derives(&mut input, syn::parse_quote![
-                    Decode, Encode, Serialize, Deserialize, Debug, Clone, PartialEq, Eq, utoipa::ToSchema
+                    Decode, Encode, Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Eq, utoipa::ToSchema
                 ]);
                 quote! {
                     #input

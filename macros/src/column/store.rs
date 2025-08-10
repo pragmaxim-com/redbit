@@ -38,13 +38,8 @@ pub fn store_many_index_def(column_name: &Ident, pk_name: &Ident, table: &Ident,
     }
 }
 
-pub fn store_dict_def(column_name: &Ident, pk_name: &Ident, table_dict_pk_by_pk: &Ident, table_value_to_dict_pk: &Ident, table_value_by_dict_pk: &Ident, table_dict_index: &Ident) -> TokenStream {
+fn store_dict_stmnt(column_name: &Ident, pk_name: &Ident, cache: Option<Ident>) -> TokenStream {
     quote! {
-        let mut dict_pk_by_pk       = tx.open_table(#table_dict_pk_by_pk)?;
-        let mut value_to_dict_pk    = tx.open_table(#table_value_to_dict_pk)?;
-        let mut value_by_dict_pk    = tx.open_table(#table_value_by_dict_pk)?;
-        let mut dict_index          = tx.open_multimap_table(#table_dict_index)?;
-
         let (birth_id, newly_created) = {
             if let Some(guard) = value_to_dict_pk.get(&instance.#column_name)? {
                 (guard.value().clone(), false)
@@ -64,7 +59,20 @@ pub fn store_dict_def(column_name: &Ident, pk_name: &Ident, table_dict_pk_by_pk:
     }
 }
 
-pub fn store_many_dict_def(column_name: &Ident, pk_name: &Ident, table_dict_pk_by_pk: &Ident, table_value_to_dict_pk: &Ident, table_value_by_dict_pk: &Ident, table_dict_index: &Ident) -> TokenStream {
+pub fn store_dict_def(column_name: &Ident, pk_name: &Ident, table_dict_pk_by_pk: &Ident, table_value_to_dict_pk: &Ident, table_value_by_dict_pk: &Ident, table_dict_index: &Ident, table_value_to_dict_pk_cache: Option<Ident>) -> TokenStream {
+    let store_dict = store_dict_stmnt(column_name, pk_name, table_value_to_dict_pk_cache);
+    quote! {
+        let mut dict_pk_by_pk       = tx.open_table(#table_dict_pk_by_pk)?;
+        let mut value_to_dict_pk    = tx.open_table(#table_value_to_dict_pk)?;
+        let mut value_by_dict_pk    = tx.open_table(#table_value_by_dict_pk)?;
+        let mut dict_index          = tx.open_multimap_table(#table_dict_index)?;
+
+        #store_dict
+    }
+}
+
+pub fn store_many_dict_def(column_name: &Ident, pk_name: &Ident, table_dict_pk_by_pk: &Ident, table_value_to_dict_pk: &Ident, table_value_by_dict_pk: &Ident, table_dict_index: &Ident, table_value_to_dict_pk_cache: Option<Ident>) -> TokenStream {
+    let store_dict = store_dict_stmnt(column_name, pk_name, table_value_to_dict_pk_cache);
     quote! {
         let mut dict_pk_by_pk       = tx.open_table(#table_dict_pk_by_pk)?;
         let mut value_to_dict_pk    = tx.open_table(#table_value_to_dict_pk)?;
@@ -72,22 +80,7 @@ pub fn store_many_dict_def(column_name: &Ident, pk_name: &Ident, table_dict_pk_b
         let mut dict_index          = tx.open_multimap_table(#table_dict_index)?;
 
         for instance in instances.iter() {
-             let (birth_id, newly_created) = {
-                if let Some(guard) = value_to_dict_pk.get(&instance.#column_name)? {
-                    (guard.value().clone(), false)
-                } else {
-                    let new_birth = instance.#pk_name.clone();
-                    (new_birth, true)
-                }
-            };
-
-            if newly_created {
-                value_to_dict_pk.insert(&instance.#column_name, &birth_id)?;
-                value_by_dict_pk.insert(&birth_id, &instance.#column_name)?;
-            }
-
-            dict_pk_by_pk.insert(&instance.#pk_name, &birth_id)?;
-            dict_index.insert(&birth_id, &instance.#pk_name)?;
+            #store_dict
         }
     }
 }

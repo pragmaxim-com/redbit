@@ -3,7 +3,11 @@ use redb::Database;
 use redbit::AppError;
 use std::sync::Arc;
 
-pub async fn with_db(db: Arc<Database>) -> Result<(), AppError> {
+pub async fn with_db(db: Arc<Database>) -> () {
+    run_with_db(db).await.unwrap_or_else(|e| eprintln!("{}", e))
+}
+
+async fn run_with_db(db: Arc<Database>) -> Result<(), AppError> {
     let blocks = Block::sample_many(2);
 
     println!("Persisting blocks:");

@@ -50,13 +50,13 @@ impl DbColumnMacros {
         let column_type = &field_def.tpe.clone();
         match indexing_type {
             IndexingType::Off => DbColumnMacros::plain(field_def, entity_name, pk_name, pk_type, column_name, column_type),
-            IndexingType::On { dictionary: false, range } => {
+            IndexingType::On { dictionary: false, range, cache_size: _ } => {
                 DbColumnMacros::index(field_def, entity_name, entity_type, pk_name, pk_type, column_name, column_type, stream_query_ty, parent_def, range)
             }
-            IndexingType::On { dictionary: true, range: false } => {
-                DbColumnMacros::dictionary(field_def, entity_name, entity_type, pk_name, pk_type, column_name, column_type, stream_query_ty, parent_def)
+            IndexingType::On { dictionary: true, range: false, cache_size } => {
+                DbColumnMacros::dictionary(field_def, entity_name, entity_type, pk_name, pk_type, column_name, column_type, stream_query_ty, parent_def, cache_size)
             }
-            IndexingType::On { dictionary: true, range: true } => {
+            IndexingType::On { dictionary: true, range: true, cache_size: _ } => {
                 panic!("Range indexing on dictionary columns is not supported")
             }
         }
@@ -176,11 +176,14 @@ impl DbColumnMacros {
         column_type: &Type,
         stream_query_type: &Type,
         parent_def: Option<ParentDef>,
+        cache_size: Option<usize>,
     ) -> DbColumnMacros {
         let dict_index_table_def = TableDef::dict_index_table_def(entity_name, column_name, pk_type);
         let value_by_dict_pk_table_def = TableDef::value_by_dict_pk_table_def(entity_name, column_name, column_type, pk_type);
-        let value_to_dict_pk_table_def = TableDef::value_to_dict_pk_table_def(entity_name, column_name, column_type, pk_type);
+        let value_to_dict_pk_table_def = TableDef::value_to_dict_pk_table_def(entity_name, column_name, column_type, pk_type, cache_size);
         let dict_pk_by_pk_table_def = TableDef::dict_pk_by_pk_table_def(entity_name, column_name, pk_name, pk_type);
+
+        let table_value_to_dict_pk_cache = value_to_dict_pk_table_def.cache.clone().map(|c|c.0);
 
         let mut function_defs: Vec<FunctionDef> = Vec::new();
 
@@ -262,6 +265,7 @@ impl DbColumnMacros {
                 &value_to_dict_pk_table_def.name,
                 &value_by_dict_pk_table_def.name,
                 &dict_index_table_def.name,
+                table_value_to_dict_pk_cache.clone()
             ),
             store_many_statement: store::store_many_dict_def(
                 column_name,
@@ -270,6 +274,7 @@ impl DbColumnMacros {
                 &value_to_dict_pk_table_def.name,
                 &value_by_dict_pk_table_def.name,
                 &dict_index_table_def.name,
+                table_value_to_dict_pk_cache.clone()
             ),
             delete_statement: delete::delete_dict_statement(
                 &dict_pk_by_pk_table_def.name,

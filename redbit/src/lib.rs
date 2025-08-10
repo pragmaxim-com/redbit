@@ -28,6 +28,7 @@ pub use futures_util::stream::TryStreamExt;
 pub use http;
 pub use http::HeaderValue;
 pub use inventory;
+pub use lru::LruCache;
 pub use macros::column;
 pub use macros::entity;
 pub use macros::pointer_key;
