@@ -18,7 +18,7 @@ pub fn table_info_fn(entity_name: &Ident, table_defs: &Vec<TableDef>) -> Functio
         quote! {
             {
                 use redb::TableStats;
-                let tx = db.begin_read()?;
+                let tx = storage.db.begin_read()?;
                 let table = tx.#open_method(#table_ident)?;
                 let stats = table.stats()?;
                 tables.push(TableInfo {
@@ -36,7 +36,7 @@ pub fn table_info_fn(entity_name: &Ident, table_defs: &Vec<TableDef>) -> Functio
     });
     let fn_name = format_ident!("table_info");
     let fn_stream = quote! {
-        pub fn #fn_name(db: &Database) -> Result<Vec<TableInfo>, AppError> {
+        pub fn #fn_name(storage: Arc<Storage>) -> Result<Vec<TableInfo>, AppError> {
             let mut tables = Vec::new();
             #(#stats_getters)*
             Ok(tables)
@@ -56,7 +56,7 @@ pub fn table_info_fn(entity_name: &Ident, table_defs: &Vec<TableDef>) -> Functio
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                Result<AppJson<Vec<TableInfo>>, AppError> {
-                    #entity_name::#fn_name(&state.db).map(AppJson)
+                    #entity_name::#fn_name(Arc::clone(&state.storage)).map(AppJson)
                 }
             },
             utoipa_responses: quote! {

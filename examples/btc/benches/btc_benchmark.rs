@@ -19,13 +19,13 @@ fn criterion_benchmark(c: &mut Criterion) {
         info!("Removing existing database directory: {}", db_path.display());
         fs::remove_dir_all(&db_path).unwrap();
     }
-    let db = Arc::new(storage::get_db(db_path, 1).expect("Failed to open database"));
+    let storage = Arc::new(storage::get_storage(db_path, 1).expect("Failed to open database"));
 
     let btc_client = Arc::new(BtcClient::new(&btc_config).expect("Failed to create Bitcoin client"));
     let fetching_par: usize = app_config.indexer.fetching_parallelism.clone().into();
     let block_provider: Arc<dyn BlockProvider<BtcBlock, Block>> =
         Arc::new(BtcBlockProvider::new(btc_client.clone(), fetching_par).expect("Failed to create block provider"));
-    let block_persistence: Arc<dyn BlockPersistence<Block>> = Arc::new(BtcBlockPersistence { db: Arc::clone(&db) });
+    let block_persistence: Arc<dyn BlockPersistence<Block>> = Arc::new(BtcBlockPersistence { storage: Arc::clone(&storage) });
 
     info!("Getting small block with 29 txs");
     let small_block = btc_client.get_block_by_height(Height(135204)).unwrap();

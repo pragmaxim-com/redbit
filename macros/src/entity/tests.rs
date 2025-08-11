@@ -4,6 +4,7 @@ use crate::rest::FunctionDef;
 
 pub fn test_suite(entity_name: &Ident, parent_entity: Option<Ident>, fn_defs: &Vec<FunctionDef>) -> TokenStream {
     let entity_tests = format_ident!("{}", entity_name.to_string().to_lowercase());
+    let entity_integration_tests = format_ident!("{}_integration", entity_name.to_string().to_lowercase());
     let entity_literal = Literal::string(&entity_name.to_string());
     let http_tests = fn_defs.iter().filter_map(|f| f.endpoint.clone().map(|e| e.tests)).flatten().collect::<Vec<_>>();
     let unit_tests = fn_defs.iter().filter_map(|f| f.test_stream.clone()).collect::<Vec<_>>();
@@ -15,58 +16,55 @@ pub fn test_suite(entity_name: &Ident, parent_entity: Option<Ident>, fn_defs: &V
             None => (3usize, entity_name.clone()),
         };
 
-    quote!{
-        #[cfg(test)]
-            mod #entity_tests {
-                use super::*;
-                use once_cell::sync::Lazy;
-                use tokio::sync::OnceCell;
-                use test::Bencher;
-                use tokio::runtime::Runtime;
+    let db_init = quote!{
+        fn test_storage() -> Arc<Storage> {
+            let db = Database::create(test_db_path(#entity_literal)).expect("Failed to create database");
+            Arc::new(Storage::new(Arc::new(db)))
+        }
 
-                fn test_db() -> Database {
-                    Database::create(test_db_path(#entity_literal)).expect("Failed to create database")
-                }
-
-                static DB: Lazy<Arc<Database>> = Lazy::new(|| {
-                    let db = test_db();
-                    let entities = #sample_entity::sample_many(#sample_count);
-                    for entity in entities {
-                        #sample_entity::store_and_commit(&db, &entity).expect("Failed to persist entity");
-                    }
-                    Arc::new(db)
-                });
-
-                static DB_DELETE: Lazy<Arc<Database>> = Lazy::new(|| {
-                    let db = test_db();
-                    let entities = #sample_entity::sample_many(#sample_count);
-                    for entity in entities {
-                        #sample_entity::store_and_commit(&db, &entity).expect("Failed to persist entity");
-                    }
-                    Arc::new(db)
-                });
-
-                static SERVER: OnceCell<Arc<axum_test::TestServer>> = OnceCell::const_new();
-                static SERVER_DELETE: OnceCell<Arc<axum_test::TestServer>> = OnceCell::const_new();
-
-                async fn get_delete_server() -> Arc<axum_test::TestServer> {
-                    SERVER_DELETE.get_or_init(|| async {
-                        Arc::new(build_test_server(DB_DELETE.clone()).await)
-                    }).await.clone()
-                }
-
-                async fn get_test_server() -> Arc<axum_test::TestServer> {
-                    SERVER.get_or_init(|| async {
-                        Arc::new(build_test_server(DB_DELETE.clone()).await)
-                    }).await.clone()
-                }
-
-                #(#unit_tests)*
-
-                #(#http_tests)*
-
-                #(#benches)*
-
+        static STORAGE: Lazy<Arc<Storage>> = Lazy::new(|| {
+            let storage = test_storage();
+            let entities = #sample_entity::sample_many(#sample_count);
+            for entity in entities {
+                #sample_entity::store_and_commit(Arc::clone(&storage), &entity).expect("Failed to persist entity");
             }
+            Arc::clone(&storage)
+        });
+    };
+
+    quote!{
+        #[cfg(all(test, not(feature = "integration")))]
+        mod #entity_tests {
+            use super::*;
+            use once_cell::sync::Lazy;
+            use tokio::sync::OnceCell;
+            use test::Bencher;
+            use tokio::runtime::Runtime;
+
+            #db_init
+
+            #(#unit_tests)*
+
+            #(#benches)*
+        }
+
+        #[cfg(all(test, feature = "integration"))]
+        mod #entity_integration_tests {
+            use super::*;
+            use once_cell::sync::Lazy;
+            use tokio::sync::OnceCell;
+
+            #db_init
+
+            static SERVER: OnceCell<Arc<axum_test::TestServer>> = OnceCell::const_new();
+
+            async fn get_delete_server() -> Arc<axum_test::TestServer> {
+                SERVER.get_or_init(|| async {
+                    Arc::new(build_test_server(STORAGE.clone()).await)
+                }).await.clone()
+            }
+
+            #(#http_tests)*
+        }
     }
 }

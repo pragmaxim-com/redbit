@@ -38,8 +38,8 @@ pub fn by_dict_def(
     let test_stream = Some(quote! {
         #[test]
         fn #fn_name() {
-            let db = DB.clone();
-            let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let storage = STORAGE.clone();
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
             let entity_pks = #entity_name::#fn_name(&read_tx, &val).expect("Failed to get entity pks by dictionary index");
             let expected_entity_pks = vec![#pk_type::default()];
@@ -51,8 +51,8 @@ pub fn by_dict_def(
     let bench_stream = Some(quote! {
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
-            let db = DB.clone();
-            let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let storage = STORAGE.clone();
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
             b.iter(|| {
                 #entity_name::#fn_name(&read_tx, &val).expect("Failed to get entity pks by dictionary index");
@@ -89,8 +89,8 @@ pub fn by_index_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, column
     let test_stream = Some(quote! {
         #[test]
         fn #fn_name() {
-            let db = DB.clone();
-            let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let storage = STORAGE.clone();
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
             let entity_pks = #entity_name::#fn_name(&read_tx, &val).expect("Failed to get entity pks by index");
             let expected_entity_pks = vec![#pk_type::default()];
@@ -102,8 +102,8 @@ pub fn by_index_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, column
     let bench_stream = Some(quote! {
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
-            let db = DB.clone();
-            let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let storage = STORAGE.clone();
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
             b.iter(|| {
                 #entity_name::#fn_name(&read_tx, &val).expect("Failed to get entity pks by index");

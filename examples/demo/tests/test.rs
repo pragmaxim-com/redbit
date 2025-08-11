@@ -25,24 +25,24 @@ fn each_entity_should_have_a_default_sample() {
 
 #[test]
 fn it_should_commit_multiple_blocks_in_a_single_tx() {
-    let (blocks, multi_tx_db) = init_temp_db("db_test");
+    let (blocks, multi_tx_storage) = init_temp_storage("db_test");
 
-    let single_tx_db = empty_temp_db("db_test_2");
+    let single_tx_db = empty_temp_storage("db_test_2");
     let write_tx = single_tx_db.begin_write().expect("Failed to begin write transaction");
     blocks.iter().for_each(|block| Block::store(&write_tx, block).expect("Failed to persist blocks"));
     write_tx.commit().unwrap();
 
-    let multi_tx_blocks = Block::take(&multi_tx_db.begin_read().unwrap(), 100).unwrap();
-    let single_tx_blocks = Block::take(&single_tx_db.begin_read().unwrap(), 100).unwrap();
+    let multi_tx_blocks = Block::take(&multi_tx_storage.db.begin_read().unwrap(), 100).unwrap();
+    let single_tx_blocks = Block::take(&multi_tx_storage.db.begin_read().unwrap(), 100).unwrap();
 
     assert_eq!(multi_tx_blocks.len(), single_tx_blocks.len());
 }
 
 #[test]
 fn it_should_get_entity_by_unique_id() {
-    let (blocks, db) = init_temp_db("db_test");
+    let (blocks, storage) = init_temp_storage("db_test");
     let block = blocks.first().unwrap();
-    let found_by_id = Block::get(&db.begin_read().unwrap(), &block.height).expect("Failed to query by ID").unwrap();
+    let found_by_id = Block::get(&storage.db.begin_read().unwrap(), &block.height).expect("Failed to query by ID").unwrap();
     assert_eq!(found_by_id.height, block.height);
     assert_eq!(found_by_id.transactions, block.transactions);
     assert_eq!(found_by_id.header, block.header);
@@ -50,14 +50,14 @@ fn it_should_get_entity_by_unique_id() {
 
 #[test]
 fn it_should_delete_entity_by_unique_id() {
-    let (blocks, db) = init_temp_db("db_test");
+    let (blocks, storage) = init_temp_storage("db_test");
     let block = blocks.first().unwrap();
-    let found_by_id = Block::get(&db.begin_read().unwrap(), &block.height).expect("Failed to query by ID").unwrap();
+    let found_by_id = Block::get(&storage.db.begin_read().unwrap(), &block.height).expect("Failed to query by ID").unwrap();
     assert_eq!(found_by_id.height, block.height);
 
-    Block::delete_and_commit(&db, &block.height).expect("Failed to delete by ID");
+    Block::delete_and_commit(Arc::clone(&storage), &block.height).expect("Failed to delete by ID");
 
-    let read_tx = db.begin_read().unwrap();
+    let read_tx = storage.db.begin_read().unwrap();
 
     let block_not_found = Block::get(&read_tx, &block.height).expect("Failed to query by ID after deletion").is_none();
     assert!(block_not_found);
@@ -76,9 +76,9 @@ fn it_should_delete_entity_by_unique_id() {
 
 #[tokio::test]
 async fn it_should_stream_entities_by_index() {
-    let (blocks, db) = init_temp_db("db_test");
+    let (blocks, storage) = init_temp_storage("db_test");
 
-    let read_tx = db.begin_read().unwrap();
+    let read_tx = storage.db.begin_read().unwrap();
     let transaction = blocks.first().unwrap().transactions.first().unwrap();
 
     let found_by_hash = Transaction::stream_by_hash(read_tx, transaction.hash.clone(), None).unwrap().try_collect::<Vec<Transaction>>().await.unwrap();
@@ -89,9 +89,9 @@ async fn it_should_stream_entities_by_index() {
 
 #[tokio::test]
 async fn it_should_stream_entities_by_index_with_dict() {
-    let (blocks, db) = init_temp_db("db_test");
+    let (blocks, storage) = init_temp_storage("db_test");
 
-    let read_tx = db.begin_read().unwrap();
+    let read_tx = storage.db.begin_read().unwrap();
     let utxo = blocks.first().unwrap().transactions.first().unwrap().utxos.first().unwrap();
 
     let found_by_address = Utxo::stream_by_address(read_tx, utxo.address.clone(), None).unwrap().try_collect::<Vec<Utxo>>().await.unwrap();
@@ -102,9 +102,9 @@ async fn it_should_stream_entities_by_index_with_dict() {
 
 #[tokio::test]
 async fn it_should_stream_entities_by_range_on_index() {
-    let (blocks, db) = init_temp_db("db_test");
+    let (blocks, storage) = init_temp_storage("db_test");
 
-    let read_tx = db.begin_read().unwrap();
+    let read_tx = storage.db.begin_read().unwrap();
 
     let from_timestamp = blocks[0].header.timestamp;
     let until_timestamp = blocks[2].header.timestamp;
@@ -120,9 +120,9 @@ async fn it_should_stream_entities_by_range_on_index() {
 
 #[test]
 fn it_should_get_entities_by_index() {
-    let (blocks, db) = init_temp_db("db_test");
+    let (blocks, storage) = init_temp_storage("db_test");
 
-    let read_tx = db.begin_read().unwrap();
+    let read_tx = storage.db.begin_read().unwrap();
     let transaction = blocks.first().unwrap().transactions.first().unwrap();
 
     let found_by_hash = Transaction::get_by_hash(&read_tx, &transaction.hash).expect("Failed to query by hash");
@@ -133,9 +133,9 @@ fn it_should_get_entities_by_index() {
 
 #[test]
 fn it_should_get_entities_by_index_with_dict() {
-    let (blocks, db) = init_temp_db("db_test");
+    let (blocks, storage) = init_temp_storage("db_test");
 
-    let read_tx = db.begin_read().unwrap();
+    let read_tx = storage.db.begin_read().unwrap();
     let utxo = blocks.first().unwrap().transactions.first().unwrap().utxos.first().unwrap();
 
     let found_by_address = Utxo::get_by_address(&read_tx, &utxo.address).expect("Failed to query by address");
@@ -147,9 +147,9 @@ fn it_should_get_entities_by_index_with_dict() {
 
 #[test]
 fn it_should_get_entities_by_range_on_pk() {
-    let (blocks, db) = init_temp_db("db_test");
+    let (blocks, storage) = init_temp_storage("db_test");
 
-    let read_tx = db.begin_read().unwrap();
+    let read_tx = storage.db.begin_read().unwrap();
 
     let height_1 = Height(1);
     let height_2 = Height(2);
@@ -176,8 +176,8 @@ fn it_should_get_entities_by_range_on_pk() {
 
 #[test]
 fn it_should_get_related_one_to_many_entities() {
-    let (blocks, db) = init_temp_db("db_test");
-    let read_tx = db.begin_read().unwrap();
+    let (blocks, storage) = init_temp_storage("db_test");
+    let read_tx = storage.db.begin_read().unwrap();
     let block = blocks.first().unwrap();
 
     let expected_transactions: Vec<Transaction> = block.transactions.clone();
@@ -196,8 +196,8 @@ fn it_should_get_related_one_to_many_entities() {
 
 #[test]
 fn it_should_get_related_one_to_one_entity() {
-    let (blocks, db) = init_temp_db("db_test");
-    let read_tx = db.begin_read().unwrap();
+    let (blocks, storage) = init_temp_storage("db_test");
+    let read_tx = storage.db.begin_read().unwrap();
     let block = blocks.first().unwrap();
 
     let expected_header: BlockHeader = block.header.clone();
@@ -208,15 +208,15 @@ fn it_should_get_related_one_to_one_entity() {
 
 #[test]
 fn it_should_override_entity() {
-    let (blocks, db) = init_temp_db("db_test");
-    let read_tx = db.begin_read().unwrap();
+    let (blocks, storage) = init_temp_storage("db_test");
+    let read_tx = storage.db.begin_read().unwrap();
     let block = blocks.first().unwrap();
 
     let loaded_block = Block::get(&read_tx, &block.height).expect("Failed to get by ID").unwrap();
 
     assert_eq!(block, &loaded_block);
 
-    Block::store_and_commit(&db, &block).expect("Failed to delete by ID");
+    Block::store_and_commit(Arc::clone(&storage), &block).expect("Failed to delete by ID");
     let loaded_block2 = Block::get(&read_tx, &block.height).expect("Failed to get by ID").unwrap();
 
     assert_eq!(block, &loaded_block2);
@@ -224,9 +224,9 @@ fn it_should_override_entity() {
 
 #[test]
 fn it_should_get_first_and_last_entity() {
-    let (blocks, db) = init_temp_db("db_test");
+    let (blocks, storage) = init_temp_storage("db_test");
 
-    let read_tx = db.begin_read().unwrap();
+    let read_tx = storage.db.begin_read().unwrap();
     let first_block = Block::first(&read_tx).expect("Failed to get first block").unwrap();
     let last_block = Block::last(&read_tx).expect("Failed to get last block").unwrap();
 

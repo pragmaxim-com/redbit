@@ -10,6 +10,8 @@ pub mod query;
 pub mod utf8_serde_enc;
 pub mod hex_serde_enc;
 pub mod base64_serde_enc;
+pub mod cache;
+pub mod storage;
 
 pub use axum;
 pub use axum::body::Body;
@@ -48,7 +50,6 @@ pub use redb::ReadableMultimapTable;
 pub use redb::ReadableTableMetadata;
 pub use redb::ReadableTable;
 pub use redb::TableDefinition;
-pub use redb::WriteTransaction;
 pub use serde;
 pub use serde::Deserialize;
 pub use serde::Deserializer;
@@ -69,6 +70,9 @@ pub use utoipa::ToSchema;
 pub use utoipa_axum;
 pub use utoipa_axum::router::OpenApiRouter;
 pub use utoipa_swagger_ui;
+pub use cache::CacheDef;
+pub use storage::Storage;
+pub use storage::StorageWriteTx;
 
 use crate::axum::extract::rejection::JsonRejection;
 use crate::axum::extract::FromRequest;
@@ -219,6 +223,9 @@ impl From<redb::DatabaseError> for AppError {
         AppError::Internal(e.to_string())
     }
 }
+impl<T> From<std::sync::PoisonError<T>> for AppError {
+    fn from(e: std::sync::PoisonError<T>) -> Self { AppError::Internal(e.to_string()) }
+}
 impl From<redb::TransactionError> for AppError {
     fn from(e: redb::TransactionError) -> Self {
         AppError::Internal(e.to_string())
@@ -357,12 +364,12 @@ impl IntoResponse for AppError {
 
 #[derive(Clone)]
 pub struct RequestState {
-    pub db: Arc<Database>,
+    pub storage: Arc<Storage>,
 }
 
 impl RequestState {
-    pub fn new(db: Arc<Database>) -> Self {
-        Self { db }
+    pub fn new(storage: Arc<Storage>) -> Self {
+        Self { storage }
     }
 }
 
@@ -410,8 +417,8 @@ pub fn test_db_path(entity_name: &str) -> PathBuf {
     dir.join(format!("{}_{}.redb", entity_name, rand::random::<u64>()))
 }
 
-pub async fn build_test_server(db: Arc<Database>) -> axum_test::TestServer {
-    let router = build_router(RequestState { db }, None, None).await;
+pub async fn build_test_server(storage: Arc<Storage>) -> axum_test::TestServer {
+    let router = build_router(RequestState { storage }, None, None).await;
     axum_test::TestServer::new(router).unwrap()
 }
 

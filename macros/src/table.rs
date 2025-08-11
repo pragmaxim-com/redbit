@@ -109,11 +109,10 @@ impl TableDef {
 
         let cache = cache_size_opt.map(|cache_size| {
             let cache_name = format_ident!("{}_CACHE", name);
+            let cache_name_str = &cache_name.to_string();
             let cache_definition = quote! {
-                pub static #cache_name: std::sync::LazyLock<std::sync::Mutex<LruCache<#column_type, #pk_type>>> =
-                    std::sync::LazyLock::new(|| std::sync::Mutex::new(
-                        LruCache::new(std::num::NonZeroUsize::new(#cache_size).expect("cache size must be > 0"))
-                    ));
+                pub static #cache_name: CacheDef<#column_type, #pk_type> =
+                        CacheDef::new(#cache_name_str, std::num::NonZeroUsize::new(#cache_size).expect("cache size must be > 0"));
             };
             (cache_name, cache_definition)
         });

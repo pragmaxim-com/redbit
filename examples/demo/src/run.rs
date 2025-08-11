@@ -1,17 +1,16 @@
 use crate::*;
-use redb::Database;
 use redbit::AppError;
 use std::sync::Arc;
 
-pub async fn with_db(db: Arc<Database>) -> () {
-    run_with_db(db).await.unwrap_or_else(|e| eprintln!("{}", e))
+pub async fn with_db(storage: Arc<Storage>) -> () {
+    run_with_db(storage).await.unwrap_or_else(|e| eprintln!("{}", e))
 }
 
-async fn run_with_db(db: Arc<Database>) -> Result<(), AppError> {
+async fn run_with_db(storage: Arc<Storage>) -> Result<(), AppError> {
     let blocks = Block::sample_many(2);
-
+    let db = Arc::clone(&storage.db);
     println!("Persisting blocks:");
-    let write_tx = db.begin_write()?;
+    let write_tx = storage.begin_write()?;
     Block::store_many(&write_tx, &blocks)?;
     write_tx.commit()?;
 
@@ -30,7 +29,7 @@ async fn run_with_db(db: Arc<Database>) -> Result<(), AppError> {
     Block::last(&read_tx)?;
     Block::stream_range(db.begin_read()?, first_block.height, last_block.height, None)?.try_collect::<Vec<Block>>().await?;
 
-    let block_infos = Block::table_info(&db)?;
+    let block_infos = Block::table_info(Arc::clone(&storage))?;
     println!("Block persisted with tables :");
     for info in block_infos {
         println!("{}", serde_json::to_string_pretty(&info).unwrap());
@@ -50,7 +49,7 @@ async fn run_with_db(db: Arc<Database>) -> Result<(), AppError> {
     BlockHeader::stream_range(db.begin_read()?, first_block_header.height, last_block_header.height, None)?.try_collect::<Vec<BlockHeader>>().await?;
     BlockHeader::stream_range_by_timestamp(db.begin_read()?, first_block_header.timestamp, last_block_header.timestamp, None)?.try_collect::<Vec<BlockHeader>>().await?;
 
-    let block_header_infos = BlockHeader::table_info(&db)?;
+    let block_header_infos = BlockHeader::table_info(Arc::clone(&storage))?;
     println!("\nBlock header persisted with tables :");
     for info in block_header_infos {
         println!("{}", serde_json::to_string_pretty(&info).unwrap());
@@ -71,7 +70,7 @@ async fn run_with_db(db: Arc<Database>) -> Result<(), AppError> {
     Transaction::stream_by_hash(db.begin_read()?, first_transaction.hash.clone(), None)?.try_collect::<Vec<Transaction>>().await?;
     Transaction::stream_range(db.begin_read()?, first_transaction.id, last_transaction.id, None)?.try_collect::<Vec<Transaction>>().await?;
 
-    let transaction_infos = Transaction::table_info(&db)?;
+    let transaction_infos = Transaction::table_info(Arc::clone(&storage))?;
     println!("\nTransaction persisted with tables :");
     for info in transaction_infos {
         println!("{}", serde_json::to_string_pretty(&info).unwrap());
@@ -93,7 +92,7 @@ async fn run_with_db(db: Arc<Database>) -> Result<(), AppError> {
     // even streaming parents is possible
     Utxo::stream_transactions_by_address(db.begin_read()?, first_utxo.address, None)?.try_collect::<Vec<Transaction>>().await?;
 
-    let utxo_infos = Utxo::table_info(&db)?;
+    let utxo_infos = Utxo::table_info(Arc::clone(&storage))?;
     println!("\nUtxo persisted with tables :");
     for info in utxo_infos {
         println!("{}", serde_json::to_string_pretty(&info).unwrap());
@@ -112,7 +111,7 @@ async fn run_with_db(db: Arc<Database>) -> Result<(), AppError> {
     // even streaming parents is possible
     Asset::stream_utxos_by_name(db.begin_read()?, first_asset.name, None)?.try_collect::<Vec<Utxo>>().await?;
 
-    let asset_infos = Asset::table_info(&db)?;
+    let asset_infos = Asset::table_info(Arc::clone(&storage))?;
     println!("\nAsset persisted with tables :");
     for info in asset_infos {
         println!("{}", serde_json::to_string_pretty(&info).unwrap());
@@ -121,7 +120,7 @@ async fn run_with_db(db: Arc<Database>) -> Result<(), AppError> {
 
     println!("\nDeleting blocks:");
     for block in blocks.iter() {
-        Block::delete_and_commit(&db, &block.height)?;
+        Block::delete_and_commit(Arc::clone(&storage), &block.height)?;
     }
     Ok(())
 }

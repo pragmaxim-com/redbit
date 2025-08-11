@@ -8,7 +8,7 @@ use syn::Type;
 pub fn store_def(entity_name: &Ident, entity_type: &Type, store_statements: &Vec<TokenStream>) -> FunctionDef {
     let fn_name = format_ident!("store");
     let fn_stream = quote! {
-        pub fn #fn_name(tx: &WriteTransaction, instance: &#entity_type) -> Result<(), AppError> {
+        pub fn #fn_name(tx: &StorageWriteTx, instance: &#entity_type) -> Result<(), AppError> {
             #(#store_statements)*
             Ok(())
         }
@@ -17,10 +17,10 @@ pub fn store_def(entity_name: &Ident, entity_type: &Type, store_statements: &Vec
     let test_stream = Some(quote! {
         #[test]
         fn #fn_name() {
-            let db = test_db();
+            let storage = test_storage();
             let entity_count: usize = 3;
             for test_entity in #entity_type::sample_many(entity_count) {
-                let tx = db.begin_write().expect("Failed to begin write transaction");
+                let tx = storage.begin_write().expect("Failed to begin write transaction");
                 let pk = #entity_name::#fn_name(&tx, &test_entity).expect("Failed to store and commit instance");
                 tx.commit().expect("Failed to commit transaction");
             }
@@ -31,10 +31,10 @@ pub fn store_def(entity_name: &Ident, entity_type: &Type, store_statements: &Vec
     let bench_stream = Some(quote! {
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
-            let db = test_db();
+            let storage = test_storage();
             let test_entity = #entity_type::sample();
             b.iter(|| {
-                let tx = db.begin_write().expect("Failed to begin write transaction");
+                let tx = storage.begin_write().expect("Failed to begin write transaction");
                 #entity_name::#fn_name(&tx, &test_entity).expect("Failed to store and commit instance");
                 tx.commit().expect("Failed to commit transaction");
             });
@@ -52,7 +52,7 @@ pub fn store_def(entity_name: &Ident, entity_type: &Type, store_statements: &Vec
 pub fn store_many_def(entity_name: &Ident, entity_type: &Type, store_many_statements: &Vec<TokenStream>) -> FunctionDef {
     let fn_name = format_ident!("store_many");
     let fn_stream = quote! {
-        pub fn #fn_name(tx: &WriteTransaction, instances: &Vec<#entity_type>) -> Result<(), AppError> {
+        pub fn #fn_name(tx: &StorageWriteTx, instances: &Vec<#entity_type>) -> Result<(), AppError> {
             #(#store_many_statements)*
             Ok(())
         }
@@ -61,10 +61,10 @@ pub fn store_many_def(entity_name: &Ident, entity_type: &Type, store_many_statem
     let test_stream = Some(quote! {
         #[test]
         fn #fn_name() {
-            let db = test_db();
+            let storage = test_storage();
             let entity_count: usize = 3;
             let test_entities = #entity_type::sample_many(entity_count);
-            let tx = db.begin_write().expect("Failed to begin write transaction");
+            let tx = storage.begin_write().expect("Failed to begin write transaction");
             let pk = #entity_name::#fn_name(&tx, &test_entities).expect("Failed to store and commit instance");
             tx.commit().expect("Failed to commit transaction");
         }
@@ -74,11 +74,11 @@ pub fn store_many_def(entity_name: &Ident, entity_type: &Type, store_many_statem
     let bench_stream = Some(quote! {
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
-            let db = test_db();
+            let storage = test_storage();
             let entity_count = 3;
             let test_entities = #entity_type::sample_many(entity_count);
             b.iter(|| {
-                let tx = db.begin_write().expect("Failed to begin write transaction");
+                let tx = storage.begin_write().expect("Failed to begin write transaction");
                 #entity_name::#fn_name(&tx, &test_entities).expect("Failed to store and commit instance");
                 tx.commit().expect("Failed to commit transaction");
             });
@@ -97,8 +97,8 @@ pub fn store_many_def(entity_name: &Ident, entity_type: &Type, store_many_statem
 pub fn store_and_commit_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type: &Type, store_statements: &Vec<TokenStream>) -> FunctionDef {
     let fn_name = format_ident!("store_and_commit");
     let fn_stream = quote! {
-        pub fn #fn_name(db: &Database, instance: &#entity_type) -> Result<#pk_type, AppError> {
-           let tx = db.begin_write()?;
+        pub fn #fn_name(storage: Arc<Storage>, instance: &#entity_type) -> Result<#pk_type, AppError> {
+           let tx = storage.begin_write()?;
            {
                #(#store_statements)*
            }
@@ -110,10 +110,10 @@ pub fn store_and_commit_def(entity_name: &Ident, entity_type: &Type, pk_name: &I
     let test_stream = Some(quote! {
         #[test]
         fn #fn_name() {
-            let db = test_db();
+            let storage = test_storage();
             let entity_count: usize = 3;
             for test_entity in #entity_type::sample_many(entity_count) {
-                let pk = #entity_name::#fn_name(&db, &test_entity).expect("Failed to store and commit instance");
+                let pk = #entity_name::#fn_name(Arc::clone(&storage), &test_entity).expect("Failed to store and commit instance");
                 assert_eq!(test_entity.#pk_name, pk, "Stored PK does not match the instance PK");
             }
         }
@@ -123,10 +123,10 @@ pub fn store_and_commit_def(entity_name: &Ident, entity_type: &Type, pk_name: &I
     let bench_stream = Some(quote! {
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
-            let db = test_db();
+            let storage = test_storage();
             let test_entity = #entity_type::sample();
             b.iter(|| {
-                #entity_name::#fn_name(&db, &test_entity).expect("Failed to store and commit instance");
+                #entity_name::#fn_name(Arc::clone(&storage), &test_entity).expect("Failed to store and commit instance");
             });
         }
     });
@@ -149,7 +149,7 @@ pub fn store_and_commit_def(entity_name: &Ident, entity_type: &Type, pk_name: &I
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                 impl IntoResponse {
-                    match #entity_name::#fn_name(&state.db, &body) {
+                    match #entity_name::#fn_name(Arc::clone(&state.storage), &body) {
                         Ok(pk) => Response::builder().status(StatusCode::OK).body(Body::empty()).unwrap().into_response(),
                         Err(err) => err.into_response(),
                     }

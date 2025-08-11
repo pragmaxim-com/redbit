@@ -32,8 +32,8 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
     let test_stream = Some(quote! {
         #[test]
         fn #fn_name() {
-            let db = DB.clone();
-            let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let storage = STORAGE.clone();
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
             let n: usize = 2;
             let entities = #entity_name::#fn_name(&read_tx, n).expect("Failed to take entities");
             let expected_entities = #entity_type::sample_many(n);
@@ -45,8 +45,8 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
     let bench_stream = Some(quote! {
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
-            let db = DB.clone();
-            let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let storage = STORAGE.clone();
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
             let n: usize = 2;
             b.iter(|| {
                 #entity_name::#fn_name(&read_tx, n).expect("Failed to take entities");
@@ -71,7 +71,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                Result<AppJson<Vec<#entity_type>>, AppError> {
-                    state.db.begin_read().map_err(AppError::from).and_then(|tx| #entity_name::#fn_name(&tx, query.take)).map(AppJson)
+                    state.storage.db.begin_read().map_err(AppError::from).and_then(|tx| #entity_name::#fn_name(&tx, query.take)).map(AppJson)
                 }
             },
             utoipa_responses: quote! {

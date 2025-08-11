@@ -19,9 +19,9 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
     let test_stream = Some(quote! {
         #[test]
         fn #fn_name() {
-            let db = DB.clone();
+            let storage = STORAGE.clone();
             let entity_count: usize = 3;
-            let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
             let entity = #entity_name::last(&read_tx).expect("Failed to get last entity by PK").expect("Expected last entity to exist");
             let expected_entity = #entity_type::sample_many(entity_count).last().expect("Expected at least one entity").clone();
             assert_eq!(entity, expected_entity, "Last entity does not match expected");
@@ -32,8 +32,8 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
     let bench_stream = Some(quote! {
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
-            let db = DB.clone();
-            let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let storage = STORAGE.clone();
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
             b.iter(|| {
                 #entity_name::last(&read_tx).expect("Failed to get last entity by PK").expect("Expected last entity to exist");
             });
@@ -53,7 +53,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                Result<AppJson<Vec<#entity_type>>, AppError> {
-                    state.db.begin_read().map_err(AppError::from).and_then(|tx| #entity_name::#fn_name(&tx).map(|r| r.into_iter().collect())).map(AppJson)
+                    state.storage.db.begin_read().map_err(AppError::from).and_then(|tx| #entity_name::#fn_name(&tx).map(|r| r.into_iter().collect())).map(AppJson)
                 }
             },
             utoipa_responses: quote! {

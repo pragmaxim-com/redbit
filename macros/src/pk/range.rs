@@ -34,8 +34,8 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, table: &I
     let test_stream = Some(quote! {
         #[test]
         fn #fn_name() {
-            let db = DB.clone();
-            let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let storage = STORAGE.clone();
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
             let from_value = #pk_type::default();
             let until_value = #pk_type::default().next_index().next_index();
             let entities = #entity_name::#fn_name(&read_tx, &from_value, &until_value, None).expect("Failed to get entities by range");
@@ -44,8 +44,8 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, table: &I
         }
         #[test]
         fn #test_with_filter_fn_name() {
-            let db = DB.clone();
-            let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let storage = STORAGE.clone();
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
             let pk = #pk_type::default();
             let from_value = #pk_type::default();
             let until_value = #pk_type::default().next_index().next_index().next_index();
@@ -61,8 +61,8 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, table: &I
     let bench_stream = Some(quote! {
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
-            let db = DB.clone();
-            let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let storage = STORAGE.clone();
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
             let from_value = #pk_type::default();
             let until_value = #pk_type::default().next_index().next_index().next_index();
             let query = #stream_query_type::sample();

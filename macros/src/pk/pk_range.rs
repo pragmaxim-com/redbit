@@ -6,7 +6,7 @@ use syn::Type;
 pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type: &Type, table: &Ident) -> FunctionDef {
     let fn_name = format_ident!("pk_range");
     let fn_stream = quote! {
-        fn #fn_name(tx: &WriteTransaction, from: &#pk_type, until: &#pk_type) -> Result<Vec<#pk_type>, AppError> {
+        fn #fn_name(tx: &StorageWriteTx, from: &#pk_type, until: &#pk_type) -> Result<Vec<#pk_type>, AppError> {
             let table_pk_10 = tx.open_table(#table)?;
             let range = from.clone()..until.clone();
             let mut iter = table_pk_10.range(range)?;
@@ -22,9 +22,9 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
     let test_stream = Some(quote! {
         #[test]
         fn #fn_name() {
-            let db = DB.clone();
+            let storage = STORAGE.clone();
             let entity_count: usize = 3;
-            let write_tx = db.begin_write().expect("Failed to begin write transaction");
+            let write_tx = storage.begin_write().expect("Failed to begin write transaction");
             let from_value = #pk_type::default();
             let until_value = #pk_type::default().next_index().next_index().next_index();
             let pks = #entity_name::#fn_name(&write_tx, &from_value, &until_value).expect("Failed to get PKs in range");
@@ -37,8 +37,8 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
     let bench_stream = Some(quote! {
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
-            let db = DB.clone();
-            let write_tx = db.begin_write().expect("Failed to begin write transaction");
+            let storage = STORAGE.clone();
+            let write_tx = storage.begin_write().expect("Failed to begin write transaction");
             let from_value = #pk_type::default();
             let until_value = #pk_type::default().next_index().next_index().next_index();
             b.iter(|| {

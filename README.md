@@ -47,9 +47,10 @@ through auto-generated REST API. It maximizes R/W speed while minimizing data si
 
 ```
 cd examples/utxo
-cargo test       # to let all the self-generated tests run (including http layer)
-cargo bench      # to run benchmarks
-cargo run        # to run the demo example and start the server
+cargo test                          # to let all the self-generated tests run
+cargo test --features integration   # to let http layer self-generated tests run
+cargo bench                         # to run benchmarks
+cargo run                           # to run the demo example and start the server
 ```
 
 Check the [redbit-ui](http://github.com/pragmaxim-com/redbit-ui) for frontend dev.
@@ -192,7 +193,7 @@ And R/W entire instances efficiently using indexes and dictionaries `examples/ut
         Block::last(&read_tx)?;
         Block::stream_range(db.begin_read()?, first_block.height, last_block.height, None)?.try_collect::<Vec<Block>>().await?;
     
-        let block_infos = Block::table_info(&db)?;
+        let block_infos = Block::table_info(Arc::clone(&storage))?;
         println!("Block persisted with tables :");
         for info in block_infos {
             println!("{}", serde_json::to_string_pretty(&info).unwrap());
@@ -212,7 +213,7 @@ And R/W entire instances efficiently using indexes and dictionaries `examples/ut
         BlockHeader::stream_range(db.begin_read()?, first_block_header.height, last_block_header.height, None)?.try_collect::<Vec<BlockHeader>>().await?;
         BlockHeader::stream_range_by_timestamp(db.begin_read()?, first_block_header.timestamp, last_block_header.timestamp, None)?.try_collect::<Vec<BlockHeader>>().await?;
     
-        let block_header_infos = BlockHeader::table_info(&db)?;
+        let block_header_infos = BlockHeader::table_info(Arc::clone(&storage))?;
         println!("
 Block header persisted with tables :");
         for info in block_header_infos {
@@ -234,7 +235,7 @@ Block header persisted with tables :");
         Transaction::stream_by_hash(db.begin_read()?, first_transaction.hash.clone(), None)?.try_collect::<Vec<Transaction>>().await?;
         Transaction::stream_range(db.begin_read()?, first_transaction.id, last_transaction.id, None)?.try_collect::<Vec<Transaction>>().await?;
     
-        let transaction_infos = Transaction::table_info(&db)?;
+        let transaction_infos = Transaction::table_info(Arc::clone(&storage))?;
         println!("
 Transaction persisted with tables :");
         for info in transaction_infos {
@@ -257,7 +258,7 @@ Transaction persisted with tables :");
         // even streaming parents is possible
         Utxo::stream_transactions_by_address(db.begin_read()?, first_utxo.address, None)?.try_collect::<Vec<Transaction>>().await?;
     
-        let utxo_infos = Utxo::table_info(&db)?;
+        let utxo_infos = Utxo::table_info(Arc::clone(&storage))?;
         println!("
 Utxo persisted with tables :");
         for info in utxo_infos {
@@ -277,7 +278,7 @@ Utxo persisted with tables :");
         // even streaming parents is possible
         Asset::stream_utxos_by_name(db.begin_read()?, first_asset.name, None)?.try_collect::<Vec<Utxo>>().await?;
     
-        let asset_infos = Asset::table_info(&db)?;
+        let asset_infos = Asset::table_info(Arc::clone(&storage))?;
         println!("
 Asset persisted with tables :");
         for info in asset_infos {

@@ -8,7 +8,7 @@ use syn::Type;
 pub fn delete_def(pk_type: &Type, delete_statements: &Vec<TokenStream>) -> FunctionDef {
     let fn_name = format_ident!("delete");
     let fn_stream = quote! {
-        pub fn #fn_name(tx: &WriteTransaction, pk: &#pk_type) -> Result<bool, AppError> {
+        pub fn #fn_name(tx: &StorageWriteTx, pk: &#pk_type) -> Result<bool, AppError> {
             let mut removed: Vec<bool> = Vec::new();
             #(#delete_statements)*
             Ok(!removed.contains(&false))
@@ -20,7 +20,7 @@ pub fn delete_def(pk_type: &Type, delete_statements: &Vec<TokenStream>) -> Funct
 pub fn delete_many_def(pk_type: &Type, delete_many_statements: &Vec<TokenStream>) -> FunctionDef {
     let fn_name = format_ident!("delete_many");
     let fn_stream = quote! {
-        pub fn #fn_name(tx: &WriteTransaction, pks: &Vec<#pk_type>) -> Result<bool, AppError> {
+        pub fn #fn_name(tx: &StorageWriteTx, pks: &Vec<#pk_type>) -> Result<bool, AppError> {
             let mut removed: Vec<bool> = Vec::new();
             #(#delete_many_statements)*
             Ok(!removed.contains(&false))
@@ -38,8 +38,8 @@ pub fn delete_and_commit_def(
 ) -> FunctionDef {
     let fn_name = format_ident!("delete_and_commit");
     let fn_stream = quote! {
-        pub fn #fn_name(db: &Database, pk: &#pk_type) -> Result<bool, AppError> {
-            let tx = db.begin_write()?;
+        pub fn #fn_name(storage: Arc<Storage>, pk: &#pk_type) -> Result<bool, AppError> {
+            let tx = storage.begin_write()?;
             let mut removed: Vec<bool> = Vec::new();
             {
                #(#delete_statements)*
@@ -52,13 +52,13 @@ pub fn delete_and_commit_def(
     let test_stream = Some(quote! {
         #[test]
         fn #fn_name() {
-            let db = test_db();
+            let storage = test_storage();
             let entity_count: usize = 3;
             for test_entity in #entity_type::sample_many(entity_count) {
-                #entity_name::store_and_commit(&db, &test_entity).expect("Failed to store and commit instance");
+                #entity_name::store_and_commit(Arc::clone(&storage), &test_entity).expect("Failed to store and commit instance");
                 let pk = test_entity.#pk_name;
-                let removed = #entity_name::#fn_name(&db, &pk).expect("Failed to delete and commit instance");
-                let read_tx = db.begin_read().expect("Failed to begin read transaction");
+                let removed = #entity_name::#fn_name(Arc::clone(&storage), &pk).expect("Failed to delete and commit instance");
+                let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
                 let is_empty = #entity_name::get(&read_tx, &pk).expect("Failed to get instance").is_none();
                 assert!(removed, "Instance should be deleted");
                 assert!(is_empty, "Instance should be deleted");
@@ -70,12 +70,12 @@ pub fn delete_and_commit_def(
     let bench_stream = Some(quote! {
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
-            let db = test_db();
+            let storage = test_storage();
             let test_entity = #entity_type::sample();
-            #entity_name::store_and_commit(&db, &test_entity).expect("Failed to store and commit instance");
+            #entity_name::store_and_commit(Arc::clone(&storage), &test_entity).expect("Failed to store and commit instance");
             let pk = test_entity.#pk_name;
             b.iter(|| {
-                #entity_name::#fn_name(&db, &pk).expect("Failed to delete and commit instance");
+                #entity_name::#fn_name(Arc::clone(&storage), &pk).expect("Failed to delete and commit instance");
             });
         }
     });
@@ -104,7 +104,7 @@ pub fn delete_and_commit_def(
             },
             handler_impl_stream: quote! {
                 impl IntoResponse {
-                    match #entity_name::#fn_name(&state.db, &#pk_name) {
+                    match #entity_name::#fn_name(Arc::clone(&state.storage), &#pk_name) {
                         Ok(true) => {
                             Response::builder().status(StatusCode::OK).body(Body::empty()).unwrap().into_response()
                         },

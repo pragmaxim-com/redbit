@@ -35,8 +35,8 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
     let test_stream = Some(quote! {
         #[test]
         fn #fn_name() {
-            let db = DB.clone();
-            let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let storage = STORAGE.clone();
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
             let from_value = #column_type::default();
             let until_value = #column_type::default().next_value();
             let entities = #entity_name::#fn_name(&read_tx, &from_value, &until_value).expect("Failed to get entities by range");
@@ -49,8 +49,8 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
     let bench_stream = Some(quote! {
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
-            let db = DB.clone();
-            let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let storage = STORAGE.clone();
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
             let from_value = #column_type::default();
             let until_value = #column_type::default().next_value();
             b.iter(|| {

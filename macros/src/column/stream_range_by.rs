@@ -51,8 +51,8 @@ pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, column
     let test_stream = Some(quote! {
         #[tokio::test]
         async fn #fn_name() {
-            let db = DB.clone();
-            let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let storage = STORAGE.clone();
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
             let from_value = #column_type::default();
             let until_value = #column_type::default().next_value().next_value();
             let entity_stream = #entity_name::#fn_name(read_tx, from_value, until_value, None).expect("Failed to range entities by index");
@@ -62,8 +62,8 @@ pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, column
         }
         #[tokio::test]
         async fn #test_with_filter_fn_name() {
-            let db = DB.clone();
-            let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let storage = STORAGE.clone();
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
             let pk = #pk_type::default();
             let from_value = #column_type::default();
             let until_value = #column_type::default().next_value().next_value().next_value();
@@ -81,13 +81,13 @@ pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, column
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
             let rt = Runtime::new().unwrap();
-            let db = DB.clone();
+            let storage = STORAGE.clone();
             let query = #stream_query_type::sample();
             b.iter(|| {
                 rt.block_on(async {
                     let from_value = #column_type::default();
                     let until_value = #column_type::default().next_value().next_value().next_value();
-                    let read_tx = db.begin_read().unwrap();
+                    let read_tx = storage.db.begin_read().unwrap();
                     let entity_stream = #entity_name::#fn_name(read_tx, from_value, until_value, Some(query.clone())).expect("Failed to range entities by index");
                     entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
                 })
@@ -117,7 +117,7 @@ pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, column
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                impl IntoResponse {
-                   match state.db.begin_read()
+                   match state.storage.db.begin_read()
                         .map_err(AppError::from)
                         .and_then(|tx| #entity_name::#fn_name(tx, query.from, query.until, body)) {
                             Ok(stream) => axum_streams::StreamBodyAs::json_nl_with_errors(stream).header("Content-Type", HeaderValue::from_str("application/x-ndjson").unwrap()).into_response(),

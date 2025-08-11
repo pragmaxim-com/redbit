@@ -3,9 +3,10 @@ use syncer::api::*;
 use redbit::redb::ReadTransaction;
 use redbit::*;
 use std::sync::Arc;
+use redbit::storage::Storage;
 
 pub struct ErgoBlockPersistence {
-    pub db: Arc<Database>,
+    pub storage: Arc<Storage>,
 }
 
 impl ErgoBlockPersistence {
@@ -27,28 +28,28 @@ impl ErgoBlockPersistence {
 
 impl BlockPersistence<Block> for ErgoBlockPersistence {
     fn get_last_header(&self) -> Result<Option<BlockHeader>, ChainSyncError> {
-        let read_tx = self.db.begin_read()?;
+        let read_tx = self.storage.db.begin_read()?;
         let last = BlockHeader::last(&read_tx)?;
         Ok(last)
     }
 
     fn get_header_by_hash(&self, hash: [u8; 32]) -> Result<Vec<BlockHeader>, ChainSyncError> {
-        let read_tx = self.db.begin_read()?;
+        let read_tx = self.storage.db.begin_read()?;
         let header = BlockHeader::get_by_hash(&read_tx, &BlockHash(hash))?;
         Ok(header)
     }
 
     fn store_blocks(&self, mut blocks: Vec<Block>) -> Result<(), ChainSyncError> {
         for block in &mut blocks {
-            let read_tx = self.db.begin_read()?;
+            let read_tx = self.storage.db.begin_read()?;
             Self::populate_inputs(&read_tx, block)?;
-            Block::store_and_commit(&self.db, block)?;
+            Block::store_and_commit(Arc::clone(&self.storage), block)?;
         }
         Ok(())
     }
 
     fn update_blocks(&self, mut blocks: Vec<Block>) -> Result<(), ChainSyncError> {
-        let write_tx = self.db.begin_write()?;
+        let write_tx = self.storage.begin_write()?;
         for block in &mut blocks {
             Block::delete(&write_tx, &block.id)?;
         }

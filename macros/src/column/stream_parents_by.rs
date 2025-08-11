@@ -60,8 +60,8 @@ pub fn by_dict_def(
     let test_stream = Some(quote! {
         #[tokio::test]
         async fn #fn_name() {
-            let db = DB.clone();
-            let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let storage = STORAGE.clone();
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
             let entity_stream = #entity_name::#fn_name(read_tx, val, None).expect("Failed to get parent entities by dictionary index");
             let parent_entities = entity_stream.try_collect::<Vec<#parent_type>>().await.expect("Failed to collect parent entity stream");
@@ -70,8 +70,8 @@ pub fn by_dict_def(
         }
         #[tokio::test]
         async fn #test_with_filter_fn_name() {
-            let db = DB.clone();
-            let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let storage = STORAGE.clone();
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
             let pk = #pk_type::default();
             let parent_pk = pk.parent();
@@ -89,11 +89,11 @@ pub fn by_dict_def(
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
             let rt = Runtime::new().unwrap();
-            let db = DB.clone();
+            let storage = STORAGE.clone();
             let query = #stream_parent_query_type::sample();
             b.iter(|| {
                 rt.block_on(async {
-                    let read_tx = db.begin_read().unwrap();
+                    let read_tx = storage.db.begin_read().unwrap();
                     let parent_entity_stream = #entity_name::#fn_name(read_tx, #column_type::default(), Some(query.clone())).expect("Failed to get parent entities by index");
                     parent_entity_stream.try_collect::<Vec<#parent_type>>().await.expect("Failed to collect parent entity stream");
                 })
@@ -124,7 +124,7 @@ pub fn by_dict_def(
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                impl IntoResponse {
-                   match state.db.begin_read()
+                   match state.storage.db.begin_read()
                         .map_err(AppError::from)
                         .and_then(|tx| #entity_name::#fn_name(tx, #column_name, body)) {
                             Ok(stream) => axum_streams::StreamBodyAs::json_nl_with_errors(stream).header("Content-Type", HeaderValue::from_str("application/x-ndjson").unwrap()).into_response(),
@@ -193,8 +193,8 @@ pub fn by_index_def(
     let test_stream = Some(quote! {
         #[tokio::test]
         async fn #fn_name() {
-            let db = DB.clone();
-            let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let storage = STORAGE.clone();
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
             let entity_stream = #entity_name::#fn_name(read_tx, val, None).expect("Failed to get parent entities by index");
             let parent_entities = entity_stream.try_collect::<Vec<#parent_type>>().await.expect("Failed to collect parent entity stream");
@@ -203,8 +203,8 @@ pub fn by_index_def(
         }
         #[tokio::test]
         async fn #test_with_filter_fn_name() {
-            let db = DB.clone();
-            let read_tx = db.begin_read().expect("Failed to begin read transaction");
+            let storage = STORAGE.clone();
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
             let pk = #pk_type::default();
             let parent_pk = pk.parent();
@@ -222,11 +222,11 @@ pub fn by_index_def(
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
             let rt = Runtime::new().unwrap();
-            let db = DB.clone();
+            let storage = STORAGE.clone();
             let query = #stream_parent_query_type::sample();
             b.iter(|| {
                 rt.block_on(async {
-                    let read_tx = db.begin_read().unwrap();
+                    let read_tx = storage.db.begin_read().unwrap();
                     let parent_entity_stream = #entity_name::#fn_name(read_tx, #column_type::default(), Some(query.clone())).expect("Failed to get parent entities by index");
                     parent_entity_stream.try_collect::<Vec<#parent_type>>().await.expect("Failed to collect parent entity stream");
                 })
@@ -259,7 +259,7 @@ pub fn by_index_def(
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                impl IntoResponse {
-                   match state.db.begin_read()
+                   match state.storage.db.begin_read()
                         .map_err(AppError::from)
                         .and_then(|tx| #entity_name::#fn_name(tx, #column_name, body)) {
                             Ok(stream) => axum_streams::StreamBodyAs::json_nl_with_errors(stream).header("Content-Type", HeaderValue::from_str("application/x-ndjson").unwrap()).into_response(),
