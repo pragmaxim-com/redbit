@@ -30,7 +30,7 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
         let chain_tip_for_persist = chain_tip_header.clone();
 
         type Batch<T> = (Vec<T>, usize);
-        let (proc_tx, mut proc_rx) = mpsc::channel::<Batch<TB>>(8);
+        let (proc_tx, mut proc_rx) = mpsc::channel::<Batch<TB>>(64);
 
         // Process + batch stage (consumes provider.stream() directly)
         let process_handle = {
