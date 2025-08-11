@@ -11,7 +11,7 @@ through auto-generated REST API. It maximizes R/W speed while minimizing data si
 ### Major Out-of-the-Box Features
 
 ✅ Querying and ranging by secondary index \
-✅ Optional dictionaries for low cardinality fields \
+✅ Optional dictionaries for low cardinality fields + first level cache for building them without overhead \
 ✅ `One-to-One` / `One-to-Option` / `One-to-Many` entities with cascade read/write/delete \
 ✅ All goodies including intuitive data ordering without writing custom codecs \
 ✅ Http response streaming api with efficient querying (ie. get txs or utxos for really HOT address) \

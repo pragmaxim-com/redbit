@@ -100,4 +100,14 @@ impl StorageWriteTx {
         let mut c = cache.lock().unwrap();
         let _ = c.put(k, v);
     }
+
+    pub fn cache_remove<K, V>(&self, def: &'static CacheDef<K, V>, k: &K) -> Option<V>
+    where
+        K: Eq + Hash + Clone + Send + Sync + 'static,
+        V: Clone + Send + Sync + 'static,
+    {
+        let cache = self.caches.ensure_cache(def);
+        let mut c = cache.lock().unwrap();
+        c.pop(k)
+    }
 }

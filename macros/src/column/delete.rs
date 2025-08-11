@@ -53,7 +53,17 @@ pub fn delete_many_index_statement(table: &Ident, index_table: &Ident) -> TokenS
     }
 }
 
-pub fn delete_dict_statement(table_dict_pk_by_pk: &Ident, table_value_to_dict_pk: &Ident, table_value_by_dict_pk: &Ident, table_dict_index: &Ident) -> TokenStream {
+fn cache_remove(cache_name: &Option<Ident>) -> TokenStream {
+    match cache_name {
+        Some(cache) => quote! {
+           tx.cache_remove(&#cache, &value);
+        },
+        None => quote! {},
+    }
+}
+
+pub fn delete_dict_statement(table_dict_pk_by_pk: &Ident, table_value_to_dict_pk: &Ident, table_value_by_dict_pk: &Ident, table_dict_index: &Ident, table_value_to_dict_pk_cache: Option<Ident>) -> TokenStream {
+    let cache_remove_stmnt = cache_remove(&table_value_to_dict_pk_cache);
     quote! {
         let mut dict_pk_by_pk       = tx.open_table(#table_dict_pk_by_pk)?;
         let mut value_to_dict_pk    = tx.open_table(#table_value_to_dict_pk)?;
@@ -67,6 +77,7 @@ pub fn delete_dict_statement(table_dict_pk_by_pk: &Ident, table_value_to_dict_pk
                 removed.push(dict_index.remove(&birth_id, pk)?);
                 if dict_index.get(&birth_id)?.is_empty() {
                     value_to_dict_pk.remove(&value)?;
+                    #cache_remove_stmnt
                     value_by_dict_pk.remove(&birth_id)?;
                 }
             } else {
@@ -78,7 +89,8 @@ pub fn delete_dict_statement(table_dict_pk_by_pk: &Ident, table_value_to_dict_pk
     }
 }
 
-pub fn delete_many_dict_statement(table_dict_pk_by_pk: &Ident, table_value_to_dict_pk: &Ident, table_value_by_dict_pk: &Ident, table_dict_index: &Ident) -> TokenStream {
+pub fn delete_many_dict_statement(table_dict_pk_by_pk: &Ident, table_value_to_dict_pk: &Ident, table_value_by_dict_pk: &Ident, table_dict_index: &Ident, table_value_to_dict_pk_cache: Option<Ident>) -> TokenStream {
+    let cache_remove_stmnt = cache_remove(&table_value_to_dict_pk_cache);
     quote! {
         let mut dict_pk_by_pk       = tx.open_table(#table_dict_pk_by_pk)?;
         let mut value_to_dict_pk    = tx.open_table(#table_value_to_dict_pk)?;
@@ -93,6 +105,7 @@ pub fn delete_many_dict_statement(table_dict_pk_by_pk: &Ident, table_value_to_di
                     removed.push(dict_index.remove(&birth_id, pk)?);
                     if dict_index.get(&birth_id)?.is_empty() {
                         value_to_dict_pk.remove(&value)?;
+                        #cache_remove_stmnt
                         value_by_dict_pk.remove(&birth_id)?;
                     }
                 } else {
