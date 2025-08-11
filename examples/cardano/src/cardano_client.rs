@@ -7,7 +7,7 @@ use pallas::network::{
 use std::sync::Arc;
 
 use crate::config::CardanoConfig;
-use crate::model::ExplorerError;
+use crate::model_v1::ExplorerError;
 
 pub type CBOR = Vec<u8>;
 

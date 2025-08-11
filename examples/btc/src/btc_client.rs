@@ -1,5 +1,5 @@
 use crate::config::BitcoinConfig;
-use crate::model::{BlockHash, Height, ExplorerError};
+use crate::model_v1::{BlockHash, Height, ExplorerError};
 use bitcoin::hashes::Hash;
 use bitcoincore_rpc::{Auth, Client, RpcApi};
 use std::sync::Arc;

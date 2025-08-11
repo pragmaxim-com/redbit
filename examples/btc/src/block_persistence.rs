@@ -1,4 +1,4 @@
-use crate::model::{Block, BlockHash, BlockHeader, Height, InputRef, Transaction, BlockPointer, TransactionPointer};
+use crate::model_v1::{Block, BlockHash, BlockHeader, Height, InputRef, Transaction, BlockPointer, TransactionPointer};
 use syncer::api::*;
 use redbit::*;
 use std::sync::Arc;
@@ -58,7 +58,7 @@ impl BlockPersistence<Block> for BtcBlockPersistence {
     fn update_blocks(&self, mut blocks: Vec<Block>) -> Result<(), ChainSyncError> {
         let write_tx = self.storage.begin_write()?;
         for block in &mut blocks {
-            Block::delete(&write_tx, &block.id)?;
+            Block::delete(&write_tx, &block.height)?;
         }
         write_tx.commit()?;
         self.store_blocks(blocks)?;

@@ -1,17 +1,8 @@
+use bitcoin::block::Bip34Error;
 use syncer::api::{BlockHeaderLike, BlockLike, ChainSyncError};
-use std::error::Error;
 use chrono::DateTime;
 pub use redbit::*;
 use std::fmt;
-use num_enum::{IntoPrimitive, TryFromPrimitive};
-
-#[derive(Clone, Copy, Debug, IntoPrimitive, PartialEq, TryFromPrimitive, )]
-#[repr(u8)]
-pub enum AssetType {
-    Mint = 0,
-    Transfer = 1,
-    Burn = 2,
-}
 
 #[root_key] pub struct Height(pub u32);
 
@@ -19,17 +10,20 @@ pub enum AssetType {
 #[pointer_key(u16)] pub struct TransactionPointer(BlockPointer);
 #[pointer_key(u8)] pub struct UtxoPointer(TransactionPointer);
 
-#[column] pub struct AssetAction(pub u8);
-#[column("utf-8")] pub struct AssetName(pub Vec<u8>);
-#[column("hex")] pub struct Tree(pub Vec<u8>);
-#[column("hex")] pub struct TreeTemplate(pub Vec<u8>);
-#[column("hex")] pub struct BoxId(pub Vec<u8>);
-
+#[column] pub struct Hash(pub String);
 #[column("hex")] pub struct BlockHash(pub [u8; 32]);
+#[column("hex")] pub struct MerkleRoot(pub [u8; 32]);
 #[column("hex")] pub struct TxHash(pub [u8; 32]);
+#[column("hex")] pub struct ScriptHash(pub Vec<u8>);
 
-#[column("crate::codec::Base58")]
+#[column("crate::codec::BaseOrBech")]
 pub struct Address(pub Vec<u8>);
+
+#[column]
+pub struct TempInputRef {
+    pub tx_hash: TxHash,
+    pub index: u32,
+}
 
 #[column]
 #[derive(Copy, Hash)]
@@ -45,7 +39,7 @@ impl fmt::Display for BlockTimestamp {
 #[entity]
 pub struct Block {
     #[pk]
-    pub id: Height,
+    pub height: Height,
     pub header: BlockHeader,
     pub transactions: Vec<Transaction>,
     #[column(transient)]
@@ -55,13 +49,15 @@ pub struct Block {
 #[entity]
 pub struct BlockHeader {
     #[fk(one2one)]
-    pub id: Height,
+    pub height: Height,
     #[column(index)]
     pub hash: BlockHash,
     #[column(index)]
     pub prev_hash: BlockHash,
     #[column(range)]
     pub timestamp: BlockTimestamp,
+    #[column(index)]
+    pub merkle_root: MerkleRoot,
 }
 
 #[entity]
@@ -73,7 +69,7 @@ pub struct Transaction {
     pub utxos: Vec<Utxo>,
     pub inputs: Vec<InputRef>,
     #[column(transient)]
-    pub transient_inputs: Vec<BoxId>,
+    pub transient_inputs: Vec<TempInputRef>,
 }
 
 #[entity]
@@ -82,27 +78,10 @@ pub struct Utxo {
     pub id: TransactionPointer,
     #[column]
     pub amount: u64,
-    #[column(index)]
-    pub box_id: BoxId,
+    #[column(dictionary(cache = 1000000))]
+    pub script_hash: ScriptHash,
     #[column(dictionary(cache = 1000000))]
     pub address: Address,
-    #[column(dictionary(cache = 1000000))]
-    pub tree: Tree,
-    #[column(dictionary(cache = 1000000))]
-    pub tree_template: TreeTemplate,
-    pub assets: Vec<Asset>,
-}
-
-#[entity]
-pub struct Asset {
-    #[fk(one2many, range)]
-    pub id: UtxoPointer,
-    #[column]
-    pub amount: u64,
-    #[column(dictionary(cache = 1000000))]
-    pub name: AssetName,
-    #[column(index)]
-    pub asset_action: AssetAction,
 }
 
 #[entity]
@@ -113,7 +92,7 @@ pub struct InputRef {
 
 impl BlockHeaderLike for BlockHeader {
     fn height(&self) -> u32 {
-        self.id.0
+        self.height.0
     }
     fn hash(&self) -> [u8; 32] {
         self.hash.0
@@ -138,17 +117,11 @@ impl BlockLike for Block {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ExplorerError {
-    #[error("Reqwest error: {source}{}", source.source().map(|e| format!(": {}", e)).unwrap_or_default())]
-    Reqwest {
-        #[from]
-        source: reqwest::Error,
-    },
+    #[error("RPC error: {0}")]
+    Rpc(#[from] bitcoincore_rpc::Error),
 
-    #[error("Url parsing error: {0}")]
-    Url(#[from] url::ParseError),
-
-    #[error("Custom error: {0}")]
-    Custom(String),
+    #[error("Height decoding error: {0}")]
+    Bip34(#[from] Bip34Error),
 }
 
 impl From<ExplorerError> for ChainSyncError {

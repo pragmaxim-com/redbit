@@ -1,4 +1,4 @@
-use crate::model::{BlockHash, Height, ExplorerError};
+use crate::model_v1::{BlockHash, Height, ExplorerError};
 use ergo_lib::chain::block::FullBlock;
 use reqwest::{
     blocking, header::{ACCEPT, CONTENT_TYPE}, Client, RequestBuilder,

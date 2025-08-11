@@ -1,4 +1,4 @@
-use crate::model::{Block, BlockHash, BlockHeader, BlockPointer, Height, InputRef, TransactionPointer, Utxo};
+use crate::model_v1::{Block, BlockHash, BlockHeader, BlockPointer, Height, InputRef, TransactionPointer, Utxo};
 use syncer::api::*;
 use redbit::*;
 use std::sync::Arc;
@@ -50,7 +50,7 @@ impl BlockPersistence<Block> for ErgoBlockPersistence {
     fn update_blocks(&self, mut blocks: Vec<Block>) -> Result<(), ChainSyncError> {
         let write_tx = self.storage.begin_write()?;
         for block in &mut blocks {
-            Block::delete(&write_tx, &block.id)?;
+            Block::delete(&write_tx, &block.height)?;
         }
         write_tx.commit()?;
         self.store_blocks(blocks)?;

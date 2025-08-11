@@ -32,7 +32,7 @@ pub fn test_suite(entity_name: &Ident, parent_entity: Option<Ident>, fn_defs: &V
     };
 
     quote!{
-        #[cfg(test)]
+        #[cfg(all(test, not(feature = "integration")))]
         mod #entity_tests {
             use super::*;
             use once_cell::sync::Lazy;

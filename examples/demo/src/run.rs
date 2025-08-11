@@ -1,6 +1,6 @@
-use crate::*;
-use redbit::AppError;
+use redbit::{AppError, Storage};
 use std::sync::Arc;
+use crate::model_v1::*;
 
 pub async fn with_db(storage: Arc<Storage>) -> () {
     run_with_db(storage).await.unwrap_or_else(|e| eprintln!("{}", e))

@@ -13,7 +13,7 @@ use btc::block_persistence::BtcBlockPersistence;
 use btc::block_provider::BtcBlockProvider;
 use btc::btc_client::{BtcBlock, BtcClient};
 use btc::config::BitcoinConfig;
-use btc::model::Block;
+use btc::model_v1::Block;
 use btc::storage;
 
 async fn maybe_run_server(http_conf: HttpSettings, storage: Arc<Storage>, shutdown: watch::Receiver<bool>) -> () {

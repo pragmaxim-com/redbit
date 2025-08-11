@@ -1,7 +1,7 @@
 use crate::config::ErgoConfig;
 use crate::ergo_client::ErgoClient;
-use crate::model;
-use crate::model::{
+use crate::model_v1;
+use crate::model_v1::{
     Address, Asset, AssetAction, AssetName, UtxoPointer, AssetType, Block, BlockHash, BlockHeader, Height, BlockTimestamp, Transaction, TxHash,
     BlockPointer, Utxo, TransactionPointer,
 };
@@ -51,8 +51,8 @@ impl ErgoBlockProvider {
                     .ok();
 
             let address = Address(address_opt.unwrap_or_else(|| vec![]));
-            let tree = model::Tree(ergo_tree_opt.unwrap_or(vec![]));
-            let tree_template = model::TreeTemplate(ergo_tree_template_opt.unwrap_or(vec![]));
+            let tree = model_v1::Tree(ergo_tree_opt.unwrap_or(vec![]));
+            let tree_template = model_v1::TreeTemplate(ergo_tree_template_opt.unwrap_or(vec![]));
 
             let amount = *out.value.as_u64();
             let utxo_pointer = TransactionPointer::from_parent(tx_pointer.clone(), out_index as u16);
@@ -86,7 +86,7 @@ impl ErgoBlockProvider {
                 assets,
                 address,
                 amount,
-                box_id: model::BoxId(box_id_bytes.clone()),
+                box_id: model_v1::BoxId(box_id_bytes.clone()),
                 tree,
                 tree_template,
             })
@@ -106,7 +106,7 @@ impl BlockProvider<FullBlock, Block> for ErgoBlockProvider {
 
         let id = Height(b.header.height);
         let header = BlockHeader {
-            id: id.clone(),
+            height: id.clone(),
             timestamp: BlockTimestamp((b.header.timestamp / 1000) as u32),
             hash: BlockHash(block_hash),
             prev_hash: BlockHash(prev_block_hash),
@@ -114,15 +114,15 @@ impl BlockProvider<FullBlock, Block> for ErgoBlockProvider {
 
         for (tx_index, tx) in b.block_transactions.transactions.iter().enumerate() {
             let tx_hash: [u8; 32] = tx.id().0.0;
-            let tx_id = BlockPointer::from_parent(header.id.clone(), tx_index as u16);
+            let tx_id = BlockPointer::from_parent(header.height.clone(), tx_index as u16);
             let (box_weight, outputs) = self.process_outputs(&tx.outputs().to_vec(), tx_id.clone()); //TODO perf check
-            let inputs: Vec<model::BoxId> = tx
+            let inputs: Vec<model_v1::BoxId> = tx
                 .inputs
                 .iter()
                 .map(|input| {
                     let box_id_slice: &[u8] = input.box_id.as_ref();
                     let box_id_bytes: Vec<u8> = box_id_slice.into();
-                    model::BoxId(box_id_bytes)
+                    model_v1::BoxId(box_id_bytes)
                 })
                 .collect();
             block_weight += box_weight;
@@ -130,7 +130,7 @@ impl BlockProvider<FullBlock, Block> for ErgoBlockProvider {
             result_txs.push(Transaction { id: tx_id.clone(), hash: TxHash(tx_hash), utxos: outputs, inputs: vec![], transient_inputs: inputs })
         }
 
-        Ok(Block { id: id.clone(), header, transactions: result_txs, weight: block_weight as u32 })
+        Ok(Block { height: id.clone(), header, transactions: result_txs, weight: block_weight as u32 })
     }
 
     fn get_processed_block(&self, header: BlockHeader) -> Result<Block, ChainSyncError> {
@@ -149,9 +149,9 @@ impl BlockProvider<FullBlock, Block> for ErgoBlockProvider {
         chain_tip_header: BlockHeader,
         last_header: Option<BlockHeader>,
     ) -> Pin<Box<dyn Stream<Item = FullBlock> + Send + 'static>> {
-        let last_height = last_header.map_or(1, |h| h.id.0);
-        info!("Indexing from {} to {}", last_height, chain_tip_header.id.0);
-        let heights = last_height..=chain_tip_header.id.0;
+        let last_height = last_header.map_or(1, |h| h.height.0);
+        info!("Indexing from {} to {}", last_height, chain_tip_header.height.0);
+        let heights = last_height..=chain_tip_header.height.0;
         let client = Arc::clone(&self.client);
         tokio_stream::iter(heights)
             .map(move |height| {

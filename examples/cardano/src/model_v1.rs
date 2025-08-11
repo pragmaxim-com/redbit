@@ -1,23 +1,33 @@
-use bitcoin::block::Bip34Error;
 use syncer::api::{BlockHeaderLike, BlockLike, ChainSyncError};
 use chrono::DateTime;
+use num_enum::{IntoPrimitive, TryFromPrimitive};
+use pallas::network::miniprotocols::{blockfetch, chainsync, localstate};
 pub use redbit::*;
 use std::fmt;
+
+#[derive(Clone, Copy, Debug, IntoPrimitive, PartialEq, TryFromPrimitive, )]
+#[repr(u8)]
+pub enum AssetType {
+    Mint = 0,
+    Transfer = 1,
+    Burn = 2,
+}
 
 #[root_key] pub struct Height(pub u32);
 
 #[pointer_key(u16)] pub struct BlockPointer(Height);
 #[pointer_key(u16)] pub struct TransactionPointer(BlockPointer);
-#[pointer_key(u8)] pub struct UtxoPointer(TransactionPointer);
+#[pointer_key(u16)] pub struct UtxoPointer(TransactionPointer);
 
-#[column] pub struct Hash(pub String);
+#[column] pub struct Slot(pub u32);
 #[column("hex")] pub struct BlockHash(pub [u8; 32]);
-#[column("hex")] pub struct MerkleRoot(pub [u8; 32]);
 #[column("hex")] pub struct TxHash(pub [u8; 32]);
 #[column("hex")] pub struct ScriptHash(pub Vec<u8>);
+#[column("hex")] pub struct PolicyId(pub [u8; 28]);
+#[column("utf-8")] pub struct AssetName(pub Vec<u8>);
+#[column("crate::codec::BaseOrBech")] pub struct Address(pub Vec<u8>);
 
-#[column("crate::codec::BaseOrBech")]
-pub struct Address(pub Vec<u8>);
+#[column] pub struct AssetAction(pub u8);
 
 #[column]
 pub struct TempInputRef {
@@ -39,7 +49,7 @@ impl fmt::Display for BlockTimestamp {
 #[entity]
 pub struct Block {
     #[pk]
-    pub id: Height,
+    pub height: Height,
     pub header: BlockHeader,
     pub transactions: Vec<Transaction>,
     #[column(transient)]
@@ -49,15 +59,15 @@ pub struct Block {
 #[entity]
 pub struct BlockHeader {
     #[fk(one2one)]
-    pub id: Height,
+    pub height: Height,
     #[column(index)]
     pub hash: BlockHash,
     #[column(index)]
     pub prev_hash: BlockHash,
     #[column(range)]
+    pub slot: Slot,
+    #[column(range)]
     pub timestamp: BlockTimestamp,
-    #[column(index)]
-    pub merkle_root: MerkleRoot,
 }
 
 #[entity]
@@ -79,9 +89,24 @@ pub struct Utxo {
     #[column]
     pub amount: u64,
     #[column(dictionary(cache = 1000000))]
-    pub script_hash: ScriptHash,
-    #[column(dictionary(cache = 1000000))]
     pub address: Address,
+    #[column]
+    pub script_hash: ScriptHash,
+    pub assets: Vec<Asset>,
+}
+
+#[entity]
+pub struct Asset {
+    #[fk(one2many, range)]
+    pub id: UtxoPointer,
+    #[column]
+    pub amount: u64,
+    #[column(dictionary(cache = 1000000))]
+    pub name: AssetName,
+    #[column(dictionary(cache = 1000000))]
+    pub policy_id: PolicyId,
+    #[column(index)]
+    pub asset_action: AssetAction,
 }
 
 #[entity]
@@ -92,7 +117,7 @@ pub struct InputRef {
 
 impl BlockHeaderLike for BlockHeader {
     fn height(&self) -> u32 {
-        self.id.0
+        self.height.0
     }
     fn hash(&self) -> [u8; 32] {
         self.hash.0
@@ -117,11 +142,20 @@ impl BlockLike for Block {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ExplorerError {
-    #[error("RPC error: {0}")]
-    Rpc(#[from] bitcoincore_rpc::Error),
+    #[error("Cardano chain sync error: {0}")]
+    ChainSyncError(#[from] chainsync::ClientError),
 
-    #[error("Height decoding error: {0}")]
-    Bip34(#[from] Bip34Error),
+    #[error("Cardano block fetch error: {0}")]
+    BlockFetchError(#[from] blockfetch::ClientError),
+
+    #[error("Cardano local state error: {0}")]
+    LocalStateError(#[from] localstate::ClientError),
+
+    #[error("Cardano pallas traverse error: {0}")]
+    PallasTraverseError(#[from] pallas_traverse::Error),
+
+    #[error("Custom error: {0}")]
+    Custom(String),
 }
 
 impl From<ExplorerError> for ChainSyncError {

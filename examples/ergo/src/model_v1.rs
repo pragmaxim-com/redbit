@@ -1,9 +1,9 @@
 use syncer::api::{BlockHeaderLike, BlockLike, ChainSyncError};
+use std::error::Error;
 use chrono::DateTime;
-use num_enum::{IntoPrimitive, TryFromPrimitive};
-use pallas::network::miniprotocols::{blockfetch, chainsync, localstate};
 pub use redbit::*;
 use std::fmt;
+use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 #[derive(Clone, Copy, Debug, IntoPrimitive, PartialEq, TryFromPrimitive, )]
 #[repr(u8)]
@@ -17,23 +17,19 @@ pub enum AssetType {
 
 #[pointer_key(u16)] pub struct BlockPointer(Height);
 #[pointer_key(u16)] pub struct TransactionPointer(BlockPointer);
-#[pointer_key(u16)] pub struct UtxoPointer(TransactionPointer);
-
-#[column] pub struct Slot(pub u32);
-#[column("hex")] pub struct BlockHash(pub [u8; 32]);
-#[column("hex")] pub struct TxHash(pub [u8; 32]);
-#[column("hex")] pub struct ScriptHash(pub Vec<u8>);
-#[column("hex")] pub struct PolicyId(pub [u8; 28]);
-#[column("utf-8")] pub struct AssetName(pub Vec<u8>);
-#[column("crate::codec::BaseOrBech")] pub struct Address(pub Vec<u8>);
+#[pointer_key(u8)] pub struct UtxoPointer(TransactionPointer);
 
 #[column] pub struct AssetAction(pub u8);
+#[column("utf-8")] pub struct AssetName(pub Vec<u8>);
+#[column("hex")] pub struct Tree(pub Vec<u8>);
+#[column("hex")] pub struct TreeTemplate(pub Vec<u8>);
+#[column("hex")] pub struct BoxId(pub Vec<u8>);
 
-#[column]
-pub struct TempInputRef {
-    pub tx_hash: TxHash,
-    pub index: u32,
-}
+#[column("hex")] pub struct BlockHash(pub [u8; 32]);
+#[column("hex")] pub struct TxHash(pub [u8; 32]);
+
+#[column("crate::codec::Base58")]
+pub struct Address(pub Vec<u8>);
 
 #[column]
 #[derive(Copy, Hash)]
@@ -49,7 +45,7 @@ impl fmt::Display for BlockTimestamp {
 #[entity]
 pub struct Block {
     #[pk]
-    pub id: Height,
+    pub height: Height,
     pub header: BlockHeader,
     pub transactions: Vec<Transaction>,
     #[column(transient)]
@@ -59,13 +55,11 @@ pub struct Block {
 #[entity]
 pub struct BlockHeader {
     #[fk(one2one)]
-    pub id: Height,
+    pub height: Height,
     #[column(index)]
     pub hash: BlockHash,
     #[column(index)]
     pub prev_hash: BlockHash,
-    #[column(range)]
-    pub slot: Slot,
     #[column(range)]
     pub timestamp: BlockTimestamp,
 }
@@ -79,7 +73,7 @@ pub struct Transaction {
     pub utxos: Vec<Utxo>,
     pub inputs: Vec<InputRef>,
     #[column(transient)]
-    pub transient_inputs: Vec<TempInputRef>,
+    pub transient_inputs: Vec<BoxId>,
 }
 
 #[entity]
@@ -88,10 +82,14 @@ pub struct Utxo {
     pub id: TransactionPointer,
     #[column]
     pub amount: u64,
+    #[column(index)]
+    pub box_id: BoxId,
     #[column(dictionary(cache = 1000000))]
     pub address: Address,
-    #[column]
-    pub script_hash: ScriptHash,
+    #[column(dictionary(cache = 1000000))]
+    pub tree: Tree,
+    #[column(dictionary(cache = 1000000))]
+    pub tree_template: TreeTemplate,
     pub assets: Vec<Asset>,
 }
 
@@ -103,8 +101,6 @@ pub struct Asset {
     pub amount: u64,
     #[column(dictionary(cache = 1000000))]
     pub name: AssetName,
-    #[column(dictionary(cache = 1000000))]
-    pub policy_id: PolicyId,
     #[column(index)]
     pub asset_action: AssetAction,
 }
@@ -117,7 +113,7 @@ pub struct InputRef {
 
 impl BlockHeaderLike for BlockHeader {
     fn height(&self) -> u32 {
-        self.id.0
+        self.height.0
     }
     fn hash(&self) -> [u8; 32] {
         self.hash.0
@@ -142,17 +138,14 @@ impl BlockLike for Block {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ExplorerError {
-    #[error("Cardano chain sync error: {0}")]
-    ChainSyncError(#[from] chainsync::ClientError),
+    #[error("Reqwest error: {source}{}", source.source().map(|e| format!(": {}", e)).unwrap_or_default())]
+    Reqwest {
+        #[from]
+        source: reqwest::Error,
+    },
 
-    #[error("Cardano block fetch error: {0}")]
-    BlockFetchError(#[from] blockfetch::ClientError),
-
-    #[error("Cardano local state error: {0}")]
-    LocalStateError(#[from] localstate::ClientError),
-
-    #[error("Cardano pallas traverse error: {0}")]
-    PallasTraverseError(#[from] pallas_traverse::Error),
+    #[error("Url parsing error: {0}")]
+    Url(#[from] url::ParseError),
 
     #[error("Custom error: {0}")]
     Custom(String),

@@ -1,5 +1,5 @@
 use crate::btc_client::{BtcBlock, BtcClient};
-use crate::model::{Address, Block, BlockHash, BlockHeader, Height, BlockTimestamp, ExplorerError, ScriptHash, TempInputRef, Transaction, TxHash, BlockPointer, Utxo, TransactionPointer, MerkleRoot};
+use crate::model_v1::{Address, Block, BlockHash, BlockHeader, Height, BlockTimestamp, ExplorerError, ScriptHash, TempInputRef, Transaction, TxHash, BlockPointer, Utxo, TransactionPointer, MerkleRoot};
 use async_trait::async_trait;
 use syncer::api::{BlockProvider, ChainSyncError};
 use syncer::info;
@@ -66,7 +66,7 @@ impl BtcBlockProvider {
 impl BlockProvider<BtcBlock, Block> for BtcBlockProvider {
     fn process_block(&self, block: &BtcBlock) -> Result<Block, ChainSyncError> {
         let header = BlockHeader {
-            id: block.height.clone(),
+            height: block.height.clone(),
             timestamp: BlockTimestamp(block.underlying.header.time),
             hash: BlockHash(*block.underlying.block_hash().as_ref()),
             prev_hash: BlockHash(*block.underlying.header.prev_blockhash.as_ref()),
@@ -75,7 +75,7 @@ impl BlockProvider<BtcBlock, Block> for BtcBlockProvider {
 
         let mut block_weight = 0;
         Ok(Block {
-            id: block.height.clone(),
+            height: block.height.clone(),
             header,
             transactions: block
                 .underlying
@@ -107,9 +107,9 @@ impl BlockProvider<BtcBlock, Block> for BtcBlockProvider {
         chain_tip_header: BlockHeader,
         last_header: Option<BlockHeader>,
     ) -> Pin<Box<dyn Stream<Item = BtcBlock> + Send + 'static>> {
-        let last_height = last_header.map_or(0, |h| h.id.0);
+        let last_height = last_header.map_or(0, |h| h.height.0);
         info!("Indexing from {:?} to {:?}", last_height, chain_tip_header);
-        let heights = last_height..=chain_tip_header.id.0;
+        let heights = last_height..=chain_tip_header.height.0;
         let client = Arc::clone(&self.client);
         tokio_stream::iter(heights)
             .map(move |height| {

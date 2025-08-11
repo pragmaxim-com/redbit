@@ -6,13 +6,13 @@ mod block_persistence;
 mod block_provider;
 mod config;
 mod ergo_client;
-mod model;
+mod model_v1;
 mod storage;
 
 use crate::block_persistence::ErgoBlockPersistence;
 use crate::block_provider::ErgoBlockProvider;
 use crate::config::ErgoConfig;
-use crate::model::Block;
+use crate::model_v1::Block;
 use anyhow::Result;
 use ergo_lib::chain::block::FullBlock;
 use futures::future::ready;

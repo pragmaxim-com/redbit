@@ -6,7 +6,7 @@ use async_stream::stream;
 use super::cardano_client::{CBOR, CardanoClient};
 use crate::config::CardanoConfig;
 use crate::info;
-use crate::model::*;
+use crate::model_v1::*;
 use ExplorerError;
 use async_trait::async_trait;
 use syncer::api::{BlockProvider, ChainSyncError};
@@ -104,7 +104,7 @@ impl BlockProvider<CBOR, Block> for CardanoBlockProvider {
         let prev_h = b.header().previous_hash().unwrap_or(pallas::crypto::hash::Hash::new([0u8; 32]));
         let prev_hash: [u8; 32] = *prev_h;
         let header = BlockHeader {
-            id: Height(b.header().number() as u32),
+            height: Height(b.header().number() as u32),
             timestamp: BlockTimestamp(b.wallclock(&self.genesis) as u32),
             slot: Slot(b.slot() as u32),
             hash: BlockHash(hash),
@@ -117,7 +117,7 @@ impl BlockProvider<CBOR, Block> for CardanoBlockProvider {
 
         for (tx_index, tx) in txs.iter().enumerate() {
             let tx_hash: [u8; 32] = *tx.hash();
-            let tx_id = BlockPointer::from_parent(header.id.clone(), tx_index as u16);
+            let tx_id = BlockPointer::from_parent(header.height.clone(), tx_index as u16);
             let inputs = self.process_inputs(&tx.inputs());
             let (box_weight, outputs) = self.process_outputs(&tx.outputs().to_vec(), tx_id.clone()); //TODO perf check
             block_weight += box_weight;
@@ -125,7 +125,7 @@ impl BlockProvider<CBOR, Block> for CardanoBlockProvider {
             result_txs.push(Transaction { id: tx_id.clone(), hash: TxHash(tx_hash), utxos: outputs, inputs: vec![], transient_inputs: inputs })
         }
 
-        Ok(Block { id: header.id.clone(), header, transactions: result_txs, weight: block_weight as u32 }) // usize
+        Ok(Block { height: header.height.clone(), header, transactions: result_txs, weight: block_weight as u32 }) // usize
     }
 
     async fn get_chain_tip(&self) -> Result<BlockHeader, ChainSyncError> {
@@ -148,7 +148,7 @@ impl BlockProvider<CBOR, Block> for CardanoBlockProvider {
         stream! {
             // Hold the lock for the duration of the chain-sync session to avoid re-locking
             let (_, to) = node_client.lock().await.chainsync().find_intersect(vec![last_point]).await.unwrap();
-            info!("Indexing from {} to {}", last_header.as_ref().map(|h| h.id.0).unwrap_or(0), to.1);
+            info!("Indexing from {} to {}", last_header.as_ref().map(|h| h.height.0).unwrap_or(0), to.1);
 
             loop {
                 match node_client.lock().await.chainsync().request_or_await_next().await.unwrap() {

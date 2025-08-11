@@ -7,7 +7,7 @@ use btc::block_persistence::BtcBlockPersistence;
 use btc::block_provider::BtcBlockProvider;
 use btc::btc_client::{BtcBlock, BtcClient};
 use btc::config::BitcoinConfig;
-use btc::model::{Block, Height};
+use btc::model_v1::{Block, Height};
 use btc::storage;
 
 fn criterion_benchmark(c: &mut Criterion) {

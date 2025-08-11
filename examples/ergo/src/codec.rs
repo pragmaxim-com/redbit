@@ -58,7 +58,7 @@ mod tests {
     use super::*;
     use serde_with::serde_as;
     use serde::{Serialize, Deserialize};
-    use crate::model::serde_json;
+    use crate::model_v1::serde_json;
 
     #[serde_as]
     #[derive(Debug, PartialEq, Serialize, Deserialize)]

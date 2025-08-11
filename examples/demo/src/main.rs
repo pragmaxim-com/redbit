@@ -1,21 +1,15 @@
-use std::env;
+use demo::storage::empty_temp_storage;
+use demo::*;
+use redbit::*;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use syncer::combine;
 use tokio::sync::watch;
 use tower_http::cors;
-use utoipa_axum::router::OpenApiRouter;
-use demo::*;
-use demo::redb::Database;
 
 #[tokio::main]
 async fn main() {
-    let dir = env::temp_dir().join("redbit");
-    if !dir.exists() {
-        std::fs::create_dir_all(dir.clone()).unwrap();
-    }
-    let db = Arc::new(Database::create(dir.join("my_db.redb")).expect("Failed to create database"));
-    let storage = Arc::new(Storage::new(db.clone()));
+    let storage = empty_temp_storage("redbit", 1);
     let cors = cors::CorsLayer::new()
         .allow_origin(cors::Any) // or use a specific origin: `AllowOrigin::exact("http://localhost:5173".parse().unwrap())`
         .allow_methods(cors::Any)

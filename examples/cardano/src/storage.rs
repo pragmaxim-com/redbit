@@ -1,4 +1,4 @@
-use crate::model::Block;
+use crate::model_v1::Block;
 use redb::Database;
 use redbit::*;
 use std::path::PathBuf;
@@ -10,7 +10,7 @@ pub fn get_storage(db_dir: PathBuf, db_cache_size_gb: u8) -> redb::Result<Arc<St
         let storage = Arc::new(Storage::new(Arc::new(db)));
         let sample_block = Block::sample();
         Block::store_and_commit(Arc::clone(&storage), &sample_block)?;
-        Block::delete_and_commit(Arc::clone(&storage), &sample_block.id)?;
+        Block::delete_and_commit(Arc::clone(&storage), &sample_block.height)?;
         Ok(Arc::clone(&storage))
     } else {
         let db = Database::open(db_dir.join("chain_syncer.db"))?;
