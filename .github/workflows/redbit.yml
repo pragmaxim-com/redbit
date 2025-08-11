@@ -33,7 +33,9 @@ jobs:
             cargo-${{ runner.os }}-
 
       - name: Run tests
-        run: cargo +nightly test --package demo
+        run: |
+          cargo +nightly test --package demo
+          cargo +nightly test --package demo --features integration
 
   performance:
     runs-on: ubuntu-latest
