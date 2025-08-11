@@ -51,7 +51,14 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
             })
         };
 
+        // drain task
+        let drain = tokio::spawn(async move {
+            while let Some(_raw) = raw_rx.recv().await { /* drop */ }
+        });
+
+
         fetch_handle.await.expect("Fetching failed");
+        drain.await.expect("Drain failed");
     }
 
     fn chain_link(block: TB, block_provider: Arc<dyn BlockProvider<FB, TB>>, block_persistence: Arc<dyn BlockPersistence<TB>>) -> Result<Vec<TB>, ChainSyncError> {
