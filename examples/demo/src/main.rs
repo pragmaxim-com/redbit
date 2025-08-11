@@ -6,6 +6,7 @@ use tokio::sync::watch;
 use tower_http::cors;
 use utoipa_axum::router::OpenApiRouter;
 use demo::*;
+use demo::redb::Database;
 
 #[tokio::main]
 async fn main() {

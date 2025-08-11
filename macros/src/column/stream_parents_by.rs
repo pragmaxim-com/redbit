@@ -18,7 +18,7 @@ pub fn by_dict_def(
 ) -> FunctionDef {
     let fn_name = format_ident!("stream_{}s_by_{}", parent_ident.to_string().to_lowercase(), column_name);
     let fn_stream = quote! {
-        pub fn #fn_name(tx: ReadTransaction, val: #column_type, query: Option<#stream_parent_query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#parent_type, AppError>> + Send + 'static>>, AppError> {
+        pub fn #fn_name(tx: StorageReadTx, val: #column_type, query: Option<#stream_parent_query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#parent_type, AppError>> + Send + 'static>>, AppError> {
             let val2birth = tx.open_table(#value_to_dict_pk)?;
             let birth_guard = val2birth.get(&val)?;
             let mut unique_parent_pointers = Vec::new();
@@ -61,7 +61,7 @@ pub fn by_dict_def(
         #[tokio::test]
         async fn #fn_name() {
             let storage = STORAGE.clone();
-            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
             let entity_stream = #entity_name::#fn_name(read_tx, val, None).expect("Failed to get parent entities by dictionary index");
             let parent_entities = entity_stream.try_collect::<Vec<#parent_type>>().await.expect("Failed to collect parent entity stream");
@@ -71,7 +71,7 @@ pub fn by_dict_def(
         #[tokio::test]
         async fn #test_with_filter_fn_name() {
             let storage = STORAGE.clone();
-            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
             let pk = #pk_type::default();
             let parent_pk = pk.parent();
@@ -93,7 +93,7 @@ pub fn by_dict_def(
             let query = #stream_parent_query_type::sample();
             b.iter(|| {
                 rt.block_on(async {
-                    let read_tx = storage.db.begin_read().unwrap();
+                    let read_tx = storage.begin_read().unwrap();
                     let parent_entity_stream = #entity_name::#fn_name(read_tx, #column_type::default(), Some(query.clone())).expect("Failed to get parent entities by index");
                     parent_entity_stream.try_collect::<Vec<#parent_type>>().await.expect("Failed to collect parent entity stream");
                 })
@@ -124,7 +124,7 @@ pub fn by_dict_def(
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                impl IntoResponse {
-                   match state.storage.db.begin_read()
+                   match state.storage.begin_read()
                         .map_err(AppError::from)
                         .and_then(|tx| #entity_name::#fn_name(tx, #column_name, body)) {
                             Ok(stream) => axum_streams::StreamBodyAs::json_nl_with_errors(stream).header("Content-Type", HeaderValue::from_str("application/x-ndjson").unwrap()).into_response(),
@@ -157,7 +157,7 @@ pub fn by_index_def(
 ) -> FunctionDef {
     let fn_name = format_ident!("stream_{}s_by_{}", parent_ident.to_string().to_lowercase(), column_name);
     let fn_stream = quote! {
-        pub fn #fn_name(tx: ReadTransaction, val: #column_type, query: Option<#stream_parent_query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#parent_type, AppError>> + Send + 'static>>, AppError> {
+        pub fn #fn_name(tx: StorageReadTx, val: #column_type, query: Option<#stream_parent_query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#parent_type, AppError>> + Send + 'static>>, AppError> {
             let mm_table = tx.open_multimap_table(#table).map_err(AppError::from)?;
             let iter = mm_table.get(&val).map_err(AppError::from)?;
             let mut unique_parent_pointers = Vec::new();
@@ -194,7 +194,7 @@ pub fn by_index_def(
         #[tokio::test]
         async fn #fn_name() {
             let storage = STORAGE.clone();
-            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
             let entity_stream = #entity_name::#fn_name(read_tx, val, None).expect("Failed to get parent entities by index");
             let parent_entities = entity_stream.try_collect::<Vec<#parent_type>>().await.expect("Failed to collect parent entity stream");
@@ -204,7 +204,7 @@ pub fn by_index_def(
         #[tokio::test]
         async fn #test_with_filter_fn_name() {
             let storage = STORAGE.clone();
-            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
             let pk = #pk_type::default();
             let parent_pk = pk.parent();
@@ -226,7 +226,7 @@ pub fn by_index_def(
             let query = #stream_parent_query_type::sample();
             b.iter(|| {
                 rt.block_on(async {
-                    let read_tx = storage.db.begin_read().unwrap();
+                    let read_tx = storage.begin_read().unwrap();
                     let parent_entity_stream = #entity_name::#fn_name(read_tx, #column_type::default(), Some(query.clone())).expect("Failed to get parent entities by index");
                     parent_entity_stream.try_collect::<Vec<#parent_type>>().await.expect("Failed to collect parent entity stream");
                 })
@@ -259,7 +259,7 @@ pub fn by_index_def(
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                impl IntoResponse {
-                   match state.storage.db.begin_read()
+                   match state.storage.begin_read()
                         .map_err(AppError::from)
                         .and_then(|tx| #entity_name::#fn_name(tx, #column_name, body)) {
                             Ok(stream) => axum_streams::StreamBodyAs::json_nl_with_errors(stream).header("Content-Type", HeaderValue::from_str("application/x-ndjson").unwrap()).into_response(),

@@ -42,10 +42,7 @@ pub use once_cell;
 pub use query::*;
 pub use rand;
 pub use redb;
-pub use redb::Database;
 pub use redb::MultimapTableDefinition;
-pub use redb::ReadTransaction;
-pub use redb::ReadOnlyTable;
 pub use redb::ReadableMultimapTable;
 pub use redb::ReadableTableMetadata;
 pub use redb::ReadableTable;
@@ -73,6 +70,7 @@ pub use utoipa_swagger_ui;
 pub use cache::CacheDef;
 pub use storage::Storage;
 pub use storage::StorageWriteTx;
+pub use storage::StorageReadTx;
 
 use crate::axum::extract::rejection::JsonRejection;
 use crate::axum::extract::FromRequest;
@@ -92,7 +90,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::net::SocketAddr;
 use std::ops::Add;
-use std::path::PathBuf;
+use redb::Database;
 use tokio::net::TcpListener;
 use tokio::sync::watch;
 use tower_http::cors::CorsLayer;
@@ -409,12 +407,13 @@ impl<T: PartialOrd + PartialEq> FilterOp<T> {
     }
 }
 
-pub fn test_db_path(entity_name: &str) -> PathBuf {
+pub fn create_random_storage(entity_name: &str) -> Arc<Storage> {
     let dir = std::env::temp_dir().join("redbit").join("test");
     if !dir.exists() {
         std::fs::create_dir_all(dir.clone()).unwrap();
     }
-    dir.join(format!("{}_{}.redb", entity_name, rand::random::<u64>()))
+    let db = Database::create(dir.join(format!("{}_{}.redb", entity_name, rand::random::<u64>()))).expect("Failed to create test database");
+    Arc::new(Storage::new(Arc::new(db)))
 }
 
 pub async fn build_test_server(storage: Arc<Storage>) -> axum_test::TestServer {

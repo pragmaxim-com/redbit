@@ -13,7 +13,7 @@ pub fn get_by_dict_def(
 ) -> FunctionDef {
     let fn_name = format_ident!("get_by_{}", column_name);
     let fn_stream = quote! {
-        pub fn #fn_name(tx: &ReadTransaction, val: &#column_type) -> Result<Vec<#entity_type>, AppError> {
+        pub fn #fn_name(tx: &StorageReadTx, val: &#column_type) -> Result<Vec<#entity_type>, AppError> {
             let val2birth = tx.open_table(#value_to_dict_pk)?;
             let birth_guard = val2birth.get(val)?;
             let birth_id = match birth_guard {
@@ -42,7 +42,7 @@ pub fn get_by_dict_def(
         #[test]
         fn #fn_name() {
             let storage = STORAGE.clone();
-            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
             let entities = #entity_name::#fn_name(&read_tx, &val).expect("Failed to get entities by dictionary index");
             let expected_entities = vec![#entity_type::sample()];
@@ -55,7 +55,7 @@ pub fn get_by_dict_def(
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
             let storage = STORAGE.clone();
-            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
             b.iter(|| {
                 #entity_name::#fn_name(&read_tx, &val).expect("Failed to get entities by dictionary index");
@@ -74,7 +74,7 @@ pub fn get_by_dict_def(
 pub fn get_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident, column_type: &Type, table: &Ident) -> FunctionDef {
     let fn_name = format_ident!("get_by_{}", column_name);
     let fn_stream = quote! {
-        pub fn #fn_name(tx: &ReadTransaction, val: &#column_type) -> Result<Vec<#entity_type>, AppError> {
+        pub fn #fn_name(tx: &StorageReadTx, val: &#column_type) -> Result<Vec<#entity_type>, AppError> {
             let mm_table = tx.open_multimap_table(#table)?;
             let mut iter = mm_table.get(val)?;
             let mut results = Vec::new();
@@ -97,7 +97,7 @@ pub fn get_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &I
         #[test]
         fn #fn_name() {
             let storage = STORAGE.clone();
-            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
             let entities = #entity_name::#fn_name(&read_tx, &val).expect("Failed to get entities by index");
             let expected_entities = vec![#entity_type::sample()];
@@ -110,7 +110,7 @@ pub fn get_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &I
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
             let storage = STORAGE.clone();
-            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
             b.iter(|| {
                 #entity_name::#fn_name(&read_tx, &val).expect("Failed to get entities by index");

@@ -9,7 +9,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
     let fn_name = format_ident!("stream_range");
     let fn_stream =
         quote! {
-            pub fn #fn_name(tx: ReadTransaction, from: #pk_type, until: #pk_type, query: Option<#stream_query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#entity_type, AppError>> + Send + 'static>>, AppError> {
+            pub fn #fn_name(tx: StorageReadTx, from: #pk_type, until: #pk_type, query: Option<#stream_query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#entity_type, AppError>> + Send + 'static>>, AppError> {
                 let table_pk_9 = tx.open_table(#table)?;
                 let range = from..until;
                 let iter_box = Box::new(table_pk_9.range::<#pk_type>(range)?);
@@ -43,7 +43,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
         #[tokio::test]
         async fn #fn_name() {
             let storage = STORAGE.clone();
-            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let from_value = #pk_type::default();
             let until_value = #pk_type::default().next_index().next_index();
             let entity_stream = #entity_name::#fn_name(read_tx, from_value, until_value, None).expect("Failed to range entities by pk");
@@ -54,7 +54,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
         #[tokio::test]
         async fn #test_with_filter_fn_name() {
             let storage = STORAGE.clone();
-            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let pk = #pk_type::default();
             let from_value = #pk_type::default();
             let until_value = #pk_type::default().next_index().next_index().next_index();
@@ -78,7 +78,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
                 rt.block_on(async {
                     let from_value = #pk_type::default();
                     let until_value = #pk_type::default().next_index().next_index().next_index();
-                    let read_tx = storage.db.begin_read().unwrap();
+                    let read_tx = storage.begin_read().unwrap();
                     let entity_stream = #entity_name::#fn_name(read_tx, from_value, until_value, Some(query.clone())).expect("Failed to range entities by pk");
                     entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
                 })
@@ -108,7 +108,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                impl IntoResponse {
-                   match state.storage.db.begin_read()
+                   match state.storage.begin_read()
                         .map_err(AppError::from)
                         .and_then(|tx| #entity_name::#fn_name(tx, query.from, query.until, body)) {
                             Ok(stream) => axum_streams::StreamBodyAs::json_nl_with_errors(stream).header("Content-Type", HeaderValue::from_str("application/x-ndjson").unwrap()).into_response(),

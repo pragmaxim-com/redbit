@@ -8,7 +8,7 @@ use syn::Type;
 pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> FunctionDef {
     let fn_name = format_ident!("take");
     let fn_stream = quote! {
-        pub fn #fn_name(tx: &ReadTransaction, n: usize) -> Result<Vec<#entity_type>, AppError> {
+        pub fn #fn_name(tx: &StorageReadTx, n: usize) -> Result<Vec<#entity_type>, AppError> {
             let table_pk_6 = tx.open_table(#table)?;
             let mut iter = table_pk_6.iter()?;
             let mut results = Vec::new();
@@ -33,7 +33,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
         #[test]
         fn #fn_name() {
             let storage = STORAGE.clone();
-            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let n: usize = 2;
             let entities = #entity_name::#fn_name(&read_tx, n).expect("Failed to take entities");
             let expected_entities = #entity_type::sample_many(n);
@@ -46,7 +46,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
             let storage = STORAGE.clone();
-            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let n: usize = 2;
             b.iter(|| {
                 #entity_name::#fn_name(&read_tx, n).expect("Failed to take entities");
@@ -71,7 +71,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                Result<AppJson<Vec<#entity_type>>, AppError> {
-                    state.storage.db.begin_read().map_err(AppError::from).and_then(|tx| #entity_name::#fn_name(&tx, query.take)).map(AppJson)
+                    state.storage.begin_read().map_err(AppError::from).and_then(|tx| #entity_name::#fn_name(&tx, query.take)).map(AppJson)
                 }
             },
             utoipa_responses: quote! {

@@ -19,7 +19,7 @@ pub fn by_dict_def(
 
     let fn_stream = quote! {
         pub fn #fn_name(
-            tx: &ReadTransaction,
+            tx: &StorageReadTx,
             val: &#column_type
         ) -> Result<impl futures::Stream<Item = Result<#pk_type, AppError>> + Send + 'static, AppError> {
             let val2birth = tx.open_table(#value_to_dict_pk)?;
@@ -47,7 +47,7 @@ pub fn by_dict_def(
         #[tokio::test]
         async fn #fn_name() {
             let storage = STORAGE.clone();
-            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
             let pk_stream = #entity_name::#fn_name(&read_tx, &val).expect("Stream creation failed");
             let pks = pk_stream.try_collect::<Vec<#pk_type>>().await.expect("Failed to collect stream");
@@ -63,7 +63,7 @@ pub fn by_dict_def(
             let storage = STORAGE.clone();
             b.iter(|| {
                 rt.block_on(async {
-                    let read_tx = storage.db.begin_read().unwrap();
+                    let read_tx = storage.begin_read().unwrap();
                     let pk_stream = #entity_name::#fn_name(&read_tx, &#column_type::default()).expect("Stream creation failed");
                     pk_stream.try_collect::<Vec<#pk_type>>().await.expect("Failed to collect stream");
                 })
@@ -88,7 +88,7 @@ pub fn by_dict_def(
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                impl IntoResponse {
-                   match state.storage.db.begin_read()
+                   match state.storage.begin_read()
                         .map_err(AppError::from)
                         .and_then(|tx| #entity_name::#fn_name(&tx, &#column_name)) {
                             Ok(stream) => axum_streams::StreamBodyAs::json_nl_with_errors(stream).header("Content-Type", HeaderValue::from_str("application/x-ndjson").unwrap()).into_response(),
@@ -124,7 +124,7 @@ pub fn by_index_def(
 
     let fn_stream = quote! {
         pub fn #fn_name(
-            tx: &ReadTransaction,
+            tx: &StorageReadTx,
             val: &#column_type
         ) -> Result<impl futures::Stream<Item = Result<#pk_type, AppError>> + Send + 'static, AppError> {
             let it = tx.open_multimap_table(#table)?.get(val)?;
@@ -139,7 +139,7 @@ pub fn by_index_def(
         #[tokio::test]
         async fn #fn_name() {
             let storage = STORAGE.clone();
-            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
             let pk_stream = #entity_name::#fn_name(&read_tx, &val).expect("Stream creation failed");
             let pks = pk_stream.try_collect::<Vec<#pk_type>>().await.expect("Failed to collect stream");
@@ -155,7 +155,7 @@ pub fn by_index_def(
             let storage = STORAGE.clone();
             b.iter(|| {
                 rt.block_on(async {
-                    let read_tx = storage.db.begin_read().unwrap();
+                    let read_tx = storage.begin_read().unwrap();
                     let pk_stream = #entity_name::#fn_name(&read_tx, &#column_type::default()).expect("Stream creation failed");
                     pk_stream.try_collect::<Vec<#pk_type>>().await.expect("Failed to collect stream");
                 })
@@ -180,7 +180,7 @@ pub fn by_index_def(
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                impl IntoResponse {
-                   match state.storage.db.begin_read()
+                   match state.storage.begin_read()
                         .map_err(AppError::from)
                         .and_then(|tx| #entity_name::#fn_name(&tx, &#column_name)) {
                             Ok(stream) => axum_streams::StreamBodyAs::json_nl_with_errors(stream).header("Content-Type", HeaderValue::from_str("application/x-ndjson").unwrap()).into_response(),

@@ -6,7 +6,7 @@ use syn::Type;
 pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, table: &Ident, stream_query_type: &Type) -> FunctionDef {
     let fn_name = format_ident!("filter");
     let fn_stream = quote! {
-        pub fn #fn_name(tx: &ReadTransaction, pk: &#pk_type, query: &#stream_query_type) -> Result<Option<#entity_type>, AppError> {
+        pub fn #fn_name(tx: &StorageReadTx, pk: &#pk_type, query: &#stream_query_type) -> Result<Option<#entity_type>, AppError> {
             let table_pk_5 = tx.open_table(#table)?;
             if table_pk_5.get(pk)?.is_some() {
                 Ok(Self::compose_with_filter(&tx, pk, query)?)
@@ -20,7 +20,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, table: &I
         #[test]
         fn #fn_name() {
             let storage = STORAGE.clone();
-            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let query = #stream_query_type::sample();
             let pk_default = #pk_type::default();
             let entity = #entity_name::#fn_name(&read_tx, &pk_default, &query).expect("Failed to get entity by PK").expect("Expected entity to exist");
@@ -38,7 +38,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, table: &I
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
             let storage = STORAGE.clone();
-            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let query = #stream_query_type::sample();
             let pk_default = #pk_type::default();
             b.iter(|| {

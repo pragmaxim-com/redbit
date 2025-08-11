@@ -17,13 +17,12 @@ pub fn test_suite(entity_name: &Ident, parent_entity: Option<Ident>, fn_defs: &V
         };
 
     let db_init = quote!{
-        fn test_storage() -> Arc<Storage> {
-            let db = Database::create(test_db_path(#entity_literal)).expect("Failed to create database");
-            Arc::new(Storage::new(Arc::new(db)))
+        fn random_storage() -> Arc<Storage> {
+            create_random_storage(#entity_literal)
         }
 
         static STORAGE: Lazy<Arc<Storage>> = Lazy::new(|| {
-            let storage = test_storage();
+            let storage = random_storage();
             let entities = #sample_entity::sample_many(#sample_count);
             for entity in entities {
                 #sample_entity::store_and_commit(Arc::clone(&storage), &entity).expect("Failed to persist entity");

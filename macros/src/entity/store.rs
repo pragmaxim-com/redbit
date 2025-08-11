@@ -17,7 +17,7 @@ pub fn store_def(entity_name: &Ident, entity_type: &Type, store_statements: &Vec
     let test_stream = Some(quote! {
         #[test]
         fn #fn_name() {
-            let storage = test_storage();
+            let storage = random_storage();
             let entity_count: usize = 3;
             for test_entity in #entity_type::sample_many(entity_count) {
                 let tx = storage.begin_write().expect("Failed to begin write transaction");
@@ -31,7 +31,7 @@ pub fn store_def(entity_name: &Ident, entity_type: &Type, store_statements: &Vec
     let bench_stream = Some(quote! {
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
-            let storage = test_storage();
+            let storage = random_storage();
             let test_entity = #entity_type::sample();
             b.iter(|| {
                 let tx = storage.begin_write().expect("Failed to begin write transaction");
@@ -61,7 +61,7 @@ pub fn store_many_def(entity_name: &Ident, entity_type: &Type, store_many_statem
     let test_stream = Some(quote! {
         #[test]
         fn #fn_name() {
-            let storage = test_storage();
+            let storage = random_storage();
             let entity_count: usize = 3;
             let test_entities = #entity_type::sample_many(entity_count);
             let tx = storage.begin_write().expect("Failed to begin write transaction");
@@ -74,7 +74,7 @@ pub fn store_many_def(entity_name: &Ident, entity_type: &Type, store_many_statem
     let bench_stream = Some(quote! {
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
-            let storage = test_storage();
+            let storage = random_storage();
             let entity_count = 3;
             let test_entities = #entity_type::sample_many(entity_count);
             b.iter(|| {
@@ -110,7 +110,7 @@ pub fn store_and_commit_def(entity_name: &Ident, entity_type: &Type, pk_name: &I
     let test_stream = Some(quote! {
         #[test]
         fn #fn_name() {
-            let storage = test_storage();
+            let storage = random_storage();
             let entity_count: usize = 3;
             for test_entity in #entity_type::sample_many(entity_count) {
                 let pk = #entity_name::#fn_name(Arc::clone(&storage), &test_entity).expect("Failed to store and commit instance");
@@ -123,7 +123,7 @@ pub fn store_and_commit_def(entity_name: &Ident, entity_type: &Type, pk_name: &I
     let bench_stream = Some(quote! {
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
-            let storage = test_storage();
+            let storage = random_storage();
             let test_entity = #entity_type::sample();
             b.iter(|| {
                 #entity_name::#fn_name(Arc::clone(&storage), &test_entity).expect("Failed to store and commit instance");

@@ -8,7 +8,7 @@ use syn::Type;
 pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type: &Type, table: &Ident) -> FunctionDef {
     let fn_name = format_ident!("get");
     let fn_stream = quote! {
-        pub fn #fn_name(tx: &ReadTransaction, pk: &#pk_type) -> Result<Option<#entity_type>, AppError> {
+        pub fn #fn_name(tx: &StorageReadTx, pk: &#pk_type) -> Result<Option<#entity_type>, AppError> {
             let table_pk_5 = tx.open_table(#table)?;
             if table_pk_5.get(pk)?.is_some() {
                 Ok(Some(Self::compose(&tx, pk)?))
@@ -22,7 +22,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
         #[test]
         fn #fn_name() {
             let storage = STORAGE.clone();
-            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let pk_value = #pk_type::default();
             let entity = #entity_name::#fn_name(&read_tx, &pk_value).expect("Failed to get entity by PK").expect("Expected entity to exist");
             let expected_enity = #entity_type::sample();
@@ -35,7 +35,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
             let storage = STORAGE.clone();
-            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let pk_value = #pk_type::default();
             b.iter(|| {
                 #entity_name::#fn_name(&read_tx, &pk_value).expect("Failed to get entity by PK").expect("Expected entity to exist");
@@ -61,7 +61,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
               impl IntoResponse {
-                   match state.storage.db.begin_read()
+                   match state.storage.begin_read()
                    .map_err(AppError::from)
                    .and_then(|tx| #entity_name::#fn_name(&tx, &#pk_name) ) {
                        Ok(Some(entity)) => {

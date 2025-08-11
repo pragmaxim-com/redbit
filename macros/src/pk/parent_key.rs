@@ -8,7 +8,7 @@ use crate::endpoint::EndpointDef;
 pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type) -> FunctionDef {
     let fn_name = format_ident!("parent_key");
     let fn_stream = quote! {
-        pub fn #fn_name(tx: &ReadTransaction, pk: &#pk_type) -> Result<<#pk_type as ChildPointer>::Parent, AppError> {
+        pub fn #fn_name(tx: &StorageReadTx, pk: &#pk_type) -> Result<<#pk_type as ChildPointer>::Parent, AppError> {
             Ok(pk.parent().clone())
         }
     };
@@ -30,7 +30,7 @@ pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type) -> FunctionD
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                Result<AppJson<<#pk_type as ChildPointer>::Parent>, AppError> {
-                    state.storage.db.begin_read().map_err(AppError::from).and_then(|tx| #entity_name::#fn_name(&tx, &#pk_name)).map(AppJson)
+                    state.storage.begin_read().map_err(AppError::from).and_then(|tx| #entity_name::#fn_name(&tx, &#pk_name)).map(AppJson)
                 }
             },
             utoipa_responses: quote! {

@@ -1,6 +1,6 @@
 use std::hash::Hash;
 use std::sync::Arc;
-use redb::{Database, WriteTransaction, TableDefinition, Table, Key, Value, CommitError, TransactionError, TableError, MultimapTableDefinition, MultimapTable};
+use redb::{Database, WriteTransaction, TableDefinition, Table, Key, Value, CommitError, TransactionError, TableError, MultimapTableDefinition, MultimapTable, ReadTransaction, ReadOnlyTable, ReadOnlyMultimapTable};
 use crate::cache::Caches;
 use crate::CacheDef;
 
@@ -15,9 +15,39 @@ impl Storage {
         Self { db: Arc::clone(&db), caches: Arc::new(Caches::default()) }
     }
 
+    pub fn begin_read(&self) -> redb::Result<StorageReadTx, TransactionError> {
+        let tx = self.db.begin_read()?;
+        Ok(StorageReadTx { tx })
+    }
+
     pub fn begin_write(&self) -> redb::Result<StorageWriteTx, TransactionError> {
         let tx = self.db.begin_write()?;
         Ok(StorageWriteTx { tx, caches: Arc::clone(&self.caches) })
+    }
+}
+
+pub struct StorageReadTx {
+    tx: ReadTransaction,
+}
+
+impl StorageReadTx {
+    pub fn open_table<K, V>(&self, def: TableDefinition<K, V>) -> redb::Result<ReadOnlyTable<K, V>, TableError>
+    where
+        K: Key + 'static,
+        V: Value + 'static,
+    {
+        self.tx.open_table(def)
+    }
+
+    pub fn open_multimap_table<K, V>(
+        &self,
+        def: MultimapTableDefinition<K, V>,
+    ) -> redb::Result<ReadOnlyMultimapTable<K, V>, TableError>
+    where
+        K: Key + 'static,
+        V: Key + 'static,
+    {
+        self.tx.open_multimap_table(def)
     }
 }
 

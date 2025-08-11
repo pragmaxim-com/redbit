@@ -7,7 +7,7 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
     let fn_name = format_ident!("range_by_{}", column_name);
     let fn_stream = quote! {
         pub fn #fn_name(
-            tx: &ReadTransaction,
+            tx: &StorageReadTx,
             from: &#column_type,
             until: &#column_type
         ) -> Result<Vec<#entity_type>, AppError> {
@@ -36,7 +36,7 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
         #[test]
         fn #fn_name() {
             let storage = STORAGE.clone();
-            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let from_value = #column_type::default();
             let until_value = #column_type::default().next_value();
             let entities = #entity_name::#fn_name(&read_tx, &from_value, &until_value).expect("Failed to get entities by range");
@@ -50,7 +50,7 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
             let storage = STORAGE.clone();
-            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let from_value = #column_type::default();
             let until_value = #column_type::default().next_value();
             b.iter(|| {
