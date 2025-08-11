@@ -1,7 +1,7 @@
 use bech32::{self, Hrp, Bech32m};
 use serde::{Deserialize, Deserializer, Serializer};
 use serde_with::{DeserializeAs, SerializeAs};
-use crate::ByteVecColumnSerde;
+use crate::model_v1::ByteVecColumnSerde;
 
 #[allow(dead_code)]
 pub struct Base58;

@@ -16,6 +16,7 @@ impl Storage {
     }
 
     pub fn begin_read(&self) -> redb::Result<StorageReadTx, TransactionError> {
+        use redb::ReadableDatabase;
         let tx = self.db.begin_read()?;
         Ok(StorageReadTx { tx })
     }
@@ -61,8 +62,7 @@ impl StorageWriteTx {
         self.tx.commit()
     }
 
-    // Forwarders keep the method-level 'txn lifetime just like redb
-    pub fn open_table<K, V>(&self, def: TableDefinition<K, V>) -> redb::Result<Table<K, V>, TableError>
+    pub fn open_table<'txn, K, V>(&'txn self, def: TableDefinition<K, V>) -> redb::Result<Table<'txn, K, V>, TableError>
     where
         K: Key + 'static,
         V: Value + 'static,
@@ -70,10 +70,10 @@ impl StorageWriteTx {
         self.tx.open_table(def)
     }
 
-    pub fn open_multimap_table<K, V>(
-        &self,
+    pub fn open_multimap_table<'txn, K, V>(
+        &'txn self,
         def: MultimapTableDefinition<K, V>,
-    ) -> redb::Result<MultimapTable<K, V>, TableError>
+    ) -> redb::Result<MultimapTable<'txn, K, V>, TableError>
     where
         K: Key + 'static,
         V: Key + 'static,

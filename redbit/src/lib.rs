@@ -44,6 +44,7 @@ pub use redb::MultimapTableDefinition;
 pub use redb::ReadableMultimapTable;
 pub use redb::ReadableTableMetadata;
 pub use redb::ReadableTable;
+pub use redb::ReadableDatabase;
 pub use redb::TableDefinition;
 pub use serde;
 pub use serde::Deserialize;

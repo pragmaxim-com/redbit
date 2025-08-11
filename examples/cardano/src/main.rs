@@ -1,19 +1,9 @@
-#![feature(test)]
-extern crate test;
-
-mod block_persistence;
-mod block_provider;
-mod cardano_client;
-mod config;
-mod model_v1;
-mod storage;
-mod codec;
-
-use crate::block_persistence::CardanoBlockPersistence;
-use crate::block_provider::CardanoBlockProvider;
-use crate::cardano_client::CBOR;
-use crate::config::CardanoConfig;
-use crate::model_v1::Block;
+use cardano::block_persistence::CardanoBlockPersistence;
+use cardano::block_provider::CardanoBlockProvider;
+use cardano::cardano_client::CBOR;
+use cardano::config::CardanoConfig;
+use cardano::model_v1::Block;
+use cardano::storage;
 use anyhow::Result;
 use syncer::api::{BlockPersistence, BlockProvider};
 use syncer::scheduler::Scheduler;

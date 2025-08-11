@@ -5,7 +5,6 @@ use tokio::runtime::Runtime;
 use async_stream::stream;
 use super::cardano_client::{CBOR, CardanoClient};
 use crate::config::CardanoConfig;
-use crate::info;
 use crate::model_v1::*;
 use ExplorerError;
 use async_trait::async_trait;
@@ -15,6 +14,7 @@ use futures::{Stream, StreamExt};
 use pallas::codec::minicbor::{Encode, Encoder};
 use pallas::ledger::traverse::{MultiEraBlock, MultiEraInput, MultiEraOutput};
 use pallas_traverse::wellknown::GenesisValues;
+use syncer::info;
 
 pub struct CardanoBlockProvider {
     pub client: CardanoClient,
