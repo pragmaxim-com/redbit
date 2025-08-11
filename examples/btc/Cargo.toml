@@ -3,6 +3,8 @@ name = "btc"
 version = "1.0.2"
 edition = "2024"
 
+
+
 [features]
 default = []
 integration = []
@@ -13,6 +15,7 @@ harness = false
 
 [dev-dependencies]
 criterion = { version = "0.7.0", features = ["async_tokio"] }
+axum-test = "17.3.0"
 
 [dependencies]
 redbit = { path = "../../redbit" }

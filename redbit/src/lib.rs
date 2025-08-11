@@ -12,7 +12,6 @@ pub mod hex_serde_enc;
 pub mod base64_serde_enc;
 pub mod cache;
 pub mod storage;
-
 pub use axum;
 pub use axum::body::Body;
 pub use axum::extract;
@@ -20,7 +19,6 @@ pub use axum::http::StatusCode;
 pub use axum::response::IntoResponse;
 pub use axum::response::Response;
 pub use axum_streams;
-pub use axum_test;
 pub use bincode::Encode;
 pub use bincode::Decode;
 pub use chrono;
@@ -414,11 +412,6 @@ pub fn create_random_storage(entity_name: &str) -> Arc<Storage> {
     }
     let db = Database::create(dir.join(format!("{}_{}.redb", entity_name, rand::random::<u64>()))).expect("Failed to create test database");
     Arc::new(Storage::new(Arc::new(db)))
-}
-
-pub async fn build_test_server(storage: Arc<Storage>) -> axum_test::TestServer {
-    let router = build_router(RequestState { storage }, None, None).await;
-    axum_test::TestServer::new(router).unwrap()
 }
 
 pub async fn build_router(state: RequestState, extras: Option<OpenApiRouter<RequestState>>, cors: Option<CorsLayer>) -> Router<()> {

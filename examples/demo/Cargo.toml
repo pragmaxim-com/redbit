@@ -7,6 +7,9 @@ edition = "2024"
 default = []
 integration = []
 
+[dev-dependencies]
+axum-test = "17.3.0"
+
 [dependencies]
 redbit = { path = "../../redbit" }
 syncer = { path = "../../syncer" }

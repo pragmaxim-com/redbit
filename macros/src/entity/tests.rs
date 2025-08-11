@@ -32,7 +32,7 @@ pub fn test_suite(entity_name: &Ident, parent_entity: Option<Ident>, fn_defs: &V
     };
 
     quote!{
-        #[cfg(all(test, not(feature = "integration")))]
+        #[cfg(test)]
         mod #entity_tests {
             use super::*;
             use once_cell::sync::Lazy;
@@ -59,7 +59,9 @@ pub fn test_suite(entity_name: &Ident, parent_entity: Option<Ident>, fn_defs: &V
 
             async fn get_delete_server() -> Arc<axum_test::TestServer> {
                 SERVER.get_or_init(|| async {
-                    Arc::new(build_test_server(STORAGE.clone()).await)
+                    let storage = STORAGE.clone();
+                    let router = build_router(RequestState { storage }, None, None).await;
+                    Arc::new(axum_test::TestServer::new(router).unwrap())
                 }).await.clone()
             }
 
