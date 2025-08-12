@@ -87,7 +87,7 @@ jobs:
 
       - name: Update README
         run: |
-          LIB_CONTENT=$(cat examples/demo/src/lib.rs | sed 's/^/    /')
+          LIB_CONTENT=$(cat examples/demo/src/model_v1.rs | sed 's/^/    /')
           MAIN_CONTENT=$(cat examples/demo/src/run.rs | sed 's/^/    /')
 
           # Update BEGIN_LIB and BEGIN_MAIN sections
