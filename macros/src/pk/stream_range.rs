@@ -5,7 +5,7 @@ use quote::{format_ident, quote};
 use syn::Type;
 use crate::endpoint::EndpointDef;
 
-pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type: &Type, table: &Ident, range_query_ty: &Type, stream_query_type: &Type) -> FunctionDef {
+pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type: &Type, table: &Ident, range_query_ty: &Type, stream_query_type: &Type, no_columns: bool) -> FunctionDef {
     let fn_name = format_ident!("stream_range");
     let fn_stream =
         quote! {
@@ -39,6 +39,27 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
         };
 
     let test_with_filter_fn_name = format_ident!("{}_with_filter", fn_name);
+    let test_stream_with_filter = if no_columns {
+        None
+    } else {
+        Some(quote! {
+            #[tokio::test]
+            async fn #test_with_filter_fn_name() {
+                let storage = STORAGE.clone();
+                let read_tx = storage.begin_read().expect("Failed to begin read transaction");
+                let pk = #pk_type::default();
+                let from_value = #pk_type::default();
+                let until_value = #pk_type::default().next_index().next_index().next_index();
+                let query = #stream_query_type::sample();
+                let entity_stream = #entity_name::#fn_name(read_tx, from_value, until_value, Some(query.clone())).expect("Failed to range entities by pk");
+                let entities = entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
+                let expected_entity = #entity_type::sample_with_query(&pk, 0, &query).expect("Failed to create sample entity with query");
+                assert_eq!(entities.len(), 1, "Expected only one entity to be returned for the given stream range with filter");
+                assert_eq!(entities[0], expected_entity, "Stream Range result is not equal to sample because it is filtered, query: {:?}", query);
+            }
+        })
+    };
+
     let test_stream = Some(quote! {
         #[tokio::test]
         async fn #fn_name() {
@@ -51,20 +72,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
             let expected_entities = #entity_type::sample_many(2);
             assert_eq!(expected_entities, entities, "Expected entities to be returned for the given range");
         }
-        #[tokio::test]
-        async fn #test_with_filter_fn_name() {
-            let storage = STORAGE.clone();
-            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
-            let pk = #pk_type::default();
-            let from_value = #pk_type::default();
-            let until_value = #pk_type::default().next_index().next_index().next_index();
-            let query = #stream_query_type::sample();
-            let entity_stream = #entity_name::#fn_name(read_tx, from_value, until_value, Some(query.clone())).expect("Failed to range entities by pk");
-            let entities = entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
-            let expected_entity = #entity_type::sample_with_query(&pk, 0, &query).expect("Failed to create sample entity with query");
-            assert_eq!(entities.len(), 1, "Expected only one entity to be returned for the given stream range with filter");
-            assert_eq!(entities[0], expected_entity, "Stream Range result is not equal to sample because it is filtered, query: {:?}", query);
-        }
+        #test_stream_with_filter
     });
 
     let bench_fn_name = format_ident!("_{}", fn_name);

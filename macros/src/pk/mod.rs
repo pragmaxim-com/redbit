@@ -44,14 +44,14 @@ pub struct DbPkMacros {
 }
 
 impl DbPkMacros {
-    pub fn new(entity_name: &Ident, entity_type: &Type, field_def: FieldDef, multiplicity: Option<Multiplicity>, stream_query_ty: &Type) -> Self {
+    pub fn new(entity_name: &Ident, entity_type: &Type, field_def: &FieldDef, multiplicity: Option<Multiplicity>, stream_query_ty: &Type, no_columns: bool) -> Self {
         let pk_name = field_def.name.clone();
         let pk_type = field_def.tpe.clone();
         let table_def = TableDef::pk(entity_name, &pk_name, &pk_type);
 
         let mut function_defs: Vec<FunctionDef> = Vec::new();
         function_defs.push(get::fn_def(entity_name, entity_type, &pk_name, &pk_type, &table_def.name));
-        function_defs.push(filter::fn_def(entity_name, entity_type, &pk_type, &table_def.name, stream_query_ty));
+        function_defs.push(filter::fn_def(entity_name, entity_type, &pk_type, &table_def.name, stream_query_ty, no_columns));
         function_defs.push(take::fn_def(entity_name, entity_type, &table_def.name));
         function_defs.push(tail::fn_def(entity_name, entity_type, &table_def.name));
         function_defs.push(first::fn_def(entity_name, entity_type, &table_def.name));
@@ -66,12 +66,12 @@ impl DbPkMacros {
         };
 
         let range_query = entity::query::pk_range_query(entity_name, &pk_name, &pk_type);
-        function_defs.push(range::fn_def(entity_name, entity_type, &pk_type, &table_def.name, stream_query_ty));
-        function_defs.push(stream_range::fn_def(entity_name, entity_type, &pk_name, &pk_type, &table_def.name, &range_query.ty, stream_query_ty));
+        function_defs.push(range::fn_def(entity_name, entity_type, &pk_type, &table_def.name, stream_query_ty, no_columns));
+        function_defs.push(stream_range::fn_def(entity_name, entity_type, &pk_name, &pk_type, &table_def.name, &range_query.ty, stream_query_ty, no_columns));
         function_defs.push(pk_range::fn_def(entity_name, entity_type, &pk_name, &pk_type, &table_def.name));
 
         DbPkMacros {
-            field_def,
+            field_def: field_def.clone(),
             table_def: table_def.clone(),
             struct_init: init::pk_init(&pk_name),
             struct_init_with_query: init::pk_init_with_query(&pk_name),

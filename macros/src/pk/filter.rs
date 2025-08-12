@@ -3,7 +3,7 @@ use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
 
-pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, table: &Ident, stream_query_type: &Type) -> FunctionDef {
+pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, table: &Ident, stream_query_type: &Type, no_columns: bool) -> FunctionDef {
     let fn_name = format_ident!("filter");
     let fn_stream = quote! {
         pub fn #fn_name(tx: &StorageReadTx, pk: &#pk_type, query: &#stream_query_type) -> Result<Option<#entity_type>, AppError> {
@@ -16,6 +16,23 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, table: &I
         }
     };
 
+    let test_with_filter_fn_name = format_ident!("{}_with_filter", fn_name);
+    let filter_test = if no_columns {
+        None
+    } else {
+        Some(quote! {
+            #[test]
+            fn #test_with_filter_fn_name() {
+                let storage = STORAGE.clone();
+                let read_tx = storage.begin_read().expect("Failed to begin read transaction");
+                let query = #stream_query_type::sample();
+                let pk_default_next = #pk_type::default().next_index();
+                let entity_opt = #entity_name::#fn_name(&read_tx, &pk_default_next, &query).expect("Failed to get entity by PK");
+                assert_eq!(entity_opt, None, "Filter is set for default value {:?}", query);
+            }
+        })
+    };
+
     let test_stream = Some(quote! {
         #[test]
         fn #fn_name() {
@@ -26,11 +43,8 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, table: &I
             let entity = #entity_name::#fn_name(&read_tx, &pk_default, &query).expect("Failed to get entity by PK").expect("Expected entity to exist");
             let expected_entity = #entity_type::sample_with_query(&pk_default, 0, &query).expect("Failed to create sample entity with query");
             assert_eq!(entity, expected_entity, "Entity PK does not match the requested PK");
-
-            let pk_default_next = #pk_type::default().next_index();
-            let entity_opt = #entity_name::#fn_name(&read_tx, &pk_default_next, &query).expect("Failed to get entity by PK");
-            assert_eq!(entity_opt, None, "Filter is set for default value {:?}", query);
         }
+        #filter_test
     });
 
     let bench_fn_name = format_ident!("_{}", fn_name);

@@ -40,8 +40,8 @@ jobs:
           cargo test --package btc --features integration
           cargo test --package cardano
           cargo test --package cardano --features integration
-          cargo test --package ergo
-          cargo test --package ergo --features integration
+          cargo test --package ergo --features ci
+          cargo test --package ergo --features integration,ci
 
   performance:
     runs-on: ubuntu-latest

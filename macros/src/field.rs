@@ -39,12 +39,12 @@ impl FieldMacros {
                 _ => None
             };
         let field_def = key_def.field_def();
-        let field_macros = field_macros.into_iter().map(|c| match c {
+        let field_macros = field_macros.iter().map(|c| match c {
             ColumnDef::Key(KeyDef::Pk(field_def)) => {
-                FieldMacros::Pk(DbPkMacros::new(entity_ident, entity_type, field_def, None, &stream_query_ty))
+                FieldMacros::Pk(DbPkMacros::new(entity_ident, entity_type, field_def, None, &stream_query_ty, field_macros.len() == 1))
             },
             ColumnDef::Key(KeyDef::Fk{ field_def, multiplicity, parent_type: _}) => {
-                FieldMacros::Pk(DbPkMacros::new(entity_ident, entity_type, field_def, Some(multiplicity), &stream_query_ty))
+                FieldMacros::Pk(DbPkMacros::new(entity_ident, entity_type, field_def, Some(multiplicity.clone()), &stream_query_ty, field_macros.len() == 1))
             },
             ColumnDef::Plain(field , indexing_type) => {
                 FieldMacros::Plain(

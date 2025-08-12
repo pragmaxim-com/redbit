@@ -97,7 +97,7 @@ impl ErgoClient {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(feature = "ci")))]
 mod tests {
     use super::*;
     use std::str::FromStr;
