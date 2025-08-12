@@ -59,26 +59,22 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, TokenStream), syn::Error
     function_defs.push(delete::delete_def(&key.tpe, &delete_statements));
     function_defs.push(delete::delete_many_def(&key.tpe, &delete_many_statements));
     function_defs.push(info::table_info_fn(entity_ident, &table_defs));
+    function_defs.push(compose::compose_token_stream(entity_ident, &entity_type, &key.tpe, &struct_inits));
+    function_defs.push(compose::compose_with_filter_token_stream(&entity_type, &key.tpe, &stream_query_type, &field_names, &struct_inits_with_query));
+    function_defs.extend(sample::sample_token_fns(entity_ident, &entity_type, &key.tpe, &stream_query_type, &struct_default_inits, &struct_default_inits_with_query, &field_names));
+    function_defs.extend(init::init(entity_ident, &key_def));
 
     let stream_query_struct = query::stream_query(&stream_query_type, &stream_queries);
     let range_query_structs = range_queries.into_iter().map(|rq| rq.stream).collect::<Vec<_>>();
 
-    let api_functions: Vec<TokenStream> = function_defs.iter().map(|f| f.fn_stream.clone()).collect::<Vec<_>>();
-    let sample_functions = sample::sample_token_streams(entity_ident, &entity_type, &key.tpe, &stream_query_type, &struct_default_inits, &struct_default_inits_with_query, &field_names);
-    let compose_function = compose::compose_token_stream(entity_ident, &entity_type, &key.tpe, &struct_inits);
-    let compose_with_filter_function = compose::compose_with_filter_token_stream(&entity_type, &key.tpe, &stream_query_type, &field_names, &struct_inits_with_query);
-    let compose_functions = vec![compose_function, compose_with_filter_function];
     let table_definitions: Vec<TokenStream> = table_defs.iter().map(|table_def| table_def.definition.clone()).collect();
     let table_cache_definitions: Vec<TokenStream> = table_defs.iter().flat_map(|table_def| table_def.cache.clone().map(|c| c.1)).collect();
 
-    let parent_ident = parent_def.clone().map(|p|p.parent_ident);
-    let test_suite = tests::test_suite(entity_ident, parent_ident.clone(), &function_defs);
-    let bootstrap_storage = match &key_def {
-        KeyDef::Pk(f) => Some(init::bootstrap_storage(entity_ident, &f.name)),
-        _ => None,
-    };
+    let api_functions: Vec<TokenStream> = function_defs.iter().map(|f| f.fn_stream.clone()).collect::<Vec<_>>();
 
-    let Rest { endpoint_handlers, routes} = Rest::new(&function_defs);
+    let Rest { endpoint_handlers, routes: api_routes } = Rest::new(&function_defs);
+
+    let test_suite = tests::test_suite(entity_ident, parent_def, &function_defs);
 
     let stream: TokenStream =
         quote! {
@@ -94,16 +90,10 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, TokenStream), syn::Error
             #(#endpoint_handlers)*
 
             impl #entity_ident {
-                // builds all tables
-                #bootstrap_storage
                 // api functions are exposed to users
                 #(#api_functions)*
-                // sample functions are used to generate test data
-                #(#sample_functions)*
-                // compose functions build entities from db results
-                #(#compose_functions)*
                 // axum routes
-                #routes
+                #api_routes
             }
             // unit tests and rest api tests
             #test_suite
