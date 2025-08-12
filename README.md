@@ -225,7 +225,7 @@ If node and indexer each uses its own SSD, then the throughput reaches :
  - 3.0GHz & NVMe on PCIe Gen4 : `~ 15 000 Inputs+outputs / s`
  - 4.0GHz & NVMe on PCIe Gen5 : `~ 28 000 Inputs+outputs / s`
 
-In a nutshell, whole bitcoin up to height ~ 0.9M can be indexed in a day on a PCIe Gen5 SSD with 4.0GHz CPU.
+In a nutshell, whole bitcoin up to height ~ 0.9M can be indexed in less than 4 days on a PCIe Gen5 SSD with 4.0GHz CPU.
 
 ### ⏱ Benchmarks (results from github servers)
 

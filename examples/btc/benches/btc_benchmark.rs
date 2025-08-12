@@ -8,6 +8,7 @@ use btc::block_provider::BtcBlockProvider;
 use btc::btc_client::{BtcBlock, BtcClient};
 use btc::config::BitcoinConfig;
 use btc::model_v1::{Block, Height};
+use serde_json;
 use redbit::Storage;
 
 fn criterion_benchmark(c: &mut Criterion) {
@@ -19,7 +20,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         info!("Removing existing database directory: {}", db_path.display());
         fs::remove_dir_all(&db_path).unwrap();
     }
-    let storage = Arc::new(Storage::init(db_path, 1).expect("Failed to open database"));
+    let storage = Arc::new(Storage::init(db_path.clone(), 1).expect("Failed to open database"));
 
     let btc_client = Arc::new(BtcClient::new(&btc_config).expect("Failed to create Bitcoin client"));
     let fetching_par: usize = app_config.indexer.fetching_parallelism.clone().into();
@@ -29,10 +30,19 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     info!("Getting small block with 29 txs");
     let small_block = btc_client.get_block_by_height(Height(135204)).unwrap();
+    let small_block_json = serde_json::to_string(&small_block).expect("Failed to serialize sample entity to JSON");
+    let small_block_file_path = db_path.join("small_block.json");
+    fs::write(&small_block_file_path, small_block_json).expect("Failed to write small block to file");
     info!("Getting avg block with 343 txs");
     let avg_block = btc_client.get_block_by_height(Height(217847)).unwrap();
+    let avg_block_json = serde_json::to_string(&avg_block).expect("Failed to serialize sample entity to JSON");
+    let avg_block_file_path = db_path.join("avg_block.json");
+    fs::write(&avg_block_file_path, avg_block_json).expect("Failed to write avg block to file");
     info!("Getting huge block with 3713 txs");
     let huge_block = btc_client.get_block_by_height(Height(908244)).unwrap();
+    let huge_block_json = serde_json::to_string(&huge_block).expect("Failed to serialize sample entity to JSON");
+    let huge_block_file_path = db_path.join("huge_block.json");
+    fs::write(&huge_block_file_path, huge_block_json).expect("Failed to write avg block to file");
 
     info!("Initiating processing");
     let processed_huge_block = block_provider.process_block(&huge_block).expect("Failed to process huge_block");
