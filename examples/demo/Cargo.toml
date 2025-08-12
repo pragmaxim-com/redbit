@@ -6,6 +6,7 @@ edition = "2024"
 [features]
 default = []
 integration = []
+ci = []
 
 [dev-dependencies]
 axum-test = "17.3.0"

@@ -6,13 +6,33 @@ use serde_with::{DeserializeAs, SerializeAs};
 #[allow(dead_code)]
 pub struct Base58;
 
+const ADDRESSES: &[&str] = &[
+    "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq",
+    "1MNr16FTvjhTAw9GBNxhfirmPt9KzSvgMw",
+    "3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy",
+    "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
+    "sp1qqffj92fjdv6yjspqhlm06e9p3r59zd3sghuwrqg2w8vu3v349pg5sq60g7xquly89u0a54r9sayzhjcpqcgeqa8qqkzuukp6c7c5wfhgscujd5rs",
+];
+
 impl ByteVecColumnSerde for Base58 {
     fn decoded_example() -> Vec<u8> {
-        bs58::decode(Self::encoded_example()).with_check(None).into_vec().unwrap()
+        bs58::decode(Self::encoded_example()).into_vec().unwrap()
     }
 
     fn encoded_example() -> String {
-        "1MNr16FTvjhTAw9GBNxhfirmPt9KzSvgMw".to_string()
+        ADDRESSES[0].to_string()
+    }
+
+    fn next_value(value: &Vec<u8>) -> Vec<u8> {
+        let current = bs58::encode(value).into_string();
+        let idx = ADDRESSES.iter().position(|&a| a == current);
+
+        let next_addr = match idx {
+            Some(i) => ADDRESSES[(i + 1) % ADDRESSES.len()],
+            None => ADDRESSES[0],
+        };
+
+        bs58::decode(next_addr).into_vec().unwrap()
     }
 }
 

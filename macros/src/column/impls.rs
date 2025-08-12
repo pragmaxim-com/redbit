@@ -63,13 +63,7 @@ pub fn generate_column_impls(
             struct_attr = Some(syn::parse_quote! { #[serde_as(as = #binary_encoding_literal)] });
             url_encoded_code = quote! { serde_json::to_string(&self).unwrap().trim_matches('"').to_string() };
             iterable_code = quote! {
-                let mut vec = self.0.clone();
-                if let Some(last) = vec.last_mut() {
-                    *last = last.wrapping_add(1);
-                } else {
-                    vec.push(1);
-                }
-                Self(vec)
+                Self(<#ty as ByteVecColumnSerde>::next_value(&self.0))
             };
         }
         InnerKind::String => {

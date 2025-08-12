@@ -57,7 +57,7 @@ pub fn test_suite(entity_name: &Ident, parent_entity: Option<Ident>, fn_defs: &V
 
             static SERVER: OnceCell<Arc<axum_test::TestServer>> = OnceCell::const_new();
 
-            async fn get_delete_server() -> Arc<axum_test::TestServer> {
+            async fn get_test_server() -> Arc<axum_test::TestServer> {
                 SERVER.get_or_init(|| async {
                     let storage = STORAGE.clone();
                     let router = build_router(RequestState { storage }, None, None).await;

@@ -214,18 +214,20 @@ The same api is accessible through http endpoints at http://127.0.0.1:8000/swagg
 Performance wise, check 🔥[flamegraph](https://rawcdn.githack.com/pragmaxim-com/redbit/refs/heads/master/flamegraph.svg).
 The demo example persists data into 30 tables to allow for rich querying.
 
-### ⏱️ Benchmark Summary (results from github servers)
+### ⏱️ Performance Summary
 
-Indexing speed in logs is the **average**, for example, the first ~ 100k **bitcoin** blocks with just one Tx are indexed slowly because 
-indexing is optimized for the big blocks.
+Indexing speed in logs is the **average**, for example, the first ~ 100k **bitcoin** blocks with just one Tx have 
+lower in/out indexing throughput because the block is indexed into ~ 24 tables in total.
 
 If node and indexer each uses its own SSD, then the throughput reaches :
 
- - 2.0GHz & NVMe on PCIe Gen3 : `~ 9 000 Inputs+outputs+assets / s`
- - 3.0GHz & NVMe on PCIe Gen4 : `~ 15 000 Inputs+outputs+assets / s`
- - 4.0GHz & NVMe on PCIe Gen5 : `~ 28 000 Inputs+outputs+assets / s`
+ - 2.0GHz & NVMe on PCIe Gen3 : `~ 9 000 Inputs+outputs / s`
+ - 3.0GHz & NVMe on PCIe Gen4 : `~ 15 000 Inputs+outputs / s`
+ - 4.0GHz & NVMe on PCIe Gen5 : `~ 28 000 Inputs+outputs / s`
 
 In a nutshell, whole bitcoin up to height ~ 0.9M can be indexed in a day on a PCIe Gen5 SSD with 4.0GHz CPU.
+
+### ⏱ Benchmarks (results from github servers)
 
 The slowest `block::_store_many` operation in this context persists 3 blocks of 3 transactions of 1 input and 3 utxos of 3 assets, ie.
 the operations writes :

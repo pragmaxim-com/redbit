@@ -6,12 +6,34 @@ use crate::model_v1::ByteVecColumnSerde;
 #[allow(dead_code)]
 pub struct Base58;
 
+const ADDRESSES: &[&str] = &[
+    "37btjrVyb4KDXBNC4haBVPCrro8AQPHwvCMp3RFhhSVWwfFmZ6wwzSK6JK1hY6wHNmtrpTf1kdbva8TCneM2YsiXT7mrzT21EacHnPpz5YyUdj64na",
+    "addr1vpu5vlrf4xkxv2qpwngf6cjhtw542ayty80v8dyr49rf5eg0yu80w",
+    "stake1vpu5vlrf4xkxv2qpwngf6cjhtw542ayty80v8dyr49rf5egfu2p0u",
+    "addr_vk1w0l2sr2zgfm26ztc6nl9xy8ghsk5sh6ldwemlpmp9xylzy4dtf7st80zhd",
+    "stake_vk1px4j0r2fk7ux5p23shz8f3y5y2qam7s954rgf3lg5merqcj6aetsft99wu",
+    "script1cda3khwqv60360rp5m7akt50m6ttapacs8rqhn5w342z7r35m37",
+];
+
 impl ByteVecColumnSerde for Base58 {
     fn decoded_example() -> Vec<u8> {
         bs58::decode(Self::encoded_example()).into_vec().unwrap()
     }
+
     fn encoded_example() -> String {
-        "37btjrVyb4KDXBNC4haBVPCrro8AQPHwvCMp3RFhhSVWwfFmZ6wwzSK6JK1hY6wHNmtrpTf1kdbva8TCneM2YsiXT7mrzT21EacHnPpz5YyUdj64na".to_string()
+        ADDRESSES[0].to_string()
+    }
+
+    fn next_value(value: &Vec<u8>) -> Vec<u8> {
+        let current = bs58::encode(value).into_string();
+        let idx = ADDRESSES.iter().position(|&a| a == current);
+
+        let next_addr = match idx {
+            Some(i) => ADDRESSES[(i + 1) % ADDRESSES.len()],
+            None => ADDRESSES[0],
+        };
+
+        bs58::decode(next_addr).into_vec().unwrap()
     }
 }
 

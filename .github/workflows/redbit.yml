@@ -34,12 +34,12 @@ jobs:
 
       - name: Run tests
         run: |
-          cargo test --package demo
-          cargo test --package demo --features integration
-          cargo test --package btc
-          cargo test --package btc --features integration
-          cargo test --package cardano
-          cargo test --package cardano --features integration
+          cargo test --package demo --features ci
+          cargo test --package demo --features integration,ci
+          cargo test --package btc --features ci
+          cargo test --package btc --features integration,ci
+          cargo test --package cardano --features ci
+          cargo test --package cardano --features integration,ci
           cargo test --package ergo --features ci
           cargo test --package ergo --features integration,ci
 

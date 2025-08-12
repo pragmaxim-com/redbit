@@ -162,6 +162,15 @@ pub struct TableInfo {
 pub trait ByteVecColumnSerde {
     fn decoded_example() -> Vec<u8>;
     fn encoded_example() -> String;
+    fn next_value(value: &Vec<u8>) -> Vec<u8> {
+        let mut vec = value.clone();
+        if let Some(last) = vec.last_mut() {
+            *last = last.wrapping_add(1);
+        } else {
+            vec.push(1);
+        }
+        vec
+    }
 }
 
 #[derive(Debug)]
