@@ -3,9 +3,10 @@ use crate::model_v1::{BlockHash, Height, ExplorerError};
 use bitcoin::hashes::Hash;
 use bitcoincore_rpc::{Auth, Client, RpcApi};
 use std::sync::Arc;
+use serde::{Deserialize, Serialize};
 
 // Bitcoin block wrapper
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct BtcBlock {
     pub height: Height,
     pub underlying: bitcoin::Block,
