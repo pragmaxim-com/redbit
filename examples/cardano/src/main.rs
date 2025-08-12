@@ -3,7 +3,7 @@ use cardano::block_provider::CardanoBlockProvider;
 use cardano::cardano_client::CBOR;
 use cardano::config::CardanoConfig;
 use cardano::model_v1::Block;
-use cardano::storage;
+
 use anyhow::Result;
 use syncer::api::{BlockPersistence, BlockProvider};
 use syncer::scheduler::Scheduler;
@@ -44,10 +44,10 @@ async fn main() -> Result<()> {
     let cardano_config = CardanoConfig::new("config/cardano")?;
     let db_path: String = format!("{}/{}/{}", app_config.indexer.db_path, "main", "cardano");
     let full_db_path = env::home_dir().unwrap().join(&db_path);
-    let storage = storage::get_storage(full_db_path, app_config.indexer.db_cache_size_gb)?;
+    let storage = Arc::new(Storage::init(full_db_path, app_config.indexer.db_cache_size_gb)?);
 
     let block_provider: Arc<dyn BlockProvider<CBOR, Block>> = Arc::new(CardanoBlockProvider::new(&cardano_config).await);
-    let block_persistence: Arc<dyn BlockPersistence<Block>> = Arc::new(CardanoBlockPersistence { storage: Arc::clone(&storage) });
+    let block_persistence: Arc<dyn BlockPersistence<Block>> = Arc::new(CardanoBlockPersistence::new(Arc::clone(&storage)));
     let scheduler: Scheduler<CBOR, Block> = Scheduler::new(block_provider, block_persistence);
 
     let (shutdown_tx, shutdown_rx) = watch::channel(false);

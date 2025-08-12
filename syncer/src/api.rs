@@ -62,6 +62,7 @@ pub trait BlockLike: Send + Sync {
 }
 
 pub trait BlockPersistence<B: BlockLike>: Send + Sync {
+    fn init(&self) -> Result<(), ChainSyncError>;
     fn get_last_header(&self) -> Result<Option<B::Header>, ChainSyncError>;
     fn get_header_by_hash(&self, hash: [u8; 32]) -> Result<Vec<B::Header>, ChainSyncError>;
     fn store_blocks(&self, blocks: Vec<B>) -> Result<(), ChainSyncError>;

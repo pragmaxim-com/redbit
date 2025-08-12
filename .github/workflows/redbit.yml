@@ -36,6 +36,12 @@ jobs:
         run: |
           cargo test --package demo
           cargo test --package demo --features integration
+          cargo test --package btc
+          cargo test --package btc --features integration
+          cargo test --package cardano
+          cargo test --package cardano --features integration
+          cargo test --package ergo
+          cargo test --package ergo --features integration
 
   performance:
     runs-on: ubuntu-latest
@@ -60,6 +66,7 @@ jobs:
       - name: Run Built-in Rust Benchmarks and Extract Metrics
         run: |
           cargo bench --package demo -- --nocapture | tee bench_output.txt
+          cargo bench --package btc
           
           # Extract and process lines with `bench:`
           grep 'bench:' bench_output.txt | while read -r line; do

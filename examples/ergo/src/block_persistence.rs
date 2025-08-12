@@ -9,6 +9,12 @@ pub struct ErgoBlockPersistence {
 }
 
 impl ErgoBlockPersistence {
+    pub fn new(storage: Arc<Storage>) -> Self {
+        let persistence = ErgoBlockPersistence { storage };
+        persistence.init().expect("Failed to initialize ErgoBlockPersistence");
+        persistence
+    }
+
     fn populate_inputs(read_tx: &StorageReadTx, block: &mut Block) -> Result<(), ChainSyncError> {
         for tx in &mut block.transactions {
             for box_id in tx.transient_inputs.iter_mut() {
@@ -26,6 +32,10 @@ impl ErgoBlockPersistence {
 }
 
 impl BlockPersistence<Block> for ErgoBlockPersistence {
+    fn init(&self) -> Result<(), ChainSyncError> {
+        Ok(Block::init(Arc::clone(&self.storage))?)
+    }
+
     fn get_last_header(&self) -> Result<Option<BlockHeader>, ChainSyncError> {
         let read_tx = self.storage.begin_read()?;
         let last = BlockHeader::last(&read_tx)?;

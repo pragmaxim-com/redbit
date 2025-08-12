@@ -2,7 +2,8 @@ use std::hash::Hash;
 use std::sync::Arc;
 use redb::{Database, WriteTransaction, TableDefinition, Table, Key, Value, CommitError, TransactionError, TableError, MultimapTableDefinition, MultimapTable, ReadTransaction, ReadOnlyTable, ReadOnlyMultimapTable};
 use crate::cache::Caches;
-use crate::CacheDef;
+use crate::{AppError, CacheDef};
+use std::path::PathBuf;
 
 #[derive(Clone)]
 pub struct Storage {
@@ -13,6 +14,17 @@ pub struct Storage {
 impl Storage {
     pub fn new(db: Arc<Database>) -> Self {
         Self { db: Arc::clone(&db), caches: Arc::new(Caches::default()) }
+    }
+
+    pub fn init(db_dir: PathBuf, db_cache_size_gb: u8) -> redb::Result<Storage, AppError> {
+        if !db_dir.exists() {
+            std::fs::create_dir_all(db_dir.clone()).map_err(|e| AppError::Internal(format!("Failed to create database directory: {}", e)))?;
+            let db = Database::builder().set_cache_size(db_cache_size_gb as usize * 1024 * 1024 * 1024).create(db_dir.join("chain_syncer.db"))?;
+            Ok(Storage::new(Arc::new(db)))
+        } else {
+            let db = Database::open(db_dir.join("chain_syncer.db"))?;
+            Ok(Storage::new(Arc::new(db)))
+        }
     }
 
     pub fn begin_read(&self) -> redb::Result<StorageReadTx, TransactionError> {

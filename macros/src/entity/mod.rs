@@ -1,10 +1,9 @@
 use crate::field::FieldMacros;
-use crate::field_parser::{KeyDef};
+use crate::field_parser::KeyDef;
 use crate::rest::Rest;
-use proc_macro2::{TokenStream};
+use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{parse_quote, ItemStruct, Type};
-
 pub mod query;
 mod store;
 mod delete;
@@ -12,6 +11,7 @@ mod sample;
 mod compose;
 mod tests;
 mod info;
+pub mod init;
 
 pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, TokenStream), syn::Error> {
     let entity_ident = &item_struct.ident;
@@ -71,8 +71,12 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, TokenStream), syn::Error
     let table_definitions: Vec<TokenStream> = table_defs.iter().map(|table_def| table_def.definition.clone()).collect();
     let table_cache_definitions: Vec<TokenStream> = table_defs.iter().flat_map(|table_def| table_def.cache.clone().map(|c| c.1)).collect();
 
-    let parent_ident = parent_def.map(|p|p.parent_ident);
-    let test_suite = tests::test_suite(entity_ident, parent_ident, &function_defs);
+    let parent_ident = parent_def.clone().map(|p|p.parent_ident);
+    let test_suite = tests::test_suite(entity_ident, parent_ident.clone(), &function_defs);
+    let bootstrap_storage = match &key_def {
+        KeyDef::Pk(f) => Some(init::bootstrap_storage(entity_ident, &f.name)),
+        _ => None,
+    };
 
     let Rest { endpoint_handlers, routes} = Rest::new(&function_defs);
 
@@ -90,6 +94,8 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, TokenStream), syn::Error
             #(#endpoint_handlers)*
 
             impl #entity_ident {
+                // builds all tables
+                #bootstrap_storage
                 // api functions are exposed to users
                 #(#api_functions)*
                 // sample functions are used to generate test data

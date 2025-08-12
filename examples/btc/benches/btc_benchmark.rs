@@ -8,7 +8,7 @@ use btc::block_provider::BtcBlockProvider;
 use btc::btc_client::{BtcBlock, BtcClient};
 use btc::config::BitcoinConfig;
 use btc::model_v1::{Block, Height};
-use btc::storage;
+use redbit::Storage;
 
 fn criterion_benchmark(c: &mut Criterion) {
     let app_config = settings::AppConfig::new("config/settings").unwrap();
@@ -19,7 +19,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         info!("Removing existing database directory: {}", db_path.display());
         fs::remove_dir_all(&db_path).unwrap();
     }
-    let storage = Arc::new(storage::get_storage(db_path, 1).expect("Failed to open database"));
+    let storage = Arc::new(Storage::init(db_path, 1).expect("Failed to open database"));
 
     let btc_client = Arc::new(BtcClient::new(&btc_config).expect("Failed to create Bitcoin client"));
     let fetching_par: usize = app_config.indexer.fetching_parallelism.clone().into();

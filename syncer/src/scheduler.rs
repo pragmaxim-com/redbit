@@ -18,7 +18,8 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> Scheduler<FB, TB> {
     }
 
     pub async fn schedule(&self, indexer_conf: IndexerSettings, mut shutdown: watch::Receiver<bool>) {
-        let mut interval = time::interval(Duration::from_secs(1));
+        let mut interval = tokio::time::interval(Duration::from_secs(1));
+        interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
         loop {
             tokio::select! {
                 _ = shutdown.changed() => {
