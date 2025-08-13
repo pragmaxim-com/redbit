@@ -150,19 +150,16 @@ impl BlockProvider<FullBlock, Block> for ErgoBlockProvider {
         last_header: Option<BlockHeader>,
     ) -> Pin<Box<dyn Stream<Item = FullBlock> + Send + 'static>> {
         let last_height = last_header.map_or(1, |h| h.height.0);
-        info!("Indexing from {} to {}", last_height, chain_tip_header.height.0);
+        info!("Indexing from {} to {} with fetching parallelism : {}", last_height, chain_tip_header.height.0, self.fetching_par);
         let heights = last_height..=chain_tip_header.height.0;
         let client = Arc::clone(&self.client);
         tokio_stream::iter(heights)
             .map(move |height| {
                 let client = Arc::clone(&client);
-                tokio::task::spawn(async move { client.get_block_by_height_async(Height(height)).await.unwrap() })
-            })
-            .buffered(self.fetching_par)
-            .map(|res| match res {
-                Ok(block) => block,
-                Err(e) => panic!("Error: {:?}", e), // lousy error handling
-            })
+                async move {
+                    client.get_block_by_height_retry_async(Height(height)).await.expect("Failed to fetch block by height")
+                }
+            }).buffered(self.fetching_par)
             .boxed()
     }
 }

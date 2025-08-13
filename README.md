@@ -308,10 +308,22 @@ If node and indexer each uses its own SSD, then the throughput reaches :
 
 In a nutshell, whole bitcoin up to height ~ 0.9M can be indexed in less than 4 days on a PCIe Gen5 SSD with 4.0GHz CPU.
 
+### Flamegraphs
+
 ```
 cargo flamegraph --bin target/release/ergo --release
 cargo flamegraph --bin target/release/cargo --release
 cargo flamegraph --bin target/release/btc --release
+```
+
+### Tracing 
+
+Tracing using [tokio console](https://github.com/tokio-rs/console)
+
+``` 
+cargo install --locked tokio-console
+RUSTFLAGS="--cfg tokio_unstable" cargo run --features tracing
+tokio-console
 ```
 
 ### ⏱ Benchmarks (results from github servers)

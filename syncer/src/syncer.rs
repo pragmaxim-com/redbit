@@ -4,9 +4,9 @@ use crate::api::{BlockProvider, ChainSyncError};
 use crate::info;
 use crate::monitor::ProgressMonitor;
 use futures::StreamExt;
-use min_batch::ext::MinBatchExt;
 use std::sync::Arc;
 use tokio::sync::mpsc;
+use redbit::task;
 use crate::settings::IndexerSettings;
 
 pub struct ChainSyncer<FB: Send + Sync + 'static, TB: BlockLike + 'static> {
@@ -30,31 +30,59 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
         let chain_tip_for_persist = chain_tip_header.clone();
 
         type Batch<T> = (Vec<T>, usize);
-        let (proc_tx, mut proc_rx) = mpsc::channel::<Batch<TB>>(64);
+        let (raw_tx, mut raw_rx) = mpsc::channel::<FB>(8192);
+        let (proc_tx, mut proc_rx) = mpsc::channel::<Batch<TB>>(512);
 
         // Process + batch stage (consumes provider.stream() directly)
+        let fetch_handle = {
+            let block_provider = Arc::clone(&self.block_provider);
+            task::spawn_named("fetch", async move {
+                let mut s = block_provider.stream(chain_tip_header.clone(), last_header);
+                while let Some(raw) = s.next().await {
+                    if raw_tx.send(raw).await.is_err() {
+                        eprintln!("Failed to send raw block, channel closed");
+                        break;
+                    }
+                }
+            })
+        };
+
+        // Process + batch stage: read raw, parse on blocking thread, batch, send to persist
         let process_handle = {
             let indexer_conf = indexer_conf.clone();
             let block_provider = Arc::clone(&self.block_provider);
+            task::spawn_named("process",async move {
+                let mut batch: Vec<TB> = Vec::with_capacity(indexer_conf.min_batch_size);
+                let mut weight: usize = 0;
+                let min_weight = indexer_conf.min_batch_size;
 
-            tokio::spawn(async move {
-                let mut stream =
-                    block_provider
-                        .stream(chain_tip_header.clone(), last_header)
-                        .map(|block| block_provider.process_block(&block).expect("Failed to process block"))
-                        .min_batch_with_weight(indexer_conf.min_batch_size, |block| block.weight() as usize);
-
-                while let Some(batch) = stream.next().await {
-                    proc_tx
-                        .send(batch)
+                while let Some(raw) = raw_rx.recv().await {
+                    let bp = Arc::clone(&block_provider);
+                    let block: TB = tokio::task::spawn_blocking(move || bp.process_block(&raw))
                         .await
-                        .expect("Persistence worker dropped processing channel");
+                        .expect("spawn_blocking panicked")
+                        .expect("Failed to process block");
+
+                    weight += block.weight() as usize;
+                    batch.push(block);
+
+                    if weight >= min_weight {
+                        if proc_tx.send((std::mem::take(&mut batch), weight)).await.is_err() {
+                            break;
+                        }
+                        weight = 0;
+                    }
+                }
+
+                // flush tail
+                if !batch.is_empty() {
+                    let _ = proc_tx.send((batch, weight)).await;
                 }
             })
         };
 
         // Persist stage
-        let persist_handle = tokio::spawn(async move {
+        let persist_handle = task::spawn_named("persist",async move {
             while let Some((block_batch, batch_weight)) = proc_rx.recv().await {
                 let chain_link = block_batch.last().is_some_and(|curr_block| curr_block.header().height() + 100 > chain_tip_for_persist.height());
 
@@ -72,6 +100,7 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
             }
         });
 
+        fetch_handle.await.expect("Fetching failed");
         process_handle.await.expect("Processor failed");
         persist_handle.await.expect("Persistence worker failed");
     }

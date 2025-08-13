@@ -37,13 +37,13 @@ async fn maybe_run_indexing(index_config: IndexerSettings, scheduler: Scheduler<
     }
 }
 
-#[cfg(feature = "console")]
+#[cfg(feature = "tracing")]
 fn maybe_console_init() {
-    info!("Running developer build without console subscriber");
+    info!("Running developer build with console subscriber");
     console_subscriber::init();
 }
 
-#[cfg(not(feature = "console"))]
+#[cfg(not(feature = "tracing"))]
 fn maybe_console_init() {
     info!("Running production build without console subscriber");
 }
