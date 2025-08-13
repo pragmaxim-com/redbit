@@ -40,7 +40,6 @@ pub const MAINNET: NetworkPrefix = NetworkPrefix::Mainnet;
 pub const EMPTY_ADDR_SENTINEL: &str = "EMPTY"; // choose something safe
 
 impl SerializeAs<Vec<u8>> for Base58 {
-    #[inline]
     fn serialize_as<S>(source: &Vec<u8>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -57,7 +56,6 @@ impl SerializeAs<Vec<u8>> for Base58 {
 }
 
 impl<'de> DeserializeAs<'de, Vec<u8>> for Base58 {
-    #[inline]
     fn deserialize_as<D>(deserializer: D) -> Result<Vec<u8>, D::Error>
     where
         D: Deserializer<'de>,

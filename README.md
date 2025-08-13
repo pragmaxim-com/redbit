@@ -308,6 +308,12 @@ If node and indexer each uses its own SSD, then the throughput reaches :
 
 In a nutshell, whole bitcoin up to height ~ 0.9M can be indexed in less than 4 days on a PCIe Gen5 SSD with 4.0GHz CPU.
 
+```
+cargo flamegraph --bin target/release/ergo --release
+cargo flamegraph --bin target/release/cargo --release
+cargo flamegraph --bin target/release/btc --release
+```
+
 ### ⏱ Benchmarks (results from github servers)
 
 The slowest `block::_store_many` operation in this context persists 3 blocks of 3 transactions of 1 input and 3 utxos of 3 assets, ie.

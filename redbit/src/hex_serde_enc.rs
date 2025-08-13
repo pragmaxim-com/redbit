@@ -18,7 +18,6 @@ impl<T> serde_with::SerializeAs<T> for Hex
 where
     T: AsRef<[u8]>,
 {
-    #[inline]
     fn serialize_as<S>(source: &T, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -28,7 +27,6 @@ where
 }
 
 impl<'de> serde_with::DeserializeAs<'de, Vec<u8>> for Hex {
-    #[inline]
     fn deserialize_as<D>(deserializer: D) -> Result<Vec<u8>, D::Error>
     where
         D: Deserializer<'de>,

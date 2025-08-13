@@ -17,7 +17,6 @@ impl ByteVecColumnSerde for Utf8 {
 }
 
 impl serde_with::SerializeAs<Vec<u8>> for Utf8 {
-    #[inline]
     fn serialize_as<S>(source: &Vec<u8>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -30,7 +29,6 @@ impl serde_with::SerializeAs<Vec<u8>> for Utf8 {
 }
 
 impl<'de> serde_with::DeserializeAs<'de, Vec<u8>> for Utf8 {
-    #[inline]
     fn deserialize_as<D>(deserializer: D) -> Result<Vec<u8>, D::Error>
     where
         D: Deserializer<'de>,
