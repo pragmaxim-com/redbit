@@ -1,5 +1,7 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
+use crate::column::open_dict_tables;
+use crate::table::DictTableDefs;
 
 pub fn store_statement(pk_name: &Ident, column_name: &Ident, table: &Ident) -> TokenStream {
     quote! {
@@ -84,26 +86,20 @@ fn store_dict_stmnt(column_name: &Ident, pk_name: &Ident, cache: Option<Ident>) 
     }
 }
 
-pub fn store_dict_def(column_name: &Ident, pk_name: &Ident, table_dict_pk_by_pk: &Ident, table_value_to_dict_pk: &Ident, table_value_by_dict_pk: &Ident, table_dict_index: &Ident, table_value_to_dict_pk_cache: Option<Ident>) -> TokenStream {
-    let store_dict = store_dict_stmnt(column_name, pk_name, table_value_to_dict_pk_cache);
+pub fn store_dict_def(column_name: &Ident, pk_name: &Ident, dict_table_defs: &DictTableDefs) -> TokenStream {
+    let opened_tables = open_dict_tables(dict_table_defs);
+    let store_dict = store_dict_stmnt(column_name, pk_name, dict_table_defs.value_to_dict_pk_cache.clone());
     quote! {
-        let mut dict_pk_by_pk       = tx.open_table(#table_dict_pk_by_pk)?;
-        let mut value_to_dict_pk    = tx.open_table(#table_value_to_dict_pk)?;
-        let mut value_by_dict_pk    = tx.open_table(#table_value_by_dict_pk)?;
-        let mut dict_index          = tx.open_multimap_table(#table_dict_index)?;
-
+        #opened_tables
         #store_dict
     }
 }
 
-pub fn store_many_dict_def(column_name: &Ident, pk_name: &Ident, table_dict_pk_by_pk: &Ident, table_value_to_dict_pk: &Ident, table_value_by_dict_pk: &Ident, table_dict_index: &Ident, table_value_to_dict_pk_cache: Option<Ident>) -> TokenStream {
-    let store_dict = store_dict_stmnt(column_name, pk_name, table_value_to_dict_pk_cache);
+pub fn store_many_dict_def(column_name: &Ident, pk_name: &Ident, dict_table_defs: &DictTableDefs) -> TokenStream {
+    let opened_tables = open_dict_tables(dict_table_defs);
+    let store_dict = store_dict_stmnt(column_name, pk_name, dict_table_defs.value_to_dict_pk_cache.clone());
     quote! {
-        let mut dict_pk_by_pk       = tx.open_table(#table_dict_pk_by_pk)?;
-        let mut value_to_dict_pk    = tx.open_table(#table_value_to_dict_pk)?;
-        let mut value_by_dict_pk    = tx.open_table(#table_value_by_dict_pk)?;
-        let mut dict_index          = tx.open_multimap_table(#table_dict_index)?;
-
+        #opened_tables
         for instance in instances.iter() {
             #store_dict
         }

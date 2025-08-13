@@ -43,7 +43,7 @@ impl DbRelationshipMacros {
                     store_many_statement: store::one2one_store_many_def(child_name, child_type),
                     delete_statement: delete::one2one_delete_def(child_type),
                     delete_many_statement: delete::one2one_delete_many_def(child_type),
-                    function_def: get::one2one_def(entity_ident, child_name, child_type, &pk_name, &pk_type)
+                    function_def: get::one2one_def(entity_ident, child_name, child_type, pk_name, pk_type)
                 }
             }
             Multiplicity::OneToOption => {
@@ -58,7 +58,7 @@ impl DbRelationshipMacros {
                     store_many_statement: store::one2opt_store_many_def(child_name, child_type),
                     delete_statement: delete::one2opt_delete_def(child_type),
                     delete_many_statement: delete::one2opt_delete_many_def(child_type),
-                    function_def: get::one2opt_def(entity_ident, child_name, child_type, &pk_name, &pk_type)
+                    function_def: get::one2opt_def(entity_ident, child_name, child_type, pk_name, pk_type)
                 }
             }
             Multiplicity::OneToMany => {
@@ -73,7 +73,7 @@ impl DbRelationshipMacros {
                     store_many_statement: store::one2many_store_many_def(child_name, child_type),
                     delete_statement: delete::one2many_delete_def(child_type),
                     delete_many_statement: delete::one2many_delete_many_def(child_type),
-                    function_def: get::one2many_def(entity_ident, child_name, child_type, &pk_name, &pk_type)
+                    function_def: get::one2many_def(entity_ident, child_name, child_type, pk_name, pk_type)
                 }
             }
         }

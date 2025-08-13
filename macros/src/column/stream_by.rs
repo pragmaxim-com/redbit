@@ -1,9 +1,10 @@
-use crate::rest::HttpParams::{FromBody, FromPath};
+use crate::rest::HttpParams::{Body, Path};
 use crate::rest::{FunctionDef, HttpMethod, PathExpr, BodyExpr, EndpointTag};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
 use crate::endpoint::EndpointDef;
+use crate::table::DictTableDefs;
 
 pub fn by_dict_def(
     entity_name: &Ident,
@@ -11,10 +12,12 @@ pub fn by_dict_def(
     column_name: &Ident,
     column_type: &Type,
     pk_type: &Type,
-    value_to_dict_pk: &Ident,
-    dict_index_table: &Ident,
+    dict_table_defs: &DictTableDefs,
     stream_query_type: &Type
 ) -> FunctionDef {
+    let value_to_dict_pk = &dict_table_defs.value_to_dict_pk_table_def.name;
+    let dict_index_table = &dict_table_defs.dict_index_table_def.name;
+
     let fn_name = format_ident!("stream_by_{}", column_name);
     let fn_stream = quote! {
         pub fn #fn_name(tx: StorageReadTx, val: #column_type, query: Option<#stream_query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#entity_type, AppError>> + Send + 'static>>, AppError> {
@@ -108,12 +111,12 @@ pub fn by_dict_def(
             _entity_name: entity_name.clone(),
             tag: EndpointTag::DataRead,
             fn_name: fn_name.clone(),
-            params: vec![FromPath(vec![PathExpr {
+            params: vec![Path(vec![PathExpr {
                 name: column_name.clone(),
                 ty: column_type.clone(),
                 description: "Secondary index column with dictionary".to_string(),
                 sample: quote! { #column_type::default().url_encode() },
-            }]), FromBody(BodyExpr {
+            }]), Body(BodyExpr {
                 ty: syn::parse_quote! { Option<#stream_query_type> },
                 extraction: quote! { MaybeJson(body): MaybeJson<#stream_query_type> },
                 samples: quote! { vec![#stream_query_type::sample()] },
@@ -227,13 +230,13 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
             tag: EndpointTag::DataRead,
             fn_name: fn_name.clone(),
             params: vec![
-                FromPath(vec![PathExpr {
+                Path(vec![PathExpr {
                     name: column_name.clone(),
                     ty: column_type.clone(),
                     description: "Secondary index column".to_string(),
                     sample: quote! { #column_type::default().url_encode() },
                 }]
-                ), FromBody(BodyExpr {
+                ), Body(BodyExpr {
                     ty: syn::parse_quote! { Option<#stream_query_type> },
                     extraction: quote! { MaybeJson(body): MaybeJson<#stream_query_type> },
                     samples: quote! { vec![#stream_query_type::sample()] },

@@ -50,9 +50,9 @@ impl ErgoBlockProvider {
                     .map(|a| AddressEncoder::encode_address_as_bytes(crate::codec::MAINNET, &a))
                     .ok();
 
-            let address = Address(address_opt.unwrap_or_else(|| vec![]));
-            let tree = model_v1::Tree(ergo_tree_opt.unwrap_or(vec![]));
-            let tree_template = model_v1::TreeTemplate(ergo_tree_template_opt.unwrap_or(vec![]));
+            let address = Address(address_opt.unwrap_or_else(Vec::new));
+            let tree = model_v1::Tree(ergo_tree_opt.unwrap_or_else(Vec::new));
+            let tree_template = model_v1::TreeTemplate(ergo_tree_template_opt.unwrap_or_else(Vec::new));
 
             let amount = *out.value.as_u64();
             let utxo_pointer = TransactionPointer::from_parent(tx_pointer.clone(), out_index as u16);
@@ -77,7 +77,7 @@ impl ErgoBlockProvider {
                 }
                 result
             } else {
-                vec![]
+                Vec::new()
             };
 
             asset_count += assets.len();
@@ -127,7 +127,7 @@ impl BlockProvider<FullBlock, Block> for ErgoBlockProvider {
                 .collect();
             block_weight += box_weight;
             block_weight += tx.inputs.len();
-            result_txs.push(Transaction { id: tx_id.clone(), hash: TxHash(tx_hash), utxos: outputs, inputs: vec![], transient_inputs: inputs })
+            result_txs.push(Transaction { id: tx_id.clone(), hash: TxHash(tx_hash), utxos: outputs, inputs: Vec::new(), transient_inputs: inputs })
         }
 
         Ok(Block { height: id.clone(), header, transactions: result_txs, weight: block_weight as u32 })

@@ -23,7 +23,7 @@ impl ByteVecColumnSerde for Base58 {
         ADDRESSES[0].to_string()
     }
 
-    fn next_value(value: &Vec<u8>) -> Vec<u8> {
+    fn next_value(value: &[u8]) -> Vec<u8> {
         let current = bs58::encode(value).into_string();
         let idx = ADDRESSES.iter().position(|&a| a == current);
 

@@ -74,5 +74,5 @@ pub fn new(struct_name: &Ident, parent_field: Field, index_field: Field) -> Toke
                 <#parent_type as ToSchema>::schemas(schemas);
             }
         }
-    }.into()
+    }
 }

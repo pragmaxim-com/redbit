@@ -1,5 +1,7 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
+use crate::column::open_dict_tables;
+use crate::table::DictTableDefs;
 
 pub fn delete_statement(table: &Ident) -> TokenStream {
     quote! {
@@ -62,13 +64,11 @@ fn cache_remove(cache_name: &Option<Ident>) -> TokenStream {
     }
 }
 
-pub fn delete_dict_statement(table_dict_pk_by_pk: &Ident, table_value_to_dict_pk: &Ident, table_value_by_dict_pk: &Ident, table_dict_index: &Ident, table_value_to_dict_pk_cache: Option<Ident>) -> TokenStream {
-    let cache_remove_stmnt = cache_remove(&table_value_to_dict_pk_cache);
+pub fn delete_dict_statement(dict_table_defs: &DictTableDefs) -> TokenStream {
+    let opened_tables = open_dict_tables(dict_table_defs);
+    let cache_remove_stmnt = cache_remove(&dict_table_defs.value_to_dict_pk_cache);
     quote! {
-        let mut dict_pk_by_pk       = tx.open_table(#table_dict_pk_by_pk)?;
-        let mut value_to_dict_pk    = tx.open_table(#table_value_to_dict_pk)?;
-        let mut value_by_dict_pk    = tx.open_table(#table_value_by_dict_pk)?;
-        let mut dict_index          = tx.open_multimap_table(#table_dict_index)?;
+        #opened_tables
 
         let birth_id_opt = dict_pk_by_pk.remove(pk)?.map(|guard| guard.value().clone());
         if let Some(birth_id) = birth_id_opt {
@@ -89,13 +89,11 @@ pub fn delete_dict_statement(table_dict_pk_by_pk: &Ident, table_value_to_dict_pk
     }
 }
 
-pub fn delete_many_dict_statement(table_dict_pk_by_pk: &Ident, table_value_to_dict_pk: &Ident, table_value_by_dict_pk: &Ident, table_dict_index: &Ident, table_value_to_dict_pk_cache: Option<Ident>) -> TokenStream {
-    let cache_remove_stmnt = cache_remove(&table_value_to_dict_pk_cache);
+pub fn delete_many_dict_statement(dict_table_defs: &DictTableDefs) -> TokenStream {
+    let opened_tables = open_dict_tables(dict_table_defs);
+    let cache_remove_stmnt = cache_remove(&dict_table_defs.value_to_dict_pk_cache);
     quote! {
-        let mut dict_pk_by_pk       = tx.open_table(#table_dict_pk_by_pk)?;
-        let mut value_to_dict_pk    = tx.open_table(#table_value_to_dict_pk)?;
-        let mut value_by_dict_pk    = tx.open_table(#table_value_by_dict_pk)?;
-        let mut dict_index          = tx.open_multimap_table(#table_dict_index)?;
+        #opened_tables
 
         for pk in pks.iter() {
             let birth_id_opt = dict_pk_by_pk.remove(pk)?.map(|guard| guard.value().clone());

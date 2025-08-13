@@ -1,11 +1,11 @@
 use crate::endpoint::EndpointDef;
-use crate::rest::HttpParams::FromPath;
+use crate::rest::HttpParams::Path;
 use crate::rest::{EndpointTag, FunctionDef, HttpMethod, PathExpr};
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use syn::Type;
 
-pub fn delete_def(pk_type: &Type, delete_statements: &Vec<TokenStream>) -> FunctionDef {
+pub fn delete_def(pk_type: &Type, delete_statements: &[TokenStream]) -> FunctionDef {
     let fn_name = format_ident!("delete");
     let fn_stream = quote! {
         pub fn #fn_name(tx: &StorageWriteTx, pk: &#pk_type) -> Result<bool, AppError> {
@@ -88,7 +88,7 @@ pub fn delete_and_commit_def(
             _entity_name: entity_name.clone(),
             tag: EndpointTag::DataDelete,
             fn_name: fn_name.clone(),
-            params: vec![FromPath(vec![PathExpr {
+            params: vec![Path(vec![PathExpr {
                 name: pk_name.clone(),
                 ty: pk_type.clone(),
                 description: "Primary key".to_string(),

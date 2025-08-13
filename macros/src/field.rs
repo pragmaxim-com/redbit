@@ -25,7 +25,7 @@ impl FieldMacros {
         entity_type: &Type,
         stream_query_ty: &Type,
     ) -> Result<(KeyDef, Option<ParentDef>, Vec<FieldMacros>), syn::Error> {
-        let (key_def, field_macros) = field_parser::get_field_macros(&item_struct)?;
+        let (key_def, field_macros) = field_parser::get_field_macros(item_struct)?;
         let parent_def =
             match key_def.clone() {
                 KeyDef::Fk{ field_def: _, multiplicity: Multiplicity::OneToMany , parent_type: Some(parent_ty)} => Some(ParentDef {
@@ -41,20 +41,19 @@ impl FieldMacros {
         let field_def = key_def.field_def();
         let field_macros = field_macros.iter().map(|c| match c {
             ColumnDef::Key(KeyDef::Pk(field_def)) => {
-                FieldMacros::Pk(DbPkMacros::new(entity_ident, entity_type, field_def, None, &stream_query_ty, field_macros.len() == 1))
+                FieldMacros::Pk(DbPkMacros::new(entity_ident, entity_type, field_def, None, stream_query_ty, field_macros.len() == 1))
             },
             ColumnDef::Key(KeyDef::Fk{ field_def, multiplicity, parent_type: _}) => {
-                FieldMacros::Pk(DbPkMacros::new(entity_ident, entity_type, field_def, Some(multiplicity.clone()), &stream_query_ty, field_macros.len() == 1))
+                FieldMacros::Pk(DbPkMacros::new(entity_ident, entity_type, field_def, Some(multiplicity.clone()), stream_query_ty, field_macros.len() == 1))
             },
             ColumnDef::Plain(field , indexing_type) => {
                 FieldMacros::Plain(
                     DbColumnMacros::new(
-                        field.clone(),
+                        field,
                         indexing_type.clone(),
                         entity_ident,
                         entity_type,
-                        &field_def.name,
-                        &field_def.tpe,
+                        field_def,
                         stream_query_ty,
                         parent_def.clone()
                     ))

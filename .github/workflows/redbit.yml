@@ -101,7 +101,7 @@ jobs:
           ' README.md > README.md.tmp && mv README.md.tmp README.md
 
           # Prepare formatted benchmark lines
-          HEADER=$(printf "%-45s %10s\n" "function" "ops/s")
+          HEADER=$(printf "%-55s %10s\n" "function" "ops/s")
           BODY=$(cat benchmarks.csv | awk -F, '{ printf "%-45s %10s\n", $1, $2 }')
           FORMATTED_BENCH="$HEADER\n-------------------------------------------------------------\n$BODY"
 

@@ -1,5 +1,5 @@
 use crate::endpoint::EndpointDef;
-use crate::rest::HttpParams::FromPath;
+use crate::rest::HttpParams::Path;
 use crate::rest::{EndpointTag, FunctionDef, HttpMethod, PathExpr};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
@@ -46,7 +46,7 @@ pub fn one2one_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
             _entity_name: entity_name.clone(),
             tag: EndpointTag::DataRead,
             fn_name: fn_name.clone(),
-            params: vec![FromPath(vec![PathExpr {
+            params: vec![Path(vec![PathExpr {
                 name: pk_name.clone(),
                 ty: pk_type.clone(),
                 description: "Primary key".to_string(),
@@ -114,7 +114,7 @@ pub fn one2opt_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
             _entity_name: entity_name.clone(),
             tag: EndpointTag::DataRead,
             fn_name: fn_name.clone(),
-            params: vec![FromPath(vec![PathExpr {
+            params: vec![Path(vec![PathExpr {
                 name: pk_name.clone(),
                 ty: pk_type.clone(),
                 description: "Primary key".to_string(),
@@ -184,7 +184,7 @@ pub fn one2many_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, 
             _entity_name: entity_name.clone(),
             tag: EndpointTag::DataRead,
             fn_name: fn_name.clone(),
-            params: vec![FromPath(vec![PathExpr {
+            params: vec![Path(vec![PathExpr {
                 name: pk_name.clone(),
                 ty: pk_type.clone(),
                 description: "Primary key".to_string(),

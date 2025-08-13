@@ -71,7 +71,7 @@ pub fn get_array_len(ty: &Type) -> Option<usize> {
 
 pub fn is_vec_u8(ty: &Type) -> bool {
     matches!(ty, Type::Path(tp) if {
-        tp.path.segments.last().map_or(false, |seg| {
+        tp.path.segments.last().is_some_and(|seg| {
             seg.ident == "Vec" && matches!(&seg.arguments, syn::PathArguments::AngleBracketed(args) if {
                 args.args.iter().any(|arg| matches!(arg,
                     syn::GenericArgument::Type(Type::Path(p)) if p.path.is_ident("u8")))
@@ -92,7 +92,7 @@ pub fn is_integer(ty: &Type) -> bool {
 
 pub fn is_uuid(ty: &Type) -> bool {
     matches!(ty, Type::Path(tp) if {
-        tp.path.segments.last().map_or(false, |seg| seg.ident == "Uuid")
+        tp.path.segments.last().is_some_and(|seg| seg.ident == "Uuid")
             && tp.path.segments.iter().any(|s| s.ident == "uuid")
     })
 }
@@ -104,7 +104,7 @@ pub fn is_datetime_utc(ty: &Type) -> bool {
             if let Some(syn::PathArguments::AngleBracketed(gen_args)) = &segments.last().map(|s|s.arguments.clone()) {
                 for arg in gen_args.args.iter() {
                     if let syn::GenericArgument::Type(Type::Path(p)) = arg {
-                        if p.path.segments.last().map_or(false, |seg| seg.ident == "Utc") {
+                        if p.path.segments.last().is_some_and(|seg| seg.ident == "Utc") {
                             return true;
                         }
                     }
@@ -117,7 +117,7 @@ pub fn is_datetime_utc(ty: &Type) -> bool {
 
 fn is_time(ty: &Type) -> bool {
     if let Type::Path(tp) = ty {
-        tp.path.segments.last().map_or(false, |seg| seg.ident == "Duration")
+        tp.path.segments.last().is_some_and(|seg| seg.ident == "Duration")
     } else {
         false
     }
@@ -203,7 +203,7 @@ pub fn to_camel_case(input: &str, upper_first_char: bool) -> String {
         if i == 0 {
             if upper_first_char {
                 let mut chars: Vec<char> = word.to_lowercase().chars().collect();
-                chars[0] = chars[0].to_uppercase().nth(0).unwrap();
+                chars[0] = chars[0].to_uppercase().next().unwrap();
                 let upper_first_char_word: String = chars.into_iter().collect();
                 result.push_str(&upper_first_char_word);
             } else {

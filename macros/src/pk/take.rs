@@ -1,5 +1,5 @@
 use crate::endpoint::EndpointDef;
-use crate::rest::HttpParams::FromQuery;
+use crate::rest::HttpParams::Query;
 use crate::rest::{EndpointTag, FunctionDef, HttpMethod, QueryExpr};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
@@ -62,7 +62,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
             _entity_name: entity_name.clone(),
             tag: EndpointTag::DataRead,
             fn_name: fn_name.clone(),
-            params: vec![FromQuery(QueryExpr {
+            params: vec![Query(QueryExpr {
                 ty: syn::parse_quote!(TakeQuery),
                 extraction: quote! { extract::Query(query): extract::Query<TakeQuery> },
                 samples: quote! { vec![TakeQuery::sample()] },

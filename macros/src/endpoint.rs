@@ -18,7 +18,7 @@ pub struct EndpointDef {
 impl EndpointDef {
     pub fn to_endpoint(&self) -> Endpoint {
         let handler_fn_name = self.handler_name.clone();
-        let endpoint_tag = format!("{}", self.tag.to_string());
+        let endpoint_tag = self.tag.to_string();
         let endpoint_path = &self.endpoint.clone();
         let handler_impl_stream = &self.handler_impl_stream.clone();
         let method_ident = format_ident!("{}", &self.method.to_string());
@@ -81,22 +81,22 @@ impl EndpointDef {
         // Analyze and extract each param kind
         for param in &self.params {
             match param {
-                HttpParams::FromPath(path_params) => {
+                HttpParams::Path(path_params) => {
                     path_expr = generate_path_expr(&self.endpoint, path_params);
                 }
-                HttpParams::FromQuery(param) => {
+                HttpParams::Query(param) => {
                     query_param = Some(param);
                 }
-                HttpParams::FromBody(param) => {
+                HttpParams::Body(param) => {
                     body_param = Some(param);
                 }
             }
         }
 
         let mut tests: Vec<TokenStream> = Vec::new();
-        if query_param.is_some() && body_param.is_some() {
-            let query_samples = query_param.unwrap().clone().samples;
-            let body_param_clone = body_param.unwrap().clone();
+        if let (Some(qp), Some(bp)) = (query_param, body_param) {
+            let query_samples = qp.clone().samples;
+            let body_param_clone = bp.clone();
             let body_samples = body_param_clone.samples;
             let body_required = body_param_clone.required;
             let test_fn_name = format_ident!("http_endpoint_with_query_and_body_{}", &self.fn_name);
@@ -118,8 +118,8 @@ impl EndpointDef {
                     }
                 }
             });
-        } else if query_param.is_some() {
-            let query_samples = query_param.unwrap().clone().samples;
+        } else if let Some(qp) = query_param {
+            let query_samples = qp.clone().samples;
             let test_fn_name = format_ident!("http_endpoint_with_query_{}", &self.fn_name);
                 tests.push(quote! {
                     #[tokio::test]
@@ -133,8 +133,8 @@ impl EndpointDef {
                         }
                     }
                 });
-        } else if body_param.is_some() {
-            let body_param_clone = body_param.unwrap().clone();
+        } else if let Some(bp) = body_param {
+            let body_param_clone = bp.clone();
             let body_samples = body_param_clone.samples;
             let body_required = body_param_clone.required;
             let test_fn_name = format_ident!("http_endpoint_with_body_{}", &self.fn_name);
@@ -172,7 +172,7 @@ impl EndpointDef {
 
         for param in &self.params {
             match param {
-                HttpParams::FromPath(path_params) => match &path_params[..] {
+                HttpParams::Path(path_params) => match &path_params[..] {
                     [] => {}
                     [PathExpr { name, ty, .. }] => {
                         bindings.push(quote! { extract::Path(#name): extract::Path<#ty> });
@@ -185,10 +185,10 @@ impl EndpointDef {
                         });
                     }
                 },
-                HttpParams::FromQuery(query) => {
+                HttpParams::Query(query) => {
                     bindings.push(query.extraction.clone());
                 }
-                HttpParams::FromBody(body) => {
+                HttpParams::Body(body) => {
                     bindings.push(body.extraction.clone());
                 }
             }
@@ -203,7 +203,7 @@ impl EndpointDef {
 
         for param in &self.params {
             match param {
-                HttpParams::FromPath(path_params) => {
+                HttpParams::Path(path_params) => {
                     for p in path_params {
                         let name_str = Literal::string(&p.name.to_string());
                         let ty = &p.ty;
@@ -213,13 +213,13 @@ impl EndpointDef {
                         });
                     }
                 }
-                HttpParams::FromQuery(param) => {
+                HttpParams::Query(param) => {
                     let ty = &param.ty;
                     params_tokens.push(quote! {
                         #ty
                     });
                 }
-                HttpParams::FromBody(body) => {
+                HttpParams::Body(body) => {
                     let ty = &body.ty;
                     body_token = Some(quote! {
                         request_body = #ty

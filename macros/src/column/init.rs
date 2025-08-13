@@ -1,6 +1,7 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::Type;
+use crate::table::DictTableDefs;
 
 pub fn default_init_expr(column_type: &Type) -> TokenStream {
     quote! {
@@ -124,15 +125,15 @@ pub fn dict_init_expr(table_dict_pk_by_pk: &Ident, table_value_by_dict_pk: &Iden
     }
 }
 
-pub fn dict_init(column_name: &Ident, table_dict_pk_by_pk: &Ident, table_value_by_dict_pk: &Ident) -> TokenStream {
-    let init_expr = dict_init_expr(table_dict_pk_by_pk, table_value_by_dict_pk);
+pub fn dict_init(column_name: &Ident, dict_table_defs: &DictTableDefs,) -> TokenStream {
+    let init_expr = dict_init_expr(&dict_table_defs.dict_pk_by_pk_table_def.name, &dict_table_defs.value_by_dict_pk_table_def.name);
     quote! {
         #column_name: #init_expr
     }
 }
 
-pub fn dict_init_with_query(column_name: &Ident, table_dict_pk_by_pk: &Ident, table_value_by_dict_pk: &Ident) -> TokenStream {
-    let init_expr = dict_init_expr(table_dict_pk_by_pk, table_value_by_dict_pk);
+pub fn dict_init_with_query(column_name: &Ident, dict_table_defs: &DictTableDefs) -> TokenStream {
+    let init_expr = dict_init_expr(&dict_table_defs.dict_pk_by_pk_table_def.name, &dict_table_defs.value_by_dict_pk_table_def.name);
     quote! {
         let #column_name = #init_expr;
         if let Some(filter_op) = stream_query.#column_name.clone() {

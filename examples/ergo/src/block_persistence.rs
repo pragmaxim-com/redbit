@@ -18,7 +18,7 @@ impl ErgoBlockPersistence {
     fn populate_inputs(read_tx: &StorageReadTx, block: &mut Block) -> Result<(), ChainSyncError> {
         for tx in &mut block.transactions {
             for box_id in tx.transient_inputs.iter_mut() {
-                let utxo_pointers = Utxo::get_ids_by_box_id(read_tx, &box_id).expect("Failed to get Utxo by ErgoBox");
+                let utxo_pointers = Utxo::get_ids_by_box_id(read_tx, box_id).expect("Failed to get Utxo by ErgoBox");
                 match utxo_pointers.first() {
                     Some(utxo_pointer) => {
                         tx.inputs.push(InputRef { id: TransactionPointer::from_parent(utxo_pointer.parent.clone(), utxo_pointer.index()) })

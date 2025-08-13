@@ -2,15 +2,18 @@ use crate::rest::FunctionDef;
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
+use crate::table::DictTableDefs;
 
 pub fn get_by_dict_def(
     entity_name: &Ident,
     entity_type: &Type,
     column_name: &Ident,
     column_type: &Type,
-    value_to_dict_pk: &Ident,
-    dict_index_table: &Ident,
+    dict_table_defs: &DictTableDefs,
 ) -> FunctionDef {
+    let value_to_dict_pk = &dict_table_defs.value_to_dict_pk_table_def.name;
+    let dict_index_table = &dict_table_defs.dict_index_table_def.name;
+
     let fn_name = format_ident!("get_by_{}", column_name);
     let fn_stream = quote! {
         pub fn #fn_name(tx: &StorageReadTx, val: &#column_type) -> Result<Vec<#entity_type>, AppError> {

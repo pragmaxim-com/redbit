@@ -139,10 +139,11 @@ pub fn derive_pointer_key(input: TokenStream) -> TokenStream {
                 Err(e) => return e.to_compile_error().into(),
             };
             match parent_field {
-                Some(parent_field) => pk::pointer_impls::new(struct_ident, parent_field, index_field).into(),
-                None => syn::Error::new(index_field.span(), "Parent field missing").to_compile_error().into(),
+                Some(parent_field) => pk::pointer_impls::new(struct_ident, parent_field, index_field),
+                None => syn::Error::new(index_field.span(), "Parent field missing").to_compile_error(),
             }
         },
+        #[allow(clippy::useless_conversion)]
         Err(e) => e.to_compile_error().into(),
     };
     macro_utils::submit_struct_to_stream(stream, "pk", struct_ident, "_derive.rs")
@@ -167,13 +168,14 @@ pub fn derive_root_key(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
     let struct_ident = &ast.ident;
 
-    let stream = match field_parser::validate_root_key(&ast) {
+    #[allow(clippy::useless_conversion)]
+    let stream: proc_macro2::TokenStream = match field_parser::validate_root_key(&ast) {
         Ok(_) => {
             let (_, index_field) = match field_parser::extract_pointer_key_fields(&ast, &PointerType::Root) {
                 Ok(fields) => fields,
                 Err(e) => return e.to_compile_error().into(),
             };
-            pk::root_impls::new(struct_ident, index_field).into()
+            pk::root_impls::new(struct_ident, index_field)
         },
         Err(e) => e.to_compile_error().into(),
     };

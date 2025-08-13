@@ -1,9 +1,10 @@
-use crate::rest::HttpParams::FromPath;
+use crate::rest::HttpParams::Path;
 use crate::rest::{EndpointTag, FunctionDef, HttpMethod, PathExpr};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
 use crate::endpoint::EndpointDef;
+use crate::table::DictTableDefs;
 
 /// Generates a streaming SSE endpoint definition for querying primary keys by a dictionary index.
 pub fn by_dict_def(
@@ -12,9 +13,11 @@ pub fn by_dict_def(
     pk_type: &Type,
     column_name: &Ident,
     column_type: &Type,
-    value_to_dict_pk: &Ident,
-    dict_index_table: &Ident,
+    dict_table_defs: &DictTableDefs,
 ) -> FunctionDef {
+    let value_to_dict_pk = &dict_table_defs.value_to_dict_pk_table_def.name;
+    let dict_index_table = &dict_table_defs.dict_index_table_def.name;
+
     let fn_name = format_ident!("stream_{}s_by_{}", pk_name, column_name);
 
     let fn_stream = quote! {
@@ -78,7 +81,7 @@ pub fn by_dict_def(
             _entity_name: entity_name.clone(),
             tag: EndpointTag::DataRead,
             fn_name: fn_name.clone(),
-            params: vec![FromPath(vec![PathExpr {
+            params: vec![Path(vec![PathExpr {
                 name: column_name.clone(),
                 ty: column_type.clone(),
                 description: "Secondary index column (dict)".to_string(),
@@ -170,7 +173,7 @@ pub fn by_index_def(
             _entity_name: entity_name.clone(),
             tag: EndpointTag::DataRead,
             fn_name: fn_name.clone(),
-            params: vec![FromPath(vec![PathExpr {
+            params: vec![Path(vec![PathExpr {
                 name: column_name.clone(),
                 ty: column_type.clone(),
                 description: "Secondary index column".to_string(),

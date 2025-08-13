@@ -21,7 +21,7 @@ pub struct StreamQueryItem {
     pub init: TokenStream,
 }
 
-pub fn stream_query(stream_query_ty: &Type, stream_queries: &Vec<StreamQueryItem>) -> TokenStream {
+pub fn stream_query(stream_query_ty: &Type, stream_queries: &[StreamQueryItem]) -> TokenStream {
     let definitions: Vec<TokenStream> = stream_queries.iter().map(|item| item.definition.clone()).collect();
     let inits: Vec<TokenStream> = stream_queries.iter().map(|item| item.init.clone()).collect();
     quote! {

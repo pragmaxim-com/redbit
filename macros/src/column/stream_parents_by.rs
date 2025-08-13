@@ -1,21 +1,27 @@
-use crate::rest::HttpParams::{FromBody, FromPath};
+use crate::rest::HttpParams::{Body, Path};
 use crate::rest::{FunctionDef, HttpMethod, PathExpr, BodyExpr, EndpointTag};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
 use crate::endpoint::EndpointDef;
+use crate::field_parser::ParentDef;
+use crate::table::DictTableDefs;
 
 pub fn by_dict_def(
     entity_name: &Ident,
     column_name: &Ident,
     column_type: &Type,
     pk_type: &Type,
-    value_to_dict_pk: &Ident,
-    dict_index_table: &Ident,
-    stream_parent_query_type: &Type,
-    parent_type: &Type,
-    parent_ident: &Ident,
+    dict_table_defs: &DictTableDefs,
+    parent_def: &ParentDef,
 ) -> FunctionDef {
+    let value_to_dict_pk = &dict_table_defs.value_to_dict_pk_table_def.name;
+    let dict_index_table = &dict_table_defs.dict_index_table_def.name;
+
+    let parent_ident = &parent_def.parent_ident;
+    let parent_type = &parent_def.parent_type;
+    let stream_parent_query_type = &parent_def.stream_query_ty;
+
     let fn_name = format_ident!("stream_{}s_by_{}", parent_ident.to_string().to_lowercase(), column_name);
     let fn_stream = quote! {
         pub fn #fn_name(tx: StorageReadTx, val: #column_type, query: Option<#stream_parent_query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#parent_type, AppError>> + Send + 'static>>, AppError> {
@@ -109,12 +115,12 @@ pub fn by_dict_def(
             _entity_name: entity_name.clone(),
             tag: EndpointTag::DataRead,
             fn_name: fn_name.clone(),
-            params: vec![FromPath(vec![PathExpr {
+            params: vec![Path(vec![PathExpr {
                 name: column_name.clone(),
                 ty: column_type.clone(),
                 description: "Secondary index column with dictionary".to_string(),
                 sample: quote! { #column_type::default().url_encode() },
-            }]), FromBody(BodyExpr {
+            }]), Body(BodyExpr {
                 ty: syn::parse_quote! { Option<#stream_parent_query_type> },
                 extraction: quote! { MaybeJson(body): MaybeJson<#stream_parent_query_type> },
                 samples: quote! { vec![#stream_parent_query_type::sample()] },
@@ -151,10 +157,12 @@ pub fn by_index_def(
     column_type: &Type,
     pk_type: &Type,
     table: &Ident,
-    stream_parent_query_type: &Type,
-    parent_type: &Type,
-    parent_ident: &Ident,
+    parent_def: &ParentDef,
 ) -> FunctionDef {
+    let parent_ident = &parent_def.parent_ident;
+    let parent_type = &parent_def.parent_type;
+    let stream_parent_query_type = &parent_def.stream_query_ty;
+
     let fn_name = format_ident!("stream_{}s_by_{}", parent_ident.to_string().to_lowercase(), column_name);
     let fn_stream = quote! {
         pub fn #fn_name(tx: StorageReadTx, val: #column_type, query: Option<#stream_parent_query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#parent_type, AppError>> + Send + 'static>>, AppError> {
@@ -242,13 +250,13 @@ pub fn by_index_def(
             tag: EndpointTag::DataRead,
             fn_name: fn_name.clone(),
             params: vec![
-                FromPath(vec![PathExpr {
+                Path(vec![PathExpr {
                     name: column_name.clone(),
                     ty: column_type.clone(),
                     description: "Secondary index column".to_string(),
                     sample: quote! { #column_type::default().url_encode() },
                 }]
-                ), FromBody(BodyExpr {
+                ), Body(BodyExpr {
                     ty: syn::parse_quote! { Option<#stream_parent_query_type> },
                     extraction: quote! { MaybeJson(body): MaybeJson<#stream_parent_query_type> },
                     samples: quote! { vec![#stream_parent_query_type::sample()] },

@@ -13,8 +13,9 @@ pub mod impls;
 
 use crate::field_parser::{FieldDef, IndexingType, ParentDef};
 use crate::rest::*;
-use crate::table::TableDef;
+use crate::table::{DictTableDefs, TableDef};
 use proc_macro2::{Ident, TokenStream};
+use quote::quote;
 use syn::Type;
 use crate::entity;
 use crate::entity::query::{RangeQuery, StreamQueryItem};
@@ -36,25 +37,25 @@ pub struct DbColumnMacros {
 }
 
 impl DbColumnMacros {
+
     pub fn new(
-        field_def: FieldDef,
+        col_field_def: &FieldDef,
         indexing_type: IndexingType,
         entity_name: &Ident,
         entity_type: &Type,
-        pk_name: &Ident,
-        pk_type: &Type,
+        pk_field_def: &FieldDef,
         stream_query_ty: &Type,
         parent_def: Option<ParentDef>,
     ) -> DbColumnMacros {
-        let column_name = &field_def.name.clone();
-        let column_type = &field_def.tpe.clone();
+        let pk_name = &pk_field_def.name;
+        let pk_type = &pk_field_def.tpe;
         match indexing_type {
-            IndexingType::Off => DbColumnMacros::plain(field_def, entity_name, pk_name, pk_type, column_name, column_type),
+            IndexingType::Off => DbColumnMacros::plain(col_field_def, entity_name, pk_name, pk_type),
             IndexingType::On { dictionary: false, range, cache_size: _ } => {
-                DbColumnMacros::index(field_def, entity_name, entity_type, pk_name, pk_type, column_name, column_type, stream_query_ty, parent_def, range)
+                DbColumnMacros::index(col_field_def, entity_name, entity_type, pk_field_def, stream_query_ty, parent_def, range)
             }
             IndexingType::On { dictionary: true, range: false, cache_size } => {
-                DbColumnMacros::dictionary(field_def, entity_name, entity_type, pk_name, pk_type, column_name, column_type, stream_query_ty, parent_def, cache_size)
+                DbColumnMacros::dictionary(col_field_def, entity_name, entity_type, pk_field_def, stream_query_ty, parent_def, cache_size)
             }
             IndexingType::On { dictionary: true, range: true, cache_size: _ } => {
                 panic!("Range indexing on dictionary columns is not supported")
@@ -63,16 +64,16 @@ impl DbColumnMacros {
     }
 
     pub fn plain(
-        field_def: FieldDef,
+        field_def: &FieldDef,
         entity_name: &Ident,
         pk_name: &Ident,
         pk_type: &Type,
-        column_name: &Ident,
-        column_type: &Type,
     ) -> DbColumnMacros {
+        let column_name = &field_def.name.clone();
+        let column_type = &field_def.tpe.clone();
         let table_def = TableDef::plain_table_def(entity_name, column_name, column_type, pk_name, pk_type);
         DbColumnMacros {
-            field_def,
+            field_def: field_def.clone(),
             range_query: None,
             stream_query_init: query::stream_query_init(column_name, column_type),
             table_definitions: vec![table_def.clone()],
@@ -89,25 +90,27 @@ impl DbColumnMacros {
     }
 
     pub fn index(
-        field_def: FieldDef,
+        col_field_def: &FieldDef,
         entity_name: &Ident,
         entity_type: &Type,
-        pk_name: &Ident,
-        pk_type: &Type,
-        column_name: &Ident,
-        column_type: &Type,
+        pk_field_def: &FieldDef,
         stream_query_type: &Type,
-        parent_def: Option<ParentDef>,
+        parent_def_opt: Option<ParentDef>,
         range: bool,
     ) -> DbColumnMacros {
+        let column_name = &col_field_def.name.clone();
+        let column_type = &col_field_def.tpe.clone();
+        let pk_name = &pk_field_def.name;
+        let pk_type = &pk_field_def.tpe;
+
         let plain_table_def = TableDef::plain_table_def(entity_name, column_name, column_type, pk_name, pk_type);
         let index_table_def = TableDef::index_table_def(entity_name, column_name, column_type, pk_type);
 
         let mut function_defs: Vec<FunctionDef> = Vec::new();
         function_defs.push(get_by::get_by_index_def(entity_name, entity_type, column_name, column_type, &index_table_def.name));
         function_defs.push(stream_by::by_index_def(entity_name, entity_type, column_name, column_type, pk_type, &index_table_def.name, stream_query_type));
-        if let Some(ParentDef { parent_type, parent_ident, stream_query_ty }) = parent_def {
-            function_defs.push(stream_parents_by::by_index_def(entity_name, column_name, column_type, pk_type, &index_table_def.name, &stream_query_ty, &parent_type, &parent_ident));
+        if let Some(parent_def) = parent_def_opt {
+            function_defs.push(stream_parents_by::by_index_def(entity_name, column_name, column_type, pk_type, &index_table_def.name, &parent_def));
         }
         function_defs.push(get_keys_by::by_index_def(
             entity_name,
@@ -132,8 +135,7 @@ impl DbColumnMacros {
             function_defs.push(stream_range_by::stream_range_by_index_def(
                 entity_name,
                 entity_type,
-                column_name,
-                column_type,
+                col_field_def,
                 pk_type,
                 &index_table_def.name,
                 &rq.ty,
@@ -150,7 +152,7 @@ impl DbColumnMacros {
         };
 
         DbColumnMacros {
-            field_def,
+            field_def: col_field_def.clone(),
             range_query,
             stream_query_init: query::stream_query_init(column_name, column_type),
             table_definitions: vec![plain_table_def.clone(), index_table_def.clone()],
@@ -167,130 +169,62 @@ impl DbColumnMacros {
     }
 
     pub fn dictionary(
-        field_def: FieldDef,
+        col_field_def: &FieldDef,
         entity_name: &Ident,
         entity_type: &Type,
-        pk_name: &Ident,
-        pk_type: &Type,
-        column_name: &Ident,
-        column_type: &Type,
+        pk_field_def: &FieldDef,
         stream_query_type: &Type,
-        parent_def: Option<ParentDef>,
+        parent_def_opt: Option<ParentDef>,
         cache_size: Option<usize>,
     ) -> DbColumnMacros {
-        let dict_index_table_def = TableDef::dict_index_table_def(entity_name, column_name, pk_type);
-        let value_by_dict_pk_table_def = TableDef::value_by_dict_pk_table_def(entity_name, column_name, column_type, pk_type);
-        let value_to_dict_pk_table_def = TableDef::value_to_dict_pk_table_def(entity_name, column_name, column_type, pk_type, cache_size);
-        let dict_pk_by_pk_table_def = TableDef::dict_pk_by_pk_table_def(entity_name, column_name, pk_name, pk_type);
+        let column_name = &col_field_def.name.clone();
+        let column_type = &col_field_def.tpe.clone();
+        let pk_name = &pk_field_def.name;
+        let pk_type = &pk_field_def.tpe;
 
-        let table_value_to_dict_pk_cache = value_to_dict_pk_table_def.cache.clone().map(|c|c.0);
+        let dict_tables = DictTableDefs::new(entity_name, column_name, column_type, pk_name, pk_type, cache_size);
 
         let mut function_defs: Vec<FunctionDef> = Vec::new();
 
-        function_defs.push(get_by::get_by_dict_def(
-            entity_name,
-            entity_type,
-            column_name,
-            column_type,
-            &value_to_dict_pk_table_def.name,
-            &dict_index_table_def.name,
-        ));
-        function_defs.push(stream_by::by_dict_def(
-            entity_name,
-            entity_type,
-            column_name,
-            column_type,
-            pk_type,
-            &value_to_dict_pk_table_def.name,
-            &dict_index_table_def.name,
-            &stream_query_type
-        ));
-        if let Some(ParentDef { parent_type, parent_ident, stream_query_ty }) = parent_def {
+        function_defs.push(get_by::get_by_dict_def(entity_name, entity_type, column_name, column_type, &dict_tables));
+        function_defs.push(stream_by::by_dict_def(entity_name, entity_type, column_name, column_type, pk_type, &dict_tables, stream_query_type));
+        if let Some(parent_def) = parent_def_opt {
             function_defs.push(
-                stream_parents_by::by_dict_def(
-                    entity_name,
-                    column_name,
-                    column_type,
-                    pk_type,
-                    &value_to_dict_pk_table_def.name,
-                    &dict_index_table_def.name,
-                    &stream_query_ty,
-                    &parent_type,
-                    &parent_ident
-                )
+                stream_parents_by::by_dict_def(entity_name, column_name, column_type, pk_type, &dict_tables, &parent_def)
             );
         }
 
-        function_defs.push(get_keys_by::by_dict_def(
-            entity_name,
-            pk_name,
-            pk_type,
-            column_name,
-            column_type,
-            &value_to_dict_pk_table_def.name,
-            &dict_index_table_def.name,
-        ));
-        function_defs.push(stream_keys_by::by_dict_def(
-            entity_name,
-            pk_name,
-            pk_type,
-            column_name,
-            column_type,
-            &value_to_dict_pk_table_def.name,
-            &dict_index_table_def.name,
-        ));
+        function_defs.push(get_keys_by::by_dict_def(entity_name, pk_name, pk_type, column_name, column_type, &dict_tables));
+        function_defs.push(stream_keys_by::by_dict_def(entity_name, pk_name, pk_type, column_name, column_type, &dict_tables));
 
         DbColumnMacros {
-            field_def,
+            field_def: col_field_def.clone(),
             range_query: None,
             stream_query_init: query::stream_query_init(column_name, column_type),
-            table_definitions: vec![
-                dict_index_table_def.clone(),
-                value_by_dict_pk_table_def.clone(),
-                value_to_dict_pk_table_def.clone(),
-                dict_pk_by_pk_table_def.clone(),
-            ],
-            struct_init: init::dict_init(column_name, &dict_pk_by_pk_table_def.name, &value_by_dict_pk_table_def.name),
-            struct_init_with_query: init::dict_init_with_query(
-                column_name,
-                &dict_pk_by_pk_table_def.name,
-                &value_by_dict_pk_table_def.name,
-            ),
+            table_definitions: dict_tables.all_table_defs(),
+            struct_init: init::dict_init(column_name, &dict_tables),
+            struct_init_with_query: init::dict_init_with_query(column_name, &dict_tables),
             struct_default_init_with_query: init::default_init_with_query(column_name, column_type),
             struct_default_init: init::default_init(column_name, column_type),
-            store_statement: store::store_dict_def(
-                column_name,
-                pk_name,
-                &dict_pk_by_pk_table_def.name,
-                &value_to_dict_pk_table_def.name,
-                &value_by_dict_pk_table_def.name,
-                &dict_index_table_def.name,
-                table_value_to_dict_pk_cache.clone()
-            ),
-            store_many_statement: store::store_many_dict_def(
-                column_name,
-                pk_name,
-                &dict_pk_by_pk_table_def.name,
-                &value_to_dict_pk_table_def.name,
-                &value_by_dict_pk_table_def.name,
-                &dict_index_table_def.name,
-                table_value_to_dict_pk_cache.clone()
-            ),
-            delete_statement: delete::delete_dict_statement(
-                &dict_pk_by_pk_table_def.name,
-                &value_to_dict_pk_table_def.name,
-                &value_by_dict_pk_table_def.name,
-                &dict_index_table_def.name,
-                table_value_to_dict_pk_cache.clone()
-            ),
-            delete_many_statement: delete::delete_many_dict_statement(
-                &dict_pk_by_pk_table_def.name,
-                &value_to_dict_pk_table_def.name,
-                &value_by_dict_pk_table_def.name,
-                &dict_index_table_def.name,
-                table_value_to_dict_pk_cache.clone()
-            ),
+            store_statement: store::store_dict_def(column_name, pk_name, &dict_tables),
+            store_many_statement: store::store_many_dict_def(column_name, pk_name, &dict_tables),
+            delete_statement: delete::delete_dict_statement(&dict_tables),
+            delete_many_statement: delete::delete_many_dict_statement(&dict_tables),
             function_defs,
         }
+    }
+}
+
+pub(crate) fn open_dict_tables(dict_table_defs: &DictTableDefs) -> TokenStream {
+    let table_dict_pk_by_pk = &dict_table_defs.dict_pk_by_pk_table_def.name;
+    let table_value_to_dict_pk = &dict_table_defs.value_to_dict_pk_table_def.name;
+    let table_value_by_dict_pk = &dict_table_defs.value_by_dict_pk_table_def.name;
+    let table_dict_index = &dict_table_defs.dict_index_table_def.name;
+
+    quote! {
+        let mut dict_pk_by_pk       = tx.open_table(#table_dict_pk_by_pk)?;
+        let mut value_to_dict_pk    = tx.open_table(#table_value_to_dict_pk)?;
+        let mut value_by_dict_pk    = tx.open_table(#table_value_by_dict_pk)?;
+        let mut dict_index          = tx.open_multimap_table(#table_dict_index)?;
     }
 }

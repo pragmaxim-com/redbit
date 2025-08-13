@@ -14,6 +14,36 @@ pub enum TableType {
 }
 
 #[derive(Clone, Debug)]
+pub struct DictTableDefs {
+    pub(crate) value_to_dict_pk_cache: Option<Ident>,
+    pub(crate) dict_index_table_def: TableDef,
+    pub(crate) value_by_dict_pk_table_def: TableDef,
+    pub(crate) value_to_dict_pk_table_def: TableDef,
+    pub(crate) dict_pk_by_pk_table_def: TableDef,
+}
+
+impl DictTableDefs {
+    pub fn new(entity_name: &Ident, column_name: &Ident, column_type: &Type, pk_name: &Ident, pk_type: &Type, cache_size: Option<usize>) -> DictTableDefs {
+        let value_to_dict_pk_table_def = TableDef::value_to_dict_pk_table_def(entity_name, column_name, column_type, pk_type, cache_size);
+        DictTableDefs {
+            value_to_dict_pk_cache: value_to_dict_pk_table_def.cache.clone().map(|c|c.0),
+            dict_index_table_def: TableDef::dict_index_table_def(entity_name, column_name, pk_type),
+            value_by_dict_pk_table_def: TableDef::value_by_dict_pk_table_def(entity_name, column_name, column_type, pk_type),
+            value_to_dict_pk_table_def,
+            dict_pk_by_pk_table_def: TableDef::dict_pk_by_pk_table_def(entity_name, column_name, pk_name, pk_type),
+        }
+    }
+    pub fn all_table_defs(&self) -> Vec<TableDef> {
+        vec![
+            self.dict_index_table_def.clone(),
+            self.value_by_dict_pk_table_def.clone(),
+            self.value_to_dict_pk_table_def.clone(),
+            self.dict_pk_by_pk_table_def.clone(),
+        ]
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct TableDef {
     pub name: Ident,
     pub cache: Option<(Ident, TokenStream)>,

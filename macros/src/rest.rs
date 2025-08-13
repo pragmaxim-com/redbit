@@ -41,9 +41,9 @@ pub struct BodyExpr {
 
 #[derive(Clone)]
 pub enum HttpParams {
-    FromPath(Vec<PathExpr>),
-    FromQuery(QueryExpr),
-    FromBody(BodyExpr),
+    Path(Vec<PathExpr>),
+    Query(QueryExpr),
+    Body(BodyExpr),
 }
 
 #[derive(Clone, strum_macros::Display)]
@@ -55,6 +55,7 @@ pub enum EndpointTag {
 }
 
 #[derive(Clone)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum HttpMethod {
     GET,
     POST,
@@ -79,7 +80,7 @@ pub struct Rest {
 }
 
 impl Rest {
-    pub fn new(fn_defs: &Vec<FunctionDef>) -> Self {
+    pub fn new(fn_defs: &[FunctionDef]) -> Self {
         let endpoints: Vec<Endpoint> = fn_defs.iter().filter_map(|fn_def| fn_def.endpoint.clone()).collect();
         let route_chains: Vec<TokenStream> = endpoints.iter().map(|e| e.route.clone()).collect();
         let endpoint_handlers: Vec<TokenStream> = endpoints.iter().map(|e| e.handler.clone()).collect();

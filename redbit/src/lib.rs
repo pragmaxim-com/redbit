@@ -162,8 +162,8 @@ pub struct TableInfo {
 pub trait ByteVecColumnSerde {
     fn decoded_example() -> Vec<u8>;
     fn encoded_example() -> String;
-    fn next_value(value: &Vec<u8>) -> Vec<u8> {
-        let mut vec = value.clone();
+    fn next_value(value: &[u8]) -> Vec<u8> {
+        let mut vec = value.to_owned();
         if let Some(last) = vec.last_mut() {
             *last = last.wrapping_add(1);
         } else {
@@ -206,9 +206,9 @@ impl From<JsonRejection> for AppError {
     }
 }
 
-impl Into<axum::Error> for AppError {
-    fn into(self) -> axum::Error {
-        axum::Error::new(self.to_string())
+impl From<AppError> for axum::Error {
+    fn from(val: AppError) -> Self {
+        axum::Error::new(val.to_string())
     }
 }
 

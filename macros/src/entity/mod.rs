@@ -18,7 +18,7 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, TokenStream), syn::Error
     let entity_type: Type = parse_quote! { #entity_ident };
     let stream_query_type = query::stream_query_type(&entity_type);
     let (key_def, parent_def, field_macros) =
-        FieldMacros::new(&item_struct, entity_ident, &entity_type, &stream_query_type)?;
+        FieldMacros::new(item_struct, entity_ident, &entity_type, &stream_query_type)?;
     let key = key_def.field_def();
     let mut field_names = Vec::new();
     let mut table_defs = Vec::new();
@@ -97,6 +97,6 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, TokenStream), syn::Error
             }
             // unit tests and rest api tests
             #test_suite
-        }.into();
+        };
     Ok((key_def, stream))
 }

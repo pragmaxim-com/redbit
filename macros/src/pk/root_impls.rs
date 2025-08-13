@@ -55,6 +55,6 @@ pub fn new(struct_name: &Ident, index_field: Field) -> TokenStream {
                 schemas.push((stringify!(#struct_name).to_string(), <#struct_name as PartialSchema>::schema()));
             }
         }
-    }.into()
+    }
 
 }

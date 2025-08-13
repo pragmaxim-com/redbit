@@ -5,7 +5,7 @@ use crate::table::TableType;
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 
-pub fn table_info_fn(entity_name: &Ident, table_defs: &Vec<TableDef>) -> FunctionDef {
+pub fn table_info_fn(entity_name: &Ident, table_defs: &[TableDef]) -> FunctionDef {
     let stats_getters = table_defs.iter().map(|td| {
         let table_name = td.name.to_string();
         let table_ident = &td.name;

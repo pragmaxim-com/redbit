@@ -7,6 +7,7 @@ use syn::{Data, DeriveInput, Field, Fields, GenericArgument, ItemStruct, PathArg
 use crate::pk::PointerType;
 
 #[derive(Clone)]
+#[allow(clippy::enum_variant_names)]
 pub enum Multiplicity {
     OneToOption,
     OneToOne,
@@ -27,6 +28,7 @@ pub struct FieldDef {
 }
 
 #[derive(Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum KeyDef {
     Pk(FieldDef),
     Fk { field_def: FieldDef, multiplicity: Multiplicity, parent_type: Option<Type> },
@@ -53,6 +55,7 @@ pub enum IndexingType {
 }
 
 #[derive(Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum ColumnDef {
     Key(KeyDef),
     Plain(FieldDef, IndexingType),
@@ -283,11 +286,11 @@ pub fn extract_pointer_key_fields(input: &DeriveInput, pointer_type: &PointerTyp
                 return Err(syn::Error::new_spanned(input, "Child struct must have exactly two fields (parent and index)"));
             }
 
-            let index_field = match fields.iter().find(|f| is_index_field(&f)) {
+            let index_field = match fields.iter().find(|f| is_index_field(f)) {
                 Some(f) => f.clone(),
                 None => return Err(syn::Error::new_spanned(input, "Unable to find index field")),
             };
-            let parent_field = match fields.iter().find(|f| !is_index_field(&f)) {
+            let parent_field = match fields.iter().find(|f| !is_index_field(f)) {
                 Some(f) => f.clone(),
                 None => return Err(syn::Error::new_spanned(input, "Unable to find parent field")),
             };
@@ -298,7 +301,7 @@ pub fn extract_pointer_key_fields(input: &DeriveInput, pointer_type: &PointerTyp
 }
 
 fn is_index_field(f: &Field) -> bool {
-    f.ident.as_ref().map_or(false, |name| name.to_string().eq("index"))
+    f.ident.as_ref().is_some_and(|name| name.to_string().eq("index"))
 }
 
 /// Determines whether a struct is a `Root` or `Child` based on `#[parent]` attributes.
