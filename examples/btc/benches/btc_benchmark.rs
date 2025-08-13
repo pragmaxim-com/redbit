@@ -7,9 +7,17 @@ use btc::block_persistence::BtcBlockPersistence;
 use btc::block_provider::BtcBlockProvider;
 use btc::btc_client::{BtcBlock, BtcClient};
 use btc::config::BitcoinConfig;
-use btc::model_v1::{Block, Height};
+use btc::model_v1::Block;
 use serde_json;
+
 use redbit::Storage;
+
+fn block_from_file(size: &str, tx_count: usize) -> BtcBlock {
+    info!("Getting {} block with {} txs", size, tx_count);
+    let path = format!("blocks/{}_block.json", size);
+    let file_content = fs::read_to_string(path).expect("Failed to read block file");
+    serde_json::from_str(&file_content).expect("Failed to deserialize block from JSON")
+}
 
 fn criterion_benchmark(c: &mut Criterion) {
     let app_config = settings::AppConfig::new("config/settings").unwrap();
@@ -27,27 +35,16 @@ fn criterion_benchmark(c: &mut Criterion) {
     let block_provider: Arc<dyn BlockProvider<BtcBlock, Block>> =
         Arc::new(BtcBlockProvider::new(btc_client.clone(), fetching_par).expect("Failed to create block provider"));
     let block_persistence: Arc<dyn BlockPersistence<Block>> = Arc::new(BtcBlockPersistence { storage: Arc::clone(&storage) });
+    block_persistence.init().expect("Failed to init block persistence");
 
-    info!("Getting small block with 29 txs");
-    let small_block = btc_client.get_block_by_height(Height(135204)).unwrap();
-    let small_block_json = serde_json::to_string(&small_block).expect("Failed to serialize sample entity to JSON");
-    let small_block_file_path = db_path.join("small_block.json");
-    fs::write(&small_block_file_path, small_block_json).expect("Failed to write small block to file");
-    info!("Getting avg block with 343 txs");
-    let avg_block = btc_client.get_block_by_height(Height(217847)).unwrap();
-    let avg_block_json = serde_json::to_string(&avg_block).expect("Failed to serialize sample entity to JSON");
-    let avg_block_file_path = db_path.join("avg_block.json");
-    fs::write(&avg_block_file_path, avg_block_json).expect("Failed to write avg block to file");
-    info!("Getting huge block with 3713 txs");
-    let huge_block = btc_client.get_block_by_height(Height(908244)).unwrap();
-    let huge_block_json = serde_json::to_string(&huge_block).expect("Failed to serialize sample entity to JSON");
-    let huge_block_file_path = db_path.join("huge_block.json");
-    fs::write(&huge_block_file_path, huge_block_json).expect("Failed to write avg block to file");
+    let small_block: BtcBlock = block_from_file("small", 29);
+    let avg_block: BtcBlock = block_from_file("avg", 343);
+    let huge_block: BtcBlock = block_from_file("huge", 3713);
 
     info!("Initiating processing");
-    let processed_huge_block = block_provider.process_block(&huge_block).expect("Failed to process huge_block");
-    let processed_avg_block = block_provider.process_block(&avg_block).expect("Failed to process avg_block");
     let processed_small_block = block_provider.process_block(&small_block).expect("Failed to process small_block");
+    let processed_avg_block = block_provider.process_block(&avg_block).expect("Failed to process avg_block");
+    let processed_huge_block = block_provider.process_block(&huge_block).expect("Failed to process huge_block");
 
     info!("Initiating indexing");
     let mut group = c.benchmark_group("persistence");
@@ -109,3 +106,4 @@ fn criterion_benchmark(c: &mut Criterion) {
 
 criterion_group!(benches, criterion_benchmark);
 criterion_main!(benches);
+
