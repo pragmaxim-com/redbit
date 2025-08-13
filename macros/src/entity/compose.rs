@@ -3,7 +3,7 @@ use quote::quote;
 use syn::Type;
 use crate::rest::FunctionDef;
 
-pub fn compose_token_stream(entity_name: &Ident, entity_type: &Type, pk_type: &Type, struct_inits: &Vec<TokenStream>) -> FunctionDef {
+pub fn compose_token_stream(entity_name: &Ident, entity_type: &Type, pk_type: &Type, struct_inits: &[TokenStream]) -> FunctionDef {
     FunctionDef {
         fn_stream: quote! {
             fn compose(tx: &StorageReadTx, pk: &#pk_type) -> Result<#entity_type, AppError> {
@@ -32,7 +32,7 @@ pub fn compose_token_stream(entity_name: &Ident, entity_type: &Type, pk_type: &T
     }
 }
 
-pub fn compose_with_filter_token_stream(entity_type: &Type, pk_type: &Type, stream_query_type: &Type, field_names: &Vec<Ident>, struct_inits_with_query: &Vec<TokenStream>) -> FunctionDef {
+pub fn compose_with_filter_token_stream(entity_type: &Type, pk_type: &Type, stream_query_type: &Type, field_names: &[Ident], struct_inits_with_query: &[TokenStream]) -> FunctionDef {
     FunctionDef {
         fn_stream: quote! {
             fn compose_with_filter(tx: &StorageReadTx, pk: &#pk_type, stream_query: &#stream_query_type) -> Result<Option<#entity_type>, AppError> {

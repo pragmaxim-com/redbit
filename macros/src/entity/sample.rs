@@ -8,9 +8,9 @@ pub fn sample_token_fns(
     entity_type: &Type,
     pk_type: &Type,
     stream_query_type: &Type,
-    struct_default_inits: &Vec<TokenStream>,
-    struct_default_inits_with_query: &Vec<TokenStream>,
-    field_names: &Vec<Ident>,
+    struct_default_inits: &[TokenStream],
+    struct_default_inits_with_query: &[TokenStream],
+    field_names: &[Ident],
 ) -> Vec<FunctionDef> {
     vec![
         FunctionDef {

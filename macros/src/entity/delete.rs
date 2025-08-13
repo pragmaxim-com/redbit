@@ -17,10 +17,10 @@ pub fn delete_def(pk_type: &Type, delete_statements: &[TokenStream]) -> Function
     FunctionDef { fn_stream, endpoint: None, test_stream: None, bench_stream: None }
 }
 
-pub fn delete_many_def(pk_type: &Type, delete_many_statements: &Vec<TokenStream>) -> FunctionDef {
+pub fn delete_many_def(pk_type: &Type, delete_many_statements: &[TokenStream]) -> FunctionDef {
     let fn_name = format_ident!("delete_many");
     let fn_stream = quote! {
-        pub fn #fn_name(tx: &StorageWriteTx, pks: &Vec<#pk_type>) -> Result<bool, AppError> {
+        pub fn #fn_name(tx: &StorageWriteTx, pks: &[#pk_type]) -> Result<bool, AppError> {
             let mut removed: Vec<bool> = Vec::new();
             #(#delete_many_statements)*
             Ok(!removed.contains(&false))
@@ -34,7 +34,7 @@ pub fn delete_and_commit_def(
     entity_type: &Type,
     pk_name: &Ident,
     pk_type: &Type,
-    delete_statements: &Vec<TokenStream>,
+    delete_statements: &[TokenStream],
 ) -> FunctionDef {
     let fn_name = format_ident!("delete_and_commit");
     let fn_stream = quote! {

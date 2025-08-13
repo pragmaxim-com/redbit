@@ -5,7 +5,7 @@ use crate::rest::{BodyExpr, EndpointTag, FunctionDef, HttpMethod};
 use quote::{format_ident, quote};
 use syn::Type;
 
-pub fn store_def(entity_name: &Ident, entity_type: &Type, store_statements: &Vec<TokenStream>) -> FunctionDef {
+pub fn store_def(entity_name: &Ident, entity_type: &Type, store_statements: &[TokenStream]) -> FunctionDef {
     let fn_name = format_ident!("store");
     let fn_stream = quote! {
         pub fn #fn_name(tx: &StorageWriteTx, instance: &#entity_type) -> Result<(), AppError> {
@@ -49,7 +49,7 @@ pub fn store_def(entity_name: &Ident, entity_type: &Type, store_statements: &Vec
     }
 }
 
-pub fn store_many_def(entity_name: &Ident, entity_type: &Type, store_many_statements: &Vec<TokenStream>) -> FunctionDef {
+pub fn store_many_def(entity_name: &Ident, entity_type: &Type, store_many_statements: &[TokenStream]) -> FunctionDef {
     let fn_name = format_ident!("store_many");
     let fn_stream = quote! {
         pub fn #fn_name(tx: &StorageWriteTx, instances: &Vec<#entity_type>) -> Result<(), AppError> {
@@ -94,7 +94,7 @@ pub fn store_many_def(entity_name: &Ident, entity_type: &Type, store_many_statem
     }
 }
 
-pub fn store_and_commit_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type: &Type, store_statements: &Vec<TokenStream>) -> FunctionDef {
+pub fn store_and_commit_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type: &Type, store_statements: &[TokenStream]) -> FunctionDef {
     let fn_name = format_ident!("store_and_commit");
     let fn_stream = quote! {
         pub fn #fn_name(storage: Arc<Storage>, instance: &#entity_type) -> Result<#pk_type, AppError> {
