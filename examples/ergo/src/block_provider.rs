@@ -50,9 +50,9 @@ impl ErgoBlockProvider {
                     .map(|a| AddressEncoder::encode_address_as_bytes(crate::codec::MAINNET, &a))
                     .ok();
 
-            let address = Address(address_opt.unwrap_or_else(Vec::new));
-            let tree = model_v1::Tree(ergo_tree_opt.unwrap_or_else(Vec::new));
-            let tree_template = model_v1::TreeTemplate(ergo_tree_template_opt.unwrap_or_else(Vec::new));
+            let address = Address(address_opt.unwrap_or_default());
+            let tree = model_v1::Tree(ergo_tree_opt.unwrap_or_default());
+            let tree_template = model_v1::TreeTemplate(ergo_tree_template_opt.unwrap_or_default());
 
             let amount = *out.value.as_u64();
             let utxo_pointer = TransactionPointer::from_parent(tx_pointer.clone(), out_index as u16);

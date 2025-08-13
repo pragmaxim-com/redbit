@@ -37,8 +37,20 @@ async fn maybe_run_indexing(index_config: IndexerSettings, scheduler: Scheduler<
     }
 }
 
+#[cfg(feature = "console")]
+fn maybe_console_init() {
+    info!("Running developer build without console subscriber");
+    console_subscriber::init();
+}
+
+#[cfg(not(feature = "console"))]
+fn maybe_console_init() {
+    info!("Running production build without console subscriber");
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
+    maybe_console_init();
     let app_config = AppConfig::new("config/settings")?;
     let ergo_config = ErgoConfig::new("config/ergo")?;
     let db_path: String = format!("{}/{}/{}", app_config.indexer.db_path, "main", "ergo");

@@ -19,7 +19,7 @@ axum-test = "17.3.0"
 [dependencies]
 redbit = { path = "../../redbit" }
 syncer = { path = "../../syncer" }
-tokio = { version = "1.45.1", features = ["full"] }
+tokio = { version = "1.45.1", features = ["full", "tracing"] }
 tokio-stream = { version = "0.1.17", features = ["sync"] }
 config = "0.15.11"
 bitcoin = "0.32.0"
