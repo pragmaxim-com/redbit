@@ -1,11 +1,13 @@
 use config::{Config, ConfigError, Environment, File};
 use dotenv::dotenv;
 use serde::Deserialize;
+use syncer::settings::Parallelism;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct ErgoConfig {
     pub api_host: String,
     pub api_key: String,
+    pub fetching_parallelism: Parallelism,
 }
 
 impl ErgoConfig {

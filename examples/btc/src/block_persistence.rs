@@ -9,10 +9,10 @@ pub struct BtcBlockPersistence {
 }
 
 impl BtcBlockPersistence {
-    pub fn new(storage: Arc<Storage>) -> Self {
+    pub fn new(storage: Arc<Storage>) -> Arc<dyn BlockPersistence<Block>> {
         let persistence = BtcBlockPersistence { storage };
         persistence.init().expect("Failed to initialize BtcBlockPersistence");
-        persistence
+        Arc::new(persistence)
     }
 
     fn populate_inputs(read_tx: &StorageReadTx, block: &mut Block) -> Result<(), ChainSyncError> {

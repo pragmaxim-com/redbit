@@ -8,6 +8,7 @@ use futures::stream::StreamExt;
 use futures::Stream;
 use redbit::*;
 use std::{pin::Pin, sync::Arc};
+use crate::config::BitcoinConfig;
 
 pub const SENTINEL: [u8; 25] = [
     0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -21,7 +22,10 @@ pub struct BtcBlockProvider {
 }
 
 impl BtcBlockProvider {
-    pub fn new(client: Arc<BtcClient>, fetching_par: usize) -> Result<Self, ExplorerError> {
+    pub fn new() -> Result<Self, ExplorerError> {
+        let config = BitcoinConfig::new("config/btc").expect("Failed to load Bitcoin configuration");
+        let client = Arc::new(BtcClient::new(&config)?);
+        let fetching_par: usize = config.fetching_parallelism.clone().into();
         Ok(BtcBlockProvider { client, fetching_par })
     }
     fn process_inputs(&self, ins: &[bitcoin::TxIn]) -> Vec<TempInputRef> {

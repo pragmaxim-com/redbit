@@ -1,12 +1,14 @@
 use config::{Config, ConfigError, Environment, File};
 use dotenv::dotenv;
 use serde::Deserialize;
+use syncer::settings::Parallelism;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct BitcoinConfig {
     pub api_host: String,
     pub api_username: String,
     pub api_password: String,
+    pub fetching_parallelism: Parallelism,
 }
 
 impl BitcoinConfig {

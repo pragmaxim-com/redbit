@@ -1,0 +1,4 @@
+api_host = "http://127.0.0.1:8332"
+api_username = "foo"
+api_password = "bar"
+fetching_parallelism = "mild"   # low / mild / high

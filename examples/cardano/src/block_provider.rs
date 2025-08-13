@@ -22,8 +22,9 @@ pub struct CardanoBlockProvider {
 }
 
 impl CardanoBlockProvider {
-    pub async fn new(cardano_config: &CardanoConfig) -> Self {
-        let client = CardanoClient::new(cardano_config).await;
+    pub async fn new() -> Self {
+        let cardano_config = CardanoConfig::new("config/cardano").expect("Failed to load Cardano configuration");
+        let client = CardanoClient::new(&cardano_config).await;
         let genesis = GenesisValues::mainnet();
         CardanoBlockProvider { client, genesis }
     }

@@ -9,10 +9,10 @@ pub struct CardanoBlockPersistence {
 }
 
 impl CardanoBlockPersistence {
-    pub fn new(storage: Arc<Storage>) -> Self {
+    pub fn new(storage: Arc<Storage>) -> Arc<dyn BlockPersistence<Block>> {
         let persistence = CardanoBlockPersistence { storage };
         persistence.init().expect("Failed to initialize CardanoBlockPersistence");
-        persistence
+        Arc::new(persistence)
     }
 
     fn populate_inputs(read_tx: &StorageReadTx, block: &mut Block) -> Result<(), ChainSyncError> {
@@ -40,6 +40,7 @@ impl CardanoBlockPersistence {
 }
 
 impl BlockPersistence<Block> for CardanoBlockPersistence {
+
     fn init(&self) -> Result<(), ChainSyncError> {
         Ok(Block::init(Arc::clone(&self.storage))?)
     }

@@ -23,3 +23,4 @@ tokio-stream = "0.1.17"
 futures = "0.3.31"
 serde_with = {  version = "3.14.0", features = ["hex", "base64", "time_0_3"] }
 tower-http = { version = "0.6.6", features = ["cors"] }
+anyhow = "1.0.99"

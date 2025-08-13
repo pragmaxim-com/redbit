@@ -30,10 +30,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     }
     let storage = Arc::new(Storage::init(db_path.clone(), 1).expect("Failed to open database"));
 
-    let btc_client = Arc::new(BtcClient::new(&btc_config).expect("Failed to create Bitcoin client"));
-    let fetching_par: usize = app_config.indexer.fetching_parallelism.clone().into();
-    let block_provider: Arc<dyn BlockProvider<BtcBlock, Block>> =
-        Arc::new(BtcBlockProvider::new(btc_client.clone(), fetching_par).expect("Failed to create block provider"));
+    let block_provider: Arc<dyn BlockProvider<BtcBlock, Block>> = Arc::new(BtcBlockProvider::new().expect("Failed to create block provider"));
     let block_persistence: Arc<dyn BlockPersistence<Block>> = Arc::new(BtcBlockPersistence { storage: Arc::clone(&storage) });
     block_persistence.init().expect("Failed to init block persistence");
 

@@ -52,11 +52,11 @@ pub struct AppConfig {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct IndexerSettings {
+    pub name: String,
     pub enable: bool,
     pub db_path: String,
     pub min_batch_size: usize,
     pub db_cache_size_gb: u8,
-    pub fetching_parallelism: Parallelism,
     pub processing_parallelism: Parallelism,
 }
 

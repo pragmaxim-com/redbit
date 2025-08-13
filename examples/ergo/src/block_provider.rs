@@ -2,13 +2,11 @@ use crate::config::ErgoConfig;
 use crate::ergo_client::ErgoClient;
 use crate::model_v1;
 use crate::model_v1::{
-    Address, Asset, AssetAction, AssetName, UtxoPointer, AssetType, Block, BlockHash, BlockHeader, Height, BlockTimestamp, Transaction, TxHash,
-    BlockPointer, Utxo, TransactionPointer,
+    Address, Asset, AssetAction, AssetName, AssetType, Block, BlockHash, BlockHeader, BlockPointer, BlockTimestamp, Height, Transaction, TransactionPointer,
+    TxHash, Utxo, UtxoPointer,
 };
 use async_trait::async_trait;
-use syncer::api::{BlockProvider, ChainSyncError};
-use syncer::info;
-use syncer::monitor::BoxWeight;
+use ergo_lib::ergotree_ir::chain::address::AddressEncoder;
 use ergo_lib::{chain::block::FullBlock, wallet::signing::ErgoTransaction};
 use ergo_lib::{
     ergotree_ir::{
@@ -17,12 +15,14 @@ use ergo_lib::{
     },
     wallet::box_selector::ErgoBoxAssets,
 };
-use futures::Stream;
 use futures::stream::StreamExt;
+use futures::Stream;
 use redbit::*;
 use reqwest::Url;
 use std::{pin::Pin, str::FromStr, sync::Arc};
-use ergo_lib::ergotree_ir::chain::address::AddressEncoder;
+use syncer::api::{BlockProvider, ChainSyncError};
+use syncer::info;
+use syncer::monitor::BoxWeight;
 
 pub struct ErgoBlockProvider {
     pub client: Arc<ErgoClient>,
@@ -30,10 +30,11 @@ pub struct ErgoBlockProvider {
 }
 
 impl ErgoBlockProvider {
-    pub fn new(ergo_config: &ErgoConfig, fetching_par: usize) -> Self {
+    pub fn new() -> Self {
+        let ergo_config = ErgoConfig::new("config/ergo").expect("Failed to load Ergo configuration");
         ErgoBlockProvider {
             client: Arc::new(ErgoClient { node_url: Url::from_str(&ergo_config.api_host).unwrap(), api_key: ergo_config.api_key.clone() }),
-            fetching_par,
+            fetching_par: ergo_config.fetching_parallelism.clone().into(),
         }
     }
     fn process_outputs(&self, outs: &[ErgoBox], tx_pointer: BlockPointer) -> (BoxWeight, Vec<Utxo>) {

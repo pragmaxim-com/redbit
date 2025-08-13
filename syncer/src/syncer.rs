@@ -6,7 +6,7 @@ use crate::monitor::ProgressMonitor;
 use futures::StreamExt;
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use redbit::task;
+use crate::task;
 use crate::settings::IndexerSettings;
 
 pub struct ChainSyncer<FB: Send + Sync + 'static, TB: BlockLike + 'static> {

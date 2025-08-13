@@ -1,9 +1,9 @@
 [indexer]
+name = "cardano"
 db_path = ".chain-syncer"
 enable = true
 db_cache_size_gb = 16           # redb cache size in GigaBytes
 min_batch_size = 1000           # Sum of : inputs + outputs + assets/tokens
-fetching_parallelism = "mild"   # low / mild / high
 processing_parallelism = "mild" # low / mild / high
 
 [http]

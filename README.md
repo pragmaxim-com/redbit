@@ -58,6 +58,13 @@ Check the [redbit-ui](http://github.com/pragmaxim-com/redbit-ui) for frontend de
 The utxo example has close to 500 frontend/backend derived tests and 130 benchmarks, so that if any redbit app derived from the definition compiles,
 it is transparent, well tested and benched already.
 
+### Chain syncer  
+
+[chain-syncer](./syncer) syncs example blockchains with nodes : 
+ - [btc](./examples/btc)
+ - [cardano](./examples/cardano)
+ - [ergo](./examples/ergo)
+
 Let's say we want to persist and query blockchain data using Redbit, declare annotated Structs `examples/utxo/src/lib.rs`:
 
 <!-- BEGIN_LIB -->
@@ -314,16 +321,6 @@ In a nutshell, whole bitcoin up to height ~ 0.9M can be indexed in less than 4 d
 cargo flamegraph --bin target/release/ergo --release
 cargo flamegraph --bin target/release/cargo --release
 cargo flamegraph --bin target/release/btc --release
-```
-
-### Tracing 
-
-Tracing using [tokio console](https://github.com/tokio-rs/console)
-
-``` 
-cargo install --locked tokio-console
-RUSTFLAGS="--cfg tokio_unstable" cargo run --features tracing
-tokio-console
 ```
 
 ### ⏱ Benchmarks (results from github servers)

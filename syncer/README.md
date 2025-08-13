@@ -10,6 +10,17 @@ Ie. only one winning fork is kept in the DB at given moment. This allows for muc
 
 Chain syncer uses 3 main independent threads : block fetching, processing and persistence while persistence being sequential, block after block.
 
+You can use [tokio console](https://github.com/tokio-rs/console), basically it breaks down to 3 named task you can see in the console :
+- fetch - task that fetches blocks from the node
+- process - task that transforms the node blocks into redbit blocks
+- persist - task that persists redbit blocks into redb
+
+``` 
+cargo install --locked tokio-console
+RUSTFLAGS="--cfg tokio_unstable" cargo run --features tracing
+tokio-console
+```
+
 ### Usage
 
 ```
