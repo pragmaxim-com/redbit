@@ -9,6 +9,7 @@ use btc::btc_client::{BtcBlock, BtcClient};
 use btc::config::BitcoinConfig;
 use btc::model_v1::Block;
 use serde_json;
+
 use redbit::Storage;
 
 fn block_from_file(size: &str, tx_count: usize) -> BtcBlock {
