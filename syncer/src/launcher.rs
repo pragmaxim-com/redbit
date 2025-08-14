@@ -69,8 +69,8 @@ pub async fn launch<FB: Send + Sync + 'static, TB: BlockLike + 'static, F>(
 where
     F: FnOnce(Arc<Storage>) -> Arc<dyn BlockPersistence<TB>>,
 {
-    maybe_console_init();
     let config = AppConfig::new("config/settings").expect("Failed to load app config");
+    maybe_console_init();
     let db_path: String = format!("{}/{}/{}", config.indexer.db_path, "main", config.indexer.name);
     let full_path = env::home_dir().unwrap().join(&db_path);
     let storage: Arc<Storage> = Storage::init(full_path, config.indexer.db_cache_size_gb)?;

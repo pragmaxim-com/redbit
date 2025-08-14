@@ -34,14 +34,14 @@ jobs:
 
       - name: Run tests
         run: |
-          cargo test --package demo --features ci
-          cargo test --package demo --features integration,ci
           cargo test --package btc --features ci
           cargo test --package btc --features integration,ci
           cargo test --package cardano --features ci
           cargo test --package cardano --features integration,ci
           cargo test --package ergo --features ci
           cargo test --package ergo --features integration,ci
+          cargo test --package demo --features ci  -- --nocapture | tee demo_test_output.txt
+          cargo test --package demo --features integration,ci
 
   performance:
     runs-on: ubuntu-latest
@@ -65,11 +65,11 @@ jobs:
 
       - name: Run Built-in Rust Benchmarks and Extract Metrics
         run: |
-          cargo bench --package demo -- --nocapture | tee bench_output.txt
-          cargo bench --package btc
+          cargo bench --package demo -- --nocapture | tee demo_bench_output.txt
+          cargo bench --package btc -- --nocapture | tee btc_bench_output.txt
           
           # Extract and process lines with `bench:`
-          grep 'bench:' bench_output.txt | while read -r line; do
+          grep 'bench:' demo_bench_output.txt | while read -r line; do
             # Extract full function name regardless of spacing
             FUNCTION=$(echo "$line" | sed -n 's/^test \([^ ]*\) \+\.\.\. bench:.*/\1/p')
           
@@ -79,11 +79,11 @@ jobs:
             # Convert TIME_NS to ops/sec
             OPS_PER_S=$(awk "BEGIN {if ($TIME_NS > 0) printf \"%.0f\", 1000000000 / $TIME_NS; else print 0}")
           
-            echo "$FUNCTION,$OPS_PER_S" >> benchmarks.csv
+            echo "$FUNCTION,$OPS_PER_S" >> demo_benchmarks.csv
           done
           
-          sort -t, -k2 -n benchmarks.csv > sorted_benchmarks.csv
-          mv sorted_benchmarks.csv benchmarks.csv
+          sort -t, -k2 -n demo_benchmarks.csv > sorted_demo_demo_benchmarks.csv
+          mv sorted_demo_demo_benchmarks.csv demo_benchmarks.csv
 
       - name: Update README
         run: |
@@ -102,7 +102,7 @@ jobs:
 
           # Prepare formatted benchmark lines
           HEADER=$(printf "%-60s %10s\n" "function" "ops/s")
-          BODY=$(cat benchmarks.csv | awk -F, '{ printf "%-60s %10s\n", $1, $2 }')
+          BODY=$(cat demo_benchmarks.csv | awk -F, '{ printf "%-60s %10s\n", $1, $2 }')
           FORMATTED_BENCH="$HEADER\n-------------------------------------------------------------\n$BODY"
 
           # Escape double quotes and backslashes

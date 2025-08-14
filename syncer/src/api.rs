@@ -4,6 +4,7 @@ use hex::FromHexError;
 use redbit::AppError;
 use serde::{Deserialize, Serialize};
 use std::{fmt, pin::Pin};
+use chrono::DateTime;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ChainSyncError {
@@ -53,6 +54,11 @@ pub trait BlockHeaderLike: Send + Sync + Clone {
     fn hash(&self) -> [u8; 32];
     fn prev_hash(&self) -> [u8; 32];
     fn timestamp(&self) -> u32;
+
+    fn timestamp_str(&self) -> String {
+        let datetime = DateTime::from_timestamp(self.timestamp() as i64, 0).unwrap();
+        datetime.format("%Y-%m-%d %H:%M:%S").to_string()
+    }
 }
 
 pub trait BlockLike: Send + Sync {

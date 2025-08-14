@@ -1,7 +1,11 @@
 use std::collections::HashSet;
-use std::env;
-use rand::random;
+use std::time::Instant;
+use demo::block_persistence::DemoBlockPersistence;
+use demo::block_provider::DemoBlockProvider;
 use demo::model_v1::*;
+use syncer::api::{BlockPersistence, BlockProvider};
+use syncer::scheduler::Scheduler;
+use syncer::settings::AppConfig;
 
 fn init_temp_storage(name: &str, db_cache_size_gb: u8) -> (Vec<Block>, Arc<Storage>) {
     let storage = Storage::temp(name, db_cache_size_gb, true).unwrap();
@@ -12,6 +16,19 @@ fn init_temp_storage(name: &str, db_cache_size_gb: u8) -> (Vec<Block>, Arc<Stora
     (blocks, storage)
 }
 
+#[tokio::test]
+async fn demo_bench() {
+    let storage = Storage::temp("demo_benchmark", 1, true).expect("Failed to open database");
+    let block_provider: Arc<dyn BlockProvider<Block, Block>> = DemoBlockProvider::new(1000).expect("Failed to create block provider");
+    let block_persistence: Arc<dyn BlockPersistence<Block>> = DemoBlockPersistence::new(Arc::clone(&storage));
+    let config = AppConfig::new("config/settings").expect("Failed to load app config");
+    let scheduler = Scheduler::new(block_provider, block_persistence);
+    let start = Instant::now();
+    scheduler.sync(config.indexer.clone()).await;
+    let elapsed = start.elapsed();
+    let secs = elapsed.as_secs_f64();
+    println!("Demo chain sync took {:.1}s", secs);
+}
 
 #[test]
 fn each_entity_should_have_a_default_sample() {

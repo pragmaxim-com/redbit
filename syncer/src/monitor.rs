@@ -24,7 +24,7 @@ impl ProgressMonitor {
     pub fn log(
         &self,
         height: u32,
-        timestamp: u32,
+        timestamp: String,
         batch_size: usize,
         batch_weight: &BatchWeight,
         proc_channel_len: usize,

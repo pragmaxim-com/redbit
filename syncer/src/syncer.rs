@@ -98,7 +98,7 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
 
                 let last_block = block_batch.last().expect("Block batch should not be empty");
                 let height = last_block.header().height();
-                let timestamp = last_block.header().timestamp();
+                let timestamp = last_block.header().timestamp_str();
 
                 monitor.log(height, timestamp, block_batch.len(), &batch_weight, proc_rx.len());
                 // Move blocking IO off the async executor

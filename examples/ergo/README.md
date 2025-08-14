@@ -18,8 +18,7 @@ sudo apt-get install rustup
 ```
 # Ergo node is expected to run locally at port 9053
 export ERGO__API_KEY="foo"
-cargo build --release
-../../target/release/ergo 
+cargo run --release 
 ```
 
 Indexing might crash especially on laptops with Node running locally and not being synced yet.

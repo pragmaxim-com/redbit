@@ -28,8 +28,7 @@ nohup ./bin/cardano-node run \
 ```
 Then :
 ```
-cargo build --release
-../../target/release/cardano
+cargo run --release
 ```
 
 Indexing might crash especially on laptops with Node running locally and not being synced yet.
