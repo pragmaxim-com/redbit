@@ -1,13 +1,12 @@
+use std::{fs, sync::Arc, time::Duration};
 use syncer::api::{BlockPersistence, BlockProvider};
-use syncer::{info, settings};
-use std::{env, fs, sync::Arc, time::Duration};
+use syncer::info;
 
-use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
 use btc::block_persistence::BtcBlockPersistence;
 use btc::block_provider::BtcBlockProvider;
-use btc::btc_client::{BtcBlock, BtcClient};
-use btc::config::BitcoinConfig;
+use btc::btc_client::BtcBlock;
 use btc::model_v1::Block;
+use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
 use serde_json;
 
 use redbit::Storage;
@@ -20,19 +19,10 @@ fn block_from_file(size: &str, tx_count: usize) -> BtcBlock {
 }
 
 fn criterion_benchmark(c: &mut Criterion) {
-    let app_config = settings::AppConfig::new("config/settings").unwrap();
-    let btc_config = BitcoinConfig::new("config/bitcoin").expect("Failed to load Bitcoin configuration");
-    let db_name = format!("{}/{}", "btc_indexer", "benchmark");
-    let db_path = env::temp_dir().join(&db_name);
-    if db_path.exists() {
-        info!("Removing existing database directory: {}", db_path.display());
-        fs::remove_dir_all(&db_path).unwrap();
-    }
-    let storage = Arc::new(Storage::init(db_path.clone(), 1).expect("Failed to open database"));
+    let storage = Storage::temp("btc_benchmark", 1, true).expect("Failed to open database");
 
-    let block_provider: Arc<dyn BlockProvider<BtcBlock, Block>> = Arc::new(BtcBlockProvider::new().expect("Failed to create block provider"));
-    let block_persistence: Arc<dyn BlockPersistence<Block>> = Arc::new(BtcBlockPersistence { storage: Arc::clone(&storage) });
-    block_persistence.init().expect("Failed to init block persistence");
+    let block_provider: Arc<dyn BlockProvider<BtcBlock, Block>> = BtcBlockProvider::new().expect("Failed to create block provider");
+    let block_persistence: Arc<dyn BlockPersistence<Block>> = BtcBlockPersistence::new(Arc::clone(&storage));
 
     let small_block: BtcBlock = block_from_file("small", 29);
     let avg_block: BtcBlock = block_from_file("avg", 343);

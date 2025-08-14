@@ -23,10 +23,15 @@ tokio-console
 
 ### Usage
 
+- [Bitcoin Explorer](../examples/btc)
+- [Cardano Explorer](../examples/cardano)
+- [Ergo Explorer](../examples/ergo)
+
+### Troubleshooting 
+
+If throughput does not reach your expectations, check that `buffer` is high enough : 
 ```
-chain-syncer = { git = "https://github.com/pragmaxim-com/chain-syncer" }
+[2025-08-11 04:45:57] INFO 3 Blocks @ 566011 at 18621.8 ins+outs+asset/s, total 1870059548, buffer: 255
 ```
 
-- [Bitcoin Explorer](https://github.com/pragmaxim-com/bitcoin-explorer)
-- [Cardano Explorer](https://github.com/pragmaxim-com/cardano-explorer)
-- [Ergo Explorer](https://github.com/pragmaxim-com/ergo-explorer)
+if it is close to 0, it means your block fetching or processing is too slow and persistence task is idling.

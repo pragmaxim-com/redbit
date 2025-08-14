@@ -1,14 +1,16 @@
 pub use redbit::*;
+use syncer::api::{BlockHeaderLike, BlockLike};
 
 #[root_key] pub struct Height(pub u32);
 
 #[pointer_key(u16)] pub struct BlockPointer(Height);
 #[pointer_key(u16)] pub struct TransactionPointer(BlockPointer);
-#[pointer_key(u8)] pub struct UtxoPointer(TransactionPointer);
+#[pointer_key(u16)] pub struct UtxoPointer(TransactionPointer);
 
 // #[column] pub struct Time(pub chrono::DateTime<chrono::Utc>);
 
-#[column("hex")] pub struct Hash(pub [u8; 32]);
+#[column("hex")] pub struct BlockHash(pub [u8; 32]);
+#[column("hex")] pub struct TxHash(pub [u8; 32]);
 #[column("base64")] pub struct Address(pub Vec<u8>);
 #[column("utf-8")] pub struct AssetName(pub Vec<u8>); // String is supported but this is more efficient
 #[column] pub struct Duration(pub std::time::Duration);
@@ -18,8 +20,8 @@ pub struct Timestamp(pub u32);
 
 #[column]
 pub struct TempInputRef {
-    tx_hash: Hash,
-    index: u32,
+    pub tx_hash: TxHash,
+    pub index: u32,
 }
 
 #[entity]
@@ -37,7 +39,9 @@ pub struct BlockHeader {
     #[fk(one2one)]
     pub height: Height,
     #[column(index)]
-    pub hash: Hash,
+    pub hash: BlockHash,
+    #[column(index)]
+    pub prev_hash: BlockHash,
     #[column(range)]
     pub timestamp: Timestamp,
     #[column(range)]
@@ -51,9 +55,10 @@ pub struct Transaction {
     #[fk(one2many)]
     pub id: BlockPointer,
     #[column(index)]
-    pub hash: Hash,
+    pub hash: TxHash,
     pub utxos: Vec<Utxo>,
-    pub input: Option<InputRef>, // intentionally Option to demonstrate it is possible
+    pub inputs: Vec<InputRef>,
+    pub maybe_value: Option<MaybeValue>, // just to demonstrate option is possible
     #[column(transient)]
     pub transient_inputs: Vec<TempInputRef>,
 }
@@ -71,10 +76,16 @@ pub struct Utxo {
 
 #[entity]
 pub struct InputRef {
+    #[fk(one2many)]
+    pub id: TransactionPointer,
+}
+
+#[entity]
+pub struct MaybeValue {
     #[fk(one2opt)]
     pub id: BlockPointer,
     #[column(index)]
-    pub hash: Hash, // just dummy values
+    pub hash: BlockHash
 }
 
 #[entity]
@@ -85,4 +96,29 @@ pub struct Asset {
     pub amount: u64,
     #[column(dictionary(cache = 1000000))]
     pub name: AssetName,
+}
+
+impl BlockHeaderLike for BlockHeader {
+    fn height(&self) -> u32 {
+        self.height.0
+    }
+    fn hash(&self) -> [u8; 32] {
+        self.hash.0
+    }
+    fn prev_hash(&self) -> [u8; 32] {
+        self.prev_hash.0
+    }
+    fn timestamp(&self) -> u32 {
+        self.timestamp.0
+    }
+}
+
+impl BlockLike for Block {
+    type Header = BlockHeader;
+    fn header(&self) -> &Self::Header {
+        &self.header
+    }
+    fn weight(&self) -> u32 {
+        self.weight
+    }
 }

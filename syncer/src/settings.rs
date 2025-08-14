@@ -2,6 +2,7 @@ use config::{Config, ConfigError, File};
 use serde::Deserialize;
 use std::net::SocketAddr;
 use std::str::FromStr;
+use std::time::Duration;
 
 #[derive(Debug, Clone)]
 pub enum Parallelism {
@@ -33,7 +34,6 @@ impl From<Parallelism> for usize {
     }
 }
 
-// Custom deserialization function for Parallelism to handle string values in the TOML file
 impl<'de> serde::Deserialize<'de> for Parallelism {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -42,6 +42,14 @@ impl<'de> serde::Deserialize<'de> for Parallelism {
         let s = String::deserialize(deserializer)?;
         Parallelism::from_str(&s).map_err(serde::de::Error::custom)
     }
+}
+
+fn duration_from_secs<'de, D>(deserializer: D) -> Result<Duration, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let secs = u64::deserialize(deserializer)?;
+    Ok(Duration::from_secs(secs))
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -55,6 +63,8 @@ pub struct IndexerSettings {
     pub name: String,
     pub enable: bool,
     pub db_path: String,
+    #[serde(deserialize_with = "duration_from_secs")]
+    pub sync_interval_s: Duration,
     pub min_batch_size: usize,
     pub db_cache_size_gb: u8,
     pub processing_parallelism: Parallelism,

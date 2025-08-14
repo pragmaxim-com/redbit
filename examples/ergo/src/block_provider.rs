@@ -30,12 +30,12 @@ pub struct ErgoBlockProvider {
 }
 
 impl ErgoBlockProvider {
-    pub fn new() -> Self {
+    pub fn new() -> Arc<Self> {
         let ergo_config = ErgoConfig::new("config/ergo").expect("Failed to load Ergo configuration");
-        ErgoBlockProvider {
+        Arc::new(ErgoBlockProvider {
             client: Arc::new(ErgoClient { node_url: Url::from_str(&ergo_config.api_host).unwrap(), api_key: ergo_config.api_key.clone() }),
             fetching_par: ergo_config.fetching_parallelism.clone().into(),
-        }
+        })
     }
     fn process_outputs(&self, outs: &[ErgoBox], tx_pointer: BlockPointer) -> (BoxWeight, Vec<Utxo>) {
         let mut result_outs = Vec::with_capacity(outs.len());

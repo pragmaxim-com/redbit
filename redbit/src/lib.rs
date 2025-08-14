@@ -100,6 +100,7 @@ pub trait IndexedPointer: Clone {
     type Index: Copy + Ord + Add<Output = Self::Index> + Default;
     fn index(&self) -> Self::Index;
     fn next_index(&self) -> Self;
+    fn nth_index(&self, n: usize) -> Self;
     fn rollback_or_init(&self, n: u32) -> Self;
 }
 
@@ -216,6 +217,12 @@ impl From<AppError> for axum::Error {
 
 impl std::error::Error for AppError {}
 
+// TODO migrate to thiserror
+impl From<std::io::Error> for AppError {
+    fn from(err: std::io::Error) -> Self {
+        AppError::Internal(err.to_string())
+    }
+}
 impl From<redb::Error> for AppError {
     fn from(e: redb::Error) -> Self {
         AppError::Internal(e.to_string())

@@ -15,7 +15,7 @@ sudo apt-get install rustup
 
 ### Usage
 
-Run bitcoin node locally, rpc at port 8332 can be changed in `config/bitcoin.toml`, for example:
+Run bitcoin node locally, rpc at port 8332 can be changed in `config/btc.toml`, for example:
 ```
 cat ~/snap/bitcoin-core/common/.bitcoin/bitcoin.conf | grep rpc
 rpcthreads=40

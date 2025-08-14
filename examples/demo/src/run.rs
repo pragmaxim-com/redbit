@@ -2,11 +2,8 @@ use redbit::{AppError, Storage};
 use std::sync::Arc;
 use crate::model_v1::*;
 
-pub async fn with_db(storage: Arc<Storage>) -> () {
-    run_with_db(storage).await.unwrap_or_else(|e| eprintln!("{}", e))
-}
-
-async fn run_with_db(storage: Arc<Storage>) -> Result<(), AppError> {
+pub async fn showcase() -> Result<(), AppError> {
+    let storage = Storage::temp("showcase", 1, true)?;
     let blocks = Block::sample_many(2);
     println!("Persisting blocks:");
     let write_tx = storage.begin_write()?;
@@ -63,7 +60,7 @@ async fn run_with_db(storage: Arc<Storage>) -> Result<(), AppError> {
     Transaction::get(&read_tx, &first_transaction.id)?;
     Transaction::range(&read_tx, &first_transaction.id, &last_transaction.id, None)?;
     Transaction::get_utxos(&read_tx, &first_transaction.id)?;
-    Transaction::get_input(&read_tx, &first_transaction.id)?;
+    Transaction::get_maybe_value(&read_tx, &first_transaction.id)?;
     Transaction::parent_key(&read_tx, &first_transaction.id)?;
     Transaction::stream_ids_by_hash(&read_tx, &first_transaction.hash)?.try_collect::<Vec<BlockPointer>>().await?;
     Transaction::stream_by_hash(storage.begin_read()?, first_transaction.hash.clone(), None)?.try_collect::<Vec<Transaction>>().await?;

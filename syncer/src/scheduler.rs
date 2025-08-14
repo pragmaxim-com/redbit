@@ -17,6 +17,10 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> Scheduler<FB, TB> {
         Scheduler { syncer }
     }
 
+    pub async fn sync(&self, indexer_conf: IndexerSettings) {
+        self.syncer.sync(indexer_conf.clone()).await;
+    }
+
     pub async fn schedule(&self, indexer_conf: IndexerSettings, mut shutdown: watch::Receiver<bool>) {
         let mut interval = tokio::time::interval(Duration::from_secs(1));
         interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);

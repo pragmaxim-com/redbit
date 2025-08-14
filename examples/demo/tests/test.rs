@@ -1,6 +1,17 @@
 use std::collections::HashSet;
-use demo::storage::*;
+use std::env;
+use rand::random;
 use demo::model_v1::*;
+
+fn init_temp_storage(name: &str, db_cache_size_gb: u8) -> (Vec<Block>, Arc<Storage>) {
+    let storage = Storage::temp(name, db_cache_size_gb, true).unwrap();
+    let write_tx = storage.begin_write().expect("Failed to begin write transaction");
+    let blocks = Block::sample_many(3);
+    Block::store_many(&write_tx, &blocks).expect("Failed to persist blocks");
+    write_tx.commit().expect("Failed to commit transaction");
+    (blocks, storage)
+}
+
 
 #[test]
 fn each_entity_should_have_a_default_sample() {
@@ -28,7 +39,7 @@ fn each_entity_should_have_a_default_sample() {
 fn it_should_commit_multiple_blocks_in_a_single_tx() {
     let (blocks, multi_tx_storage) = init_temp_storage("db_test", 0);
 
-    let single_tx_db = empty_temp_storage("db_test_2", 0);
+    let single_tx_db = Storage::temp("db_test_2", 0, true).unwrap();
     let write_tx = single_tx_db.begin_write().expect("Failed to begin write transaction");
     blocks.iter().for_each(|block| Block::store(&write_tx, block).expect("Failed to persist blocks"));
     write_tx.commit().unwrap();

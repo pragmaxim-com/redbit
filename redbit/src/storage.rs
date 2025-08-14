@@ -1,8 +1,9 @@
+use std::{env, fs};
 use std::hash::Hash;
 use std::sync::Arc;
 use redb::{Database, WriteTransaction, TableDefinition, Table, Key, Value, CommitError, TransactionError, TableError, MultimapTableDefinition, MultimapTable, ReadTransaction, ReadOnlyTable, ReadOnlyMultimapTable};
 use crate::cache::Caches;
-use crate::{AppError, CacheDef};
+use crate::*;
 use std::path::PathBuf;
 
 #[derive(Clone)]
@@ -16,14 +17,28 @@ impl Storage {
         Self { db: Arc::clone(&db), caches: Arc::new(Caches::default()) }
     }
 
-    pub fn init(db_dir: PathBuf, db_cache_size_gb: u8) -> redb::Result<Storage, AppError> {
+    pub fn temp(name: &str, db_cache_size_gb: u8, random: bool) -> redb::Result<Arc<Storage>, AppError> {
+        let db_name = if random {
+            format!("{}_{}", name, rand::random::<u64>())
+        } else {
+            name.to_string()
+        };
+        let db_path = env::temp_dir().join(format!("{}/{}", "redbit", db_name));
+        if random && db_path.exists() {
+            fs::remove_dir_all(&db_path)?;
+        }
+        let storage = Storage::init(db_path, db_cache_size_gb)?;
+        Ok(storage)
+    }
+
+    pub fn init(db_dir: PathBuf, db_cache_size_gb: u8) -> redb::Result<Arc<Storage>, AppError> {
         if !db_dir.exists() {
-            std::fs::create_dir_all(db_dir.clone()).map_err(|e| AppError::Internal(format!("Failed to create database directory: {}", e)))?;
+            fs::create_dir_all(db_dir.clone()).map_err(|e| AppError::Internal(format!("Failed to create database directory: {}", e)))?;
             let db = Database::builder().set_cache_size(db_cache_size_gb as usize * 1024 * 1024 * 1024).create(db_dir.join("chain_syncer.db"))?;
-            Ok(Storage::new(Arc::new(db)))
+            Ok(Arc::new(Storage::new(Arc::new(db))))
         } else {
             let db = Database::open(db_dir.join("chain_syncer.db"))?;
-            Ok(Storage::new(Arc::new(db)))
+            Ok(Arc::new(Storage::new(Arc::new(db))))
         }
     }
 

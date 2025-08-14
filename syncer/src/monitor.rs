@@ -27,6 +27,7 @@ impl ProgressMonitor {
         timestamp: u32,
         batch_size: usize,
         batch_weight: &BatchWeight,
+        proc_channel_len: usize,
     ) {
         let mut total_weight = self.total_and_last_report_weight.lock().unwrap();
         let new_total_weight = total_weight.0 + batch_weight;
@@ -34,7 +35,10 @@ impl ProgressMonitor {
             *total_weight = (new_total_weight, new_total_weight);
             let total_time = self.start_time.elapsed().as_secs();
             let txs_per_sec = format!("{:.1}", new_total_weight as f64 / total_time as f64);
-            info!("{} Blocks @ {} from {} at {} ins+outs+assets per second, total {}", batch_size, height, timestamp, txs_per_sec, new_total_weight);
+            info!(
+                "{} Blocks @ {} from {} at {} ins+outs+assets/s, total {}, buffer {}",
+                batch_size, height, timestamp, txs_per_sec, new_total_weight, proc_channel_len
+            );
         } else {
             *total_weight = (new_total_weight, total_weight.1);
         }

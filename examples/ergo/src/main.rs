@@ -6,6 +6,6 @@ use syncer::launcher;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    launcher::launch(Arc::new(ErgoBlockProvider::new()), ErgoBlockPersistence::new, None, None).await?;
+    launcher::launch(ErgoBlockProvider::new(), ErgoBlockPersistence::new, None, None).await?;
     Ok(())
 }

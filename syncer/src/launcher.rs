@@ -30,14 +30,20 @@ pub async fn maybe_run_server(
     }
 }
 
-pub async fn maybe_run_indexing<FB: Send + Sync + 'static, TB: BlockLike + 'static>(
+pub async fn maybe_run_syncing<FB: Send + Sync + 'static, TB: BlockLike + 'static>(
     index_config: IndexerSettings,
     scheduler: Scheduler<FB, TB>,
     shutdown: watch::Receiver<bool>,
 ) -> () {
     if index_config.enable {
-        info!("Starting indexing process");
-        scheduler.schedule(index_config, shutdown).await
+        if index_config.sync_interval_s.is_zero() {
+            info!("Syncing initiated");
+            scheduler.sync(index_config).await;
+            info!("Syncing completed");
+        } else {
+            info!("Scheduling initiated");
+            scheduler.schedule(index_config, shutdown).await
+        }
     } else {
         ready(()).await
     }
@@ -67,11 +73,11 @@ where
     let config = AppConfig::new("config/settings").expect("Failed to load app config");
     let db_path: String = format!("{}/{}/{}", config.indexer.db_path, "main", config.indexer.name);
     let full_path = env::home_dir().unwrap().join(&db_path);
-    let storage: Arc<Storage> = Arc::new(Storage::init(full_path, config.indexer.db_cache_size_gb)?);
+    let storage: Arc<Storage> = Storage::init(full_path, config.indexer.db_cache_size_gb)?;
     let block_persistence: Arc<dyn BlockPersistence<TB>> = make_persistence(Arc::clone(&storage));
     let scheduler: Scheduler<FB, TB> = Scheduler::new(block_provider, block_persistence);
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
-    let indexing_f = maybe_run_indexing(config.indexer, scheduler, shutdown_rx.clone());
+    let indexing_f = maybe_run_syncing(config.indexer, scheduler, shutdown_rx.clone());
     let server_f = maybe_run_server(config.http, Arc::clone(&storage), extras, cors, shutdown_rx.clone());
     Ok(combine::futures(indexing_f, server_f, shutdown_tx).await)
 }

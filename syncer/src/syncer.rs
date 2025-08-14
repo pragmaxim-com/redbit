@@ -1,7 +1,7 @@
 use crate::api::BlockHeaderLike;
 use crate::api::{BlockLike, BlockPersistence};
 use crate::api::{BlockProvider, ChainSyncError};
-use crate::info;
+use crate::{error, info};
 use crate::monitor::ProgressMonitor;
 use futures::StreamExt;
 use std::sync::Arc;
@@ -25,25 +25,31 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
         let persistence = Arc::clone(&self.block_persistence);
         let monitor = Arc::clone(&self.monitor);
 
-        let chain_tip_header = block_provider.get_chain_tip().await.expect("Failed to get chain tip header");
-        let last_header = persistence.get_last_header().expect("Failed to get last header");
-        let chain_tip_for_persist = chain_tip_header.clone();
+        let node_chain_tip_header = block_provider.get_chain_tip().await.expect("Failed to get chain tip header");
+        let chain_tip_for_persist = node_chain_tip_header.clone();
+        let last_persisted_header = persistence.get_last_header().expect("Failed to get last header");
+
+        let heights_to_fetch = node_chain_tip_header.clone().height() - last_persisted_header.as_ref().map_or(0, |h| h.height());
+        if heights_to_fetch <= 0 {
+            return;
+        }
 
         type Batch<T> = (Vec<T>, usize);
-        let (raw_tx, mut raw_rx) = mpsc::channel::<FB>(8192);
+        let (fetch_tx, mut fetch_rx) = mpsc::channel::<FB>(8192);
         let (proc_tx, mut proc_rx) = mpsc::channel::<Batch<TB>>(512);
 
         // Process + batch stage (consumes provider.stream() directly)
         let fetch_handle = {
             let block_provider = Arc::clone(&self.block_provider);
             task::spawn_named("fetch", async move {
-                let mut s = block_provider.stream(chain_tip_header.clone(), last_header);
+                let mut s = block_provider.stream(node_chain_tip_header.clone(), last_persisted_header);
                 while let Some(raw) = s.next().await {
-                    if raw_tx.send(raw).await.is_err() {
-                        eprintln!("Failed to send raw block, channel closed");
-                        break;
+                    if let Err(_) = fetch_tx.send(raw).await {
+                        error!("fetch: raw_rx closed, stopping fetcher");
+                        return;
                     }
                 }
+                drop(fetch_tx);
             })
         };
 
@@ -56,13 +62,19 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
                 let mut weight: usize = 0;
                 let min_weight = indexer_conf.min_batch_size;
 
-                while let Some(raw) = raw_rx.recv().await {
+                while let Some(raw) = fetch_rx.recv().await {
                     let bp = Arc::clone(&block_provider);
-                    let block: TB = tokio::task::spawn_blocking(move || bp.process_block(&raw))
-                        .await
-                        .expect("spawn_blocking panicked")
-                        .expect("Failed to process block");
-
+                    let block: TB = match tokio::task::spawn_blocking(move || bp.process_block(&raw)).await {
+                        Ok(Ok(b)) => b,
+                        Ok(Err(e)) => {
+                            error!("process: failed to process block due to {}", e);
+                            return;
+                        }
+                        Err(join_err) => {
+                            error!("process: failed to process block due to {}", join_err);
+                            return;
+                        }
+                    };
                     weight += block.weight() as usize;
                     batch.push(block);
 
@@ -73,36 +85,41 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
                         weight = 0;
                     }
                 }
-
-                // flush tail
                 if !batch.is_empty() {
                     let _ = proc_tx.send((batch, weight)).await;
                 }
+                drop(proc_tx);
             })
         };
 
-        // Persist stage
         let persist_handle = task::spawn_named("persist",async move {
             while let Some((block_batch, batch_weight)) = proc_rx.recv().await {
-                let chain_link = block_batch.last().is_some_and(|curr_block| curr_block.header().height() + 100 > chain_tip_for_persist.height());
+                let chain_link: bool = block_batch.last().is_some_and(|curr_block| curr_block.header().height() + 100 > chain_tip_for_persist.height());
 
                 let last_block = block_batch.last().expect("Block batch should not be empty");
                 let height = last_block.header().height();
                 let timestamp = last_block.header().timestamp();
 
-                monitor.log(height, timestamp, block_batch.len(), &batch_weight);
+                monitor.log(height, timestamp, block_batch.len(), &batch_weight, proc_rx.len());
                 // Move blocking IO off the async executor
                 let block_provider = Arc::clone(&block_provider);
                 let persistence = Arc::clone(&persistence);
-                tokio::task::spawn_blocking(move || Self::persist_blocks(block_batch, chain_link, block_provider, persistence))
-                    .await.expect("join")
-                    .unwrap_or_else(|e| panic!("Unable to persist blocks due to {}", e.error));
+                match tokio::task::spawn_blocking(move || Self::persist_blocks(block_batch, chain_link, block_provider, persistence)).await {
+                    Ok(Ok(())) => {},
+                    Ok(Err(e)) => {
+                        error!("persist: persist_blocks returned error {}", e);
+                        return;
+                    }
+                    Err(join_err) => {
+                        error!("persist: spawn_blocking panicked {}", join_err);
+                        return;
+                    }
+                }
             }
         });
-
-        fetch_handle.await.expect("Fetching failed");
-        process_handle.await.expect("Processor failed");
-        persist_handle.await.expect("Persistence worker failed");
+        if let Err(e) = tokio::try_join!(fetch_handle, process_handle, persist_handle) {
+            error!("One of the pipeline tasks failed {}", e);
+        }
     }
 
     fn chain_link(block: TB, block_provider: Arc<dyn BlockProvider<FB, TB>>, block_persistence: Arc<dyn BlockPersistence<TB>>) -> Result<Vec<TB>, ChainSyncError> {

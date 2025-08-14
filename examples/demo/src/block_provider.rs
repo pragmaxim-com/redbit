@@ -1,0 +1,73 @@
+use crate::model_v1::stream::Stream;
+use crate::model_v1::{Block, BlockHeader, Height, StreamExt};
+use anyhow::Result;
+use async_trait::async_trait;
+use std::collections::BTreeMap;
+use std::pin::Pin;
+use std::sync::{Arc, RwLock};
+use syncer::api::{BlockProvider, ChainSyncError};
+use syncer::info;
+
+pub struct DemoBlockProvider {
+    pub chain: Arc<RwLock<BTreeMap<Height, Block>>>,
+}
+
+impl DemoBlockProvider {
+    pub fn new(chain_height: usize) -> Result<Arc<Self>> {
+        assert!(chain_height < 100_000, "Chain height must be less than 100_000");
+        let mut chain = BTreeMap::new();
+        let blocks = Block::sample_many(chain_height);
+        let mut prev_block: Option<Block> = None;
+        for mut block in blocks {
+            if let Some(ref prev) = prev_block {
+                block.header.prev_hash = prev.header.hash.clone();
+                block.weight = block
+                    .transactions
+                    .iter()
+                    .flat_map(|t| &t.utxos)
+                    .fold(0, |acc, u| acc + u.assets.len() as u32);
+
+            }
+            prev_block = Some(block.clone()); // keep current block as previous for next iteration
+            chain.insert(block.header.height.clone(), block);
+        }
+        info!("Demo chain initialized with {} blocks", chain.len());
+        Ok(Arc::new(DemoBlockProvider { chain: Arc::new(RwLock::new(chain)) }))
+    }
+}
+
+#[async_trait]
+impl BlockProvider<Block, Block> for DemoBlockProvider {
+    fn process_block(&self, block: &Block) -> Result<Block, ChainSyncError> {
+        Ok(block.clone())
+    }
+
+    fn get_processed_block(&self, header: BlockHeader) -> Result<Block, ChainSyncError> {
+        let chain = self.chain.read().unwrap();
+        let result = chain.get(&header.height).ok_or_else(|| ChainSyncError::new("Block not found"))?;
+        Ok(result.clone())
+    }
+
+    async fn get_chain_tip(&self) -> Result<BlockHeader, ChainSyncError> {
+        let chain = self.chain.read().unwrap();
+        let (_, tip_block) = chain.last_key_value().ok_or_else(|| ChainSyncError::new("No blocks in chain"))?;
+        Ok(tip_block.header.clone())
+    }
+
+    fn stream(
+        &self,
+        chain_tip_header: BlockHeader,
+        last_header: Option<BlockHeader>,
+    ) -> Pin<Box<dyn Stream<Item = Block> + Send + 'static>> {
+        let last_height = last_header.map_or(1, |h| h.height.0);
+        info!("Indexing from {} to {}", last_height, chain_tip_header.height.0);
+        let heights = last_height..=chain_tip_header.height.0;
+        let chain = self.chain.clone();
+        tokio_stream::iter(heights)
+            .map(move |height| {
+                let chain = Arc::clone(&chain);
+                chain.read().unwrap().get(&Height(height)).expect("Failed to fetch block by height").clone()
+            })
+            .boxed()
+    }
+}

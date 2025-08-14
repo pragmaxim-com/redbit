@@ -22,11 +22,11 @@ pub struct BtcBlockProvider {
 }
 
 impl BtcBlockProvider {
-    pub fn new() -> Result<Self, ExplorerError> {
+    pub fn new() -> Result<Arc<Self>, ExplorerError> {
         let config = BitcoinConfig::new("config/btc").expect("Failed to load Bitcoin configuration");
         let client = Arc::new(BtcClient::new(&config)?);
         let fetching_par: usize = config.fetching_parallelism.clone().into();
-        Ok(BtcBlockProvider { client, fetching_par })
+        Ok(Arc::new(BtcBlockProvider { client, fetching_par }))
     }
     fn process_inputs(&self, ins: &[bitcoin::TxIn]) -> Vec<TempInputRef> {
         ins.iter()
@@ -112,7 +112,7 @@ impl BlockProvider<BtcBlock, Block> for BtcBlockProvider {
         last_header: Option<BlockHeader>,
     ) -> Pin<Box<dyn Stream<Item = BtcBlock> + Send + 'static>> {
         let last_height = last_header.map_or(0, |h| h.height.0);
-        info!("Indexing from {:?} to {:?}", last_height, chain_tip_header);
+        info!("Indexing from {} to {}", last_height, chain_tip_header.height.0);
         let heights = last_height..=chain_tip_header.height.0;
         let client = Arc::clone(&self.client);
         tokio_stream::iter(heights)

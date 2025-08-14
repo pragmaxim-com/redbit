@@ -156,7 +156,7 @@ pub fn root_key(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let struct_ident = &s.ident;
     s.attrs.retain(|a| !a.path().is_ident("derive"));
     s.attrs.insert(0, parse_quote! {
-        #[derive(RootKey, Clone, Debug, Decode, Encode, Default, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
+        #[derive(RootKey, Clone, Hash, Debug, Decode, Encode, Default, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
     });
     let stream = quote!(#s);
     macro_utils::submit_struct_to_stream(stream, "pk", struct_ident, "_attr.rs")

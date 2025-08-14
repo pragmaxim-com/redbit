@@ -12,6 +12,7 @@ pub fn new(struct_name: &Ident, parent_field: Field, index_field: Field) -> Toke
             type Index = #index_type;
             fn index(&self) -> Self::Index { self.#index_name }
             fn next_index(&self) -> Self { #struct_name { #parent_name: self.#parent_name.clone(), #index_name: self.#index_name + 1 } }
+            fn nth_index(&self, n: usize) -> Self { #struct_name { #parent_name: self.#parent_name.clone(), #index_name: self.#index_name + n as #index_type} }
             fn rollback_or_init(&self, n: u32) -> Self {
                 #struct_name { #parent_name: self.#parent_name.rollback_or_init(n), #index_name: 0 }
             }

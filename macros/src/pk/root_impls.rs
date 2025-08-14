@@ -12,6 +12,7 @@ pub fn new(struct_name: &Ident, index_field: Field) -> TokenStream {
             type Index = #index_type;
             fn index(&self) -> Self::Index { self.0 }
             fn next_index(&self) -> Self { #struct_name(self.0 + 1) }
+            fn nth_index(&self, n: usize) -> Self { #struct_name(self.0 + n as #index_type) }
             fn rollback_or_init(&self, n: u32) -> Self {
                 let prev_index = self.0.checked_sub(n).unwrap_or(0);
                 #struct_name(prev_index)
