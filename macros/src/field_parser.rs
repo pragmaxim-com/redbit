@@ -63,14 +63,14 @@ pub enum ColumnDef {
     Transient(FieldDef),
 }
 
-pub fn get_named_fields(ast: &ItemStruct) -> Result<Punctuated<syn::Field, Comma>, syn::Error> {
+pub fn get_named_fields(ast: &ItemStruct) -> syn::Result<Punctuated<Field, Comma>> {
     match &ast.fields {
         Fields::Named(columns_named) => Ok(columns_named.named.clone()),
         _ => Err(syn::Error::new(ast.span(), "`#[derive(Entity)]` only supports structs with named columns.")),
     }
 }
 
-pub fn extract_base_type_from_pointer(field: &Field) -> Result<Type, syn::Error> {
+pub fn extract_base_type_from_pointer(field: &Field) -> syn::Result<Type> {
     match &field.ty {
         Type::Path(type_path) => {
             if let Some(seg) = type_path.path.segments.last() {
@@ -101,7 +101,7 @@ pub fn extract_base_type_from_pointer(field: &Field) -> Result<Type, syn::Error>
 }
 
 
-fn parse_entity_field(field: &syn::Field) -> Result<ColumnDef, syn::Error> {
+fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
     match &field.ident {
         None => Err(syn::Error::new(field.span(), "Unnamed fields not supported")),
         Some(column_name) => {
@@ -233,7 +233,7 @@ fn parse_entity_field(field: &syn::Field) -> Result<ColumnDef, syn::Error> {
     }
 }
 
-pub fn get_field_macros(ast: &ItemStruct) -> Result<(KeyDef, Vec<ColumnDef>), syn::Error> {
+pub fn get_field_macros(ast: &ItemStruct) -> syn::Result<(KeyDef, Vec<ColumnDef>)> {
     let mut key_column: Option<KeyDef> = None;
     let mut columns: Vec<ColumnDef> = Vec::new();
 

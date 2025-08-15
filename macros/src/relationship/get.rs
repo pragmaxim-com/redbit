@@ -56,7 +56,9 @@ pub fn one2one_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                Result<AppJson<#child_type>, AppError> {
-                    state.storage.begin_read().map_err(AppError::from).and_then(|tx| #entity_name::#fn_name(&tx, &#pk_name)).map(AppJson)
+                    let read_tx = state.storage.begin_read()?;
+                    let result = #entity_name::#fn_name(&read_tx, &#pk_name)?;
+                    Ok(AppJson(result))
                 }
             },
             utoipa_responses: quote! {
@@ -200,7 +202,9 @@ pub fn one2many_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, 
             },
             handler_impl_stream: quote! {
                Result<AppJson<Vec<#child_type>>, AppError> {
-                    state.storage.begin_read().map_err(AppError::from).and_then(|tx| #entity_name::#fn_name(&tx, &#pk_name)).map(AppJson)
+                    let read_tx = state.storage.begin_read()?;
+                    let result = #entity_name::#fn_name(&read_tx, &#pk_name)?;
+                    Ok(AppJson(result))
                 }
             },
             endpoint: format!("/{}/{{{}}}/{}", entity_name.to_string().to_lowercase(), pk_name, child_name),

@@ -29,7 +29,7 @@ impl ErgoClient {
         let mut headers = HeaderMap::new();
         headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-        let api_key = HeaderValue::from_str(&api_key).map_err(|e| ExplorerError::Custom(e.to_string()))?;
+        let api_key = HeaderValue::from_str(&api_key)?;
         headers.insert("api_key", api_key.clone());
 
         let http = Client::builder()

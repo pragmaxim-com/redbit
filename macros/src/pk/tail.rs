@@ -78,7 +78,9 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                Result<AppJson<Vec<#entity_type>>, AppError> {
-                    state.storage.begin_read().map_err(AppError::from).and_then(|tx| #entity_name::#fn_name(&tx, query.tail)).map(AppJson)
+                    let read_tx = state.storage.begin_read()?;
+                    let result = #entity_name::#fn_name(&read_tx, query.tail)?;
+                    Ok(AppJson(result))
                 }
             },
             utoipa_responses: quote! {

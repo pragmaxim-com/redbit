@@ -147,6 +147,9 @@ pub enum ExplorerError {
     #[error("Url parsing error: {0}")]
     Url(#[from] url::ParseError),
 
+    #[error("Invalid http header value : {0}")]
+    InvalidHeaderValue(#[from] reqwest::header::InvalidHeaderValue),
+
     #[error("Custom error: {0}")]
     Custom(String),
 }

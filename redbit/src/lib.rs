@@ -208,6 +208,9 @@ pub enum AppError {
     #[error("redb commit error: {0}")]
     RedbCommit(#[from] redb::CommitError),
 
+    #[error("serde error: {0}")]
+    SerdeError(#[from] serde_json::Error),
+
     #[error("HTTP error: {0}")]
     Http(#[from] http::Error),
 
@@ -225,6 +228,17 @@ pub enum AppError {
 
     #[error("Internal error: {0}")]
     Internal(#[source] Box<dyn std::error::Error + Send + Sync>),
+}
+
+impl AppError {
+    fn status_code(&self) -> StatusCode {
+        match self {
+            AppError::NotFound(_)      => StatusCode::NOT_FOUND,
+            AppError::BadRequest(_)    => StatusCode::BAD_REQUEST,
+            AppError::JsonRejection(r) => r.status(),
+            _                          => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
 }
 
 #[derive(Debug, Error)]
@@ -331,7 +345,7 @@ where
             return Ok(MaybeJson(None));
         }
 
-        let parsed = serde_json::from_slice::<T>(&body_bytes).map_err(|e| AppError::BadRequest(e.to_string()))?;
+        let parsed = serde_json::from_slice::<T>(&body_bytes)?;
 
         Ok(MaybeJson(Some(parsed)))
     }
@@ -345,21 +359,11 @@ pub struct ErrorResponse {
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
-        let (status, message) = match self {
-            AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg),
-            AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg),
-            AppError::JsonRejection(rejection) => (rejection.status(), rejection.body_text()),
-            AppError::Internal(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg.to_string()),
-            AppError::Io(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg.to_string()),
-            AppError::Database(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg.to_string()),
-            AppError::Redb(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg.to_string()),
-            AppError::RedbTransaction(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg.to_string()),
-            AppError::RedbStorage(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg.to_string()),
-            AppError::RedbTable(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg.to_string()),
-            AppError::RedbCommit(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg.to_string()),
-            AppError::Http(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg.to_string()),
+        let status = self.status_code();
+        let message = match self {
+            AppError::JsonRejection(rej) => rej.body_text(),
+            other                        => other.to_string(),
         };
-
         (status, AppJson(ErrorResponse { message, code: status.as_u16() })).into_response()
     }
 }

@@ -69,14 +69,14 @@ pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, table: &Iden
                     match state.storage.begin_read()
                           .map_err(AppError::from)
                           .and_then(|tx| #entity_name::#fn_name(&tx, &#pk_name)) {
-                        Ok(true) => {
-                            Response::builder().status(StatusCode::OK).body(Body::empty()).unwrap().into_response()
-                        },
-                        Ok(false) => {
-                            Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap().into_response()
-                        },
-                        Err(err) => err.into_response(),
-                    }
+                            Ok(true) => {
+                                Response::builder().status(StatusCode::OK).body(Body::empty()).unwrap().into_response()
+                            },
+                            Ok(false) => {
+                                Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap().into_response()
+                            },
+                            Err(err) => err.into_response(),
+                        }
                 }
             },
             endpoint: format!("/{}/{}/{{{}}}", entity_name.to_string().to_lowercase(), pk_name, pk_name),

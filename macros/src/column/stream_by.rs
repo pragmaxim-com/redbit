@@ -151,8 +151,8 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
     let fn_name = format_ident!("stream_by_{}", column_name);
     let fn_stream = quote! {
         pub fn #fn_name(tx: StorageReadTx, val: #column_type, query: Option<#stream_query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#entity_type, AppError>> + Send + 'static>>, AppError> {
-            let mm_table = tx.open_multimap_table(#table).map_err(AppError::from)?;
-            let iter = mm_table.get(&val).map_err(AppError::from)?;
+            let mm_table = tx.open_multimap_table(#table)?;
+            let iter = mm_table.get(&val)?;
 
             let stream = futures::stream::unfold((iter, tx, query), |(mut iter, tx, query)| async move {
                 match iter.next() {

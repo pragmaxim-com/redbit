@@ -5,9 +5,8 @@ use redbit::AppError;
 use std::pin::Pin;
 use std::sync::Arc;
 use chrono::DateTime;
-use thiserror::Error;
 
-#[derive(Debug, Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum ChainSyncError {
     #[error("Database error: {0}")]
     Redb(#[from] redb::Error),
