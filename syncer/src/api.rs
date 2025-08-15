@@ -59,6 +59,10 @@ pub trait BlockHeaderLike: Send + Sync + Clone {
         let datetime = DateTime::from_timestamp(self.timestamp() as i64, 0).unwrap();
         datetime.format("%Y-%m-%d %H:%M:%S").to_string()
     }
+
+    fn hash_str(&self) -> String {
+        hex::encode(self.hash())
+    }
 }
 
 pub trait BlockLike: Send + Sync {

@@ -17,7 +17,7 @@ sudo apt-get install rustup
 
 ```
 # Ergo node is expected to run locally at port 9053
-export ERGO__API_KEY="foo"
+export ERGO__API_KEY="foo"           # not needed for syncing
 cargo run --release 
 ```
 
@@ -34,3 +34,11 @@ or when indexing is disabled `indexer.enable = false` and we only run http serve
 ### UI
 
 See [redbit-ui](https://github.com/pragmaxim-com/redbit-ui) 
+
+### Performance
+
+Performance on PCIe gen3 NVMe SSD and remote Ergo node is ~ `6395.0` ins+outs+assets/s. 
+Expect up to `30 000` ins+outs+assets/s on PCIe gen5 and local Ergo node.
+```
+[2025-08-15 08:38:51] INFO v 0b44bb8d4a8f @ 407058 from 2021-01-16 18:13:15 at 6395.0 ins+outs+assets/s, buffer 11
+```

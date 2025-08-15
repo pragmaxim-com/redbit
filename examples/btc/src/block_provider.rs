@@ -1,14 +1,13 @@
 use crate::btc_client::{BtcBlock, BtcClient};
-use crate::model_v1::{Address, Block, BlockHash, BlockHeader, Height, BlockTimestamp, ExplorerError, ScriptHash, TempInputRef, Transaction, TxHash, BlockPointer, Utxo, TransactionPointer, MerkleRoot};
+use crate::config::BitcoinConfig;
+use crate::model_v1::{Address, Block, BlockHash, BlockHeader, BlockPointer, BlockTimestamp, ExplorerError, Height, MerkleRoot, ScriptHash, TempInputRef, Transaction, TransactionPointer, TxHash, Utxo};
 use async_trait::async_trait;
-use syncer::api::{BlockProvider, ChainSyncError};
-use syncer::info;
-use syncer::monitor::BoxWeight;
 use futures::stream::StreamExt;
 use futures::Stream;
 use redbit::*;
 use std::{pin::Pin, sync::Arc};
-use crate::config::BitcoinConfig;
+use syncer::api::{BlockProvider, ChainSyncError};
+use syncer::monitor::BoxWeight;
 
 pub const SENTINEL: [u8; 25] = [
     0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -112,7 +111,6 @@ impl BlockProvider<BtcBlock, Block> for BtcBlockProvider {
         last_header: Option<BlockHeader>,
     ) -> Pin<Box<dyn Stream<Item = BtcBlock> + Send + 'static>> {
         let last_height = last_header.map_or(0, |h| h.height.0);
-        info!("Indexing from {} to {}", last_height, chain_tip_header.height.0);
         let heights = last_height..=chain_tip_header.height.0;
         let client = Arc::clone(&self.client);
         tokio_stream::iter(heights)
@@ -120,7 +118,7 @@ impl BlockProvider<BtcBlock, Block> for BtcBlockProvider {
                 let client = Arc::clone(&client);
                 tokio::task::spawn_blocking(move || client.get_block_by_height(Height(height)).expect("Failed to get block by height"))
             })
-            .buffered(self.fetching_par)
+            .buffer_unordered(self.fetching_par)
             .map(|res| match res {
                 Ok(block) => block,
                 Err(e) => panic!("Error: {:?}", e), // TODO lousy error handling

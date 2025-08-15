@@ -60,7 +60,6 @@ impl BlockProvider<Block, Block> for DemoBlockProvider {
         last_header: Option<BlockHeader>,
     ) -> Pin<Box<dyn Stream<Item = Block> + Send + 'static>> {
         let last_height = last_header.map_or(1, |h| h.height.0);
-        info!("Indexing from {} to {}", last_height, chain_tip_header.height.0);
         let heights = last_height..=chain_tip_header.height.0;
         let chain = self.chain.clone();
         tokio_stream::iter(heights)

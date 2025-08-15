@@ -1,20 +1,19 @@
-use pallas::network::miniprotocols::Point;
-use pallas::network::miniprotocols::chainsync::NextResponse;
-use std::{pin::Pin, sync::Arc};
-use tokio::runtime::Runtime;
-use async_stream::stream;
-use super::cardano_client::{CBOR, CardanoClient};
+use super::cardano_client::{CardanoClient, CBOR};
 use crate::config::CardanoConfig;
 use crate::model_v1::*;
-use ExplorerError;
+use async_stream::stream;
 use async_trait::async_trait;
-use syncer::api::{BlockProvider, ChainSyncError};
-use syncer::monitor::BoxWeight;
 use futures::{Stream, StreamExt};
 use pallas::codec::minicbor::{Encode, Encoder};
 use pallas::ledger::traverse::{MultiEraBlock, MultiEraInput, MultiEraOutput};
+use pallas::network::miniprotocols::chainsync::NextResponse;
+use pallas::network::miniprotocols::Point;
 use pallas_traverse::wellknown::GenesisValues;
-use syncer::info;
+use std::{pin::Pin, sync::Arc};
+use syncer::api::{BlockProvider, ChainSyncError};
+use syncer::monitor::BoxWeight;
+use tokio::runtime::Runtime;
+use ExplorerError;
 
 pub struct CardanoBlockProvider {
     pub client: CardanoClient,
@@ -120,7 +119,7 @@ impl BlockProvider<CBOR, Block> for CardanoBlockProvider {
             let tx_hash: [u8; 32] = *tx.hash();
             let tx_id = BlockPointer::from_parent(header.height.clone(), tx_index as u16);
             let inputs = self.process_inputs(&tx.inputs());
-            let (box_weight, outputs) = self.process_outputs(&tx.outputs().to_vec(), tx_id.clone()); //TODO perf check
+            let (box_weight, outputs) = self.process_outputs(&tx.outputs(), tx_id.clone()); //TODO perf check
             block_weight += box_weight;
             block_weight += inputs.len();
             result_txs.push(Transaction { id: tx_id.clone(), hash: TxHash(tx_hash), utxos: outputs, inputs: vec![], transient_inputs: inputs })
@@ -144,13 +143,7 @@ impl BlockProvider<CBOR, Block> for CardanoBlockProvider {
 
     fn stream(&self, _chain_tip: BlockHeader, last_header: Option<BlockHeader>) -> Pin<Box<dyn Stream<Item = CBOR> + Send + 'static>> {
         let node_client = Arc::clone(&self.client.node_client);
-        let last_point = last_header.as_ref().map_or(Point::Origin, |h| Point::new(h.slot.0 as u64, h.hash.0.to_vec()));
-
         stream! {
-            // Hold the lock for the duration of the chain-sync session to avoid re-locking
-            let (_, to) = node_client.lock().await.chainsync().find_intersect(vec![last_point]).await.unwrap();
-            info!("Indexing from {} to {}", last_header.as_ref().map(|h| h.height.0).unwrap_or(0), to.1);
-
             loop {
                 match node_client.lock().await.chainsync().request_or_await_next().await.unwrap() {
                     NextResponse::RollForward(block_bytes, _) => {

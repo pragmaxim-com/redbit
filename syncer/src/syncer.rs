@@ -6,6 +6,7 @@ use crate::monitor::ProgressMonitor;
 use futures::StreamExt;
 use std::sync::Arc;
 use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
 use crate::task;
 use crate::settings::IndexerSettings;
 
@@ -26,17 +27,22 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
         let monitor = Arc::clone(&self.monitor);
 
         let node_chain_tip_header = block_provider.get_chain_tip().await.expect("Failed to get chain tip header");
-        let chain_tip_for_persist = node_chain_tip_header.clone();
+        let chain_tip_height = node_chain_tip_header.height();
         let last_persisted_header = persistence.get_last_header().expect("Failed to get last header");
+        let last_persisted_height = last_persisted_header.as_ref().map_or(0, |h| h.height());
+        let heights_to_fetch = chain_tip_height - last_persisted_height;
 
-        let heights_to_fetch = node_chain_tip_header.clone().height() - last_persisted_header.as_ref().map_or(0, |h| h.height());
+        let indexing_par: usize = indexer_conf.processing_parallelism.clone().into();
+
         if heights_to_fetch <= 0 {
             return;
         }
-
-        type Batch<T> = (Vec<T>, usize);
-        let (fetch_tx, mut fetch_rx) = mpsc::channel::<FB>(8192);
-        let (proc_tx, mut proc_rx) = mpsc::channel::<Batch<TB>>(512);
+        info!("Indexing from {} to {} with processing parallelism : {}", last_persisted_height, chain_tip_height, indexing_par);
+        let buffer_size = 8192;
+        let batch_buffer_size = std::cmp::max(16, buffer_size / indexer_conf.min_batch_size);
+        let (fetch_tx, fetch_rx) = mpsc::channel::<FB>(buffer_size);
+        let (proc_tx, mut proc_rx) = mpsc::channel::<TB>(buffer_size);
+        let (sort_tx, mut sort_rx) = mpsc::channel::<Vec<TB>>(batch_buffer_size);
 
         // Process + batch stage (consumes provider.stream() directly)
         let fetch_handle = {
@@ -53,55 +59,62 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
             })
         };
 
-        // Process + batch stage: read raw, parse on blocking thread, batch, send to persist
         let process_handle = {
-            let indexer_conf = indexer_conf.clone();
             let block_provider = Arc::clone(&self.block_provider);
-            task::spawn_named("process",async move {
-                let mut batch: Vec<TB> = Vec::with_capacity(indexer_conf.min_batch_size);
-                let mut weight: usize = 0;
-                let min_weight = indexer_conf.min_batch_size;
+            let proc_tx_stream = proc_tx.clone();
 
-                while let Some(raw) = fetch_rx.recv().await {
-                    let bp = Arc::clone(&block_provider);
-                    let block: TB = match tokio::task::spawn_blocking(move || bp.process_block(&raw)).await {
-                        Ok(Ok(b)) => b,
-                        Ok(Err(e)) => {
-                            error!("process: failed to process block due to {}", e);
-                            return;
+            task::spawn_named("process", async move {
+                ReceiverStream::new(fetch_rx)
+                    .for_each_concurrent(indexing_par, move |raw| {
+                        let tx = proc_tx_stream.clone();
+                        let bp = Arc::clone(&block_provider);
+                        async move {
+                            match bp.process_block(&raw) {
+                                Ok(block)   => { let _ = tx.send(block).await; }
+                                Err(e)      => { error!("process: {e}"); }
+                            }
                         }
-                        Err(join_err) => {
-                            error!("process: failed to process block due to {}", join_err);
-                            return;
-                        }
-                    };
-                    weight += block.weight() as usize;
-                    batch.push(block);
-
-                    if weight >= min_weight {
-                        if proc_tx.send((std::mem::take(&mut batch), weight)).await.is_err() {
-                            break;
-                        }
-                        weight = 0;
-                    }
-                }
-                if !batch.is_empty() {
-                    let _ = proc_tx.send((batch, weight)).await;
-                }
+                    })
+                    .await;
                 drop(proc_tx);
             })
         };
 
+        // Sort + process stage is executed at parallel so blocks are not coming in order
+        let sort_handle = {
+            let indexer_conf = indexer_conf.clone();
+            task::spawn_named("sort",async move {
+                let mut batch: Vec<TB> = Vec::with_capacity(indexer_conf.min_batch_size);
+                let mut weight: usize = 0;
+                let min_weight = indexer_conf.min_batch_size;
+
+                while let Some(block) = proc_rx.recv().await {
+                    weight += block.weight() as usize;
+                    let header = block.header();
+                    let height = header.height();
+                    let idx = batch.binary_search_by_key(&height, |b| b.header().height()).unwrap_or_else(|i| i);
+
+                    if weight >= min_weight {
+                        monitor.log(height, &header.timestamp_str(), &header.hash_str(), &weight, proc_rx.len());
+                        batch.insert(idx, block);
+                        if sort_tx.send(std::mem::take(&mut batch)).await.is_err() {
+                            break;
+                        }
+                        weight = 0;
+                    } else {
+                        batch.insert(idx, block);
+                    }
+                }
+                if !batch.is_empty() {
+                    let _ = sort_tx.send(batch).await;
+                }
+                drop(sort_tx);
+            })
+        };
+
         let persist_handle = task::spawn_named("persist",async move {
-            while let Some((block_batch, batch_weight)) = proc_rx.recv().await {
-                let chain_link: bool = block_batch.last().is_some_and(|curr_block| curr_block.header().height() + 100 > chain_tip_for_persist.height());
-
-                let last_block = block_batch.last().expect("Block batch should not be empty");
-                let height = last_block.header().height();
-                let timestamp = last_block.header().timestamp_str();
-
-                monitor.log(height, timestamp, block_batch.len(), &batch_weight, proc_rx.len());
-                // Move blocking IO off the async executor
+            while let Some(block_batch) = sort_rx.recv().await {
+                let chain_link: bool = block_batch.last().is_some_and(|curr_block| curr_block.header().height() + 100 > chain_tip_height);
                 let block_provider = Arc::clone(&block_provider);
                 let persistence = Arc::clone(&persistence);
                 match tokio::task::spawn_blocking(move || Self::persist_blocks(block_batch, chain_link, block_provider, persistence)).await {
@@ -117,7 +130,7 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
                 }
             }
         });
-        if let Err(e) = tokio::try_join!(fetch_handle, process_handle, persist_handle) {
+        if let Err(e) = tokio::try_join!(fetch_handle, process_handle, sort_handle, persist_handle) {
             error!("One of the pipeline tasks failed {}", e);
         }
     }
