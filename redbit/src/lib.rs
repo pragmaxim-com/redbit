@@ -13,6 +13,7 @@ pub mod base64_serde_enc;
 pub mod cache;
 pub mod storage;
 pub mod retry;
+pub mod logger;
 
 pub use axum;
 pub use axum::body::Body;
@@ -92,6 +93,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::net::SocketAddr;
 use std::ops::Add;
+use thiserror::Error;
 use tokio::net::TcpListener;
 use tokio::sync::watch;
 use tower_http::cors::CorsLayer;
@@ -129,8 +131,17 @@ where
     }
 }
 
-pub trait IterableColumn: Sized {
+pub trait IterableColumn: Sized + Clone {
     fn next_value(&self) -> Self;
+    fn nth_value(&self, n: usize) -> Self {
+        let mut value = self.clone(); // convert &Self → Self
+        let mut n = n;
+        while n > 0 {
+            value = value.next_value();
+            n -= 1;
+        }
+        value
+    }
 }
 macro_rules! impl_iterable_column_for_primitive {
     ($($t:ty),*) => {
@@ -176,15 +187,47 @@ pub trait ByteVecColumnSerde {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum AppError {
-    Internal(String),
+
+    #[error("Database error: {0}")]
+    Database(#[from] redb::DatabaseError),
+
+    #[error("redb error: {0}")]
+    Redb(#[from] redb::Error),
+
+    #[error("redb transaction error: {0}")]
+    RedbTransaction(#[from] redb::TransactionError),
+
+    #[error("redb storage error: {0}")]
+    RedbStorage(#[from] redb::StorageError),
+
+    #[error("redb table error: {0}")]
+    RedbTable(#[from] redb::TableError),
+
+    #[error("redb commit error: {0}")]
+    RedbCommit(#[from] redb::CommitError),
+
+    #[error("HTTP error: {0}")]
+    Http(#[from] http::Error),
+
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+
+    #[error("Json rejection: {0}")]
+    JsonRejection(#[from] JsonRejection),
+
+    #[error("Not Found: {0}")]
     NotFound(String),
+
+    #[error("Bad Request: {0}")]
     BadRequest(String),
-    JsonRejection(JsonRejection),
+
+    #[error("Internal error: {0}")]
+    Internal(#[source] Box<dyn std::error::Error + Send + Sync>),
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Error)]
 pub enum ParsePointerError {
     #[error("invalid pointer format")]
     Format,
@@ -192,73 +235,9 @@ pub enum ParsePointerError {
     ParseInt(#[from] std::num::ParseIntError),
 }
 
-impl std::fmt::Display for AppError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            AppError::Internal(msg) => write!(f, "Database error: {}", msg),
-            AppError::NotFound(msg) => write!(f, "Not Found: {}", msg),
-            AppError::BadRequest(msg) => write!(f, "Bad Request: {}", msg),
-            AppError::JsonRejection(reject) => write!(f, "Json rejection: {}", reject),
-        }
-    }
-}
-
-impl From<JsonRejection> for AppError {
-    fn from(rejection: JsonRejection) -> Self {
-        Self::JsonRejection(rejection)
-    }
-}
-
 impl From<AppError> for axum::Error {
     fn from(val: AppError) -> Self {
         axum::Error::new(val.to_string())
-    }
-}
-
-impl std::error::Error for AppError {}
-
-// TODO migrate to thiserror
-impl From<std::io::Error> for AppError {
-    fn from(err: std::io::Error) -> Self {
-        AppError::Internal(err.to_string())
-    }
-}
-impl From<redb::Error> for AppError {
-    fn from(e: redb::Error) -> Self {
-        AppError::Internal(e.to_string())
-    }
-}
-impl From<http::Error> for AppError {
-    fn from(e: http::Error) -> Self {
-        AppError::Internal(e.to_string())
-    }
-}
-impl From<redb::DatabaseError> for AppError {
-    fn from(e: redb::DatabaseError) -> Self {
-        AppError::Internal(e.to_string())
-    }
-}
-impl<T> From<std::sync::PoisonError<T>> for AppError {
-    fn from(e: std::sync::PoisonError<T>) -> Self { AppError::Internal(e.to_string()) }
-}
-impl From<redb::TransactionError> for AppError {
-    fn from(e: redb::TransactionError) -> Self {
-        AppError::Internal(e.to_string())
-    }
-}
-impl From<redb::StorageError> for AppError {
-    fn from(e: redb::StorageError) -> Self {
-        AppError::Internal(e.to_string())
-    }
-}
-impl From<redb::TableError> for AppError {
-    fn from(e: redb::TableError) -> Self {
-        AppError::Internal(e.to_string())
-    }
-}
-impl From<redb::CommitError> for AppError {
-    fn from(e: redb::CommitError) -> Self {
-        AppError::Internal(e.to_string())
     }
 }
 
@@ -370,7 +349,15 @@ impl IntoResponse for AppError {
             AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg),
             AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg),
             AppError::JsonRejection(rejection) => (rejection.status(), rejection.body_text()),
-            AppError::Internal(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
+            AppError::Internal(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg.to_string()),
+            AppError::Io(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg.to_string()),
+            AppError::Database(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg.to_string()),
+            AppError::Redb(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg.to_string()),
+            AppError::RedbTransaction(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg.to_string()),
+            AppError::RedbStorage(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg.to_string()),
+            AppError::RedbTable(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg.to_string()),
+            AppError::RedbCommit(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg.to_string()),
+            AppError::Http(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg.to_string()),
         };
 
         (status, AppJson(ErrorResponse { message, code: status.as_u16() })).into_response()
@@ -447,7 +434,6 @@ pub async fn build_router(state: RequestState, extras: Option<OpenApiRouter<Requ
     let merged = r
         .merge(SwaggerUi::new("/swagger-ui").url("/apidoc/openapi.json", openapi))
         .with_state(state);
-
     if let Some(cors_layer) = cors {
         merged.layer(cors_layer)
     } else {
@@ -463,7 +449,6 @@ pub async fn serve(
     shutdown: watch::Receiver<bool>,
 ) {
     let router: Router<()> = build_router(state, extras, cors).await;
-    println!("Starting server on {}", socket_addr);
     let tcp = TcpListener::bind(socket_addr).await.unwrap();
 
     // spawn shutdown watcher future
@@ -471,7 +456,7 @@ pub async fn serve(
     axum::serve(tcp, router)
         .with_graceful_shutdown(async move {
             if shutdown.changed().await.is_ok() {
-                println!("Shutting down server...");
+                info!("Shutting down server...");
             }
         })
         .await
@@ -482,7 +467,7 @@ pub async fn serve(
 pub fn write_to_local_file(lines: Vec<String>, dir_name: &str, file_name: &str) {
     let dir_path = env::current_dir().expect("current dir inaccessible").join("target").join("macros").join(dir_name);
     if let Err(e) = std::fs::create_dir_all(&dir_path) {
-        eprintln!("Failed to create directory {:?}: {}", dir_path, e);
+        error!("Failed to create directory {:?}: {}", dir_path, e);
         return;
     }
     let full_path = dir_path.join(file_name);

@@ -5,8 +5,8 @@ use async_trait::async_trait;
 use std::collections::BTreeMap;
 use std::pin::Pin;
 use std::sync::{Arc, RwLock};
+use redbit::info;
 use syncer::api::{BlockProvider, ChainSyncError};
-use syncer::info;
 
 pub struct DemoBlockProvider {
     pub chain: Arc<RwLock<BTreeMap<Height, Block>>>,

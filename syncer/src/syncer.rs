@@ -1,12 +1,12 @@
 use crate::api::BlockHeaderLike;
 use crate::api::{BlockLike, BlockPersistence};
 use crate::api::{BlockProvider, ChainSyncError};
-use crate::{error, info};
 use crate::monitor::ProgressMonitor;
 use futures::StreamExt;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
+use redbit::{error, info};
 use crate::task;
 use crate::settings::IndexerSettings;
 

@@ -1,7 +1,7 @@
 use std::{time::Instant};
-use crate::info;
 
 use std::sync::Mutex;
+use redbit::info;
 
 pub type BatchWeight = usize;
 pub type BoxWeight = usize;
@@ -36,7 +36,7 @@ impl ProgressMonitor {
             let total_time = self.start_time.elapsed().as_secs();
             let txs_per_sec = format!("{:.1}", new_total_weight as f64 / total_time as f64);
             info!(
-                "v {} @ {} from {} at {} ins+outs+assets/s, total {}, buffer {}",
+                "{} @ {} from {} at {} ins+outs+assets/s, total {}, buffer {}",
                 &hash[..12], height, timestamp, txs_per_sec, new_total_weight, buffer_size
             );
         } else {

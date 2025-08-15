@@ -14,7 +14,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
             let mut results = Vec::new();
             let mut count: usize = 0;
             if n > 100 {
-                return Err(AppError::Internal("Cannot take more than 100 entities at once".to_string()));
+                return Err(AppError::Internal("Cannot take more than 100 entities at once".into()));
             } else {
                 while let Some(entry_res) = iter.next() {
                     if count >= n {

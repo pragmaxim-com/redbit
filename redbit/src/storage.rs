@@ -32,12 +32,14 @@ impl Storage {
     }
 
     pub fn init(db_dir: PathBuf, db_cache_size_gb: u8) -> redb::Result<Arc<Storage>, AppError> {
+        let db_path = db_dir.join("chain_syncer.db");
         if !db_dir.exists() {
-            fs::create_dir_all(db_dir.clone()).map_err(|e| AppError::Internal(format!("Failed to create database directory: {}", e)))?;
-            let db = Database::builder().set_cache_size(db_cache_size_gb as usize * 1024 * 1024 * 1024).create(db_dir.join("chain_syncer.db"))?;
+            fs::create_dir_all(db_dir.clone())?;
+            let db = Database::builder().set_cache_size(db_cache_size_gb as usize * 1024 * 1024 * 1024).create(db_path)?;
             Ok(Arc::new(Storage::new(Arc::new(db))))
         } else {
-            let db = Database::open(db_dir.join("chain_syncer.db"))?;
+            info!("Opening existing db at {:?}, it might take a while in case previous process was killed", db_path);
+            let db = Database::open(db_path)?;
             Ok(Arc::new(Storage::new(Arc::new(db))))
         }
     }

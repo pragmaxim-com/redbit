@@ -11,7 +11,6 @@ use pallas::network::miniprotocols::Point;
 use pallas_traverse::wellknown::GenesisValues;
 use std::{pin::Pin, sync::Arc};
 use syncer::api::{BlockProvider, ChainSyncError};
-use syncer::info;
 use syncer::monitor::BoxWeight;
 use tokio::runtime::Runtime;
 use ExplorerError;
@@ -170,7 +169,7 @@ impl BlockProvider<CBOR, Block> for CardanoBlockProvider {
 
             loop {
                 match cs.request_next().await.expect("chainsync request_next failed") {
-                    NextResponse::RollForward(block_bytes, new_tip) => {
+                    NextResponse::RollForward(block_bytes, _new_tip) => {
                         yield block_bytes.0;
                     }
                     NextResponse::RollBackward(_point, new_tip) => {

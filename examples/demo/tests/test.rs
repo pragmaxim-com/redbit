@@ -19,7 +19,7 @@ fn init_temp_storage(name: &str, db_cache_size_gb: u8) -> (Vec<Block>, Arc<Stora
 #[tokio::test]
 async fn demo_bench() {
     let storage = Storage::temp("demo_benchmark", 1, true).expect("Failed to open database");
-    let block_provider: Arc<dyn BlockProvider<Block, Block>> = DemoBlockProvider::new(1000).expect("Failed to create block provider");
+    let block_provider: Arc<dyn BlockProvider<Block, Block>> = DemoBlockProvider::new(100).expect("Failed to create block provider");
     let block_persistence: Arc<dyn BlockPersistence<Block>> = DemoBlockPersistence::new(Arc::clone(&storage));
     let config = AppConfig::new("config/settings").expect("Failed to load app config");
     let scheduler = Scheduler::new(block_provider, block_persistence);

@@ -33,7 +33,7 @@ pub fn get_by_dict_def(
                         results.push(item);
                     }
                     Err(err) => {
-                        return Err(AppError::Internal(err.to_string()));
+                        return Err(AppError::Internal(err.into()));
                     }
                 }
             }
@@ -88,7 +88,7 @@ pub fn get_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &I
                         results.push(item);
                     }
                     Err(err) => {
-                        return Err(AppError::Internal(err.to_string()));
+                        return Err(AppError::Internal(err.into()));
                     }
                 }
             }

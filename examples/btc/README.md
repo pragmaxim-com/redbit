@@ -48,7 +48,7 @@ In that case, set `fetching_parallelism = "low"` to not put the Node and Laptop 
 
 ### Rest API
 
-http://localhost:8000/swagger-ui/
+http://localhost:3033/swagger-ui/
 
 Querying currently times out during historical indexing. So use it only at the chain tip sync phase
 or when indexing is disabled `indexer.enable = false` and we only run http server to query over existing data.

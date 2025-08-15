@@ -7,10 +7,7 @@ pub fn default_init_expr(column_type: &Type) -> TokenStream {
     quote! {
         {
             let mut value = <#column_type as Default>::default();
-            for _ in 0..sample_index {
-                value = <#column_type as IterableColumn>::next_value(&value);
-            }
-            value
+            <#column_type as IterableColumn>::nth_value(&value, sample_index)
         }
     }
 }

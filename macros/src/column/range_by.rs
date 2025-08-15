@@ -23,7 +23,7 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
                             results.push(item);
                         }
                         Err(err) => {
-                            return Err(AppError::Internal(err.to_string()));
+                            return Err(AppError::Internal(err.into()));
                         }
                     }
                 }

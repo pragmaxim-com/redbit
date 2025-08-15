@@ -3,7 +3,7 @@ use demo::block_persistence::DemoBlockPersistence;
 use demo::block_provider::DemoBlockProvider;
 use demo::*;
 use redbit::*;
-use syncer::{info, launcher};
+use syncer::launcher;
 
 #[tokio::main]
 async fn main() -> Result<()> {

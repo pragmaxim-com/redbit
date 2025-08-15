@@ -1,11 +1,10 @@
-use syncer::info;
 use futures::lock::Mutex;
 use pallas::network::{
     facades::{NodeClient, PeerClient},
-    miniprotocols::{MAINNET_MAGIC, Point, localstate::queries_v16},
+    miniprotocols::{localstate::queries_v16, Point, MAINNET_MAGIC},
 };
 use std::sync::Arc;
-
+use redbit::info;
 use crate::config::CardanoConfig;
 use crate::model_v1::ExplorerError;
 

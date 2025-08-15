@@ -1,6 +1,5 @@
 use std::{fs, sync::Arc, time::Duration};
-use syncer::api::{BlockPersistence, BlockProvider};
-use syncer::info;
+use syncer::api::BlockPersistence;
 
 use btc::block_persistence::BtcBlockPersistence;
 use btc::block_provider::BtcBlockProvider;
@@ -9,7 +8,7 @@ use btc::model_v1::Block;
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
 use serde_json;
 
-use redbit::Storage;
+use redbit::{info, Storage};
 
 fn block_from_file(size: &str, tx_count: usize) -> BtcBlock {
     info!("Getting {} block with {} txs", size, tx_count);

@@ -58,7 +58,7 @@ pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, col_fi
             let storage = STORAGE.clone();
             let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let from_value = #column_type::default();
-            let until_value = #column_type::default().next_value().next_value();
+            let until_value = #column_type::default().nth_value(2);
             let entity_stream = #entity_name::#fn_name(read_tx, from_value, until_value, None).expect("Failed to range entities by index");
             let entities = entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
             let expected_entities = #entity_type::sample_many(2);
@@ -70,7 +70,7 @@ pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, col_fi
             let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let pk = #pk_type::default();
             let from_value = #column_type::default();
-            let until_value = #column_type::default().next_value().next_value().next_value();
+            let until_value = #column_type::default().nth_value(3);
             let query = #stream_query_type::sample();
             let entity_stream = #entity_name::#fn_name(read_tx, from_value, until_value, Some(query.clone())).expect("Failed to range entities by index");
             let entities = entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
@@ -90,7 +90,7 @@ pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, col_fi
             b.iter(|| {
                 rt.block_on(async {
                     let from_value = #column_type::default();
-                    let until_value = #column_type::default().next_value().next_value().next_value();
+                    let until_value = #column_type::default().nth_value(3);
                     let read_tx = storage.begin_read().unwrap();
                     let entity_stream = #entity_name::#fn_name(read_tx, from_value, until_value, Some(query.clone())).expect("Failed to range entities by index");
                     entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");

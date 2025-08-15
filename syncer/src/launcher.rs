@@ -1,10 +1,10 @@
 use crate::api::{BlockLike, BlockPersistence, BlockProvider};
 use crate::scheduler::Scheduler;
 use crate::settings::{AppConfig, HttpSettings, IndexerSettings};
-use crate::{combine, info};
+use crate::combine;
 use futures::future::ready;
 use redbit::storage::Storage;
-use redbit::{serve, AppError, OpenApiRouter, RequestState};
+use redbit::{info, serve, AppError, OpenApiRouter, RequestState};
 use std::env;
 use std::sync::Arc;
 use tokio::sync::watch;

@@ -33,7 +33,7 @@ through auto-generated REST API. It maximizes R/W speed while minimizing data si
 ✅ Optional column is basically `One-to-Option` relationship, we build a table for optional "values" \
 ✅ Column encodings of binary columns : `hex`, `base64`, `utf-8` + custom impl of `ByteVecColumnSerde` \
 ✅ All types have binary (db) and human-readable (http) serde support \
-✅ Macro derived http rest API at http://127.0.0.1:8000/swagger-ui/ with examples \
+✅ Macro derived http rest API at http://127.0.0.1:3033/swagger-ui/ with examples \
 ✅ Macro derived unit tests and integration tests on axum test server and benchmarks \
 ✅ TypeScript client generated from OpenAPI spec with tests suite requesting all endpoints \
 ✅ For other features, check the [redbit-ui](http://github.com/pragmaxim-com/redbit-ui)
@@ -330,7 +330,7 @@ Deleting blocks:");
 ```
 <!-- END_MAIN -->
 
-The same api is accessible through http endpoints at http://127.0.0.1:8000/swagger-ui/.
+The same api is accessible through http endpoints at http://127.0.0.1:3033/swagger-ui/.
 
 Performance wise, check 🔥[flamegraph](https://rawcdn.githack.com/pragmaxim-com/redbit/refs/heads/master/flamegraph.svg).
 The demo example persists data into 30 tables to allow for rich querying.

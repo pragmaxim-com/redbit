@@ -89,7 +89,7 @@ pub fn col_range_query(entity_name: &Ident, field_ident: &Ident, tpe: &Type) -> 
                 pub fn sample() -> Self {
                     Self {
                         from: #tpe::default(),
-                        until: #tpe::default().next_value().next_value().next_value()
+                        until: #tpe::default().nth_value(3)
                     }
                 }
             }

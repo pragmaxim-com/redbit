@@ -2,54 +2,37 @@ use async_trait::async_trait;
 use futures::Stream;
 use hex::FromHexError;
 use redbit::AppError;
-use serde::{Deserialize, Serialize};
-use std::{fmt, pin::Pin};
+use std::pin::Pin;
 use std::sync::Arc;
 use chrono::DateTime;
+use thiserror::Error;
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ChainSyncError {
-    pub error: String,
-}
-impl fmt::Display for ChainSyncError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.error)
-    }
-}
+#[derive(Debug, Error)]
+pub enum ChainSyncError {
+    #[error("Database error: {0}")]
+    Redb(#[from] redb::Error),
 
-impl From<redb::Error> for ChainSyncError {
-    fn from(err: redb::Error) -> Self {
-        ChainSyncError::new(&err.to_string())
-    }
-}
+    #[error("Transaction error: {0}")]
+    RedbTransaction(#[from] redb::TransactionError),
 
-impl From<redb::TransactionError> for ChainSyncError {
-    fn from(err: redb::TransactionError) -> Self {
-        ChainSyncError::new(&err.to_string())
-    }
-}
-impl From<redb::CommitError> for ChainSyncError {
-    fn from(err: redb::CommitError) -> Self {
-        ChainSyncError::new(&err.to_string())
-    }
-}
-impl From<AppError> for ChainSyncError {
-    fn from(err: AppError) -> Self {
-        ChainSyncError::new(&err.to_string())
-    }
-}
-impl From<FromHexError> for ChainSyncError {
-    fn from(err: FromHexError) -> Self {
-        ChainSyncError::new(&err.to_string())
-    }
+    #[error("Commit error: {0}")]
+    RedbCommit(#[from] redb::CommitError),
+
+    #[error("Application error: {0}")]
+    App(#[from] AppError),
+
+    #[error("Invalid hex: {0}")]
+    Hex(#[from] FromHexError),
+
+    #[error("{0}")]
+    Custom(String),
 }
 
 impl ChainSyncError {
-    pub fn new(error: &str) -> Self {
-        ChainSyncError { error: error.to_string() }
+    pub fn new(msg: impl Into<String>) -> Self {
+        ChainSyncError::Custom(msg.into())
     }
 }
-
 pub trait BlockHeaderLike: Send + Sync + Clone {
     fn height(&self) -> u32;
     fn hash(&self) -> [u8; 32];
