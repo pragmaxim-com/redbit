@@ -111,22 +111,18 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
             })
         };
 
-        let persist_handle = task::spawn_named("persist",async move {
-            while let Some(block_batch) = sort_rx.recv().await {
-                let chain_link: bool = block_batch.last().is_some_and(|curr_block| curr_block.header().height() + 100 > chain_tip_height);
-                match tokio::task::spawn_blocking({
-                    let block_provider = Arc::clone(&block_provider);
-                    let persistence = Arc::clone(&persistence);
-                    move || Self::persist_blocks(block_batch, chain_link, block_provider, persistence)
-                }).await {
-                    Ok(Ok(())) => {},
-                    Ok(Err(e)) => {
-                        error!("persist: persist_blocks returned error {}", e);
-                        return;
-                    }
-                    Err(join_err) => {
-                        error!("persist: spawn_blocking panicked {}", join_err);
-                        return;
+        let persist_handle = task::spawn_blocking_named("persist",{
+            let block_provider = Arc::clone(&block_provider);
+            let persistence   = Arc::clone(&persistence);
+            move || {
+                while let Some(batch) = sort_rx.blocking_recv() {
+                    let do_chain_link = batch.last().is_some_and(|b| b.header().height() + 100 > chain_tip_height);
+                    match Self::persist_blocks(batch, do_chain_link, Arc::clone(&block_provider), Arc::clone(&persistence)) {
+                        Ok(()) => {},
+                        Err(e) => {
+                            error!("persist: persist_blocks returned error {}", e);
+                            return;
+                        }
                     }
                 }
             }
