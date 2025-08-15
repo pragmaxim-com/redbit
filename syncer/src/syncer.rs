@@ -111,10 +111,10 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
             })
         };
 
-        let persist_handle = task::spawn_blocking_named("persist",{
+        let persist_handle = {
             let block_provider = Arc::clone(&block_provider);
             let persistence   = Arc::clone(&persistence);
-            move || {
+            task::spawn_blocking_named("persist",move || {
                 while let Some(batch) = sort_rx.blocking_recv() {
                     let do_chain_link = batch.last().is_some_and(|b| b.header().height() + 100 > chain_tip_height);
                     match Self::persist_blocks(batch, do_chain_link, Arc::clone(&block_provider), Arc::clone(&persistence)) {
@@ -125,8 +125,9 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
                         }
                     }
                 }
-            }
-        });
+            })
+        };
+
         if let Err(e) = tokio::try_join!(fetch_handle, process_handle, sort_handle, persist_handle) {
             error!("One of the pipeline tasks failed {}", e);
         }

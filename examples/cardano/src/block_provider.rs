@@ -171,7 +171,6 @@ impl BlockProvider<CBOR, Block> for CardanoBlockProvider {
             loop {
                 match cs.request_next().await.expect("chainsync request_next failed") {
                     NextResponse::RollForward(block_bytes, new_tip) => {
-                        info !("Cardano roll forward to: {:?} ", new_tip);
                         yield block_bytes.0;
                     }
                     NextResponse::RollBackward(_point, new_tip) => {
