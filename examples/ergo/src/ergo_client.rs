@@ -47,7 +47,6 @@ impl ErgoClient {
 
     pub(crate) async fn get_block_by_height_retry_async(&self, height: Height) -> Result<FullBlock, ExplorerError> {
         retry_with_delay(5, Duration::from_millis(1000), || {
-            let height = height.clone();
             async move {
                 let block_ids = self.get_block_ids_by_height_async(height).await?;
                 self.get_block_by_hash_async(block_ids.first().unwrap()).await

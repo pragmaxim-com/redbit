@@ -98,7 +98,7 @@ use tokio::net::TcpListener;
 use tokio::sync::watch;
 use tower_http::cors::CorsLayer;
 
-pub trait IndexedPointer: Clone {
+pub trait IndexedPointer: Copy {
     type Index: Copy + Ord + Add<Output = Self::Index> + Default;
     fn index(&self) -> Self::Index;
     fn next_index(&self) -> Self;
@@ -106,28 +106,32 @@ pub trait IndexedPointer: Clone {
     fn rollback_or_init(&self, n: u32) -> Self;
 }
 
-pub trait RootPointer: IndexedPointer {
+pub trait RootPointer: IndexedPointer + Copy {
     fn is_pointer(&self) -> bool;
 }
 
-pub trait ChildPointer: IndexedPointer {
-    type Parent: IndexedPointer;
+pub trait ChildPointer: IndexedPointer + Copy {
+    type Parent: IndexedPointer + Copy;
     fn is_pointer(&self) -> bool;
-    fn parent(&self) -> &Self::Parent;
+    fn parent(&self) -> Self::Parent;
     fn from_parent(parent: Self::Parent, index: Self::Index) -> Self;
 }
 
-pub trait ForeignKey<CH: ChildPointer> {
+pub trait ForeignKey<CH>: Copy
+where
+    CH: ChildPointer + Copy,
+    CH::Parent: IndexedPointer + Copy,
+{
     fn fk_range(&self) -> (CH, CH);
 }
 
 impl<CH> ForeignKey<CH> for CH::Parent
 where
-    CH: ChildPointer + Clone,
-    CH::Parent: IndexedPointer + Clone,
+    CH: ChildPointer + Copy,
+    CH::Parent: IndexedPointer + Copy,
 {
     fn fk_range(&self) -> (CH, CH) {
-        (CH::from_parent(self.clone(), CH::Index::default()), CH::from_parent(self.clone().next_index(), CH::Index::default()))
+        (CH::from_parent(*self, CH::Index::default()), CH::from_parent(self.next_index(), CH::Index::default()))
     }
 }
 

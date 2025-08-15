@@ -47,12 +47,12 @@ fn store_dict_stmnt(column_name: &Ident, pk_name: &Ident, cache: Option<Ident>) 
                 if let Some(cached) = tx.cache_get(&#cache_name, &instance.#column_name) {
                     (cached, false)
                 } else if let Some(guard) = value_to_dict_pk.get(&instance.#column_name)? {
-                    let pk = guard.value().clone();
-                    tx.cache_put(&#cache_name, instance.#column_name.clone(), pk.clone());
+                    let pk = guard.value();
+                    tx.cache_put(&#cache_name, instance.#column_name.clone(), pk);
                     (pk, false)
                 } else {
-                    let new_birth = instance.#pk_name.clone();
-                    tx.cache_put(&#cache_name, instance.#column_name.clone(), new_birth.clone());
+                    let new_birth = instance.#pk_name;
+                    tx.cache_put(&#cache_name, instance.#column_name.clone(), new_birth);
                     (new_birth, true)
                 }
             };
@@ -68,9 +68,9 @@ fn store_dict_stmnt(column_name: &Ident, pk_name: &Ident, cache: Option<Ident>) 
         None => quote! {
             let (birth_id, newly_created) = {
                 if let Some(guard) = value_to_dict_pk.get(&instance.#column_name)? {
-                    (guard.value().clone(), false)
+                    (guard.value(), false)
                 } else {
-                    let new_birth = instance.#pk_name.clone();
+                    let new_birth = instance.#pk_name;
                     (new_birth, true)
                 }
             };

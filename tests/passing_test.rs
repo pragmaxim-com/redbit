@@ -72,12 +72,12 @@ pub struct FullStruct {
 
 fn main() {
     let parent_pointer = ParentPK(5);
-    let pointer_0 = MultipleOne2ManyAnnotationsStructPointer::from_parent(parent_pointer.clone(), 0);
+    let pointer_0 = MultipleOne2ManyAnnotationsStructPointer::from_parent(parent_pointer, 0);
     let pointer_1 = pointer_0.next_index();
-    let _ = MinimalStruct { id: pointer_0.clone(), persisted_no_index_no_dict: 42 };
+    let _ = MinimalStruct { id: pointer_0, persisted_no_index_no_dict: 42 };
     let _ = StructWithPersistedEntityField { id: PK(2), persisted_indexed_no_dict: Index(43) };
     let _ = StructWithPersistedEntityFieldWithDict { id: PK(3), persisted_indexed_with_dict: Index(44) };
     let _ = FullStruct { id: PK(4), amount: 45, datum: Datum::default(), address: Address::default() };
-    let _ = MultipleOne2ManyAnnotationsStruct { id: parent_pointer, foos: vec![MinimalStruct { id: pointer_0.clone(), persisted_no_index_no_dict: 46 }], bars: vec![MinimalStruct { id: pointer_1, persisted_no_index_no_dict: 47 }] };
+    let _ = MultipleOne2ManyAnnotationsStruct { id: parent_pointer, foos: vec![MinimalStruct { id: pointer_0, persisted_no_index_no_dict: 46 }], bars: vec![MinimalStruct { id: pointer_1, persisted_no_index_no_dict: 47 }] };
     let _ = TransientAnnotationStruct { id: PK(1), name: "foo".to_string(), foo: 3};
 }

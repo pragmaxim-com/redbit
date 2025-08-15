@@ -14,6 +14,7 @@ through auto-generated REST API. It maximizes R/W speed while minimizing data si
 ✅ Optional dictionaries for low cardinality fields + first level cache for building them without overhead \
 ✅ `One-to-One` / `One-to-Option` / `One-to-Many` entities with cascade read/write/delete \
 ✅ All goodies including intuitive data ordering without writing custom codecs \
+✅ All pointers and most column types implement `Copy` => minimal cloning \
 ✅ Http response streaming api with efficient querying (ie. get txs or utxos for really HOT address) \
 ✅ Query contraints : `eq`, `ne`, `lt`, `le`, `gt`, `ge`, `in` with logical `AND`
   ```json

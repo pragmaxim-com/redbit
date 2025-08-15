@@ -28,7 +28,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
             let from_value = #pk_type::default();
             let until_value = #pk_type::default().next_index().next_index().next_index();
             let pks = #entity_name::#fn_name(&write_tx, &from_value, &until_value).expect("Failed to get PKs in range");
-            let test_pks: Vec<#pk_type> = #entity_type::sample_many(entity_count).iter().map(|e| e.#pk_name.clone()).collect();
+            let test_pks: Vec<#pk_type> = #entity_type::sample_many(entity_count).iter().map(|e| e.#pk_name).collect();
             assert_eq!(test_pks, pks, "Expected PKs to be returned for the given range");
         }
     });

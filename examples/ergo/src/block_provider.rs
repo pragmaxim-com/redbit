@@ -46,7 +46,7 @@ impl ErgoBlockProvider {
 
         let height = Height(b.header.height);
         let header = BlockHeader {
-            height: height.clone(),
+            height,
             timestamp: BlockTimestamp((b.header.timestamp / 1000) as u32),
             hash: BlockHash(block_hash),
             prev_hash: BlockHash(prev_block_hash),
@@ -54,7 +54,7 @@ impl ErgoBlockProvider {
 
         for (tx_index, tx) in b.block_transactions.transactions.iter().enumerate() {
             let tx_hash: [u8; 32] = tx.id().0.0;
-            let tx_id = BlockPointer::from_parent(height.clone(), tx_index as u16);
+            let tx_id = BlockPointer::from_parent(height, tx_index as u16);
             let (box_weight, outputs) = Self::process_outputs(&tx.outputs(), &tx_id);
             let mut inputs = Vec::with_capacity(tx.inputs.len());
             for input in &tx.inputs {
@@ -62,10 +62,10 @@ impl ErgoBlockProvider {
             }
             block_weight += box_weight;
             block_weight += tx.inputs.len();
-            result_txs.push(Transaction { id: tx_id.clone(), hash: TxHash(tx_hash), utxos: outputs, inputs: Vec::new(), transient_inputs: inputs })
+            result_txs.push(Transaction { id: tx_id, hash: TxHash(tx_hash), utxos: outputs, inputs: Vec::new(), transient_inputs: inputs })
         }
 
-        Ok(Block { height: height.clone(), header, transactions: result_txs, weight: block_weight as u32 })
+        Ok(Block { height, header, transactions: result_txs, weight: block_weight as u32 })
     }
 
     fn process_outputs(outs: &TxIoVec<ErgoBox>, tx_pointer: &BlockPointer) -> (BoxWeight, Vec<Utxo>) {
@@ -86,7 +86,7 @@ impl ErgoBlockProvider {
             let tree_template = model_v1::TreeTemplate(ergo_tree_template_opt.unwrap_or_default());
 
             let amount = *out.value.as_u64();
-            let utxo_pointer = TransactionPointer::from_parent(tx_pointer.clone(), out_index as u16);
+            let utxo_pointer = TransactionPointer::from_parent(*tx_pointer, out_index as u16);
 
             let assets: Vec<Asset> = if let Some(assets) = out.tokens() {
                 let mut result = Vec::with_capacity(assets.len());
@@ -101,7 +101,7 @@ impl ErgoBlockProvider {
                         true => AssetType::Mint, // TODO!! for Minting it might not be enough to check first boxId
                         _ => AssetType::Transfer,
                     };
-                    let asset_pointer = UtxoPointer::from_parent(utxo_pointer.clone(), index as u8);
+                    let asset_pointer = UtxoPointer::from_parent(utxo_pointer, index as u8);
                     result.push(Asset { id: asset_pointer, name: AssetName(asset_id), amount: amount_u64, asset_action: AssetAction(action.into()) });
                 }
                 result
@@ -111,7 +111,7 @@ impl ErgoBlockProvider {
 
             asset_count += assets.len();
             result_outs.push(Utxo {
-                id: utxo_pointer.clone(),
+                id: utxo_pointer,
                 assets,
                 address,
                 amount,

@@ -30,7 +30,7 @@ impl BtcBlockProvider {
 
     pub fn process_block_pure(block: &BtcBlock) -> Result<Block, ChainSyncError> {
         let header = BlockHeader {
-            height: block.height.clone(),
+            height: block.height,
             timestamp: BlockTimestamp(block.underlying.header.time),
             hash: BlockHash(*block.underlying.block_hash().as_ref()),
             prev_hash: BlockHash(*block.underlying.header.prev_blockhash.as_ref()),
@@ -39,7 +39,7 @@ impl BtcBlockProvider {
 
         let mut block_weight = 0;
         Ok(Block {
-            height: block.height.clone(),
+            height: block.height,
             header,
             transactions: block
                 .underlying
@@ -48,7 +48,7 @@ impl BtcBlockProvider {
                 .enumerate()
                 .map(|(tx_index, tx)| {
                     block_weight += tx.input.len() + tx.output.len();
-                    Self::process_tx(block.height.clone(), tx_index as u16, &tx)
+                    Self::process_tx(block.height, tx_index as u16, &tx)
                 })
                 .collect(),
             weight: block_weight as u32, // TODO usize
@@ -72,7 +72,7 @@ impl BtcBlockProvider {
                 SENTINEL.to_vec()
             };
             result_outs.push(Utxo {
-                id: TransactionPointer::from_parent(tx_pointer.clone(), out_index as u16),
+                id: TransactionPointer::from_parent(tx_pointer, out_index as u16),
                 amount: out.value.to_sat().into(),
                 script_hash: ScriptHash(out.script_pubkey.as_bytes().to_vec()),
                 address: Address(address),
@@ -82,9 +82,9 @@ impl BtcBlockProvider {
     }
     fn process_tx(height: Height, tx_index: u16, tx: &bitcoin::Transaction) -> Transaction {
         let tx_pointer = BlockPointer::from_parent(height, tx_index);
-        let (_, outputs) = Self::process_outputs(&tx.output, tx_pointer.clone());
+        let (_, outputs) = Self::process_outputs(&tx.output, tx_pointer);
         Transaction {
-            id: tx_pointer.clone(),
+            id: tx_pointer,
             hash: TxHash(*tx.compute_txid().as_ref()),
             utxos: outputs,
             inputs: vec![],

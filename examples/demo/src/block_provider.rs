@@ -29,7 +29,7 @@ impl DemoBlockProvider {
 
             }
             prev_block = Some(block.clone()); // keep current block as previous for next iteration
-            chain.insert(block.header.height.clone(), block);
+            chain.insert(block.header.height, block);
         }
         info!("Demo chain initialized with {} blocks", chain.len());
         Ok(Arc::new(DemoBlockProvider { chain: Arc::new(RwLock::new(chain)) }))

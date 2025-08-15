@@ -116,7 +116,7 @@ pub fn pointer_key(attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     let stream = quote! {
-        #[derive(PointerKey, Clone, Debug, Default, Decode, Encode, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
+        #[derive(PointerKey, Copy, Clone, Debug, Default, Decode, Encode, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
         #[serde(into = "String", try_from = "String")]
         #vis struct #struct_ident {
             pub parent: #parent_type,
@@ -156,7 +156,7 @@ pub fn root_key(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let struct_ident = &s.ident;
     s.attrs.retain(|a| !a.path().is_ident("derive"));
     s.attrs.insert(0, parse_quote! {
-        #[derive(RootKey, Clone, Hash, Debug, Decode, Encode, Default, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
+        #[derive(RootKey, Copy, Clone, Hash, Debug, Decode, Encode, Default, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
     });
     let stream = quote!(#s);
     macro_utils::submit_struct_to_stream(stream, "pk", struct_ident, "_attr.rs")

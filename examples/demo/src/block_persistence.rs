@@ -22,7 +22,7 @@ impl DemoBlockPersistence {
                 match tx_pointers.first() {
                     Some(tx_pointer) => {
                         tx.inputs.push(InputRef {
-                            id: TransactionPointer::from_parent(tx_pointer.clone(), transient_input.index as u16),
+                            id: TransactionPointer::from_parent(*tx_pointer, transient_input.index as u16),
                         });
                     }
                     None => {

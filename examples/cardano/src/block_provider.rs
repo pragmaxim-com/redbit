@@ -48,15 +48,15 @@ impl CardanoBlockProvider {
 
         for (tx_index, tx) in txs.iter().enumerate() {
             let tx_hash: [u8; 32] = *tx.hash();
-            let tx_id = BlockPointer::from_parent(header.height.clone(), tx_index as u16);
+            let tx_id = BlockPointer::from_parent(header.height, tx_index as u16);
             let inputs = Self::process_inputs(&tx.inputs());
-            let (box_weight, outputs) = Self::process_outputs(&tx.outputs(), tx_id.clone());
+            let (box_weight, outputs) = Self::process_outputs(&tx.outputs(), tx_id);
             block_weight += box_weight;
             block_weight += inputs.len();
             result_txs.push(Transaction { id: tx_id, hash: TxHash(tx_hash), utxos: outputs, inputs: vec![], transient_inputs: inputs })
         }
 
-        Ok(Block { height: header.height.clone(), header, transactions: result_txs, weight: block_weight as u32 }) // usize
+        Ok(Block { height: header.height, header, transactions: result_txs, weight: block_weight as u32 }) // usize
     }
 
     fn process_inputs(ins: &[MultiEraInput<'_>]) -> Vec<TempInputRef> {
@@ -86,7 +86,7 @@ impl CardanoBlockProvider {
                 script_buf.clone() // keep a copy per output
             });
 
-            let utxo_pointer = TransactionPointer::from_parent(tx_pointer.clone(), out_index as u16);
+            let utxo_pointer = TransactionPointer::from_parent(tx_pointer, out_index as u16);
 
             let mut result_assets = Vec::with_capacity(16);
 
@@ -107,7 +107,7 @@ impl CardanoBlockProvider {
                     };
 
                     result_assets.push(Asset {
-                        id: UtxoPointer::from_parent(utxo_pointer.clone(), idx),
+                        id: UtxoPointer::from_parent(utxo_pointer, idx),
                         amount: any_coin.abs() as u64,
                         name: AssetName(asset.name().to_vec()),
                         policy_id: policy_id.clone(),

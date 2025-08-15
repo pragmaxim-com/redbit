@@ -21,7 +21,7 @@ impl ErgoBlockPersistence {
                 let utxo_pointers = Utxo::get_ids_by_box_id(read_tx, box_id).expect("Failed to get Utxo by ErgoBox");
                 match utxo_pointers.first() {
                     Some(utxo_pointer) => {
-                        tx.inputs.push(InputRef { id: TransactionPointer::from_parent(utxo_pointer.parent.clone(), utxo_pointer.index()) })
+                        tx.inputs.push(InputRef { id: TransactionPointer::from_parent(utxo_pointer.parent, utxo_pointer.index()) })
                     }
                     None => tx.inputs.push(InputRef { id: TransactionPointer::from_parent(BlockPointer::from_parent(Height(0), 0), 0) }),
                 }

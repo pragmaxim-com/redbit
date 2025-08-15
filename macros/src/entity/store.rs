@@ -103,7 +103,7 @@ pub fn store_and_commit_def(entity_name: &Ident, entity_type: &Type, pk_name: &I
                #(#store_statements)*
            }
            tx.commit()?;
-           Ok(instance.#pk_name.clone())
+           Ok(instance.#pk_name)
        }
     };
 

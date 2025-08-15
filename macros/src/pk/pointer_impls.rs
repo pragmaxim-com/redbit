@@ -20,7 +20,7 @@ pub fn new(struct_name: &Ident, parent_field: Field, index_field: Field) -> Toke
         impl ChildPointer for #struct_name {
             type Parent = #parent_type;
             fn is_pointer(&self) -> bool { true }
-            fn parent(&self) -> &Self::Parent { &self.#parent_name }
+            fn parent(&self) -> Self::Parent { self.#parent_name }
             fn from_parent(parent: Self::Parent, index: #index_type) -> Self { #struct_name { #parent_name: parent, #index_name: index } }
         }
 

@@ -27,7 +27,7 @@ pub fn delete_index_statement(table: &Ident, index_table: &Ident) -> TokenStream
         let mut table_col_8 = tx.open_table(#table)?;
         let maybe_value = {
             if let Some(value_guard) = table_col_8.remove(pk)? {
-                Some(value_guard.value().clone())
+                Some(value_guard.value())
             } else {
                 removed.push(false);
                 None
@@ -70,9 +70,9 @@ pub fn delete_dict_statement(dict_table_defs: &DictTableDefs) -> TokenStream {
     quote! {
         #opened_tables
 
-        let birth_id_opt = dict_pk_by_pk.remove(pk)?.map(|guard| guard.value().clone());
+        let birth_id_opt = dict_pk_by_pk.remove(pk)?.map(|guard| guard.value());
         if let Some(birth_id) = birth_id_opt {
-            let value_opt = value_by_dict_pk.get(&birth_id)?.map(|guard| guard.value().clone());
+            let value_opt = value_by_dict_pk.get(&birth_id)?.map(|guard| guard.value());
             if let Some(value) = value_opt {
                 removed.push(dict_index.remove(&birth_id, pk)?);
                 if dict_index.get(&birth_id)?.is_empty() {
@@ -96,9 +96,9 @@ pub fn delete_many_dict_statement(dict_table_defs: &DictTableDefs) -> TokenStrea
         #opened_tables
 
         for pk in pks.iter() {
-            let birth_id_opt = dict_pk_by_pk.remove(pk)?.map(|guard| guard.value().clone());
+            let birth_id_opt = dict_pk_by_pk.remove(pk)?.map(|guard| guard.value());
             if let Some(birth_id) = birth_id_opt { // duplicate
-                let value_opt = value_by_dict_pk.get(&birth_id)?.map(|guard| guard.value().clone());
+                let value_opt = value_by_dict_pk.get(&birth_id)?.map(|guard| guard.value());
                 if let Some(value) = value_opt {
                     removed.push(dict_index.remove(&birth_id, pk)?);
                     if dict_index.get(&birth_id)?.is_empty() {

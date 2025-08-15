@@ -20,7 +20,7 @@ pub fn get_by_dict_def(
             let val2birth = tx.open_table(#value_to_dict_pk)?;
             let birth_guard = val2birth.get(val)?;
             let birth_id = match birth_guard {
-                Some(g) => g.value().clone(),
+                Some(g) => g.value(),
                 None => return Ok(Vec::new()),
             };
             let birth2pks = tx.open_multimap_table(#dict_index_table)?;
