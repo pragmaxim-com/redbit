@@ -13,10 +13,10 @@ pub struct DemoBlockProvider {
 }
 
 impl DemoBlockProvider {
-    pub fn new(chain_height: usize) -> Result<Arc<Self>> {
-        assert!(chain_height < 100_000, "Chain height must be less than 100_000");
+    pub fn new(chain_blocks: usize) -> Result<Arc<Self>> {
+        assert!(chain_blocks < 100_000, "Chain height must be less than 100_000");
         let mut chain = BTreeMap::new();
-        let blocks = Block::sample_many(chain_height);
+        let blocks = Block::sample_many(chain_blocks);
         let mut prev_block: Option<Block> = None;
         for mut block in blocks {
             if let Some(ref prev) = prev_block {

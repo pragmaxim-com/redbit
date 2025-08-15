@@ -19,15 +19,17 @@ fn init_temp_storage(name: &str, db_cache_size_gb: u8) -> (Vec<Block>, Arc<Stora
 #[tokio::test]
 async fn demo_bench() {
     let storage = Storage::temp("demo_benchmark", 1, true).expect("Failed to open database");
-    let block_provider: Arc<dyn BlockProvider<Block, Block>> = DemoBlockProvider::new(100).expect("Failed to create block provider");
+    let block_provider: Arc<dyn BlockProvider<Block, Block>> = DemoBlockProvider::new(50).expect("Failed to create block provider");
     let block_persistence: Arc<dyn BlockPersistence<Block>> = DemoBlockPersistence::new(Arc::clone(&storage));
     let config = AppConfig::new("config/settings").expect("Failed to load app config");
-    let scheduler = Scheduler::new(block_provider, block_persistence);
+    let scheduler = Scheduler::new(block_provider, block_persistence.clone());
     let start = Instant::now();
     scheduler.sync(config.indexer.clone()).await;
     let elapsed = start.elapsed();
     let secs = elapsed.as_secs_f64();
     println!("Demo chain sync took {:.1}s", secs);
+    let last_header = block_persistence.get_last_header().unwrap().expect("Failed to get last header");
+    assert_eq!(last_header.height, Height(49));
 }
 
 #[test]

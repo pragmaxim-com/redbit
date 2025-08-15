@@ -34,22 +34,22 @@ fn criterion_benchmark(c: &mut Criterion) {
     info!("Initiating indexing");
     let mut group = c.benchmark_group("persistence");
     group.throughput(Throughput::Elements(1));
-    group.warm_up_time(Duration::from_millis(100));
-    group.measurement_time(Duration::from_millis(1000));
-    group.sample_size(85);
+    group.warm_up_time(Duration::from_millis(50));
+    group.measurement_time(Duration::from_millis(300));
+    group.sample_size(10);
     group.bench_function(BenchmarkId::from_parameter("small_block_processing"), |bencher| {
         bencher.iter(|| BtcBlockProvider::process_block_pure(&small_block).expect("Failed to process small_block"));
     });
-    group.sample_size(60);
+    group.sample_size(10);
     group.bench_function(BenchmarkId::from_parameter("avg_block_processing"), |bencher| {
         bencher.iter(|| BtcBlockProvider::process_block_pure(&avg_block).expect("Failed to process avg_block"));
     });
-    group.sample_size(45);
+    group.sample_size(10);
     group.bench_function(BenchmarkId::from_parameter("huge_block_processing"), |bencher| {
         bencher.iter(|| BtcBlockProvider::process_block_pure(&huge_block).expect("Failed to process huge_block"));
     });
 
-    group.sample_size(20);
+    group.sample_size(10);
     group.bench_function(BenchmarkId::from_parameter("small_block_persistence"), |bencher| {
         bencher.iter_batched_ref(
             || vec![processed_small_block.clone()], // setup once
