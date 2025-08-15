@@ -36,7 +36,39 @@ impl ErgoBlockProvider {
             fetching_par: ergo_config.fetching_parallelism.clone().into(),
         }))
     }
-    fn process_outputs(&self, outs: &TxIoVec<ErgoBox>, tx_pointer: &BlockPointer) -> (BoxWeight, Vec<Utxo>) {
+
+    fn process_block_pure(b: &FullBlock) -> Result<Block, ChainSyncError> {
+        let mut block_weight: usize = 0;
+        let mut result_txs = Vec::with_capacity(b.block_transactions.transactions.len());
+
+        let block_hash: [u8; 32] = b.header.id.0.into();
+        let prev_block_hash: [u8; 32] = b.header.parent_id.0.into();
+
+        let height = Height(b.header.height);
+        let header = BlockHeader {
+            height: height.clone(),
+            timestamp: BlockTimestamp((b.header.timestamp / 1000) as u32),
+            hash: BlockHash(block_hash),
+            prev_hash: BlockHash(prev_block_hash),
+        };
+
+        for (tx_index, tx) in b.block_transactions.transactions.iter().enumerate() {
+            let tx_hash: [u8; 32] = tx.id().0.0;
+            let tx_id = BlockPointer::from_parent(height.clone(), tx_index as u16);
+            let (box_weight, outputs) = Self::process_outputs(&tx.outputs(), &tx_id);
+            let mut inputs = Vec::with_capacity(tx.inputs.len());
+            for input in &tx.inputs {
+                inputs.push(model_v1::BoxId(input.box_id.as_ref().into()));
+            }
+            block_weight += box_weight;
+            block_weight += tx.inputs.len();
+            result_txs.push(Transaction { id: tx_id.clone(), hash: TxHash(tx_hash), utxos: outputs, inputs: Vec::new(), transient_inputs: inputs })
+        }
+
+        Ok(Block { height: height.clone(), header, transactions: result_txs, weight: block_weight as u32 })
+    }
+
+    fn process_outputs(outs: &TxIoVec<ErgoBox>, tx_pointer: &BlockPointer) -> (BoxWeight, Vec<Utxo>) {
         let mut result_outs = Vec::with_capacity(outs.len());
         let mut asset_count = 0;
         for (out_index, out) in outs.iter().enumerate() {
@@ -94,45 +126,19 @@ impl ErgoBlockProvider {
 
 #[async_trait]
 impl BlockProvider<FullBlock, Block> for ErgoBlockProvider {
-    fn process_block(&self, b: &FullBlock) -> Result<Block, ChainSyncError> {
-        let mut block_weight: usize = 0;
-        let mut result_txs = Vec::with_capacity(b.block_transactions.transactions.len());
 
-        let block_hash: [u8; 32] = b.header.id.0.into();
-        let prev_block_hash: [u8; 32] = b.header.parent_id.0.into();
-
-        let height = Height(b.header.height);
-        let header = BlockHeader {
-            height: height.clone(),
-            timestamp: BlockTimestamp((b.header.timestamp / 1000) as u32),
-            hash: BlockHash(block_hash),
-            prev_hash: BlockHash(prev_block_hash),
-        };
-
-        for (tx_index, tx) in b.block_transactions.transactions.iter().enumerate() {
-            let tx_hash: [u8; 32] = tx.id().0.0;
-            let tx_id = BlockPointer::from_parent(height.clone(), tx_index as u16);
-            let (box_weight, outputs) = self.process_outputs(&tx.outputs(), &tx_id);
-            let mut inputs = Vec::with_capacity(tx.inputs.len());
-            for input in &tx.inputs {
-                inputs.push(model_v1::BoxId(input.box_id.as_ref().into()));
-            }
-            block_weight += box_weight;
-            block_weight += tx.inputs.len();
-            result_txs.push(Transaction { id: tx_id.clone(), hash: TxHash(tx_hash), utxos: outputs, inputs: Vec::new(), transient_inputs: inputs })
-        }
-
-        Ok(Block { height: height.clone(), header, transactions: result_txs, weight: block_weight as u32 })
+    fn block_processor(&self) -> Arc<dyn Fn(&FullBlock) -> Result<Block, ChainSyncError> + Send + Sync> {
+        Arc::new(|raw| ErgoBlockProvider::process_block_pure(raw))
     }
 
     fn get_processed_block(&self, header: BlockHeader) -> Result<Block, ChainSyncError> {
         let block = self.client.get_block_by_hash_sync(header.hash)?;
-        self.process_block(&block)
+        Self::process_block_pure(&block)
     }
 
     async fn get_chain_tip(&self) -> Result<BlockHeader, ChainSyncError> {
         let best_block = self.client.get_best_block_async().await?;
-        let processed_block = self.process_block(&best_block)?;
+        let processed_block = Self::process_block_pure(&best_block)?;
         Ok(processed_block.header)
     }
 

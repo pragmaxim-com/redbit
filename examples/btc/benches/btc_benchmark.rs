@@ -21,7 +21,6 @@ fn block_from_file(size: &str, tx_count: usize) -> BtcBlock {
 fn criterion_benchmark(c: &mut Criterion) {
     let storage = Storage::temp("btc_benchmark", 1, true).expect("Failed to open database");
 
-    let block_provider: Arc<dyn BlockProvider<BtcBlock, Block>> = BtcBlockProvider::new().expect("Failed to create block provider");
     let block_persistence: Arc<dyn BlockPersistence<Block>> = BtcBlockPersistence::new(Arc::clone(&storage));
 
     let small_block: BtcBlock = block_from_file("small", 29);
@@ -29,9 +28,9 @@ fn criterion_benchmark(c: &mut Criterion) {
     let huge_block: BtcBlock = block_from_file("huge", 3713);
 
     info!("Initiating processing");
-    let processed_small_block = block_provider.process_block(&small_block).expect("Failed to process small_block");
-    let processed_avg_block = block_provider.process_block(&avg_block).expect("Failed to process avg_block");
-    let processed_huge_block = block_provider.process_block(&huge_block).expect("Failed to process huge_block");
+    let processed_small_block = BtcBlockProvider::process_block_pure(&small_block).expect("Failed to process small_block");
+    let processed_avg_block = BtcBlockProvider::process_block_pure(&avg_block).expect("Failed to process avg_block");
+    let processed_huge_block = BtcBlockProvider::process_block_pure(&huge_block).expect("Failed to process huge_block");
 
     info!("Initiating indexing");
     let mut group = c.benchmark_group("persistence");
@@ -40,15 +39,15 @@ fn criterion_benchmark(c: &mut Criterion) {
     group.measurement_time(Duration::from_millis(1000));
     group.sample_size(85);
     group.bench_function(BenchmarkId::from_parameter("small_block_processing"), |bencher| {
-        bencher.iter(|| block_provider.process_block(&small_block).expect("Failed to process small_block"));
+        bencher.iter(|| BtcBlockProvider::process_block_pure(&small_block).expect("Failed to process small_block"));
     });
     group.sample_size(60);
     group.bench_function(BenchmarkId::from_parameter("avg_block_processing"), |bencher| {
-        bencher.iter(|| block_provider.process_block(&avg_block).expect("Failed to process avg_block"));
+        bencher.iter(|| BtcBlockProvider::process_block_pure(&avg_block).expect("Failed to process avg_block"));
     });
     group.sample_size(45);
     group.bench_function(BenchmarkId::from_parameter("huge_block_processing"), |bencher| {
-        bencher.iter(|| block_provider.process_block(&huge_block).expect("Failed to process huge_block"));
+        bencher.iter(|| BtcBlockProvider::process_block_pure(&huge_block).expect("Failed to process huge_block"));
     });
 
     group.sample_size(20);

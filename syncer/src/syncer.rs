@@ -60,16 +60,15 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
         };
 
         let process_handle = {
-            let block_provider = Arc::clone(&self.block_provider);
             let proc_tx_stream = proc_tx.clone();
-
+            let proc_fn = block_provider.block_processor();
             task::spawn_named("process", async move {
                 ReceiverStream::new(fetch_rx)
                     .for_each_concurrent(indexing_par, move |raw| {
                         let tx = proc_tx_stream.clone();
-                        let bp = Arc::clone(&block_provider);
+                        let proc_fn = proc_fn.clone();
                         async move {
-                            match bp.process_block(&raw) {
+                            match proc_fn(&raw) {
                                 Ok(block)   => { let _ = tx.send(block).await; }
                                 Err(e)      => { error!("process: {e}"); }
                             }
@@ -115,9 +114,11 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
         let persist_handle = task::spawn_named("persist",async move {
             while let Some(block_batch) = sort_rx.recv().await {
                 let chain_link: bool = block_batch.last().is_some_and(|curr_block| curr_block.header().height() + 100 > chain_tip_height);
-                let block_provider = Arc::clone(&block_provider);
-                let persistence = Arc::clone(&persistence);
-                match tokio::task::spawn_blocking(move || Self::persist_blocks(block_batch, chain_link, block_provider, persistence)).await {
+                match tokio::task::spawn_blocking({
+                    let block_provider = Arc::clone(&block_provider);
+                    let persistence = Arc::clone(&persistence);
+                    move || Self::persist_blocks(block_batch, chain_link, block_provider, persistence)
+                }).await {
                     Ok(Ok(())) => {},
                     Ok(Err(e)) => {
                         error!("persist: persist_blocks returned error {}", e);
@@ -167,17 +168,21 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
         panic!("Unexpected condition in chain_link: multiple parent candidates for {}@{}", header.height(), hex::encode(header.hash()));
     }
 
-    pub fn persist_blocks(blocks: Vec<TB>, do_chain_link: bool, block_provider: Arc<dyn BlockProvider<FB, TB>>, block_persistence: Arc<dyn BlockPersistence<TB>>) -> Result<(), ChainSyncError> {
-        for block in blocks {
-            // consume each block by value, build its chain
-            let chain = if do_chain_link { Self::chain_link(block, Arc::clone(&block_provider), Arc::clone(&block_persistence))? } else { vec![block] };
+    pub fn persist_blocks(mut blocks: Vec<TB>, do_chain_link: bool, block_provider: Arc<dyn BlockProvider<FB, TB>>, block_persistence: Arc<dyn BlockPersistence<TB>>) -> Result<(), ChainSyncError> {
+        if !do_chain_link {
+            block_persistence.store_blocks(blocks)
+        } else {
+            for block in blocks.drain(..) {
+                let chain = Self::chain_link(block, Arc::clone(&block_provider), Arc::clone(&block_persistence))?;
 
-            match chain.len() {
-                0 => unreachable!("chain_link never returns empty Vec"),
-                1 => block_persistence.store_blocks(chain)?,
-                _ => block_persistence.update_blocks(chain)?,
+                match chain.len() {
+                    0 => unreachable!("chain_link never returns empty Vec"),
+                    1 => block_persistence.store_blocks(chain)?,
+                    _ => block_persistence.update_blocks(chain)?,
+                }
             }
+            Ok(())
         }
-        Ok(())
+
     }
 }

@@ -38,8 +38,8 @@ impl DemoBlockProvider {
 
 #[async_trait]
 impl BlockProvider<Block, Block> for DemoBlockProvider {
-    fn process_block(&self, block: &Block) -> Result<Block, ChainSyncError> {
-        Ok(block.clone())
+    fn block_processor(&self) -> Arc<dyn Fn(&Block) -> std::result::Result<Block, ChainSyncError> + Send + Sync> {
+        Arc::new(|block| Ok(block.clone()))
     }
 
     fn get_processed_block(&self, header: BlockHeader) -> Result<Block, ChainSyncError> {

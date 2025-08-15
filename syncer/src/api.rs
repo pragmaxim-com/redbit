@@ -4,6 +4,7 @@ use hex::FromHexError;
 use redbit::AppError;
 use serde::{Deserialize, Serialize};
 use std::{fmt, pin::Pin};
+use std::sync::Arc;
 use chrono::DateTime;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -81,7 +82,7 @@ pub trait BlockPersistence<B: BlockLike>: Send + Sync {
 
 #[async_trait]
 pub trait BlockProvider<FB: Send, TB: BlockLike>: Send + Sync {
-    fn process_block(&self, block: &FB) -> Result<TB, ChainSyncError>;
+    fn block_processor(&self) -> Arc<dyn Fn(&FB) -> Result<TB, ChainSyncError> + Send + Sync>;
     fn get_processed_block(&self, header: TB::Header) -> Result<TB, ChainSyncError>;
     async fn get_chain_tip(&self) -> Result<TB::Header, ChainSyncError>;
     fn stream(&self, chain_tip_header: TB::Header, last_header: Option<TB::Header>) -> Pin<Box<dyn Stream<Item = FB> + Send + 'static>>;

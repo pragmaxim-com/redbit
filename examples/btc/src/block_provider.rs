@@ -27,47 +27,8 @@ impl BtcBlockProvider {
         let fetching_par: usize = config.fetching_parallelism.clone().into();
         Ok(Arc::new(BtcBlockProvider { client, fetching_par }))
     }
-    fn process_inputs(&self, ins: &[bitcoin::TxIn]) -> Vec<TempInputRef> {
-        ins.iter()
-            .map(|input| {
-                let tx_hash = TxHash(*input.previous_output.txid.as_ref());
-                TempInputRef { tx_hash, index: input.previous_output.vout }
-            })
-            .collect()
-    }
-    fn process_outputs(&self, outs: &[bitcoin::TxOut], tx_pointer: BlockPointer) -> (BoxWeight, Vec<Utxo>) {
-        let mut result_outs = Vec::with_capacity(outs.len());
-        for (out_index, out) in outs.iter().enumerate() {
-            let address = if let Ok(address) = bitcoin::Address::from_script(out.script_pubkey.as_script(), bitcoin::Network::Bitcoin) {
-                address.to_string().into_bytes()
-            } else {
-                SENTINEL.to_vec()
-            };
-            result_outs.push(Utxo {
-                id: TransactionPointer::from_parent(tx_pointer.clone(), out_index as u16),
-                amount: out.value.to_sat().into(),
-                script_hash: ScriptHash(out.script_pubkey.as_bytes().to_vec()),
-                address: Address(address),
-            })
-        }
-        (result_outs.len(), result_outs)
-    }
-    fn process_tx(&self, height: Height, tx_index: u16, tx: &bitcoin::Transaction) -> Transaction {
-        let tx_pointer = BlockPointer::from_parent(height, tx_index);
-        let (_, outputs) = self.process_outputs(&tx.output, tx_pointer.clone());
-        Transaction {
-            id: tx_pointer.clone(),
-            hash: TxHash(*tx.compute_txid().as_ref()),
-            utxos: outputs,
-            inputs: vec![],
-            transient_inputs: self.process_inputs(&tx.input),
-        }
-    }
-}
 
-#[async_trait]
-impl BlockProvider<BtcBlock, Block> for BtcBlockProvider {
-    fn process_block(&self, block: &BtcBlock) -> Result<Block, ChainSyncError> {
+    pub fn process_block_pure(block: &BtcBlock) -> Result<Block, ChainSyncError> {
         let header = BlockHeader {
             height: block.height.clone(),
             timestamp: BlockTimestamp(block.underlying.header.time),
@@ -87,21 +48,65 @@ impl BlockProvider<BtcBlock, Block> for BtcBlockProvider {
                 .enumerate()
                 .map(|(tx_index, tx)| {
                     block_weight += tx.input.len() + tx.output.len();
-                    self.process_tx(block.height.clone(), tx_index as u16, &tx)
+                    Self::process_tx(block.height.clone(), tx_index as u16, &tx)
                 })
                 .collect(),
             weight: block_weight as u32, // TODO usize
         })
     }
 
+    fn process_inputs(ins: &[bitcoin::TxIn]) -> Vec<TempInputRef> {
+        ins.iter()
+            .map(|input| {
+                let tx_hash = TxHash(*input.previous_output.txid.as_ref());
+                TempInputRef { tx_hash, index: input.previous_output.vout }
+            })
+            .collect()
+    }
+    fn process_outputs(outs: &[bitcoin::TxOut], tx_pointer: BlockPointer) -> (BoxWeight, Vec<Utxo>) {
+        let mut result_outs = Vec::with_capacity(outs.len());
+        for (out_index, out) in outs.iter().enumerate() {
+            let address = if let Ok(address) = bitcoin::Address::from_script(out.script_pubkey.as_script(), bitcoin::Network::Bitcoin) {
+                address.to_string().into_bytes()
+            } else {
+                SENTINEL.to_vec()
+            };
+            result_outs.push(Utxo {
+                id: TransactionPointer::from_parent(tx_pointer.clone(), out_index as u16),
+                amount: out.value.to_sat().into(),
+                script_hash: ScriptHash(out.script_pubkey.as_bytes().to_vec()),
+                address: Address(address),
+            })
+        }
+        (result_outs.len(), result_outs)
+    }
+    fn process_tx(height: Height, tx_index: u16, tx: &bitcoin::Transaction) -> Transaction {
+        let tx_pointer = BlockPointer::from_parent(height, tx_index);
+        let (_, outputs) = Self::process_outputs(&tx.output, tx_pointer.clone());
+        Transaction {
+            id: tx_pointer.clone(),
+            hash: TxHash(*tx.compute_txid().as_ref()),
+            utxos: outputs,
+            inputs: vec![],
+            transient_inputs: Self::process_inputs(&tx.input),
+        }
+    }
+}
+
+#[async_trait]
+impl BlockProvider<BtcBlock, Block> for BtcBlockProvider {
+    fn block_processor(&self) -> Arc<dyn Fn(&BtcBlock) -> Result<Block, ChainSyncError> + Send + Sync> {
+        Arc::new(|raw| Self::process_block_pure(raw))
+    }
+
     fn get_processed_block(&self, header: BlockHeader) -> Result<Block, ChainSyncError> {
         let block = self.client.get_block_by_hash(header.hash)?;
-        self.process_block(&block)
+        Self::process_block_pure(&block)
     }
 
     async fn get_chain_tip(&self) -> Result<BlockHeader, ChainSyncError> {
         let best_block = self.client.get_best_block()?;
-        let processed_block = self.process_block(&best_block)?;
+        let processed_block = Self::process_block_pure(&best_block)?;
         Ok(processed_block.header)
     }
 
