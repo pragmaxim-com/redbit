@@ -35,21 +35,23 @@ pub struct Caches {
     inner: Mutex<HashMap<CacheKey, Arc<dyn Any + Send + Sync>>>,
 }
 impl Caches {
-    pub(crate) fn ensure_cache<K, V>(&self, def: &'static CacheDef<K, V>) -> Arc<Mutex<LruCache<K, V>>>
+    fn new_cache<K, V>(capacity: NonZeroUsize) -> Arc<dyn Any + Send + Sync>
+    where
+        K: Eq + Hash + Clone + Send + Sync + 'static,
+        V: Clone + Send + Sync + 'static,
+    {
+        Arc::new(Mutex::new(LruCache::<K, V>::new(capacity))) as Arc<dyn Any + Send + Sync>
+    }
+
+    pub(crate) fn get_cache<K, V>(&self, def: &'static CacheDef<K, V>) -> Arc<Mutex<LruCache<K, V>>>
     where
         K: Eq + Hash + Clone + Send + Sync + 'static,
         V: Clone + Send + Sync + 'static,
     {
         let key = CacheKey::of::<K, V>(def.name);
         let mut map = self.inner.lock().unwrap();
-        let erased = map.entry(key).or_insert_with(|| {
-            let c: Arc<Mutex<LruCache<K, V>>> = Arc::new(Mutex::new(LruCache::new(def.capacity)));
-            c as Arc<dyn Any + Send + Sync>
-        }).clone();
+        let erased = map.entry(key).or_insert_with(|| Self::new_cache::<K, V>(def.capacity)).clone();
         drop(map);
-        match Arc::downcast::<Mutex<LruCache<K, V>>>(erased) {
-            Ok(typed) => typed,
-            Err(_) => panic!("cache '{}' reused with different K/V types", def.name),
-        }
+        Arc::downcast::<Mutex<LruCache<K, V>>>(erased).expect(&format!("cache '{}' reused with different K/V types", def.name))
     }
 }

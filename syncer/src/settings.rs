@@ -6,6 +6,7 @@ use std::time::Duration;
 
 #[derive(Debug, Clone)]
 pub enum Parallelism {
+    Off,
     Low,
     Mild,
     High,
@@ -16,6 +17,7 @@ impl FromStr for Parallelism {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
+            "off" => Ok(Parallelism::Off),
             "low" => Ok(Parallelism::Low),
             "mild" => Ok(Parallelism::Mild),
             "high" => Ok(Parallelism::High),
@@ -27,6 +29,7 @@ impl FromStr for Parallelism {
 impl From<Parallelism> for usize {
     fn from(parallelism: Parallelism) -> Self {
         match parallelism {
+            Parallelism::Off => 1,
             Parallelism::Low => num_cpus::get() / 8,
             Parallelism::Mild => num_cpus::get() / 4,
             Parallelism::High => num_cpus::get() / 2,

@@ -115,7 +115,7 @@ impl StorageWriteTx {
         K: Eq + Hash + Clone + Send + Sync + 'static,
         V: Clone + Send + Sync + 'static,
     {
-        let cache = self.caches.ensure_cache(def);
+        let cache = self.caches.get_cache(def);
         let mut c = cache.lock().unwrap();
         c.get(k).cloned()
     }
@@ -125,7 +125,7 @@ impl StorageWriteTx {
         K: Eq + Hash + Clone + Send + Sync + 'static,
         V: Clone + Send + Sync + 'static,
     {
-        let cache = self.caches.ensure_cache(def);
+        let cache = self.caches.get_cache(def);
         let mut c = cache.lock().unwrap();
         let _ = c.put(k, v);
     }
@@ -135,7 +135,7 @@ impl StorageWriteTx {
         K: Eq + Hash + Clone + Send + Sync + 'static,
         V: Clone + Send + Sync + 'static,
     {
-        let cache = self.caches.ensure_cache(def);
+        let cache = self.caches.get_cache(def);
         let mut c = cache.lock().unwrap();
         c.pop(k)
     }
