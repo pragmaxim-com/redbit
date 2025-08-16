@@ -78,9 +78,9 @@ pub struct Utxo {
     pub id: TransactionPointer,
     #[column]
     pub amount: u64,
-    #[column(dictionary(cache = 100000))]
+    #[column(dictionary(cache = 10000))]
     pub script_hash: ScriptHash,
-    #[column(dictionary(cache = 100000))]
+    #[column(dictionary(cache = 10000))]
     pub address: Address,
 }
 

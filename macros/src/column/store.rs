@@ -43,19 +43,14 @@ pub fn store_many_index_def(column_name: &Ident, pk_name: &Ident, table: &Ident,
 fn store_dict_stmnt(column_name: &Ident, pk_name: &Ident, cache: Option<Ident>) -> TokenStream {
     match cache {
         Some(cache_name) => quote! {
-            let (birth_id, newly_created) = {
-                if let Some(cached) = tx.cache_get(&#cache_name, &instance.#column_name) {
-                    (cached, false)
-                } else if let Some(guard) = value_to_dict_pk.get(&instance.#column_name)? {
-                    let pk = guard.value();
-                    tx.cache_put(&#cache_name, instance.#column_name.clone(), pk);
-                    (pk, false)
-                } else {
-                    let new_birth = instance.#pk_name;
-                    tx.cache_put(&#cache_name, instance.#column_name.clone(), new_birth);
-                    (new_birth, true)
-                }
-            };
+            let (birth_id, newly_created) =
+                tx.cache_get_or_put(&#cache_name, instance.#column_name.clone(), || {
+                    if let Some(guard) = value_to_dict_pk.get(&instance.#column_name)? {
+                        Ok((guard.value(), false))
+                    } else {
+                        Ok((instance.#pk_name, true))
+                    }
+                })?;
 
             if newly_created {
                 value_to_dict_pk.insert(&instance.#column_name, &birth_id)?;

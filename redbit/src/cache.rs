@@ -52,6 +52,6 @@ impl Caches {
         let mut map = self.inner.lock().unwrap();
         let erased = map.entry(key).or_insert_with(|| Self::new_cache::<K, V>(def.capacity)).clone();
         drop(map);
-        Arc::downcast::<Mutex<LruCache<K, V>>>(erased).expect(&format!("cache '{}' reused with different K/V types", def.name))
+        Arc::downcast::<Mutex<LruCache<K, V>>>(erased).unwrap_or_else(|_| panic!("cache '{}' reused with different K/V types", def.name))
     }
 }

@@ -84,11 +84,11 @@ pub struct Utxo {
     pub amount: u64,
     #[column(index)]
     pub box_id: BoxId,
-    #[column(dictionary(cache = 100000))]
+    #[column(dictionary(cache = 10000))]
     pub address: Address,
-    #[column(dictionary(cache = 100000))]
+    #[column(dictionary(cache = 10000))]
     pub tree: Tree,
-    #[column(dictionary(cache = 100000))]
+    #[column(dictionary(cache = 10000))]
     pub tree_template: TreeTemplate,
     pub assets: Vec<Asset>,
 }
@@ -99,7 +99,7 @@ pub struct Asset {
     pub id: UtxoPointer,
     #[column]
     pub amount: u64,
-    #[column(dictionary(cache = 100000))]
+    #[column(dictionary(cache = 10000))]
     pub name: AssetName,
     #[column(index)]
     pub asset_action: AssetAction,

@@ -110,24 +110,22 @@ impl StorageWriteTx {
         self.tx.open_multimap_table(def)
     }
 
-    pub fn cache_get<K, V>(&self, def: &'static CacheDef<K, V>, k: &K) -> Option<V>
+    pub fn cache_get_or_put<K, V, F>(&self, def: &'static CacheDef<K, V>, k: K, compute: F) -> Result<(V, bool), AppError>
     where
         K: Eq + Hash + Clone + Send + Sync + 'static,
         V: Clone + Send + Sync + 'static,
+        F: FnOnce() -> Result<(V, bool), AppError>,
     {
         let cache = self.caches.get_cache(def);
         let mut c = cache.lock().unwrap();
-        c.get(k).cloned()
-    }
 
-    pub fn cache_put<K, V>(&self, def: &'static CacheDef<K, V>, k: K, v: V)
-    where
-        K: Eq + Hash + Clone + Send + Sync + 'static,
-        V: Clone + Send + Sync + 'static,
-    {
-        let cache = self.caches.get_cache(def);
-        let mut c = cache.lock().unwrap();
-        let _ = c.put(k, v);
+        if let Some(cached) = c.get(&k) {
+            return Ok((cached.clone(), false));
+        }
+
+        let (value, created) = compute()?;
+        let _ = c.put(k, value.clone());
+        Ok((value, created))
     }
 
     pub fn cache_remove<K, V>(&self, def: &'static CacheDef<K, V>, k: &K) -> Option<V>
