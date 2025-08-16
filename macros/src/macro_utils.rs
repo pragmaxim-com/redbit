@@ -4,9 +4,9 @@ use quote::quote;
 use std::env;
 use std::fs::OpenOptions;
 use std::io::Write;
+use syn::{Attribute, ItemStruct, Path, Type};
 use syn::punctuated::Punctuated;
 use syn::token::Comma;
-use syn::{Attribute, ItemStruct, Path, Type};
 
 pub fn extract_derives(attr: &Attribute) -> syn::Result<Vec<syn::Path>> {
     let mut derives = Vec::new();

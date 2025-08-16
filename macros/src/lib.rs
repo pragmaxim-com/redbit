@@ -17,7 +17,9 @@ use proc_macro_error::proc_macro_error;
 use quote::quote;
 use syn::parse::Parse;
 use syn::spanned::Spanned;
-use syn::{parse_macro_input, parse_quote, DeriveInput, Fields, ItemStruct, Lit, Type};
+use syn::{parse_macro_input, parse_quote, DeriveInput, Fields, ItemStruct, Lit, Path, Type};
+use syn::punctuated::Punctuated;
+use syn::token::Comma;
 
 #[proc_macro_attribute]
 #[proc_macro_error]
@@ -28,7 +30,7 @@ pub fn column(attr: TokenStream, item: TokenStream) -> TokenStream {
     let stream =
         match &mut input.fields {
             Fields::Unnamed(fields) if fields.unnamed.len() == 1 => {
-                let (impls, maybe_field_attr) =
+                let (impls, maybe_field_attr, extra_derive_impls) =
                     column::impls::generate_column_impls(struct_ident, &fields.unnamed[0].ty, attr_args.encoding);
 
                 if let Some(attr) = maybe_field_attr {
@@ -36,16 +38,17 @@ pub fn column(attr: TokenStream, item: TokenStream) -> TokenStream {
                     fields.unnamed[0].attrs.push(attr);
                 }
 
-                macro_utils::merge_struct_derives(&mut input, syn::parse_quote![Clone, Hash, Eq, Ord, PartialEq, PartialOrd, Debug, Decode, Encode, Serialize, Deserialize]);
+                let mut derives: Punctuated<Path, Comma> = syn::parse_quote![Clone, Hash, Eq, Ord, PartialEq, PartialOrd, Debug, Decode, Encode, Serialize, Deserialize];
+                derives.extend(extra_derive_impls);
+                macro_utils::merge_struct_derives(&mut input, derives);
                 quote! {
                     #input
                     #impls
                 }
             },
             _ => {
-                macro_utils::merge_struct_derives(&mut input, syn::parse_quote![
-                    Decode, Encode, Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Eq, utoipa::ToSchema
-                ]);
+                let derives: Punctuated<Path, Comma> = syn::parse_quote![Decode, Encode, Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Eq, utoipa::ToSchema];
+                macro_utils::merge_struct_derives(&mut input, derives);
                 quote! {
                     #input
                 }

@@ -6,7 +6,7 @@ analytical db like [DuckDB](https://duckdb.org/) right on the node would be stil
 
 Redbit reads struct annotations and derives code necessary for persisting and querying structured data into/from
 [Redb](https://github.com/cberner/redb) using secondary indexes and dictionaries, served by [axum](https://github.com/tokio-rs/axum)
-through auto-generated REST API. It maximizes R/W speed while minimizing data size using hierarchical data structures of smart pointers.
+through auto-generated REST API.
 
 ### Major Out-of-the-Box Features
 
@@ -14,7 +14,7 @@ through auto-generated REST API. It maximizes R/W speed while minimizing data si
 ✅ Optional dictionaries for low cardinality fields + first level cache for building them without overhead \
 ✅ `One-to-One` / `One-to-Option` / `One-to-Many` entities with cascade read/write/delete \
 ✅ All goodies including intuitive data ordering without writing custom codecs \
-✅ All pointers and most column types implement `Copy` => minimal cloning \
+✅ All keys and all newType column types with fixed-sized value implement `Copy` => minimal cloning \
 ✅ Http response streaming api with efficient querying (ie. get txs or utxos for really HOT address) \
 ✅ Query contraints : `eq`, `ne`, `lt`, `le`, `gt`, `ge`, `in` with logical `AND`
   ```json

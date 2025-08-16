@@ -1,18 +1,21 @@
 use proc_macro2::{Literal, Ident, TokenStream};
 use quote::quote;
-use syn::{parse_str, Attribute, Type};
+use syn::{parse_str, Attribute, Path, Type};
+use syn::punctuated::Punctuated;
+use syn::token::Comma;
 use crate::macro_utils::InnerKind;
 
 pub fn generate_column_impls(
     struct_ident: &Ident,
     inner_type: &Type,
     binary_encoding_opt: Option<String>,
-) -> (TokenStream, Option<Attribute>) {
+) -> (TokenStream, Option<Attribute>, Punctuated<Path, Comma>) {
     let kind = crate::macro_utils::classify_inner_type(inner_type);
 
     let binary_encoding = binary_encoding_opt.unwrap_or_else(|| "hex".to_string());
     let mut schema_example = quote! { vec![Some(serde_json::json!(#struct_ident::default().url_encode()))] };
     let mut struct_attr: Option<Attribute> = None;
+    let mut extra_derive_impls: Punctuated<Path, Comma> = Punctuated::new();
     let mut schema_type = quote! { SchemaType::Type(Type::String) };
     let mut default_code = quote! { Self(Default::default()) };
     let mut url_encoded_code = quote! { format!("{}", self.0) };
@@ -36,6 +39,7 @@ pub fn generate_column_impls(
             default_code = example;
             struct_attr = Some(syn::parse_quote! { #[serde_as(as = #binary_encoding_literal)] });
             url_encoded_code = quote! { serde_json::to_string(&self).unwrap().trim_matches('"').to_string() };
+            extra_derive_impls.push(syn::parse_quote![Copy]);
             iterable_code = quote! {
                 let mut arr = self.0;
                 for i in (0..#len).rev() {
@@ -82,12 +86,14 @@ pub fn generate_column_impls(
             schema_type = quote! { SchemaType::Type(Type::Integer) };
             iterable_code = quote! { Self(self.0.wrapping_add(1)) };
             schema_example = quote! { vec![Some(0)] };
+            extra_derive_impls.push(syn::parse_quote![Copy])
         }
         InnerKind::Bool => {
             schema_type = quote! { SchemaType::Type(Type::Boolean) };
             default_code = quote! { Self(false) };
             url_encoded_code = quote! { self.0.to_string() };
             iterable_code = quote! { Self(!self.0) };
+            extra_derive_impls.push(syn::parse_quote![Copy])
         }
         InnerKind::Uuid => {
             default_code = quote! { Self(uuid::Uuid::nil()) };
@@ -176,5 +182,5 @@ pub fn generate_column_impls(
         }
     };
 
-    (impls, struct_attr)
+    (impls, struct_attr, extra_derive_impls)
 }
