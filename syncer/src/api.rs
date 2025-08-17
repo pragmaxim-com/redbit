@@ -46,6 +46,10 @@ pub trait BlockHeaderLike: Send + Sync + Clone {
     fn hash_str(&self) -> String {
         hex::encode(self.hash())
     }
+
+    fn prev_hash_str(&self) -> String {
+        hex::encode(self.hash())
+    }
 }
 
 pub trait BlockLike: Send + Sync {
@@ -54,7 +58,7 @@ pub trait BlockLike: Send + Sync {
     fn weight(&self) -> u32;
 }
 
-pub trait BlockPersistence<B: BlockLike>: Send + Sync {
+pub trait BlockChain<B: BlockLike>: Send + Sync {
     fn init(&self) -> Result<(), ChainSyncError>;
     fn get_last_header(&self) -> Result<Option<B::Header>, ChainSyncError>;
     fn get_header_by_hash(&self, hash: [u8; 32]) -> Result<Vec<B::Header>, ChainSyncError>;

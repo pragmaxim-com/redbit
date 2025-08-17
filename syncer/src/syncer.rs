@@ -1,5 +1,5 @@
 use crate::api::BlockHeaderLike;
-use crate::api::{BlockLike, BlockPersistence};
+use crate::api::{BlockLike, BlockChain};
 use crate::api::{BlockProvider, ChainSyncError};
 use crate::monitor::ProgressMonitor;
 use futures::StreamExt;
@@ -12,32 +12,36 @@ use crate::settings::IndexerSettings;
 
 pub struct ChainSyncer<FB: Send + Sync + 'static, TB: BlockLike + 'static> {
     pub block_provider: Arc<dyn BlockProvider<FB, TB>>,
-    pub block_persistence: Arc<dyn BlockPersistence<TB>>,
+    pub chain: Arc<dyn BlockChain<TB>>,
     pub monitor: Arc<ProgressMonitor>,
 }
 
 impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
-    pub fn new(block_provider: Arc<dyn BlockProvider<FB, TB>>, block_persistence: Arc<dyn BlockPersistence<TB>>) -> Self {
-        Self { block_provider, block_persistence, monitor: Arc::new(ProgressMonitor::new(1000)) }
+    pub fn new(block_provider: Arc<dyn BlockProvider<FB, TB>>, chain: Arc<dyn BlockChain<TB>>) -> Self {
+        Self { block_provider, chain, monitor: Arc::new(ProgressMonitor::new(1000)) }
     }
 
     pub async fn sync(&self, indexer_conf: IndexerSettings) {
         let block_provider = Arc::clone(&self.block_provider);
-        let persistence = Arc::clone(&self.block_persistence);
+        let chain = Arc::clone(&self.chain);
         let monitor = Arc::clone(&self.monitor);
 
         let node_chain_tip_header = block_provider.get_chain_tip().await.expect("Failed to get chain tip header");
         let chain_tip_height = node_chain_tip_header.height();
-        let last_persisted_header = persistence.get_last_header().expect("Failed to get last header");
+        let last_persisted_header = chain.get_last_header().expect("Failed to get last header");
         let last_persisted_height = last_persisted_header.as_ref().map_or(0, |h| h.height());
         let heights_to_fetch = chain_tip_height - last_persisted_height;
 
         let indexing_par: usize = indexer_conf.processing_parallelism.clone().into();
+        let fork_detection_height: u32 = chain_tip_height - indexer_conf.fork_detection_heights as u32;
 
         if heights_to_fetch <= 0 {
             return;
         }
-        info!("Indexing from {} to {} with processing parallelism : {}", last_persisted_height, chain_tip_height, indexing_par);
+        info!(
+            "Going to index {} blocks from {} to {}, parallelism : {}, fork_detection @ {}",
+            heights_to_fetch, last_persisted_height, chain_tip_height, indexing_par, fork_detection_height
+        );
         let buffer_size = 8192;
         let batch_buffer_size = std::cmp::max(16, buffer_size / indexer_conf.min_batch_size);
         let (fetch_tx, fetch_rx) = mpsc::channel::<FB>(buffer_size);
@@ -94,7 +98,8 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
                     let idx = batch.binary_search_by_key(&height, |b| b.header().height()).unwrap_or_else(|i| i);
 
                     if weight >= min_weight {
-                        monitor.log(height, &header.timestamp_str(), &header.hash_str(), &weight, proc_rx.len());
+                        let block_size = batch.len() + 1;
+                        monitor.log(height, &header.timestamp_str(), &header.hash_str(), block_size, &weight, proc_rx.len());
                         batch.insert(idx, block);
                         if sort_tx.send(std::mem::take(&mut batch)).await.is_err() {
                             break;
@@ -113,11 +118,10 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
 
         let persist_handle = {
             let block_provider = Arc::clone(&block_provider);
-            let persistence   = Arc::clone(&persistence);
+            let chain   = Arc::clone(&chain);
             task::spawn_blocking_named("persist",move || {
                 while let Some(batch) = sort_rx.blocking_recv() {
-                    let do_chain_link = batch.last().is_some_and(|b| b.header().height() + 100 > chain_tip_height);
-                    match Self::persist_blocks(batch, do_chain_link, Arc::clone(&block_provider), Arc::clone(&persistence)) {
+                    match Self::persist_or_link(batch, fork_detection_height, Arc::clone(&block_provider), Arc::clone(&chain)) {
                         Ok(()) => {},
                         Err(e) => {
                             error!("persist: persist_blocks returned error {}", e);
@@ -133,49 +137,57 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
         }
     }
 
-    fn chain_link(block: TB, block_provider: Arc<dyn BlockProvider<FB, TB>>, block_persistence: Arc<dyn BlockPersistence<TB>>) -> Result<Vec<TB>, ChainSyncError> {
+    fn chain_link(block: TB, block_provider: Arc<dyn BlockProvider<FB, TB>>, chain: Arc<dyn BlockChain<TB>>) -> Result<Vec<TB>, ChainSyncError> {
         let header = block.header();
-        let prev_headers = block_persistence.get_header_by_hash(header.prev_hash())?;
+        let prev_headers = chain.get_header_by_hash(header.prev_hash())?;
 
-        // Base case: genesis
         if header.height() == 1 {
-            return Ok(vec![block]);
-        }
-
-        // If the DB already has the direct predecessor, we can stop here
-        if prev_headers.first().map(|ph| ph.height() == header.height() - 1).unwrap_or(false) {
-            return Ok(vec![block]);
-        }
-
-        // Otherwise we need to fetch the parent and prepend it
-        if prev_headers.is_empty() {
-            info!("Fork detected at {}@{}, downloading parent {}", header.height(), hex::encode(header.hash()), hex::encode(header.prev_hash()),);
-
-            // fetch parent
+            // Base case: genesis
+            Ok(vec![block])
+        } else if prev_headers.first().map(|ph| ph.height() == header.height() - 1).unwrap_or(false) {
+            // If the DB already has the direct predecessor, we can stop here
+            info!("Block @ {} : {} linked with parent {}", header.height(), &header.hash_str()[..12], &header.prev_hash_str()[..12]);
+            Ok(vec![block])
+        } else if prev_headers.is_empty() {
+            // Otherwise we need to fetch the parent and prepend it
+            info!("Fork detected @ {} : {} - downloading his parent {}", header.height(), &header.hash_str()[..12], &header.prev_hash_str()[..12]);
             let parent_header = header.clone();
             let parent_block = block_provider.get_processed_block(parent_header)?;
-            // recurse to build the earlier part of the chain
-            let mut chain = Self::chain_link(parent_block, block_provider, block_persistence)?;
-            // now append our current block at the end
+            // recurse to fetch the missing fork
+            let mut chain = Self::chain_link(parent_block, block_provider, chain)?;
+            // now append our current block at the end of the fork
             chain.push(block);
-            return Ok(chain);
+            Ok(chain)
+        } else {
+            if let Some(prev_header) = prev_headers.first() {
+                panic!(
+                    "Found prev header {} with different height {} @ {} : {} -> {}",
+                    &prev_header.hash_str()[..12],
+                    prev_header.height(),
+                    header.height(),
+                    &header.hash_str()[..12],
+                    &header.prev_hash_str()[..12]
+                );
+            } else {
+                panic!("Found {} prev headers", prev_headers.len())
+            }
         }
 
-        // If we got here, there were multiple candidates in DB → panic or handle specially
-        panic!("Unexpected condition in chain_link: multiple parent candidates for {}@{}", header.height(), hex::encode(header.hash()));
     }
 
-    pub fn persist_blocks(mut blocks: Vec<TB>, do_chain_link: bool, block_provider: Arc<dyn BlockProvider<FB, TB>>, block_persistence: Arc<dyn BlockPersistence<TB>>) -> Result<(), ChainSyncError> {
-        if !do_chain_link {
-            block_persistence.store_blocks(blocks)
+    pub fn persist_or_link(mut blocks: Vec<TB>, fork_detection_height: u32, block_provider: Arc<dyn BlockProvider<FB, TB>>, block_chain: Arc<dyn BlockChain<TB>>) -> Result<(), ChainSyncError> {
+        if blocks.is_empty() {
+            error!("Received empty block batch, nothing to persist");
+            Ok(())
+        } else if blocks.last().is_some_and(|b| b.header().height() <= fork_detection_height) {
+            block_chain.store_blocks(blocks)
         } else {
             for block in blocks.drain(..) {
-                let chain = Self::chain_link(block, Arc::clone(&block_provider), Arc::clone(&block_persistence))?;
-
+                let chain = Self::chain_link(block, Arc::clone(&block_provider), Arc::clone(&block_chain))?;
                 match chain.len() {
                     0 => unreachable!("chain_link never returns empty Vec"),
-                    1 => block_persistence.store_blocks(chain)?,
-                    _ => block_persistence.update_blocks(chain)?,
+                    1 => block_chain.store_blocks(chain)?,
+                    _ => block_chain.update_blocks(chain)?,
                 }
             }
             Ok(())

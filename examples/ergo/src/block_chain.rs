@@ -4,15 +4,15 @@ use redbit::*;
 use std::sync::Arc;
 use redbit::storage::{Storage, StorageReadTx};
 
-pub struct ErgoBlockPersistence {
+pub struct ErgoBlockChain {
     pub storage: Arc<Storage>,
 }
 
-impl ErgoBlockPersistence {
-    pub fn new(storage: Arc<Storage>) -> Arc<dyn BlockPersistence<Block>> {
-        let persistence = ErgoBlockPersistence { storage };
-        persistence.init().expect("Failed to initialize ErgoBlockPersistence");
-        Arc::new(persistence)
+impl ErgoBlockChain {
+    pub fn new(storage: Arc<Storage>) -> Arc<dyn BlockChain<Block>> {
+        let chain = ErgoBlockChain { storage };
+        chain.init().expect("Failed to initialize ErgoBlockPersistence");
+        Arc::new(chain)
     }
 
     fn populate_inputs(read_tx: &StorageReadTx, block: &mut Block) -> Result<(), ChainSyncError> {
@@ -31,7 +31,7 @@ impl ErgoBlockPersistence {
     }
 }
 
-impl BlockPersistence<Block> for ErgoBlockPersistence {
+impl BlockChain<Block> for ErgoBlockChain {
     fn init(&self) -> Result<(), ChainSyncError> {
         Ok(Block::init(Arc::clone(&self.storage))?)
     }

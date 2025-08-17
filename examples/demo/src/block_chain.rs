@@ -1,17 +1,17 @@
 use std::sync::Arc;
 use redbit::*;
-use syncer::api::{BlockPersistence, ChainSyncError};
+use syncer::api::{BlockChain, ChainSyncError};
 use crate::model_v1::{Block, BlockHash, BlockHeader, BlockPointer, Height, InputRef, Transaction, TransactionPointer};
 
-pub struct DemoBlockPersistence {
+pub struct DemoBlockChain {
     pub storage: Arc<Storage>,
 }
 
-impl DemoBlockPersistence {
-    pub fn new(storage: Arc<Storage>) -> Arc<dyn BlockPersistence<Block>> {
-        let persistence = DemoBlockPersistence { storage };
-        persistence.init().expect("Failed to initialize DemoBlockPersistence");
-        Arc::new(persistence)
+impl DemoBlockChain {
+    pub fn new(storage: Arc<Storage>) -> Arc<dyn BlockChain<Block>> {
+        let chain = DemoBlockChain { storage };
+        chain.init().expect("Failed to initialize DemoBlockPersistence");
+        Arc::new(chain)
     }
 
     fn populate_inputs(read_tx: &StorageReadTx, block: &mut Block) -> Result<(), ChainSyncError> {
@@ -38,7 +38,7 @@ impl DemoBlockPersistence {
 
 }
 
-impl BlockPersistence<Block> for DemoBlockPersistence {
+impl BlockChain<Block> for DemoBlockChain {
     fn init(&self) -> Result<(), ChainSyncError> {
         Ok(Block::init(Arc::clone(&self.storage))?)
     }

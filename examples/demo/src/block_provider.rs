@@ -13,22 +13,21 @@ pub struct DemoBlockProvider {
 }
 
 impl DemoBlockProvider {
-    pub fn new(chain_blocks: usize) -> Result<Arc<Self>> {
-        assert!(chain_blocks < 100_000, "Chain height must be less than 100_000");
+    pub fn new(chain_tip_height: usize) -> Result<Arc<Self>> {
+        assert!(chain_tip_height < 100_000, "Chain height must be less than 100_000");
         let mut chain = BTreeMap::new();
-        let blocks = Block::sample_many(chain_blocks);
-        let mut prev_block: Option<Block> = None;
-        for mut block in blocks {
-            if let Some(ref prev) = prev_block {
-                block.header.prev_hash = prev.header.hash.clone();
-                block.weight = block
-                    .transactions
-                    .iter()
-                    .flat_map(|t| &t.utxos)
-                    .fold(0, |acc, u| acc + u.assets.len() as u32);
-
-            }
-            prev_block = Some(block.clone()); // keep current block as previous for next iteration
+        let mut blocks_iter = Block::sample_many(chain_tip_height + 1).into_iter();
+        let genesis = blocks_iter.next().expect("at least one block");
+        let mut prev_hash = genesis.header.hash.clone();
+        for mut block in blocks_iter {
+            block.header.prev_hash = prev_hash.clone();
+            block.weight = block
+                .transactions
+                .iter()
+                .flat_map(|t| &t.utxos)
+                .map(|u| u.assets.len() as u32)
+                .sum();
+            prev_hash = block.header.hash.clone();
             chain.insert(block.header.height, block);
         }
         info!("Demo chain initialized with {} blocks", chain.len());

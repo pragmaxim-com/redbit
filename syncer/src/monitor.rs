@@ -26,6 +26,7 @@ impl ProgressMonitor {
         height: u32,
         timestamp: &str,
         hash: &str,
+        cur_batch_size: usize,
         batch_weight: &BatchWeight,
         buffer_size: usize,
     ) {
@@ -36,8 +37,8 @@ impl ProgressMonitor {
             let total_time = self.start_time.elapsed().as_secs();
             let txs_per_sec = format!("{:.1}", new_total_weight as f64 / total_time as f64);
             info!(
-                "{} @ {} from {} at {} ins+outs+assets/s, total {}, proc_buffer {}",
-                &hash[..12], height, timestamp, txs_per_sec, new_total_weight, buffer_size
+                "Batch[{}] @ {} : {} from {} at {} ins+outs+assets/s, total {}, proc_buffer {}",
+                cur_batch_size, height, &hash[..12], timestamp, txs_per_sec, new_total_weight, buffer_size
             );
         } else {
             *total_weight = (new_total_weight, total_weight.1);

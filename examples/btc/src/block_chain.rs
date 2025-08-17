@@ -4,15 +4,15 @@ use redbit::*;
 use std::sync::Arc;
 use redbit::storage::StorageReadTx;
 
-pub struct BtcBlockPersistence {
+pub struct BtcBlockChain {
     pub storage: Arc<Storage>,
 }
 
-impl BtcBlockPersistence {
-    pub fn new(storage: Arc<Storage>) -> Arc<dyn BlockPersistence<Block>> {
-        let persistence = BtcBlockPersistence { storage };
-        persistence.init().expect("Failed to initialize BtcBlockPersistence");
-        Arc::new(persistence)
+impl BtcBlockChain {
+    pub fn new(storage: Arc<Storage>) -> Arc<dyn BlockChain<Block>> {
+        let chain = BtcBlockChain { storage };
+        chain.init().expect("Failed to initialize BtcBlockPersistence");
+        Arc::new(chain)
     }
 
     fn populate_inputs(read_tx: &StorageReadTx, block: &mut Block) -> Result<(), ChainSyncError> {
@@ -39,7 +39,7 @@ impl BtcBlockPersistence {
     }
 }
 
-impl BlockPersistence<Block> for BtcBlockPersistence {
+impl BlockChain<Block> for BtcBlockChain {
     fn init(&self) -> Result<(), ChainSyncError> {
         Ok(Block::init(Arc::clone(&self.storage))?)
     }

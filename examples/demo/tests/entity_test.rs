@@ -1,11 +1,5 @@
-use std::collections::HashSet;
-use std::time::Instant;
-use demo::block_persistence::DemoBlockPersistence;
-use demo::block_provider::DemoBlockProvider;
 use demo::model_v1::*;
-use syncer::api::{BlockPersistence, BlockProvider};
-use syncer::scheduler::Scheduler;
-use syncer::settings::AppConfig;
+use std::collections::HashSet;
 
 fn init_temp_storage(name: &str, db_cache_size_gb: u8) -> (Vec<Block>, Arc<Storage>) {
     let storage = Storage::temp(name, db_cache_size_gb, true).unwrap();
@@ -14,22 +8,6 @@ fn init_temp_storage(name: &str, db_cache_size_gb: u8) -> (Vec<Block>, Arc<Stora
     Block::store_many(&write_tx, &blocks).expect("Failed to persist blocks");
     write_tx.commit().expect("Failed to commit transaction");
     (blocks, storage)
-}
-
-#[tokio::test]
-async fn demo_bench() {
-    let storage = Storage::temp("demo_benchmark", 1, true).expect("Failed to open database");
-    let block_provider: Arc<dyn BlockProvider<Block, Block>> = DemoBlockProvider::new(50).expect("Failed to create block provider");
-    let block_persistence: Arc<dyn BlockPersistence<Block>> = DemoBlockPersistence::new(Arc::clone(&storage));
-    let config = AppConfig::new("config/settings").expect("Failed to load app config");
-    let scheduler = Scheduler::new(block_provider, block_persistence.clone());
-    let start = Instant::now();
-    scheduler.sync(config.indexer.clone()).await;
-    let elapsed = start.elapsed();
-    let secs = elapsed.as_secs_f64();
-    println!("Demo chain sync took {:.1}s", secs);
-    let last_header = block_persistence.get_last_header().unwrap().expect("Failed to get last header");
-    assert_eq!(last_header.height, Height(49));
 }
 
 #[test]
@@ -129,6 +107,14 @@ async fn it_should_stream_entities_by_index_with_dict() {
     assert_eq!(found_by_address.len(), 1);
     assert!(found_by_address.iter().any(|tx| tx.id == utxo.id));
     assert!(found_by_address.iter().any(|tx| tx.id == utxo.id));
+}
+
+#[tokio::test]
+async fn store_many_utxos() {
+    let (blocks, storage) = init_temp_storage("db_test", 0);
+    let all_utxos = blocks.iter().flat_map(|b| b.transactions.iter().flat_map(|t| t.utxos.clone())).collect::<Vec<Utxo>>();
+    let write_tx = storage.begin_write().unwrap();
+    Utxo::store_many(&write_tx, &all_utxos).expect("Failed to store UTXO");
 }
 
 #[tokio::test]

@@ -1,7 +1,7 @@
 use std::{fs, sync::Arc, time::Duration};
-use syncer::api::BlockPersistence;
+use syncer::api::BlockChain;
 
-use btc::block_persistence::BtcBlockPersistence;
+use btc::block_chain::BtcBlockChain;
 use btc::block_provider::BtcBlockProvider;
 use btc::btc_client::BtcBlock;
 use btc::model_v1::Block;
@@ -20,7 +20,7 @@ fn block_from_file(size: &str, tx_count: usize) -> BtcBlock {
 fn criterion_benchmark(c: &mut Criterion) {
     let storage = Storage::temp("btc_benchmark", 1, true).expect("Failed to open database");
 
-    let block_persistence: Arc<dyn BlockPersistence<Block>> = BtcBlockPersistence::new(Arc::clone(&storage));
+    let chain: Arc<dyn BlockChain<Block>> = BtcBlockChain::new(Arc::clone(&storage));
 
     let small_block: BtcBlock = block_from_file("small", 29);
     let avg_block: BtcBlock = block_from_file("avg", 343);
@@ -54,7 +54,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         bencher.iter_batched_ref(
             || vec![processed_small_block.clone()], // setup once
             |blocks| {
-                block_persistence
+                chain
                     .store_blocks(std::mem::take(blocks))
                     .expect("Failed to persist small_block");
             },
@@ -66,7 +66,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         bencher.iter_batched_ref(
             || vec![processed_avg_block.clone()], // setup once
             |blocks| {
-                block_persistence
+                chain
                     .store_blocks(std::mem::take(blocks))
                     .expect("Failed to persist avg_block");
             },
@@ -78,7 +78,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         bencher.iter_batched_ref(
             || vec![processed_huge_block.clone()], // setup once
             |blocks| {
-                block_persistence
+                chain
                     .store_blocks(std::mem::take(blocks))
                     .expect("Failed to persist huge_block");
             },

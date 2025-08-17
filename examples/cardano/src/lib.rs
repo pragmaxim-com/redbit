@@ -1,7 +1,7 @@
 #![feature(test)]
 extern crate test;
 
-pub mod block_persistence;
+pub mod block_chain;
 pub mod block_provider;
 pub mod cardano_client;
 pub mod config;

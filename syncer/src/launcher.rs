@@ -1,4 +1,4 @@
-use crate::api::{BlockLike, BlockPersistence, BlockProvider};
+use crate::api::{BlockLike, BlockChain, BlockProvider};
 use crate::scheduler::Scheduler;
 use crate::settings::{AppConfig, HttpSettings, IndexerSettings};
 use crate::combine;
@@ -62,20 +62,20 @@ fn maybe_console_init() {
 
 pub async fn launch<FB: Send + Sync + 'static, TB: BlockLike + 'static, F>(
     block_provider: Arc<dyn BlockProvider<FB, TB>>,
-    make_persistence: F,
+    build_chain: F,
     extras: Option<OpenApiRouter<RequestState>>,
     cors: Option<CorsLayer>,
 ) -> Result<(), AppError>
 where
-    F: FnOnce(Arc<Storage>) -> Arc<dyn BlockPersistence<TB>>,
+    F: FnOnce(Arc<Storage>) -> Arc<dyn BlockChain<TB>>,
 {
     let config = AppConfig::new("config/settings").expect("Failed to load app config");
     maybe_console_init();
     let db_path: String = format!("{}/{}/{}", config.indexer.db_path, "main", config.indexer.name);
     let full_path = env::home_dir().unwrap().join(&db_path);
     let storage: Arc<Storage> = Storage::init(full_path, config.indexer.db_cache_size_gb)?;
-    let block_persistence: Arc<dyn BlockPersistence<TB>> = make_persistence(Arc::clone(&storage));
-    let scheduler: Scheduler<FB, TB> = Scheduler::new(block_provider, block_persistence);
+    let chain: Arc<dyn BlockChain<TB>> = build_chain(Arc::clone(&storage));
+    let scheduler: Scheduler<FB, TB> = Scheduler::new(block_provider, chain);
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
     let indexing_f = maybe_run_syncing(config.indexer, scheduler, shutdown_rx.clone());
     let server_f = maybe_run_server(config.http, Arc::clone(&storage), extras, cors, shutdown_rx.clone());
