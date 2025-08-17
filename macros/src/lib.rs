@@ -31,7 +31,7 @@ pub fn column(attr: TokenStream, item: TokenStream) -> TokenStream {
         match &mut input.fields {
             Fields::Unnamed(fields) if fields.unnamed.len() == 1 => {
                 let (impls, maybe_field_attr, extra_derive_impls) =
-                    column::impls::generate_column_impls(struct_ident, &fields.unnamed[0].ty, attr_args.encoding);
+                    column::column_impls::generate_column_impls(struct_ident, &fields.unnamed[0].ty, attr_args.encoding);
 
                 if let Some(attr) = maybe_field_attr {
                     input.attrs.push(syn::parse_quote! { #[serde_with::serde_as] });

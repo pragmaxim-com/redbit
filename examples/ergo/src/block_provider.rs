@@ -43,14 +43,7 @@ impl ErgoBlockProvider {
 
         let block_hash: [u8; 32] = b.header.id.0.into();
         let prev_block_hash: [u8; 32] = b.header.parent_id.0.into();
-
         let height = Height(b.header.height);
-        let header = BlockHeader {
-            height,
-            timestamp: BlockTimestamp((b.header.timestamp / 1000) as u32),
-            hash: BlockHash(block_hash),
-            prev_hash: BlockHash(prev_block_hash),
-        };
 
         for (tx_index, tx) in b.block_transactions.transactions.iter().enumerate() {
             let tx_hash: [u8; 32] = tx.id().0.0;
@@ -65,7 +58,15 @@ impl ErgoBlockProvider {
             result_txs.push(Transaction { id: tx_id, hash: TxHash(tx_hash), utxos: outputs, inputs: Vec::new(), transient_inputs: inputs })
         }
 
-        Ok(Block { height, header, transactions: result_txs, weight: block_weight as u32 })
+        let header = BlockHeader {
+            height,
+            timestamp: BlockTimestamp((b.header.timestamp / 1000) as u32),
+            hash: BlockHash(block_hash),
+            prev_hash: BlockHash(prev_block_hash),
+            weight: block_weight as u32
+        };
+
+        Ok(Block { height, header, transactions: result_txs })
     }
 
     fn process_outputs(outs: &TxIoVec<ErgoBox>, tx_pointer: &BlockPointer) -> (BoxWeight, Vec<Utxo>) {

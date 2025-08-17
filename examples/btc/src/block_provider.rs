@@ -29,29 +29,31 @@ impl BtcBlockProvider {
     }
 
     pub fn process_block_pure(block: &BtcBlock) -> Result<Block, ChainSyncError> {
+        let mut block_weight = 0;
+        let transactions = block
+            .underlying
+            .txdata
+            .iter()
+            .enumerate()
+            .map(|(tx_index, tx)| {
+                block_weight += tx.input.len() + tx.output.len();
+                Self::process_tx(block.height, tx_index as u16, &tx)
+            })
+            .collect();
+        
         let header = BlockHeader {
             height: block.height,
             timestamp: BlockTimestamp(block.underlying.header.time),
             hash: BlockHash(*block.underlying.block_hash().as_ref()),
             prev_hash: BlockHash(*block.underlying.header.prev_blockhash.as_ref()),
             merkle_root: MerkleRoot(*block.underlying.header.merkle_root.as_ref()),
+            weight: block_weight as u32,
         };
 
-        let mut block_weight = 0;
         Ok(Block {
             height: block.height,
             header,
-            transactions: block
-                .underlying
-                .txdata
-                .iter()
-                .enumerate()
-                .map(|(tx_index, tx)| {
-                    block_weight += tx.input.len() + tx.output.len();
-                    Self::process_tx(block.height, tx_index as u16, &tx)
-                })
-                .collect(),
-            weight: block_weight as u32, // TODO usize
+            transactions,
         })
     }
 

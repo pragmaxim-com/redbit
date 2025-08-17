@@ -34,21 +34,14 @@ impl CardanoBlockProvider {
         let hash: [u8; 32] = *b.header().hash();
         let prev_h = b.header().previous_hash().unwrap_or(pallas::crypto::hash::Hash::new([0u8; 32]));
         let prev_hash: [u8; 32] = *prev_h;
-        let header = BlockHeader {
-            height: Height(b.header().number() as u32),
-            timestamp: BlockTimestamp(b.wallclock(genesis) as u32),
-            slot: Slot(b.slot() as u32),
-            hash: BlockHash(hash),
-            prev_hash: BlockHash(prev_hash),
-        };
-
+        let height = Height(b.header().number() as u32);
         let mut block_weight = 0;
         let txs: Vec<pallas::ledger::traverse::MultiEraTx> = b.txs();
         let mut result_txs = Vec::with_capacity(txs.len());
 
         for (tx_index, tx) in txs.iter().enumerate() {
             let tx_hash: [u8; 32] = *tx.hash();
-            let tx_id = BlockPointer::from_parent(header.height, tx_index as u16);
+            let tx_id = BlockPointer::from_parent(height, tx_index as u16);
             let inputs = Self::process_inputs(&tx.inputs());
             let (box_weight, outputs) = Self::process_outputs(&tx.outputs(), tx_id);
             block_weight += box_weight;
@@ -56,7 +49,16 @@ impl CardanoBlockProvider {
             result_txs.push(Transaction { id: tx_id, hash: TxHash(tx_hash), utxos: outputs, inputs: vec![], transient_inputs: inputs })
         }
 
-        Ok(Block { height: header.height, header, transactions: result_txs, weight: block_weight as u32 }) // usize
+        let header = BlockHeader {
+            height,
+            timestamp: BlockTimestamp(b.wallclock(genesis) as u32),
+            slot: Slot(b.slot() as u32),
+            hash: BlockHash(hash),
+            prev_hash: BlockHash(prev_hash),
+            weight: block_weight as u32
+        };
+
+        Ok(Block { height: header.height, header, transactions: result_txs }) // usize
     }
 
     fn process_inputs(ins: &[MultiEraInput<'_>]) -> Vec<TempInputRef> {

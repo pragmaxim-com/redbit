@@ -48,8 +48,6 @@ pub struct Block {
     pub height: Height,
     pub header: BlockHeader,
     pub transactions: Vec<Transaction>,
-    #[column(transient)]
-    pub weight: u32,
 }
 
 #[entity]
@@ -62,6 +60,8 @@ pub struct BlockHeader {
     pub prev_hash: BlockHash,
     #[column(range)]
     pub timestamp: BlockTimestamp,
+    #[column(transient)]
+    pub weight: u32,
 }
 
 #[entity]
@@ -124,15 +124,15 @@ impl BlockHeaderLike for BlockHeader {
     fn timestamp(&self) -> u32 {
         self.timestamp.0
     }
+    fn weight(&self) -> u32 {
+        self.weight
+    }
 }
 
 impl BlockLike for Block {
     type Header = BlockHeader;
     fn header(&self) -> &Self::Header {
         &self.header
-    }
-    fn weight(&self) -> u32 {
-        self.weight
     }
 }
 

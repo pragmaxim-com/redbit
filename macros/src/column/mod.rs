@@ -9,7 +9,7 @@ mod query;
 mod range_by;
 mod get_by;
 mod get_keys_by;
-pub mod impls;
+pub mod column_impls;
 
 use crate::field_parser::{FieldDef, IndexingType, ParentDef};
 use crate::rest::*;

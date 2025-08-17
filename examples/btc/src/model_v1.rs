@@ -4,6 +4,8 @@ use chrono::DateTime;
 pub use redbit::*;
 use std::fmt;
 
+// feel free to add custom #[derive(Foo, Bar)] attributes to your types, they will get merged with the ones from redbit
+
 #[root_key] pub struct Height(pub u32);
 
 #[pointer_key(u16)] pub struct BlockPointer(Height);
@@ -26,7 +28,6 @@ pub struct TempInputRef {
 }
 
 #[column]
-#[derive(Copy, Hash)]
 pub struct BlockTimestamp(pub u32);
 impl fmt::Display for BlockTimestamp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -42,8 +43,6 @@ pub struct Block {
     pub height: Height,
     pub header: BlockHeader,
     pub transactions: Vec<Transaction>,
-    #[column(transient)]
-    pub weight: u32,
 }
 
 #[entity]
@@ -58,6 +57,8 @@ pub struct BlockHeader {
     pub timestamp: BlockTimestamp,
     #[column(index)]
     pub merkle_root: MerkleRoot,
+    #[column(transient)]
+    pub weight: u32,
 }
 
 #[entity]
@@ -103,15 +104,15 @@ impl BlockHeaderLike for BlockHeader {
     fn timestamp(&self) -> u32 {
         self.timestamp.0
     }
+    fn weight(&self) -> u32 {
+        self.weight
+    }
 }
 
 impl BlockLike for Block {
     type Header = BlockHeader;
     fn header(&self) -> &Self::Header {
         &self.header
-    }
-    fn weight(&self) -> u32 {
-        self.weight
     }
 }
 

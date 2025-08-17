@@ -21,7 +21,7 @@ impl DemoBlockProvider {
         let mut prev_hash = genesis.header.hash.clone();
         for mut block in blocks_iter {
             block.header.prev_hash = prev_hash.clone();
-            block.weight = block
+            block.header.weight = block
                 .transactions
                 .iter()
                 .flat_map(|t| &t.utxos)

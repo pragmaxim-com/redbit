@@ -37,6 +37,7 @@ pub trait BlockHeaderLike: Send + Sync + Clone {
     fn hash(&self) -> [u8; 32];
     fn prev_hash(&self) -> [u8; 32];
     fn timestamp(&self) -> u32;
+    fn weight(&self) -> u32;
 
     fn timestamp_str(&self) -> String {
         let datetime = DateTime::from_timestamp(self.timestamp() as i64, 0).unwrap();
@@ -55,7 +56,6 @@ pub trait BlockHeaderLike: Send + Sync + Clone {
 pub trait BlockLike: Send + Sync {
     type Header: BlockHeaderLike + 'static;
     fn header(&self) -> &Self::Header;
-    fn weight(&self) -> u32;
 }
 
 pub trait BlockChain<B: BlockLike>: Send + Sync {

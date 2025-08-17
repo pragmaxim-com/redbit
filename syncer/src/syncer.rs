@@ -92,8 +92,8 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
                 let min_weight = indexer_conf.min_batch_size;
 
                 while let Some(block) = proc_rx.recv().await {
-                    weight += block.weight() as usize;
                     let header = block.header();
+                    weight += header.weight() as usize;
                     let height = header.height();
                     let idx = batch.binary_search_by_key(&height, |b| b.header().height()).unwrap_or_else(|i| i);
 
