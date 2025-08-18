@@ -1,6 +1,6 @@
 ## Ergo Explorer
 
-Ergo explorer on top of [redbit](https://github.com/pragmaxim-com/redbit) and [chain-syncer](https://github.com/pragmaxim-com/chain-syncer)
+Ergo explorer on top of [redbit](../../redbit) and [chain](../../chain)
 
 It uses tiny `block_height/tx_index/utxo_index/[asset_index]` dictionary pointers to big hashes, ie. not a single hash is duplicated,
 which allows for much better space efficiency and syncing speed with local node and an SSD.

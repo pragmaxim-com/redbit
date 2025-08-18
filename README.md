@@ -59,9 +59,9 @@ Check the [redbit-ui](http://github.com/pragmaxim-com/redbit-ui) for frontend de
 The utxo example has close to 500 frontend/backend derived tests and 130 benchmarks, so that if any redbit app derived from the definition compiles,
 it is transparent, well tested and benched already.
 
-### Chain syncer  
+### Chain  
 
-[chain-syncer](./syncer) syncs example blockchains with nodes : 
+[chain](./chain) syncs blockchains with nodes : 
  - [btc](./examples/btc)
  - [cardano](./examples/cardano)
  - [ergo](./examples/ergo)
@@ -71,7 +71,7 @@ Let's say we want to persist and query blockchain data using Redbit, declare ann
 <!-- BEGIN_LIB -->
 ```rust
     pub use redbit::*;
-    use syncer::api::{BlockHeaderLike, BlockLike};
+    use chain::api::{BlockHeaderLike, BlockLike};
     
     #[root_key] pub struct Height(pub u32);
     

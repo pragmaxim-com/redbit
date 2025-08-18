@@ -10,8 +10,8 @@ use pallas::network::miniprotocols::chainsync::{N2CClient, NextResponse};
 use pallas::network::miniprotocols::Point;
 use pallas_traverse::wellknown::GenesisValues;
 use std::{pin::Pin, sync::Arc};
-use syncer::api::{BlockProvider, ChainSyncError};
-use syncer::monitor::BoxWeight;
+use chain::api::{BlockProvider, ChainSyncError};
+use chain::monitor::BoxWeight;
 use tokio::runtime::Runtime;
 use ExplorerError;
 

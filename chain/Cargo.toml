@@ -1,5 +1,5 @@
 [package]
-name = "syncer"
+name = "chain"
 version = "1.0.3"
 edition = "2024"
 

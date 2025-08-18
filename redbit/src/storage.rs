@@ -32,7 +32,7 @@ impl Storage {
     }
 
     pub fn init(db_dir: PathBuf, db_cache_size_gb: u8) -> redb::Result<Arc<Storage>, AppError> {
-        let db_path = db_dir.join("chain_syncer.db");
+        let db_path = db_dir.join("chain.db");
         if !db_dir.exists() {
             fs::create_dir_all(db_dir.clone())?;
             let db = Database::builder().set_cache_size(db_cache_size_gb as usize * 1024 * 1024 * 1024).create(db_path)?;

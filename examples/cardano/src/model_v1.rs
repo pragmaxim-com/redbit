@@ -1,4 +1,4 @@
-use syncer::api::{BlockHeaderLike, BlockLike, ChainSyncError};
+use chain::api::{BlockHeaderLike, BlockLike, ChainSyncError};
 use chrono::DateTime;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use pallas::network::miniprotocols::{blockfetch, chainsync, localstate};
@@ -139,7 +139,7 @@ impl From<ExplorerError> for ChainSyncError {
     }
 }
 
-use syncer::api::*;
+use chain::api::*;
 
 pub struct BlockChain {
     pub storage: Arc<Storage>,

@@ -21,10 +21,10 @@ tokio = { version = "1.45.1", features = ["full", "tracing"] }
 members = [
     "macros",
     "redbit",
-    "syncer",
+    "chain",
     "examples/demo",
     "examples/cardano",
     "examples/btc",
     "examples/ergo",
 ]
-default-members = ["macros", "redbit", "syncer"]
+default-members = ["macros", "redbit", "chain"]

@@ -3,7 +3,7 @@ use demo::block_provider::DemoBlockProvider;
 use demo::*;
 use demo::model_v1::BlockChain;
 use redbit::*;
-use syncer::launcher;
+use chain::launcher;
 
 #[tokio::main]
 async fn main() -> Result<()> {

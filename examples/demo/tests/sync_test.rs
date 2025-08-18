@@ -1,9 +1,9 @@
 use std::time::Instant;
 use demo::block_provider::DemoBlockProvider;
 use demo::model_v1::*;
-use syncer::api::{BlockChainLike, BlockProvider};
-use syncer::scheduler::Scheduler;
-use syncer::settings::AppConfig;
+use chain::api::{BlockChainLike, BlockProvider};
+use chain::scheduler::Scheduler;
+use chain::settings::AppConfig;
 
 #[tokio::test]
 async fn chain_sync() {

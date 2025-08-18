@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use std::pin::Pin;
 use std::sync::{Arc, RwLock};
 use redbit::info;
-use syncer::api::{BlockProvider, ChainSyncError};
+use chain::api::{BlockProvider, ChainSyncError};
 
 pub struct DemoBlockProvider {
     pub chain: Arc<RwLock<BTreeMap<Height, Block>>>,

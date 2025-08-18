@@ -6,8 +6,8 @@ use futures::stream::StreamExt;
 use futures::Stream;
 use redbit::*;
 use std::{pin::Pin, sync::Arc};
-use syncer::api::{BlockProvider, ChainSyncError};
-use syncer::monitor::BoxWeight;
+use chain::api::{BlockProvider, ChainSyncError};
+use chain::monitor::BoxWeight;
 
 pub const SENTINEL: [u8; 25] = [
     0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,

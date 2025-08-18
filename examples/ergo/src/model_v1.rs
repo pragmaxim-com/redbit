@@ -134,7 +134,7 @@ impl From<ExplorerError> for ChainSyncError {
     }
 }
 
-use syncer::api::*;
+use chain::api::*;
 
 pub struct BlockChain {
     pub storage: Arc<Storage>,

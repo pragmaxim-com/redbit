@@ -1,7 +1,7 @@
 use anyhow::Result;
 use btc::block_provider::BtcBlockProvider;
 use btc::model_v1::BlockChain;
-use syncer::launcher;
+use chain::launcher;
 
 #[tokio::main]
 async fn main() -> Result<()> {

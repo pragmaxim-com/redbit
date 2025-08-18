@@ -18,8 +18,8 @@ use futures::Stream;
 use redbit::*;
 use reqwest::Url;
 use std::{pin::Pin, str::FromStr, sync::Arc};
-use syncer::api::{BlockProvider, ChainSyncError};
-use syncer::monitor::BoxWeight;
+use chain::api::{BlockProvider, ChainSyncError};
+use chain::monitor::BoxWeight;
 
 pub struct ErgoBlockProvider {
     pub client: Arc<ErgoClient>,

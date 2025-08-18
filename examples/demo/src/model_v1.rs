@@ -98,7 +98,7 @@ pub struct Asset {
     pub name: AssetName,
 }
 
-use syncer::api::*;
+use chain::api::*;
 
 pub struct BlockChain {
     pub storage: Arc<Storage>,

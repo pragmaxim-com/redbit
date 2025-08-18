@@ -1,7 +1,7 @@
 use cardano::block_provider::CardanoBlockProvider;
 use anyhow::Result;
 use cardano::model_v1::BlockChain;
-use syncer::launcher;
+use chain::launcher;
 
 #[tokio::main]
 async fn main() -> Result<()> {

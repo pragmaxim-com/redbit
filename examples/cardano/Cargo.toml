@@ -8,14 +8,14 @@ default = ["chain"]
 integration = []
 ci = []
 chain = ["redbit/chain"]
-tracing = ["syncer/tracing"]
+tracing = ["chain/tracing"]
 
 [dev-dependencies]
 axum-test = "17.3.0"
 
 [dependencies]
 redbit = { path = "../../redbit" }
-syncer = { path = "../../syncer" }
+chain = { path = "../../chain" }
 pallas = "0.33.0"
 pallas-traverse = "0.33.0"
 anyhow = "1.0.98"

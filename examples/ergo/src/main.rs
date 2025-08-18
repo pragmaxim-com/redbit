@@ -1,7 +1,7 @@
 use anyhow::Result;
 use ergo::block_provider::ErgoBlockProvider;
 use ergo::model_v1::*;
-use syncer::launcher;
+use chain::launcher;
 
 #[tokio::main]
 async fn main() -> Result<()> {

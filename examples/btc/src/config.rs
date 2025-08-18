@@ -1,7 +1,7 @@
 use config::{Config, ConfigError, Environment, File};
 use dotenv::dotenv;
 use serde::Deserialize;
-use syncer::settings::Parallelism;
+use chain::settings::Parallelism;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct BitcoinConfig {

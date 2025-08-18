@@ -1,5 +1,5 @@
 use std::{fs, sync::Arc, time::Duration};
-use syncer::api::BlockChainLike;
+use chain::api::BlockChainLike;
 
 use btc::block_provider::BtcBlockProvider;
 use btc::btc_client::BtcBlock;
