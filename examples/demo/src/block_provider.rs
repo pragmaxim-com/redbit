@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use std::pin::Pin;
 use std::sync::{Arc, RwLock};
 use redbit::info;
-use chain::api::{BlockProvider, ChainSyncError};
+use chain::api::{BlockProvider, ChainError};
 
 pub struct DemoBlockProvider {
     pub chain: Arc<RwLock<BTreeMap<Height, Block>>>,
@@ -37,19 +37,19 @@ impl DemoBlockProvider {
 
 #[async_trait]
 impl BlockProvider<Block, Block> for DemoBlockProvider {
-    fn block_processor(&self) -> Arc<dyn Fn(&Block) -> std::result::Result<Block, ChainSyncError> + Send + Sync> {
+    fn block_processor(&self) -> Arc<dyn Fn(&Block) -> std::result::Result<Block, ChainError> + Send + Sync> {
         Arc::new(|block| Ok(block.clone()))
     }
 
-    fn get_processed_block(&self, header: Header) -> Result<Block, ChainSyncError> {
+    fn get_processed_block(&self, header: Header) -> Result<Block, ChainError> {
         let chain = self.chain.read().unwrap();
-        let result = chain.get(&header.height).ok_or_else(|| ChainSyncError::new("Block not found"))?;
+        let result = chain.get(&header.height).ok_or_else(|| ChainError::new("Block not found"))?;
         Ok(result.clone())
     }
 
-    async fn get_chain_tip(&self) -> Result<Header, ChainSyncError> {
+    async fn get_chain_tip(&self) -> Result<Header, ChainError> {
         let chain = self.chain.read().unwrap();
-        let (_, tip_block) = chain.last_key_value().ok_or_else(|| ChainSyncError::new("No blocks in chain"))?;
+        let (_, tip_block) = chain.last_key_value().ok_or_else(|| ChainError::new("No blocks in chain"))?;
         Ok(tip_block.header.clone())
     }
 

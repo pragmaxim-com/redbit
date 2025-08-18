@@ -10,7 +10,7 @@ use pallas::network::miniprotocols::chainsync::{N2CClient, NextResponse};
 use pallas::network::miniprotocols::Point;
 use pallas_traverse::wellknown::GenesisValues;
 use std::{pin::Pin, sync::Arc};
-use chain::api::{BlockProvider, ChainSyncError};
+use chain::api::{BlockProvider, ChainError};
 use chain::monitor::BoxWeight;
 use tokio::runtime::Runtime;
 use ExplorerError;
@@ -28,7 +28,7 @@ impl CardanoBlockProvider {
         Arc::new(CardanoBlockProvider { client, genesis })
     }
 
-    fn process_block_pure(block: &CBOR, genesis: &GenesisValues) -> Result<Block, ChainSyncError> {
+    fn process_block_pure(block: &CBOR, genesis: &GenesisValues) -> Result<Block, ChainError> {
         let b = MultiEraBlock::decode(block).map_err(ExplorerError::from)?;
 
         let hash: [u8; 32] = *b.header().hash();
@@ -135,7 +135,7 @@ impl CardanoBlockProvider {
 
 #[async_trait]
 impl BlockProvider<CBOR, Block> for CardanoBlockProvider {
-    fn block_processor(&self) -> Arc<dyn Fn(&CBOR) -> Result<Block, ChainSyncError> + Send + Sync> {
+    fn block_processor(&self) -> Arc<dyn Fn(&CBOR) -> Result<Block, ChainError> + Send + Sync> {
         let genesis = Arc::clone(&self.genesis);
         // capture Arc<GenesisValues>; closure itself is zero-alloc per call
         Arc::new(move |cbor: &CBOR| {
@@ -143,7 +143,7 @@ impl BlockProvider<CBOR, Block> for CardanoBlockProvider {
         })
     }
 
-    fn get_processed_block(&self, h: BlockHeader) -> Result<Block, ChainSyncError> {
+    fn get_processed_block(&self, h: BlockHeader) -> Result<Block, ChainError> {
         let point = Point::new(h.slot.0 as u64, h.hash.0.to_vec());
         let rt = Runtime::new().unwrap();
         let cbor = rt.block_on(self.client.get_block_by_point(point))?;
@@ -151,7 +151,7 @@ impl BlockProvider<CBOR, Block> for CardanoBlockProvider {
         Self::process_block_pure(&cbor, &genesis)
     }
 
-    async fn get_chain_tip(&self) -> Result<BlockHeader, ChainSyncError> {
+    async fn get_chain_tip(&self) -> Result<BlockHeader, ChainError> {
         let best_block = self.client.get_best_block().await?;
         let genesis = Arc::clone(&self.genesis);
         let best_header = Self::process_block_pure(&best_block, &genesis)?;

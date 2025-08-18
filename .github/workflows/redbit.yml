@@ -139,12 +139,5 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions@users.noreply.github.com"
-
-          # Copy the Criterion report to repo root
-          cp target/criterion/report/index.html benchmark.html
-
-          # Stage and commit if there are changes
-          git add benchmark.html
-          git diff --cached --quiet || git commit -m "Auto-update benchmark HTML" 
           git diff --quiet || (git add README.md && git commit -m "Auto-update README with example code" && git push)
           git push

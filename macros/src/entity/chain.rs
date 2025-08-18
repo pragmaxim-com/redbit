@@ -107,31 +107,64 @@ pub fn block_like(block_type: Type, field_defs: &[FieldDef]) -> Result<TokenStre
             }
         }
 
+        #[async_trait::async_trait]
         impl chain::BlockChainLike<#block_type> for BlockChain {
-            fn init(&self) -> Result<(), chain::ChainSyncError> {
+            fn init(&self) -> Result<(), chain::ChainError> {
                 Ok(Block::init(Arc::clone(&self.storage))?)
             }
 
-            fn get_last_header(&self) -> Result<Option<#header_type>, chain::ChainSyncError> {
+            fn get_last_header(&self) -> Result<Option<#header_type>, chain::ChainError> {
                 let read_tx = self.storage.begin_read()?;
                 let last = #header_type::last(&read_tx)?;
                 Ok(last)
             }
 
-            fn get_header_by_hash(&self, hash: [u8; 32]) -> Result<Vec<#header_type>, chain::ChainSyncError> {
+            fn get_header_by_hash(&self, hash: [u8; 32]) -> Result<Vec<#header_type>, chain::ChainError> {
                 let read_tx = self.storage.begin_read()?;
                 let header = #header_type::get_by_hash(&read_tx, &BlockHash(hash))?;
                 Ok(header)
             }
 
-            fn store_blocks(&self, blocks: Vec<#block_type>) -> Result<(), chain::ChainSyncError> {
+            fn store_blocks(&self, blocks: Vec<#block_type>) -> Result<(), chain::ChainError> {
                 for block in &blocks {
                     #block_type::store_and_commit(Arc::clone(&self.storage), block)?;
                 }
                 Ok(())
             }
 
-            fn update_blocks(&self, blocks: Vec<#block_type>) -> Result<(), chain::ChainSyncError> {
+            async fn validate_chain(&self) -> Result<(), chain::ChainError> {
+                use futures::StreamExt;
+                let read_tx = self.storage.begin_read()?; // kept as-is even if unused
+                if let Some(tip_header) = #header_type::last(&read_tx)? {
+                   let mut stream = #header_type::stream_range(self.storage.begin_read()?, Height(0), tip_header.height, None)?;
+
+                   // get the first header (nothing to validate yet)
+                   let mut prev = match stream.next().await {
+                       Some(Ok(h)) => h,
+                       Some(Err(e)) => return Err(chain::ChainError::new(format!("Stream error: {}", e))),
+                       None => return Ok(()), // empty chain
+                   };
+
+                   while let Some(item) = stream.next().await {
+                       let curr = match item {
+                           Ok(h) => h,
+                           Err(e) => return Err(chain::ChainError::new(format!("Stream error: {}", e))),
+                       };
+
+                       // compare prev.hash with curr.prev_hash
+                       chain::utils::ensure_hashes_equal(
+                           format!("{:?}", prev.hash),
+                           format!("{:?}", curr.prev_hash),
+                           curr.height.0
+                       )?;
+
+                       prev = curr;
+                   }
+                }
+                Ok(())
+            }
+
+            fn update_blocks(&self, blocks: Vec<#block_type>) -> Result<(), chain::ChainError> {
                 let write_tx = self.storage.begin_write()?;
                 for block in &blocks {
                     #block_type::delete(&write_tx, &block.height)?;
@@ -141,7 +174,7 @@ pub fn block_like(block_type: Type, field_defs: &[FieldDef]) -> Result<TokenStre
                 Ok(())
             }
 
-            fn populate_inputs(&self, blocks: &mut Vec<Block>) -> Result<(), chain::ChainSyncError> {
+            fn populate_inputs(&self, blocks: &mut Vec<Block>) -> Result<(), chain::ChainError> {
                 let read_tx = self.storage.begin_read()?;
                 for block in blocks.iter_mut() {
                     self.resolve_tx_inputs(&read_tx, block)?;

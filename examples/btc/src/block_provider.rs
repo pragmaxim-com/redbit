@@ -6,7 +6,7 @@ use futures::stream::StreamExt;
 use futures::Stream;
 use redbit::*;
 use std::{pin::Pin, sync::Arc};
-use chain::api::{BlockProvider, ChainSyncError};
+use chain::api::{BlockProvider, ChainError};
 use chain::monitor::BoxWeight;
 
 pub const SENTINEL: [u8; 25] = [
@@ -28,7 +28,7 @@ impl BtcBlockProvider {
         Ok(Arc::new(BtcBlockProvider { client, fetching_par }))
     }
 
-    pub fn process_block_pure(block: &BtcBlock) -> Result<Block, ChainSyncError> {
+    pub fn process_block_pure(block: &BtcBlock) -> Result<Block, ChainError> {
         let mut block_weight = 0;
         let transactions = block
             .underlying
@@ -97,16 +97,16 @@ impl BtcBlockProvider {
 
 #[async_trait]
 impl BlockProvider<BtcBlock, Block> for BtcBlockProvider {
-    fn block_processor(&self) -> Arc<dyn Fn(&BtcBlock) -> Result<Block, ChainSyncError> + Send + Sync> {
+    fn block_processor(&self) -> Arc<dyn Fn(&BtcBlock) -> Result<Block, ChainError> + Send + Sync> {
         Arc::new(|raw| Self::process_block_pure(raw))
     }
 
-    fn get_processed_block(&self, header: Header) -> Result<Block, ChainSyncError> {
+    fn get_processed_block(&self, header: Header) -> Result<Block, ChainError> {
         let block = self.client.get_block_by_hash(header.hash)?;
         Self::process_block_pure(&block)
     }
 
-    async fn get_chain_tip(&self) -> Result<Header, ChainSyncError> {
+    async fn get_chain_tip(&self) -> Result<Header, ChainError> {
         let best_block = self.client.get_best_block()?;
         let processed_block = Self::process_block_pure(&best_block)?;
         Ok(processed_block.header)

@@ -128,9 +128,9 @@ pub enum ExplorerError {
     Custom(String),
 }
 
-impl From<ExplorerError> for ChainSyncError {
+impl From<ExplorerError> for ChainError {
     fn from(err: ExplorerError) -> Self {
-        ChainSyncError::new(&err.to_string())
+        ChainError::new(&err.to_string())
     }
 }
 
@@ -145,7 +145,7 @@ impl BlockChain {
         Arc::new(BlockChain { storage })
     }
 
-    fn resolve_tx_inputs(&self, read_tx: &StorageReadTx, block: &mut Block) -> Result<(), ChainSyncError> {
+    fn resolve_tx_inputs(&self, read_tx: &StorageReadTx, block: &mut Block) -> Result<(), ChainError> {
         for tx in &mut block.transactions {
             for box_id in tx.transient_inputs.iter_mut() {
                 let utxo_pointers = Utxo::get_ids_by_box_id(read_tx, box_id).expect("Failed to get Utxo by ErgoBox");

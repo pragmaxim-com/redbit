@@ -1,10 +1,10 @@
-use crate::api::{BlockLike, BlockChainLike, BlockProvider};
+use crate::api::{BlockChainLike, BlockLike, BlockProvider};
 use crate::scheduler::Scheduler;
 use crate::settings::{AppConfig, HttpSettings, IndexerSettings};
-use crate::combine;
+use crate::{combine, ChainError};
 use futures::future::ready;
 use redbit::storage::Storage;
-use redbit::{info, serve, AppError, OpenApiRouter, RequestState};
+use redbit::{info, serve, OpenApiRouter, RequestState};
 use std::env;
 use std::sync::Arc;
 use tokio::sync::watch;
@@ -65,7 +65,7 @@ pub async fn launch<FB: Send + Sync + 'static, TB: BlockLike + 'static, F>(
     build_chain: F,
     extras: Option<OpenApiRouter<RequestState>>,
     cors: Option<CorsLayer>,
-) -> Result<(), AppError>
+) -> Result<(), ChainError>
 where
     F: FnOnce(Arc<Storage>) -> Arc<dyn BlockChainLike<TB>>,
 {
@@ -73,8 +73,15 @@ where
     maybe_console_init();
     let db_path: String = format!("{}/{}/{}", config.indexer.db_path, "main", config.indexer.name);
     let full_path = env::home_dir().unwrap().join(&db_path);
-    let storage: Arc<Storage> = Storage::init(full_path, config.indexer.db_cache_size_gb)?;
+    let (created, storage) = Storage::init(full_path, config.indexer.db_cache_size_gb)?;
     let chain: Arc<dyn BlockChainLike<TB>> = build_chain(Arc::clone(&storage));
+    if created {
+        chain.init()?;
+    } else {
+        info!("Validating chain for being linked");
+        chain.validate_chain().await?;
+        info!("Chain is linked and ready");
+    }
     let scheduler: Scheduler<FB, TB> = Scheduler::new(block_provider, chain);
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
     let indexing_f = maybe_run_syncing(config.indexer, scheduler, shutdown_rx.clone());

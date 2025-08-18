@@ -7,7 +7,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 #[derive(Debug, thiserror::Error)]
-pub enum ChainSyncError {
+pub enum ChainError {
     #[error("Database error: {0}")]
     Redb(#[from] redb::Error),
 
@@ -27,9 +27,9 @@ pub enum ChainSyncError {
     Custom(String),
 }
 
-impl ChainSyncError {
+impl ChainError {
     pub fn new(msg: impl Into<String>) -> Self {
-        ChainSyncError::Custom(msg.into())
+        ChainError::Custom(msg.into())
     }
 }
 pub trait BlockHeaderLike: Send + Sync + Clone {
@@ -49,7 +49,7 @@ pub trait BlockHeaderLike: Send + Sync + Clone {
     }
 
     fn prev_hash_str(&self) -> String {
-        hex::encode(self.hash())
+        hex::encode(self.prev_hash())
     }
 }
 
@@ -58,19 +58,21 @@ pub trait BlockLike: Send + Sync {
     fn header(&self) -> &Self::Header;
 }
 
+#[async_trait]
 pub trait BlockChainLike<B: BlockLike>: Send + Sync {
-    fn init(&self) -> Result<(), ChainSyncError>;
-    fn get_last_header(&self) -> Result<Option<B::Header>, ChainSyncError>;
-    fn get_header_by_hash(&self, hash: [u8; 32]) -> Result<Vec<B::Header>, ChainSyncError>;
-    fn store_blocks(&self, blocks: Vec<B>) -> Result<(), ChainSyncError>;
-    fn update_blocks(&self, blocks: Vec<B>) -> Result<(), ChainSyncError>;
-    fn populate_inputs(&self, blocks: &mut Vec<B>) -> Result<(), ChainSyncError>;
+    fn init(&self) -> Result<(), ChainError>;
+    fn get_last_header(&self) -> Result<Option<B::Header>, ChainError>;
+    fn get_header_by_hash(&self, hash: [u8; 32]) -> Result<Vec<B::Header>, ChainError>;
+    fn store_blocks(&self, blocks: Vec<B>) -> Result<(), ChainError>;
+    fn update_blocks(&self, blocks: Vec<B>) -> Result<(), ChainError>;
+    fn populate_inputs(&self, blocks: &mut Vec<B>) -> Result<(), ChainError>;
+    async fn validate_chain(&self) -> Result<(), ChainError>;
 }
 
 #[async_trait]
 pub trait BlockProvider<FB: Send, TB: BlockLike>: Send + Sync {
-    fn block_processor(&self) -> Arc<dyn Fn(&FB) -> Result<TB, ChainSyncError> + Send + Sync>;
-    fn get_processed_block(&self, header: TB::Header) -> Result<TB, ChainSyncError>;
-    async fn get_chain_tip(&self) -> Result<TB::Header, ChainSyncError>;
+    fn block_processor(&self) -> Arc<dyn Fn(&FB) -> Result<TB, ChainError> + Send + Sync>;
+    fn get_processed_block(&self, header: TB::Header) -> Result<TB, ChainError>;
+    async fn get_chain_tip(&self) -> Result<TB::Header, ChainError>;
     fn stream(&self, chain_tip_header: TB::Header, last_header: Option<TB::Header>) -> Pin<Box<dyn Stream<Item = FB> + Send + 'static>>;
 }

@@ -1,6 +1,6 @@
 use crate::api::{BlockChainLike, BlockLike};
 use crate::api::BlockHeaderLike;
-use crate::api::{BlockProvider, ChainSyncError};
+use crate::api::{BlockProvider, ChainError};
 use crate::monitor::ProgressMonitor;
 use crate::settings::IndexerSettings;
 use crate::task;
@@ -18,7 +18,6 @@ pub struct ChainSyncer<FB: Send + Sync + 'static, TB: BlockLike + 'static> {
 
 impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
     pub fn new(block_provider: Arc<dyn BlockProvider<FB, TB>>, chain: Arc<dyn BlockChainLike<TB>>) -> Self {
-        chain.init().expect("Failed to initialize chain");
         Self { block_provider, chain, monitor: Arc::new(ProgressMonitor::new(1000)) }
     }
 
@@ -138,7 +137,7 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
         }
     }
 
-    fn chain_link(block: TB, block_provider: Arc<dyn BlockProvider<FB, TB>>, chain: Arc<dyn BlockChainLike<TB>>) -> Result<Vec<TB>, ChainSyncError> {
+    fn chain_link(block: TB, block_provider: Arc<dyn BlockProvider<FB, TB>>, chain: Arc<dyn BlockChainLike<TB>>) -> Result<Vec<TB>, ChainError> {
         let header = block.header();
         let prev_headers = chain.get_header_by_hash(header.prev_hash())?;
 
@@ -176,7 +175,7 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
 
     }
 
-    pub fn persist_or_link(mut blocks: Vec<TB>, fork_detection_height: u32, block_provider: Arc<dyn BlockProvider<FB, TB>>, block_chain: Arc<dyn BlockChainLike<TB>>) -> Result<(), ChainSyncError> {
+    pub fn persist_or_link(mut blocks: Vec<TB>, fork_detection_height: u32, block_provider: Arc<dyn BlockProvider<FB, TB>>, block_chain: Arc<dyn BlockChainLike<TB>>) -> Result<(), ChainError> {
         if blocks.is_empty() {
             error!("Received empty block batch, nothing to persist");
             Ok(())

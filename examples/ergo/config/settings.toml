@@ -1,7 +1,7 @@
 [indexer]
 name = "ergo"
 db_path = "/opt/.chain"
-enable = false
+enable = true
 sync_interval_s = 1             # 0 means only chatching up but no periodic sync
 fork_detection_heights = 100    # max 255, how many blocks from tip to check for forks
 db_cache_size_gb = 16           # 0 means disabled, redb cache size in GigaBytes

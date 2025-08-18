@@ -10,6 +10,7 @@ async fn chain_sync() {
     let storage = Storage::temp("chain_sync_test", 1, true).expect("Failed to open database");
     let block_provider: Arc<dyn BlockProvider<Block, Block>> = DemoBlockProvider::new(50).expect("Failed to create block provider");
     let chain: Arc<dyn BlockChainLike<Block>> = BlockChain::new(Arc::clone(&storage));
+    chain.init().expect("Failed to initialize chain");
     let config = AppConfig::new("config/settings").expect("Failed to load app config");
     let scheduler = Scheduler::new(block_provider, chain.clone());
     let start = Instant::now();
@@ -24,5 +25,7 @@ async fn chain_sync() {
     assert_eq!(block_headers.len(), 50); // genesis not stored
     let heights: Vec<u32> = block_headers.iter().map(|h| h.height.0).collect();
     assert_eq!(heights, (1..=50).collect::<Vec<u32>>());
+    let result = chain.validate_chain().await;
+    assert!(result.is_ok(), "Chain validation failed: {:?}", result.err());
 }
 

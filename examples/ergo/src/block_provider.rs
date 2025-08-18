@@ -18,7 +18,7 @@ use futures::Stream;
 use redbit::*;
 use reqwest::Url;
 use std::{pin::Pin, str::FromStr, sync::Arc};
-use chain::api::{BlockProvider, ChainSyncError};
+use chain::api::{BlockProvider, ChainError};
 use chain::monitor::BoxWeight;
 
 pub struct ErgoBlockProvider {
@@ -37,7 +37,7 @@ impl ErgoBlockProvider {
         }))
     }
 
-    fn process_block_pure(b: &FullBlock) -> Result<Block, ChainSyncError> {
+    fn process_block_pure(b: &FullBlock) -> Result<Block, ChainError> {
         let mut block_weight: usize = 0;
         let mut result_txs = Vec::with_capacity(b.block_transactions.transactions.len());
 
@@ -128,16 +128,16 @@ impl ErgoBlockProvider {
 #[async_trait]
 impl BlockProvider<FullBlock, Block> for ErgoBlockProvider {
 
-    fn block_processor(&self) -> Arc<dyn Fn(&FullBlock) -> Result<Block, ChainSyncError> + Send + Sync> {
+    fn block_processor(&self) -> Arc<dyn Fn(&FullBlock) -> Result<Block, ChainError> + Send + Sync> {
         Arc::new(|raw| ErgoBlockProvider::process_block_pure(raw))
     }
 
-    fn get_processed_block(&self, header: BlockHeader) -> Result<Block, ChainSyncError> {
+    fn get_processed_block(&self, header: BlockHeader) -> Result<Block, ChainError> {
         let block = self.client.get_block_by_hash_sync(header.hash)?;
         Self::process_block_pure(&block)
     }
 
-    async fn get_chain_tip(&self) -> Result<BlockHeader, ChainSyncError> {
+    async fn get_chain_tip(&self) -> Result<BlockHeader, ChainError> {
         let best_block = self.client.get_best_block_async().await?;
         let processed_block = Self::process_block_pure(&best_block)?;
         Ok(processed_block.header)
