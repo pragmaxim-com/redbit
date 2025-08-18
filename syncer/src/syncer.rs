@@ -1,14 +1,14 @@
+use crate::api::{BlockChainLike, BlockLike};
 use crate::api::BlockHeaderLike;
-use crate::api::{BlockLike, BlockChainLike};
 use crate::api::{BlockProvider, ChainSyncError};
 use crate::monitor::ProgressMonitor;
+use crate::settings::IndexerSettings;
+use crate::task;
 use futures::StreamExt;
+use redbit::{error, info};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
-use redbit::{error, info};
-use crate::task;
-use crate::settings::IndexerSettings;
 
 pub struct ChainSyncer<FB: Send + Sync + 'static, TB: BlockLike + 'static> {
     pub block_provider: Arc<dyn BlockProvider<FB, TB>>,
@@ -18,6 +18,7 @@ pub struct ChainSyncer<FB: Send + Sync + 'static, TB: BlockLike + 'static> {
 
 impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
     pub fn new(block_provider: Arc<dyn BlockProvider<FB, TB>>, chain: Arc<dyn BlockChainLike<TB>>) -> Self {
+        chain.init().expect("Failed to initialize chain");
         Self { block_provider, chain, monitor: Arc::new(ProgressMonitor::new(1000)) }
     }
 
@@ -180,8 +181,10 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
             error!("Received empty block batch, nothing to persist");
             Ok(())
         } else if blocks.last().is_some_and(|b| b.header().height() <= fork_detection_height) {
+            block_chain.populate_inputs(&mut blocks)?;
             block_chain.store_blocks(blocks)
         } else {
+            block_chain.populate_inputs(&mut blocks)?;
             for block in blocks.drain(..) {
                 let chain = Self::chain_link(block, Arc::clone(&block_provider), Arc::clone(&block_chain))?;
                 match chain.len() {

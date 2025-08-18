@@ -3,6 +3,10 @@ name = "macros"
 version = "1.0.3"
 edition = "2021"
 
+[features]
+chain = []
+default = []
+
 [lib]
 proc-macro = true
 

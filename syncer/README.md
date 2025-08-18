@@ -23,9 +23,10 @@ tokio-console
 
 ### Usage
 
-- [Bitcoin Explorer](../examples/btc)
-- [Cardano Explorer](../examples/cardano)
-- [Ergo Explorer](../examples/ergo)
+- [Demo](../examples/btc)
+- [Btc](../examples/btc)
+- [Cardano](../examples/cardano)
+- [Ergo](../examples/ergo)
 
 ### Troubleshooting 
 

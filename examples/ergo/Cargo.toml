@@ -4,9 +4,10 @@ version = "1.0.3"
 edition = "2024"
 
 [features]
-default = []
+default = ["chain"]
 integration = []
 ci = []
+chain = ["redbit/chain"]
 tracing = ["syncer/tracing"]
 
 [dev-dependencies]

@@ -3,6 +3,10 @@ name = "redbit"
 version = "1.0.3"
 edition = "2021"
 
+[features]
+default = []
+chain = ["macros/chain"]  # forward feature to libC
+
 [lib]
 name = "redbit"
 

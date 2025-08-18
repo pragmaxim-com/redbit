@@ -6,3 +6,5 @@ pub mod scheduler;
 pub mod combine;
 pub mod launcher;
 pub mod task;
+
+pub use api::{BlockHeaderLike, BlockLike, BlockChainLike, ChainSyncError};

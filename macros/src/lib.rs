@@ -224,7 +224,7 @@ pub fn derive_entity(input: TokenStream) -> TokenStream {
 
     let stream = quote! {
         #s
-
+        #[cfg(feature = "chain")]
         #chain_impl
 
         inventory::submit! {

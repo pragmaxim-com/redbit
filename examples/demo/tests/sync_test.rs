@@ -1,5 +1,4 @@
 use std::time::Instant;
-use demo::block_chain::DemoBlockChain;
 use demo::block_provider::DemoBlockProvider;
 use demo::model_v1::*;
 use syncer::api::{BlockChainLike, BlockProvider};
@@ -10,7 +9,7 @@ use syncer::settings::AppConfig;
 async fn chain_sync() {
     let storage = Storage::temp("chain_sync_test", 1, true).expect("Failed to open database");
     let block_provider: Arc<dyn BlockProvider<Block, Block>> = DemoBlockProvider::new(50).expect("Failed to create block provider");
-    let chain: Arc<dyn BlockChainLike<Block>> = DemoBlockChain::new(Arc::clone(&storage));
+    let chain: Arc<dyn BlockChainLike<Block>> = BlockChain::new(Arc::clone(&storage));
     let config = AppConfig::new("config/settings").expect("Failed to load app config");
     let scheduler = Scheduler::new(block_provider, chain.clone());
     let start = Instant::now();

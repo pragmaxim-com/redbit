@@ -1,4 +1,3 @@
-use syncer::api::{BlockHeaderLike, BlockLike, ChainSyncError};
 use std::error::Error;
 use chrono::DateTime;
 pub use redbit::*;
@@ -133,4 +132,32 @@ impl From<ExplorerError> for ChainSyncError {
     fn from(err: ExplorerError) -> Self {
         ChainSyncError::new(&err.to_string())
     }
+}
+
+use syncer::api::*;
+
+pub struct BlockChain {
+    pub storage: Arc<Storage>,
+}
+
+impl BlockChain {
+    pub fn new(storage: Arc<Storage>) -> Arc<dyn BlockChainLike<Block>> {
+        Arc::new(BlockChain { storage })
+    }
+
+    fn resolve_tx_inputs(&self, read_tx: &StorageReadTx, block: &mut Block) -> Result<(), ChainSyncError> {
+        for tx in &mut block.transactions {
+            for box_id in tx.transient_inputs.iter_mut() {
+                let utxo_pointers = Utxo::get_ids_by_box_id(read_tx, box_id).expect("Failed to get Utxo by ErgoBox");
+                match utxo_pointers.first() {
+                    Some(utxo_pointer) => {
+                        tx.inputs.push(InputRef { id: TransactionPointer::from_parent(utxo_pointer.parent, utxo_pointer.index()) })
+                    }
+                    None => tx.inputs.push(InputRef { id: TransactionPointer::from_parent(BlockPointer::from_parent(Height(0), 0), 0) }),
+                }
+            }
+        }
+        Ok(())
+    }
+
 }

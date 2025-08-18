@@ -1,5 +1,4 @@
 use crate::api::{BlockLike, BlockChainLike, BlockProvider};
-use crate::monitor::ProgressMonitor;
 use crate::settings::IndexerSettings;
 use crate::syncer::ChainSyncer;
 use std::sync::Arc;
@@ -13,8 +12,7 @@ pub struct Scheduler<FB: Send + Sync + 'static, TB: BlockLike + 'static> {
 
 impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> Scheduler<FB, TB> {
     pub fn new(block_provider: Arc<dyn BlockProvider<FB, TB>>, chain: Arc<dyn BlockChainLike<TB>>) -> Self {
-        let syncer = ChainSyncer { block_provider, chain, monitor: Arc::new(ProgressMonitor::new(1000)) };
-        Scheduler { syncer }
+        Scheduler { syncer: ChainSyncer::new(block_provider, chain) }
     }
 
     pub async fn sync(&self, indexer_conf: IndexerSettings) {

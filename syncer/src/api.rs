@@ -1,10 +1,10 @@
 use async_trait::async_trait;
+use chrono::DateTime;
 use futures::Stream;
 use hex::FromHexError;
-use redbit::{AppError, Storage};
+use redbit::AppError;
 use std::pin::Pin;
 use std::sync::Arc;
-use chrono::DateTime;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ChainSyncError {
@@ -58,17 +58,13 @@ pub trait BlockLike: Send + Sync {
     fn header(&self) -> &Self::Header;
 }
 
-
-pub struct BlockChain {
-    pub storage: Arc<Storage>,
-}
-
 pub trait BlockChainLike<B: BlockLike>: Send + Sync {
     fn init(&self) -> Result<(), ChainSyncError>;
     fn get_last_header(&self) -> Result<Option<B::Header>, ChainSyncError>;
     fn get_header_by_hash(&self, hash: [u8; 32]) -> Result<Vec<B::Header>, ChainSyncError>;
     fn store_blocks(&self, blocks: Vec<B>) -> Result<(), ChainSyncError>;
     fn update_blocks(&self, blocks: Vec<B>) -> Result<(), ChainSyncError>;
+    fn populate_inputs(&self, blocks: &mut Vec<B>) -> Result<(), ChainSyncError>;
 }
 
 #[async_trait]

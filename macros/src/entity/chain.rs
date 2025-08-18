@@ -1,3 +1,5 @@
+#[cfg(feature = "chain")]
+
 use crate::field_parser::FieldDef;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
@@ -95,13 +97,56 @@ pub fn block_header_like(header_type: Type, field_defs: &[FieldDef]) -> Result<T
 }
 
 pub fn block_like(block_type: Type, field_defs: &[FieldDef]) -> Result<TokenStream, syn::Error> {
-    let header_ty = header_type_from(field_defs)?;
+    let header_type = header_type_from(field_defs)?;
 
     Ok(quote! {
         impl BlockLike for #block_type {
-            type Header = #header_ty;
+            type Header = #header_type;
             fn header(&self) -> &Self::Header {
                 &self.header
+            }
+        }
+
+        impl syncer::BlockChainLike<#block_type> for BlockChain {
+            fn init(&self) -> Result<(), syncer::ChainSyncError> {
+                Ok(Block::init(Arc::clone(&self.storage))?)
+            }
+
+            fn get_last_header(&self) -> Result<Option<#header_type>, syncer::ChainSyncError> {
+                let read_tx = self.storage.begin_read()?;
+                let last = #header_type::last(&read_tx)?;
+                Ok(last)
+            }
+
+            fn get_header_by_hash(&self, hash: [u8; 32]) -> Result<Vec<#header_type>, syncer::ChainSyncError> {
+                let read_tx = self.storage.begin_read()?;
+                let header = #header_type::get_by_hash(&read_tx, &BlockHash(hash))?;
+                Ok(header)
+            }
+
+            fn store_blocks(&self, blocks: Vec<#block_type>) -> Result<(), syncer::ChainSyncError> {
+                for block in &blocks {
+                    #block_type::store_and_commit(Arc::clone(&self.storage), block)?;
+                }
+                Ok(())
+            }
+
+            fn update_blocks(&self, blocks: Vec<#block_type>) -> Result<(), syncer::ChainSyncError> {
+                let write_tx = self.storage.begin_write()?;
+                for block in &blocks {
+                    #block_type::delete(&write_tx, &block.height)?;
+                }
+                write_tx.commit()?;
+                self.store_blocks(blocks)?;
+                Ok(())
+            }
+
+            fn populate_inputs(&self, blocks: &mut Vec<Block>) -> Result<(), syncer::ChainSyncError> {
+                let read_tx = self.storage.begin_read()?;
+                for block in blocks.iter_mut() {
+                    self.resolve_tx_inputs(&read_tx, block)?;
+                }
+                Ok(())
             }
         }
     })

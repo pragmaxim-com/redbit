@@ -1,10 +1,9 @@
 use std::{fs, sync::Arc, time::Duration};
 use syncer::api::BlockChainLike;
 
-use btc::block_chain::BtcBlockChain;
 use btc::block_provider::BtcBlockProvider;
 use btc::btc_client::BtcBlock;
-use btc::model_v1::Block;
+use btc::model_v1::{Block, BlockChain};
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
 use serde_json;
 
@@ -20,7 +19,7 @@ fn block_from_file(size: &str, tx_count: usize) -> BtcBlock {
 fn criterion_benchmark(c: &mut Criterion) {
     let storage = Storage::temp("btc_benchmark", 1, true).expect("Failed to open database");
 
-    let chain: Arc<dyn BlockChainLike<Block>> = BtcBlockChain::new(Arc::clone(&storage));
+    let chain: Arc<dyn BlockChainLike<Block>> = BlockChain::new(Arc::clone(&storage));
 
     let small_block: BtcBlock = block_from_file("small", 29);
     let avg_block: BtcBlock = block_from_file("avg", 343);
