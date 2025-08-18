@@ -34,13 +34,15 @@ jobs:
 
       - name: Run tests
         run: |
+          cargo test --package redbit
+          cargo test --package chain
           cargo test --package btc --features ci
           cargo test --package btc --features integration,ci
           cargo test --package cardano --features ci
           cargo test --package cardano --features integration,ci
           cargo test --package ergo --features ci
           cargo test --package ergo --features integration,ci
-          cargo test --package demo --features ci  -- --nocapture | tee demo_test_output.txt
+          cargo test --package demo --features ci
           cargo test --package demo --features integration,ci
 
   performance:
@@ -65,27 +67,35 @@ jobs:
 
       - name: Run Built-in Rust Benchmarks and Extract Metrics
         run: |
-          cargo bench --package demo -- --nocapture | tee demo_bench_output.txt
-          cargo bench --package btc -- --nocapture | tee btc_bench_output.txt
-          
-          # Extract and process lines with `bench:`
-          grep 'bench:' demo_bench_output.txt | while read -r line; do
-            # Extract full function name regardless of spacing
-            FUNCTION=$(echo "$line" | sed -n 's/^test \([^ ]*\) \+\.\.\. bench:.*/\1/p')
-          
-            # Extract time in ns/iter
-            TIME_NS=$(echo "$line" | grep -oP 'bench:\s+\K[0-9.,]+' | tr -d ',')
-          
-            # Convert TIME_NS to ops/sec
-            OPS_PER_S=$(awk "BEGIN {if ($TIME_NS > 0) printf \"%.0f\", 1000000000 / $TIME_NS; else print 0}")
-          
-            echo "$FUNCTION,$OPS_PER_S" >> demo_benchmarks.csv
-          done
-          
-          sort -t, -k2 -n demo_benchmarks.csv > sorted_demo_demo_benchmarks.csv
-          mv sorted_demo_demo_benchmarks.csv demo_benchmarks.csv
+          run_bench() {
+            PACKAGE=$1
+            OUT_FILE="${PACKAGE}_bench_output.txt"
+            CSV_FILE="${PACKAGE}_benchmarks.csv"
 
-      - name: Update README
+            echo "Running benchmarks for $PACKAGE ..."
+            cargo bench --package "$PACKAGE" -- --nocapture | tee "$OUT_FILE"
+
+            # Extract and process lines with `bench:`
+            grep 'bench:' "$OUT_FILE" | while read -r line; do
+              # Extract full function name regardless of spacing
+              FUNCTION=$(echo "$line" | sed -n 's/^test \([^ ]*\) \+\.\.\. bench:.*/\1/p')
+
+              # Extract time in ns/iter
+              TIME_NS=$(echo "$line" | grep -oP 'bench:\s+\K[0-9.,]+' | tr -d ',')
+
+              # Convert TIME_NS to ops/sec
+              OPS_PER_S=$(awk "BEGIN {if ($TIME_NS > 0) printf \"%.0f\", 1000000000 / $TIME_NS; else print 0}")
+
+              echo "$FUNCTION,$OPS_PER_S" >> "$CSV_FILE"
+            done
+
+            sort -t, -k2 -n "$CSV_FILE" -o "$CSV_FILE"
+          }
+
+          run_bench demo
+          cargo bench --package btc --bench btc_benchmark -- --quiet
+
+      - name: Update README with documentation
         run: |
           LIB_CONTENT=$(cat examples/demo/src/model_v1.rs | sed 's/^/    /')
           MAIN_CONTENT=$(cat examples/demo/src/run.rs | sed 's/^/    /')
@@ -100,6 +110,8 @@ jobs:
             !in_lib && !in_main { print }
           ' README.md > README.md.tmp && mv README.md.tmp README.md
 
+      - name: Update Readme with bench results
+        run: |
           # Prepare formatted benchmark lines
           HEADER=$(printf "%-60s %10s\n" "function" "ops/s")
           BODY=$(cat demo_benchmarks.csv | awk -F, '{ printf "%-60s %10s\n", $1, $2 }')
@@ -123,8 +135,16 @@ jobs:
             !in_bench { print }
           ' README.md > README.md.tmp && mv README.md.tmp README.md
 
-      - name: Commit changes
+      - name: Commit benchmark HTML
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions@users.noreply.github.com"
+
+          # Copy the Criterion report to repo root
+          cp target/criterion/report/index.html benchmark.html
+
+          # Stage and commit if there are changes
+          git add benchmark.html
+          git diff --cached --quiet || git commit -m "Auto-update benchmark HTML" 
           git diff --quiet || (git add README.md && git commit -m "Auto-update README with example code" && git push)
+          git push

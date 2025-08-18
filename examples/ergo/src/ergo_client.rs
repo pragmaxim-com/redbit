@@ -1,6 +1,6 @@
 use crate::model_v1::{BlockHash, ExplorerError, Height};
 use ergo_lib::chain::block::FullBlock;
-use redbit::retry::retry_with_delay;
+use redbit::retry::retry_with_delay_async;
 use reqwest::{
     blocking, header::{HeaderMap, HeaderValue, ACCEPT, CONTENT_TYPE}, Client,
     Url,
@@ -46,7 +46,7 @@ impl ErgoClient {
     }
 
     pub(crate) async fn get_block_by_height_retry_async(&self, height: Height) -> Result<FullBlock, ExplorerError> {
-        retry_with_delay(5, Duration::from_millis(1000), || {
+        retry_with_delay_async(5, Duration::from_millis(1000), || {
             async move {
                 let block_ids = self.get_block_ids_by_height_async(height).await?;
                 self.get_block_by_hash_async(block_ids.first().unwrap()).await

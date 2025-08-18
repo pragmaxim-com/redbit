@@ -1,10 +1,8 @@
 use core::future::Future;
+use std::thread;
+use std::time::Duration;
 
-pub async fn retry_with_delay<F, Fut, T, E>(
-    attempts: usize,
-    delay: std::time::Duration,
-    mut op: F,
-) -> Result<T, E>
+pub async fn retry_with_delay_async<F, Fut, T, E>(attempts: usize, delay: Duration, mut op: F) -> Result<T, E>
 where
     F: FnMut() -> Fut,
     Fut: Future<Output = Result<T, E>>,
@@ -22,6 +20,25 @@ where
         }
     }
 }
+
+pub fn retry_with_delay_sync<F, T, E>(attempts: usize, delay: Duration, mut op: F, ) -> Result<T, E>
+where
+    F: FnMut() -> Result<T, E>,
+{
+    assert!(attempts >= 1);
+    let mut left = attempts;
+    loop {
+        match op() {
+            Ok(v) => return Ok(v),
+            Err(_e) if left > 1 => {
+                left -= 1;
+                thread::sleep(delay);
+            }
+            Err(e) => return Err(e),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -30,13 +47,30 @@ mod tests {
     use tokio::task::JoinHandle;
     use tokio::time::{advance};
 
+    #[test]
+    fn test_retry_with_delay_sync() {
+        let counter = AtomicUsize::new(0);
+
+        let result = retry_with_delay_sync(5, Duration::from_millis(10), || {
+            let n = counter.fetch_add(1, Ordering::SeqCst);
+            if n < 3 {
+                Err("fail")
+            } else {
+                Ok(n)
+            }
+        });
+
+        assert_eq!(result.unwrap(), 3);
+        assert_eq!(counter.load(Ordering::SeqCst), 4);
+    }
+
     // 1) Immediate success: should not retry, no sleeps needed.
     #[tokio::test(start_paused = true)]
     async fn retry_immediate_success() {
         static CALLS: AtomicUsize = AtomicUsize::new(0);
         CALLS.store(0, Ordering::SeqCst);
 
-        let out: Result<i32, &'static str> = retry_with_delay(5, Duration::from_secs(1), || async {
+        let out: Result<i32, &'static str> = retry_with_delay_async(5, Duration::from_secs(1), || async {
             CALLS.fetch_add(1, Ordering::SeqCst);
             Ok(42)
         }).await;
@@ -53,7 +87,7 @@ mod tests {
         let delay = Duration::from_millis(500);
 
         let task = tokio::spawn(async move {
-            retry_with_delay(3, delay, || async {
+            retry_with_delay_async(3, delay, || async {
                 let n = CALLS.fetch_add(1, Ordering::SeqCst) + 1;
                 if n < 3 { Err("not yet") } else { Ok(7) }
             }).await
@@ -76,7 +110,7 @@ mod tests {
         let delay = Duration::from_secs(1);
 
         let task: JoinHandle<Result<(), &'static str>> = tokio::spawn(async move {
-            retry_with_delay(3, delay, || async {
+            retry_with_delay_async(3, delay, || async {
                 let n = CALLS.fetch_add(1, Ordering::SeqCst) + 1;
                 Err(match n {
                     1 => "e1",
@@ -95,11 +129,10 @@ mod tests {
         assert_eq!(CALLS.load(Ordering::SeqCst), 3, "exactly N attempts on failure");
     }
 
-    // 4) attempts == 0 should panic due to the assert! guard.
     #[tokio::test(start_paused = true)]
     #[should_panic]
     async fn retry_zero_attempts_panics() {
-        let _ = retry_with_delay::<_, _, (), ()>(0, Duration::from_secs(1), || async { Ok(()) }).await;
+        let _ = retry_with_delay_async::<_, _, (), ()>(0, Duration::from_secs(1), || async { Ok(()) }).await;
     }
 
     // 5) Zero delay: still retries immediately; no time advance required.
@@ -108,7 +141,7 @@ mod tests {
         static CALLS: AtomicUsize = AtomicUsize::new(0);
         CALLS.store(0, Ordering::SeqCst);
 
-        let res: Result<i32, &str> = retry_with_delay(4, Duration::ZERO, || async {
+        let res: Result<i32, &str> = retry_with_delay_async(4, Duration::ZERO, || async {
             let n = CALLS.fetch_add(1, Ordering::SeqCst) + 1;
             if n < 4 { Err("nope") } else { Ok(99) }
         }).await;
@@ -126,7 +159,7 @@ mod tests {
         let delay = Duration::from_millis(300);
 
         let task = tokio::spawn(async move {
-            retry_with_delay(10, delay, || async {
+            retry_with_delay_async(10, delay, || async {
                 let n = CALLS.fetch_add(1, Ordering::SeqCst) + 1;
                 if n == 5 { Ok(1) } else { Err("x") }
             }).await

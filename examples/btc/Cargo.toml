@@ -15,7 +15,7 @@ name = "btc_benchmark"
 harness = false
 
 [dev-dependencies]
-criterion = { version = "0.7.0", features = ["async_tokio"] }
+criterion = { version = "0.7.0", features = ["async_tokio", "html_reports"] }
 axum-test = "17.3.0"
 
 [dependencies]

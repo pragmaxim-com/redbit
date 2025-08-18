@@ -34,8 +34,31 @@ redbit = { path = "../../redbit" }
 chain = { path = "../../chain" }
 ```
 
-And then all you need to do is defining how to resolve transaction inputs : 
+And then all you need to do is defining entities with minimal required fields and how to resolve transaction inputs : 
 ```rust
+
+#[entity]
+pub struct Block {
+    #[pk]
+    pub height: Height,
+    pub header: Header,
+    pub transactions: Vec<Transaction>,
+}
+
+#[entity]
+pub struct Header {
+    #[fk(one2one)]
+    pub height: Height,
+    #[column(index)]
+    pub hash: BlockHash,
+    #[column(index)]
+    pub prev_hash: BlockHash,
+    #[column(range)]
+    pub timestamp: Timestamp,
+    #[column(transient)]
+    pub weight: Weight,
+}
+
 use chain::api::*;
 
 pub struct BlockChain {

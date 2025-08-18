@@ -3,9 +3,10 @@ use crate::model_v1::{BlockHash, Height, ExplorerError};
 use bitcoin::hashes::Hash;
 use bitcoincore_rpc::{Auth, Client, RpcApi};
 use std::sync::Arc;
+use std::time::Duration;
 use serde::{Deserialize, Serialize};
+use redbit::retry::retry_with_delay_sync;
 
-// Bitcoin block wrapper
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct BtcBlock {
     pub height: Height,
@@ -32,33 +33,39 @@ impl BtcClient {
 
 impl BtcClient {
     pub fn get_best_block(&self) -> Result<BtcBlock, ExplorerError> {
-        let best_block_hash = self.rpc_client.get_best_block_hash()?;
-        let best_block = self.rpc_client.get_block(&best_block_hash)?;
-        let height = self.get_block_height(&best_block)?;
-        Ok(BtcBlock { height, underlying: best_block })
+        retry_with_delay_sync(3, Duration::from_millis(1000), || {
+            let best_block_hash = self.rpc_client.get_best_block_hash()?;
+            let best_block = self.rpc_client.get_block(&best_block_hash)?;
+            let height = self.get_block_height(&best_block)?;
+            Ok(BtcBlock { height, underlying: best_block })
+        })
     }
 
     pub fn get_block_by_hash(&self, hash: BlockHash) -> Result<BtcBlock, ExplorerError> {
         let bitcoin_hash = bitcoin::BlockHash::from_raw_hash(Hash::from_byte_array(hash.0));
-        let block = self.rpc_client.get_block(&bitcoin_hash)?;
-        let height = self.get_block_height(&block)?;
-        Ok(BtcBlock { height, underlying: block })
+        retry_with_delay_sync(3, Duration::from_millis(1000), || {
+            let block = self.rpc_client.get_block(&bitcoin_hash)?;
+            let height = self.get_block_height(&block)?;
+            Ok(BtcBlock { height, underlying: block })
+        })
     }
 
     pub fn get_block_by_height(&self, height: Height) -> Result<BtcBlock, ExplorerError> {
-        let block_hash = self.rpc_client.get_block_hash(height.0 as u64)?;
-        let block = self.rpc_client.get_block(&block_hash)?;
-        Ok(BtcBlock { height, underlying: block })
+        retry_with_delay_sync(3, Duration::from_millis(1000), || {
+            let block_hash = self.rpc_client.get_block_hash(height.0 as u64)?;
+            let block = self.rpc_client.get_block(&block_hash)?;
+            Ok(BtcBlock { height, underlying: block })
+        })
     }
 
     fn get_block_height(&self, block: &bitcoin::Block) -> Result<Height, ExplorerError> {
-        // Try to get height using fast method (BIP34)
         if let Ok(height) = block.bip34_block_height() {
             return Ok(Height(height as u32));
         }
-        // Fallback to fetching block header for height
         let block_hash = block.block_hash();
-        let verbose_block = self.rpc_client.get_block_info(&block_hash)?;
-        Ok(Height(verbose_block.height as u32))
+        retry_with_delay_sync(3, Duration::from_millis(1000), || {
+            let verbose_block = self.rpc_client.get_block_info(&block_hash)?;
+            Ok(Height(verbose_block.height as u32))
+        })
     }
 }
