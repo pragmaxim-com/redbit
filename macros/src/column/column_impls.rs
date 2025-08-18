@@ -142,6 +142,10 @@ pub fn generate_column_impls(
     }
 
     let impls = quote! {
+        impl ColInnerType for #struct_ident {
+            type Repr = #inner_type;
+        }
+
         impl UrlEncoded for #struct_ident {
             fn url_encode(&self) -> String {
                 #url_encoded_code

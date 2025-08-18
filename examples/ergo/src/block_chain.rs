@@ -9,7 +9,7 @@ pub struct ErgoBlockChain {
 }
 
 impl ErgoBlockChain {
-    pub fn new(storage: Arc<Storage>) -> Arc<dyn BlockChain<Block>> {
+    pub fn new(storage: Arc<Storage>) -> Arc<dyn BlockChainLike<Block>> {
         let chain = ErgoBlockChain { storage };
         chain.init().expect("Failed to initialize ErgoBlockPersistence");
         Arc::new(chain)
@@ -31,7 +31,7 @@ impl ErgoBlockChain {
     }
 }
 
-impl BlockChain<Block> for ErgoBlockChain {
+impl BlockChainLike<Block> for ErgoBlockChain {
     fn init(&self) -> Result<(), ChainSyncError> {
         Ok(Block::init(Arc::clone(&self.storage))?)
     }

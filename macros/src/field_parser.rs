@@ -15,7 +15,7 @@ pub enum Multiplicity {
 }
 
 #[derive(Clone)]
-pub struct ParentDef {
+pub struct OneToManyParentDef {
     pub parent_type: Type,
     pub parent_ident: Ident,
     pub stream_query_ty: Type

@@ -7,7 +7,9 @@ use syn::Field;
 pub fn new(struct_name: &Ident, index_field: Field) -> TokenStream {
     let index_type = &index_field.ty;
     quote! {
-        // Core traits
+        impl ColInnerType for #struct_name {
+            type Repr = #index_type;
+        }
         impl IndexedPointer for #struct_name {
             type Index = #index_type;
             fn index(&self) -> Self::Index { self.0 }

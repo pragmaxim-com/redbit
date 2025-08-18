@@ -125,12 +125,12 @@ async fn it_should_stream_entities_by_range_on_index() {
 
     let from_timestamp = blocks[0].header.timestamp;
     let until_timestamp = blocks[2].header.timestamp;
-    let expected_blocks: Vec<BlockHeader> = blocks.into_iter().map(|b|b.header).take(2).collect();
-    let unique_timestamps: HashSet<Timestamp> = BlockHeader::take(&read_tx, 100).unwrap().iter().map(|h| h.timestamp).collect();
+    let expected_blocks: Vec<Header> = blocks.into_iter().map(|b|b.header).take(2).collect();
+    let unique_timestamps: HashSet<Timestamp> = Header::take(&read_tx, 100).unwrap().iter().map(|h| h.timestamp).collect();
     assert_eq!(unique_timestamps.len(), 3);
 
     let found_by_timestamp_range =
-        BlockHeader::stream_range_by_timestamp(read_tx, from_timestamp, until_timestamp, None).unwrap().try_collect::<Vec<BlockHeader>>().await.unwrap();
+        Header::stream_range_by_timestamp(read_tx, from_timestamp, until_timestamp, None).unwrap().try_collect::<Vec<Header>>().await.unwrap();
     assert_eq!(found_by_timestamp_range.len(), 2);
     assert_eq!(expected_blocks, found_by_timestamp_range);
 }
@@ -217,7 +217,7 @@ fn it_should_get_related_one_to_one_entity() {
     let read_tx = storage.begin_read().unwrap();
     let block = blocks.first().unwrap();
 
-    let expected_header: BlockHeader = block.header.clone();
+    let expected_header: Header = block.header.clone();
     let header = Block::get_header(&read_tx, &block.height).expect("Failed to get header");
 
     assert_eq!(expected_header, header);
@@ -247,8 +247,8 @@ fn it_should_get_first_and_last_entity() {
     let first_block = Block::first(&read_tx).expect("Failed to get first block").unwrap();
     let last_block = Block::last(&read_tx).expect("Failed to get last block").unwrap();
 
-    let first_block_header = BlockHeader::first(&read_tx).expect("Failed to get first header").unwrap();
-    let last_block_header = BlockHeader::last(&read_tx).expect("Failed to get last header").unwrap();
+    let first_block_header = Header::first(&read_tx).expect("Failed to get first header").unwrap();
+    let last_block_header = Header::last(&read_tx).expect("Failed to get last header").unwrap();
 
     assert_eq!(blocks.first().unwrap().height, first_block.height);
     assert_eq!(blocks.last().unwrap().height, last_block.height);

@@ -98,6 +98,8 @@ use tokio::net::TcpListener;
 use tokio::sync::watch;
 use tower_http::cors::CorsLayer;
 
+pub trait ColInnerType { type Repr; }
+
 pub trait IndexedPointer: Copy {
     type Index: Copy + Ord + Add<Output = Self::Index> + Default;
     fn index(&self) -> Self::Index;

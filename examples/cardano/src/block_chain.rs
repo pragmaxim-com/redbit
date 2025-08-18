@@ -9,7 +9,7 @@ pub struct CardanoBlockChain {
 }
 
 impl CardanoBlockChain {
-    pub fn new(storage: Arc<Storage>) -> Arc<dyn BlockChain<Block>> {
+    pub fn new(storage: Arc<Storage>) -> Arc<dyn BlockChainLike<Block>> {
         let chain = CardanoBlockChain { storage };
         chain.init().expect("Failed to initialize CardanoBlockPersistence");
         Arc::new(chain)
@@ -39,7 +39,7 @@ impl CardanoBlockChain {
     }
 }
 
-impl BlockChain<Block> for CardanoBlockChain {
+impl BlockChainLike<Block> for CardanoBlockChain {
 
     fn init(&self) -> Result<(), ChainSyncError> {
         Ok(Block::init(Arc::clone(&self.storage))?)

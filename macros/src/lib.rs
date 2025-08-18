@@ -20,18 +20,20 @@ use syn::spanned::Spanned;
 use syn::{parse_macro_input, parse_quote, DeriveInput, Fields, ItemStruct, Lit, Path, Type};
 use syn::punctuated::Punctuated;
 use syn::token::Comma;
+use crate::entity::chain;
 
 #[proc_macro_attribute]
 #[proc_macro_error]
 pub fn column(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let attr_args = parse_macro_input!(attr as EncodingAttr);
+    let attr_args = parse_macro_input!(attr as LiteralAttr);
     let mut input = parse_macro_input!(item as ItemStruct);
     let struct_ident = &input.ident.clone();
     let stream =
         match &mut input.fields {
             Fields::Unnamed(fields) if fields.unnamed.len() == 1 => {
+                let inner_ty = &fields.unnamed[0].ty;
                 let (impls, maybe_field_attr, extra_derive_impls) =
-                    column::column_impls::generate_column_impls(struct_ident, &fields.unnamed[0].ty, attr_args.encoding);
+                    column::column_impls::generate_column_impls(struct_ident, inner_ty, attr_args.literal);
 
                 if let Some(attr) = maybe_field_attr {
                     input.attrs.push(syn::parse_quote! { #[serde_with::serde_as] });
@@ -58,19 +60,19 @@ pub fn column(attr: TokenStream, item: TokenStream) -> TokenStream {
     macro_utils::submit_struct_to_stream(stream, "column", struct_ident, ".rs")
 }
 
-struct EncodingAttr {
-    encoding: Option<String>,
+struct LiteralAttr {
+    literal: Option<String>,
 }
 
-impl Parse for EncodingAttr {
+impl Parse for LiteralAttr {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         if input.is_empty() {
-            Ok(EncodingAttr { encoding: None })
+            Ok(LiteralAttr { literal: None })
         } else {
             let literal: Lit = input.parse()?;
             match literal {
-                Lit::Str(lit_str) => Ok(EncodingAttr {
-                    encoding: Some(lit_str.value()), // unquoted, unescaped
+                Lit::Str(lit_str) => Ok(LiteralAttr {
+                    literal: Some(lit_str.value()), // unquoted, unescaped
                 }),
                 _ => Err(syn::Error::new_spanned(literal, "Expected a string literal")),
             }
@@ -205,13 +207,26 @@ pub fn entity(_attr: TokenStream, item: TokenStream) -> TokenStream {
 pub fn derive_entity(input: TokenStream) -> TokenStream {
     let item_struct = parse_macro_input!(input as ItemStruct);
     let struct_ident = &item_struct.ident;
-    let (key_def, s) = match entity::new(&item_struct) {
+    let (key_def, field_defs, s) = match entity::new(&item_struct) {
         Ok(result) => result,
         Err(e) => return e.to_compile_error().into(),
     };
     let root = key_def.is_root();
+
+    let chain_impl: proc_macro2::TokenStream =
+        if struct_ident.to_string().contains("Header") {
+            chain::block_header_like(syn::parse_quote!(#struct_ident), &field_defs)
+        } else if struct_ident.to_string().contains("Block") {
+            chain::block_like(syn::parse_quote!(#struct_ident), &field_defs)
+        } else {
+            Ok(quote! {})
+        }.unwrap_or_else(|e| syn::Error::new_spanned(&item_struct, e).to_compile_error().into());
+
     let stream = quote! {
         #s
+
+        #chain_impl
+
         inventory::submit! {
             StructInfo {
                 name: stringify!(#struct_ident),

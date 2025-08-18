@@ -1,5 +1,5 @@
 use std::{fs, sync::Arc, time::Duration};
-use syncer::api::BlockChain;
+use syncer::api::BlockChainLike;
 
 use btc::block_chain::BtcBlockChain;
 use btc::block_provider::BtcBlockProvider;
@@ -20,7 +20,7 @@ fn block_from_file(size: &str, tx_count: usize) -> BtcBlock {
 fn criterion_benchmark(c: &mut Criterion) {
     let storage = Storage::temp("btc_benchmark", 1, true).expect("Failed to open database");
 
-    let chain: Arc<dyn BlockChain<Block>> = BtcBlockChain::new(Arc::clone(&storage));
+    let chain: Arc<dyn BlockChainLike<Block>> = BtcBlockChain::new(Arc::clone(&storage));
 
     let small_block: BtcBlock = block_from_file("small", 29);
     let avg_block: BtcBlock = block_from_file("avg", 343);

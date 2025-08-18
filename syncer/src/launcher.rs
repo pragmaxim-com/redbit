@@ -1,4 +1,4 @@
-use crate::api::{BlockLike, BlockChain, BlockProvider};
+use crate::api::{BlockLike, BlockChainLike, BlockProvider};
 use crate::scheduler::Scheduler;
 use crate::settings::{AppConfig, HttpSettings, IndexerSettings};
 use crate::combine;
@@ -67,14 +67,14 @@ pub async fn launch<FB: Send + Sync + 'static, TB: BlockLike + 'static, F>(
     cors: Option<CorsLayer>,
 ) -> Result<(), AppError>
 where
-    F: FnOnce(Arc<Storage>) -> Arc<dyn BlockChain<TB>>,
+    F: FnOnce(Arc<Storage>) -> Arc<dyn BlockChainLike<TB>>,
 {
     let config = AppConfig::new("config/settings").expect("Failed to load app config");
     maybe_console_init();
     let db_path: String = format!("{}/{}/{}", config.indexer.db_path, "main", config.indexer.name);
     let full_path = env::home_dir().unwrap().join(&db_path);
     let storage: Arc<Storage> = Storage::init(full_path, config.indexer.db_cache_size_gb)?;
-    let chain: Arc<dyn BlockChain<TB>> = build_chain(Arc::clone(&storage));
+    let chain: Arc<dyn BlockChainLike<TB>> = build_chain(Arc::clone(&storage));
     let scheduler: Scheduler<FB, TB> = Scheduler::new(block_provider, chain);
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
     let indexing_f = maybe_run_syncing(config.indexer, scheduler, shutdown_rx.clone());

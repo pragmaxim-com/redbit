@@ -11,7 +11,7 @@ mod get_by;
 mod get_keys_by;
 pub mod column_impls;
 
-use crate::field_parser::{FieldDef, IndexingType, ParentDef};
+use crate::field_parser::{FieldDef, IndexingType, OneToManyParentDef};
 use crate::rest::*;
 use crate::table::{DictTableDefs, TableDef};
 use proc_macro2::{Ident, TokenStream};
@@ -45,7 +45,7 @@ impl DbColumnMacros {
         entity_type: &Type,
         pk_field_def: &FieldDef,
         stream_query_ty: &Type,
-        parent_def: Option<ParentDef>,
+        parent_def: Option<OneToManyParentDef>,
     ) -> DbColumnMacros {
         let pk_name = &pk_field_def.name;
         let pk_type = &pk_field_def.tpe;
@@ -95,7 +95,7 @@ impl DbColumnMacros {
         entity_type: &Type,
         pk_field_def: &FieldDef,
         stream_query_type: &Type,
-        parent_def_opt: Option<ParentDef>,
+        parent_def_opt: Option<OneToManyParentDef>,
         range: bool,
     ) -> DbColumnMacros {
         let column_name = &col_field_def.name.clone();
@@ -174,7 +174,7 @@ impl DbColumnMacros {
         entity_type: &Type,
         pk_field_def: &FieldDef,
         stream_query_type: &Type,
-        parent_def_opt: Option<ParentDef>,
+        parent_def_opt: Option<OneToManyParentDef>,
         cache_size: Option<usize>,
     ) -> DbColumnMacros {
         let column_name = &col_field_def.name.clone();

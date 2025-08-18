@@ -1,4 +1,4 @@
-use crate::model_v1::{Block, BlockHash, BlockHeader, Height, InputRef, Transaction, BlockPointer, TransactionPointer};
+use crate::model_v1::{Block, BlockHash, Header, Height, InputRef, Transaction, BlockPointer, TransactionPointer};
 use syncer::api::*;
 use redbit::*;
 use std::sync::Arc;
@@ -9,7 +9,7 @@ pub struct BtcBlockChain {
 }
 
 impl BtcBlockChain {
-    pub fn new(storage: Arc<Storage>) -> Arc<dyn BlockChain<Block>> {
+    pub fn new(storage: Arc<Storage>) -> Arc<dyn BlockChainLike<Block>> {
         let chain = BtcBlockChain { storage };
         chain.init().expect("Failed to initialize BtcBlockPersistence");
         Arc::new(chain)
@@ -39,20 +39,20 @@ impl BtcBlockChain {
     }
 }
 
-impl BlockChain<Block> for BtcBlockChain {
+impl BlockChainLike<Block> for BtcBlockChain {
     fn init(&self) -> Result<(), ChainSyncError> {
         Ok(Block::init(Arc::clone(&self.storage))?)
     }
 
-    fn get_last_header(&self) -> Result<Option<BlockHeader>, ChainSyncError> {
+    fn get_last_header(&self) -> Result<Option<Header>, ChainSyncError> {
         let read_tx = self.storage.begin_read()?;
-        let last = BlockHeader::last(&read_tx)?;
+        let last = Header::last(&read_tx)?;
         Ok(last)
     }
 
-    fn get_header_by_hash(&self, hash: [u8; 32]) -> Result<Vec<BlockHeader>, ChainSyncError> {
+    fn get_header_by_hash(&self, hash: [u8; 32]) -> Result<Vec<Header>, ChainSyncError> {
         let read_tx = self.storage.begin_read()?;
-        let header = BlockHeader::get_by_hash(&read_tx, &BlockHash(hash))?;
+        let header = Header::get_by_hash(&read_tx, &BlockHash(hash))?;
         Ok(header)
     }
 

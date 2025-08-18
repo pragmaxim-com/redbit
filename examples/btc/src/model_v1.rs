@@ -17,6 +17,7 @@ use std::fmt;
 #[column("hex")] pub struct MerkleRoot(pub [u8; 32]);
 #[column("hex")] pub struct TxHash(pub [u8; 32]);
 #[column("hex")] pub struct ScriptHash(pub Vec<u8>);
+#[column] pub struct Weight(pub u32);
 
 #[column("crate::codec::BaseOrBech")]
 pub struct Address(pub Vec<u8>);
@@ -41,12 +42,12 @@ impl fmt::Display for BlockTimestamp {
 pub struct Block {
     #[pk]
     pub height: Height,
-    pub header: BlockHeader,
+    pub header: Header,
     pub transactions: Vec<Transaction>,
 }
 
 #[entity]
-pub struct BlockHeader {
+pub struct Header {
     #[fk(one2one)]
     pub height: Height,
     #[column(index)]
@@ -58,7 +59,7 @@ pub struct BlockHeader {
     #[column(index)]
     pub merkle_root: MerkleRoot,
     #[column(transient)]
-    pub weight: u32,
+    pub weight: Weight,
 }
 
 #[entity]
@@ -89,31 +90,6 @@ pub struct Utxo {
 pub struct InputRef {
     #[fk(one2many)]
     pub id: TransactionPointer,
-}
-
-impl BlockHeaderLike for BlockHeader {
-    fn height(&self) -> u32 {
-        self.height.0
-    }
-    fn hash(&self) -> [u8; 32] {
-        self.hash.0
-    }
-    fn prev_hash(&self) -> [u8; 32] {
-        self.prev_hash.0
-    }
-    fn timestamp(&self) -> u32 {
-        self.timestamp.0
-    }
-    fn weight(&self) -> u32 {
-        self.weight
-    }
-}
-
-impl BlockLike for Block {
-    type Header = BlockHeader;
-    fn header(&self) -> &Self::Header {
-        &self.header
-    }
 }
 
 #[derive(Debug, thiserror::Error)]

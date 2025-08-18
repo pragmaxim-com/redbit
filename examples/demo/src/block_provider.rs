@@ -1,5 +1,5 @@
 use crate::model_v1::stream::Stream;
-use crate::model_v1::{Block, BlockHeader, Height, StreamExt};
+use crate::model_v1::{Block, Header, Height, StreamExt, Weight};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::collections::BTreeMap;
@@ -21,12 +21,12 @@ impl DemoBlockProvider {
         let mut prev_hash = genesis.header.hash.clone();
         for mut block in blocks_iter {
             block.header.prev_hash = prev_hash.clone();
-            block.header.weight = block
+            block.header.weight = Weight(block
                 .transactions
                 .iter()
                 .flat_map(|t| &t.utxos)
                 .map(|u| u.assets.len() as u32)
-                .sum();
+                .sum());
             prev_hash = block.header.hash.clone();
             chain.insert(block.header.height, block);
         }
@@ -41,13 +41,13 @@ impl BlockProvider<Block, Block> for DemoBlockProvider {
         Arc::new(|block| Ok(block.clone()))
     }
 
-    fn get_processed_block(&self, header: BlockHeader) -> Result<Block, ChainSyncError> {
+    fn get_processed_block(&self, header: Header) -> Result<Block, ChainSyncError> {
         let chain = self.chain.read().unwrap();
         let result = chain.get(&header.height).ok_or_else(|| ChainSyncError::new("Block not found"))?;
         Ok(result.clone())
     }
 
-    async fn get_chain_tip(&self) -> Result<BlockHeader, ChainSyncError> {
+    async fn get_chain_tip(&self) -> Result<Header, ChainSyncError> {
         let chain = self.chain.read().unwrap();
         let (_, tip_block) = chain.last_key_value().ok_or_else(|| ChainSyncError::new("No blocks in chain"))?;
         Ok(tip_block.header.clone())
@@ -55,8 +55,8 @@ impl BlockProvider<Block, Block> for DemoBlockProvider {
 
     fn stream(
         &self,
-        chain_tip_header: BlockHeader,
-        last_header: Option<BlockHeader>,
+        chain_tip_header: Header,
+        last_header: Option<Header>,
     ) -> Pin<Box<dyn Stream<Item = Block> + Send + 'static>> {
         let last_height = last_header.map_or(1, |h| h.height.0);
         let heights = last_height..=chain_tip_header.height.0;

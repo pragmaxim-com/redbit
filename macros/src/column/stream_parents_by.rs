@@ -4,7 +4,7 @@ use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
 use crate::endpoint::EndpointDef;
-use crate::field_parser::ParentDef;
+use crate::field_parser::OneToManyParentDef;
 use crate::table::DictTableDefs;
 
 pub fn by_dict_def(
@@ -13,7 +13,7 @@ pub fn by_dict_def(
     column_type: &Type,
     pk_type: &Type,
     dict_table_defs: &DictTableDefs,
-    parent_def: &ParentDef,
+    parent_def: &OneToManyParentDef,
 ) -> FunctionDef {
     let value_to_dict_pk = &dict_table_defs.value_to_dict_pk_table_def.name;
     let dict_index_table = &dict_table_defs.dict_index_table_def.name;
@@ -157,7 +157,7 @@ pub fn by_index_def(
     column_type: &Type,
     pk_type: &Type,
     table: &Ident,
-    parent_def: &ParentDef,
+    parent_def: &OneToManyParentDef,
 ) -> FunctionDef {
     let parent_ident = &parent_def.parent_ident;
     let parent_type = &parent_def.parent_type;

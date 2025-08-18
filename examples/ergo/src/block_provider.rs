@@ -1,7 +1,7 @@
 use crate::config::ErgoConfig;
 use crate::ergo_client::ErgoClient;
 use crate::model_v1;
-use crate::model_v1::{Address, Asset, AssetAction, AssetName, AssetType, Block, BlockHash, BlockHeader, BlockPointer, BlockTimestamp, ExplorerError, Height, Transaction, TransactionPointer, TxHash, Utxo, UtxoPointer};
+use crate::model_v1::{Address, Asset, AssetAction, AssetName, AssetType, Block, BlockHash, BlockHeader, BlockPointer, BlockTimestamp, ExplorerError, Height, Transaction, TransactionPointer, TxHash, Utxo, UtxoPointer, Weight};
 use async_trait::async_trait;
 use ergo_lib::chain::transaction::TxIoVec;
 use ergo_lib::ergotree_ir::chain::address::AddressEncoder;
@@ -63,7 +63,7 @@ impl ErgoBlockProvider {
             timestamp: BlockTimestamp((b.header.timestamp / 1000) as u32),
             hash: BlockHash(block_hash),
             prev_hash: BlockHash(prev_block_hash),
-            weight: block_weight as u32
+            weight: Weight(block_weight as u32)
         };
 
         Ok(Block { height, header, transactions: result_txs })

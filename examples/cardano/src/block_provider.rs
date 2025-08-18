@@ -55,7 +55,7 @@ impl CardanoBlockProvider {
             slot: Slot(b.slot() as u32),
             hash: BlockHash(hash),
             prev_hash: BlockHash(prev_hash),
-            weight: block_weight as u32
+            weight: Weight(block_weight as u32)
         };
 
         Ok(Block { height: header.height, header, transactions: result_txs }) // usize

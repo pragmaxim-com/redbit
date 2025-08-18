@@ -14,9 +14,8 @@ use syncer::api::{BlockHeaderLike, BlockLike};
 #[column("base64")] pub struct Address(pub Vec<u8>);
 #[column("utf-8")] pub struct AssetName(pub Vec<u8>); // String is supported but this is more efficient
 #[column] pub struct Duration(pub std::time::Duration);
-#[column]
-#[derive(Copy, Hash)]
-pub struct Timestamp(pub u32);
+#[column] pub struct Weight(pub u32);
+#[column] pub struct Timestamp(pub u32);
 
 #[column]
 pub struct TempInputRef {
@@ -28,12 +27,12 @@ pub struct TempInputRef {
 pub struct Block {
     #[pk]
     pub height: Height,
-    pub header: BlockHeader,
+    pub header: Header,
     pub transactions: Vec<Transaction>,
 }
 
 #[entity]
-pub struct BlockHeader {
+pub struct Header {
     #[fk(one2one)]
     pub height: Height,
     #[column(index)]
@@ -47,7 +46,7 @@ pub struct BlockHeader {
     #[column]
     pub nonce: u64,
     #[column(transient)]
-    pub weight: u32,
+    pub weight: Weight,
 }
 
 #[entity]
@@ -96,29 +95,4 @@ pub struct Asset {
     pub amount: u64,
     #[column(dictionary(cache = 10000))]
     pub name: AssetName,
-}
-
-impl BlockHeaderLike for BlockHeader {
-    fn height(&self) -> u32 {
-        self.height.0
-    }
-    fn hash(&self) -> [u8; 32] {
-        self.hash.0
-    }
-    fn prev_hash(&self) -> [u8; 32] {
-        self.prev_hash.0
-    }
-    fn timestamp(&self) -> u32 {
-        self.timestamp.0
-    }
-    fn weight(&self) -> u32 {
-        self.weight
-    }
-}
-
-impl BlockLike for Block {
-    type Header = BlockHeader;
-    fn header(&self) -> &Self::Header {
-        &self.header
-    }
 }

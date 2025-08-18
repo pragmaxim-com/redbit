@@ -1,7 +1,7 @@
 use crate::field::FieldMacros;
-use crate::field_parser::KeyDef;
+use crate::field_parser::{FieldDef, KeyDef};
 use crate::rest::Rest;
-use proc_macro2::TokenStream;
+use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::{parse_quote, ItemStruct, Type};
 pub mod query;
@@ -12,15 +12,16 @@ mod compose;
 mod tests;
 mod info;
 pub mod init;
+pub mod chain;
 
-pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, TokenStream), syn::Error> {
+pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStream), syn::Error> {
     let entity_ident = &item_struct.ident;
     let entity_type: Type = parse_quote! { #entity_ident };
     let stream_query_type = query::stream_query_type(&entity_type);
-    let (key_def, parent_def, field_macros) =
+    let (key_def, one_to_many_parent_def, field_macros) =
         FieldMacros::new(item_struct, entity_ident, &entity_type, &stream_query_type)?;
     let key = key_def.field_def();
-    let mut field_names = Vec::new();
+    let mut field_defs = Vec::new();
     let mut table_defs = Vec::new();
     let mut range_queries = Vec::new();
     let mut stream_queries = Vec::new();
@@ -35,7 +36,7 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, TokenStream), syn::Error
     let mut column_function_defs = Vec::new();
 
     for field_macro in field_macros.iter() {
-        field_names.push(field_macro.field_name().clone());
+        field_defs.push(field_macro.field_def().clone());
         table_defs.extend(field_macro.table_definitions());
         range_queries.extend(field_macro.range_queries());
         stream_queries.extend(field_macro.stream_queries());
@@ -49,6 +50,8 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, TokenStream), syn::Error
         delete_many_statements.extend(field_macro.delete_many_statements());
         column_function_defs.extend(field_macro.function_defs())
     }
+
+    let field_names: Vec<Ident> = field_defs.iter().map(|f| f.name.clone()).collect();
 
     let mut function_defs = Vec::new();
     function_defs.push(store::store_and_commit_def(entity_ident, &entity_type, &key.name, &key.tpe, &store_statements));
@@ -74,7 +77,7 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, TokenStream), syn::Error
 
     let Rest { endpoint_handlers, routes: api_routes } = Rest::new(&function_defs);
 
-    let test_suite = tests::test_suite(entity_ident, parent_def, &function_defs);
+    let test_suite = tests::test_suite(entity_ident, one_to_many_parent_def.clone(), &function_defs);
 
     let stream: TokenStream =
         quote! {
@@ -98,5 +101,5 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, TokenStream), syn::Error
             // unit tests and rest api tests
             #test_suite
         };
-    Ok((key_def, stream))
+    Ok((key_def, field_defs, stream))
 }

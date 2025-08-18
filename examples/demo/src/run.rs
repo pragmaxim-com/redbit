@@ -31,21 +31,21 @@ pub async fn showcase() -> Result<(), AppError> {
         println!("{}", serde_json::to_string_pretty(&info).unwrap());
     }
 
-    let first_block_header = BlockHeader::first(&read_tx)?.unwrap();
-    let last_block_header = BlockHeader::last(&read_tx)?.unwrap();
+    let first_block_header = Header::first(&read_tx)?.unwrap();
+    let last_block_header = Header::last(&read_tx)?.unwrap();
 
-    BlockHeader::get_by_hash(&read_tx, &first_block_header.hash)?;
-    BlockHeader::get_by_timestamp(&read_tx, &first_block_header.timestamp)?;
-    BlockHeader::take(&read_tx, 100)?;
-    BlockHeader::get(&read_tx, &first_block_header.height)?;
-    BlockHeader::range(&read_tx, &first_block_header.height, &last_block_header.height, None)?;
-    BlockHeader::range_by_timestamp(&read_tx, &first_block_header.timestamp, &last_block_header.timestamp)?;
-    BlockHeader::stream_by_hash(storage.begin_read()?, first_block_header.hash, None)?.try_collect::<Vec<BlockHeader>>().await?;
-    BlockHeader::stream_by_timestamp(storage.begin_read()?, first_block_header.timestamp, None)?.try_collect::<Vec<BlockHeader>>().await?;
-    BlockHeader::stream_range(storage.begin_read()?, first_block_header.height, last_block_header.height, None)?.try_collect::<Vec<BlockHeader>>().await?;
-    BlockHeader::stream_range_by_timestamp(storage.begin_read()?, first_block_header.timestamp, last_block_header.timestamp, None)?.try_collect::<Vec<BlockHeader>>().await?;
+    Header::get_by_hash(&read_tx, &first_block_header.hash)?;
+    Header::get_by_timestamp(&read_tx, &first_block_header.timestamp)?;
+    Header::take(&read_tx, 100)?;
+    Header::get(&read_tx, &first_block_header.height)?;
+    Header::range(&read_tx, &first_block_header.height, &last_block_header.height, None)?;
+    Header::range_by_timestamp(&read_tx, &first_block_header.timestamp, &last_block_header.timestamp)?;
+    Header::stream_by_hash(storage.begin_read()?, first_block_header.hash, None)?.try_collect::<Vec<Header>>().await?;
+    Header::stream_by_timestamp(storage.begin_read()?, first_block_header.timestamp, None)?.try_collect::<Vec<Header>>().await?;
+    Header::stream_range(storage.begin_read()?, first_block_header.height, last_block_header.height, None)?.try_collect::<Vec<Header>>().await?;
+    Header::stream_range_by_timestamp(storage.begin_read()?, first_block_header.timestamp, last_block_header.timestamp, None)?.try_collect::<Vec<Header>>().await?;
 
-    let block_header_infos = BlockHeader::table_info(Arc::clone(&storage))?;
+    let block_header_infos = Header::table_info(Arc::clone(&storage))?;
     println!("\nBlock header persisted with tables :");
     for info in block_header_infos {
         println!("{}", serde_json::to_string_pretty(&info).unwrap());

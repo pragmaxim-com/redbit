@@ -26,7 +26,7 @@ pub enum AssetType {
 #[column("hex")] pub struct PolicyId(pub [u8; 28]);
 #[column("utf-8")] pub struct AssetName(pub Vec<u8>);
 #[column("crate::codec::BaseOrBech")] pub struct Address(pub Vec<u8>);
-
+#[column] pub struct Weight(pub u32);
 #[column] pub struct AssetAction(pub u8);
 
 #[column]
@@ -67,7 +67,7 @@ pub struct BlockHeader {
     #[column(range)]
     pub timestamp: BlockTimestamp,
     #[column(transient)]
-    pub weight: u32,
+    pub weight: Weight,
 }
 
 #[entity]
@@ -113,31 +113,6 @@ pub struct Asset {
 pub struct InputRef {
     #[fk(one2many)]
     pub id: TransactionPointer,
-}
-
-impl BlockHeaderLike for BlockHeader {
-    fn height(&self) -> u32 {
-        self.height.0
-    }
-    fn hash(&self) -> [u8; 32] {
-        self.hash.0
-    }
-    fn prev_hash(&self) -> [u8; 32] {
-        self.prev_hash.0
-    }
-    fn timestamp(&self) -> u32 {
-        self.timestamp.0
-    }
-    fn weight(&self) -> u32 {
-        self.weight
-    }
-}
-
-impl BlockLike for Block {
-    type Header = BlockHeader;
-    fn header(&self) -> &Self::Header {
-        &self.header
-    }
 }
 
 #[derive(Debug, thiserror::Error)]

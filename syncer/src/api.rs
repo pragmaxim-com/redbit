@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use futures::Stream;
 use hex::FromHexError;
-use redbit::AppError;
+use redbit::{AppError, Storage};
 use std::pin::Pin;
 use std::sync::Arc;
 use chrono::DateTime;
@@ -58,7 +58,12 @@ pub trait BlockLike: Send + Sync {
     fn header(&self) -> &Self::Header;
 }
 
-pub trait BlockChain<B: BlockLike>: Send + Sync {
+
+pub struct BlockChain {
+    pub storage: Arc<Storage>,
+}
+
+pub trait BlockChainLike<B: BlockLike>: Send + Sync {
     fn init(&self) -> Result<(), ChainSyncError>;
     fn get_last_header(&self) -> Result<Option<B::Header>, ChainSyncError>;
     fn get_header_by_hash(&self, hash: [u8; 32]) -> Result<Vec<B::Header>, ChainSyncError>;

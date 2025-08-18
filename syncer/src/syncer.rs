@@ -1,5 +1,5 @@
 use crate::api::BlockHeaderLike;
-use crate::api::{BlockLike, BlockChain};
+use crate::api::{BlockLike, BlockChainLike};
 use crate::api::{BlockProvider, ChainSyncError};
 use crate::monitor::ProgressMonitor;
 use futures::StreamExt;
@@ -12,12 +12,12 @@ use crate::settings::IndexerSettings;
 
 pub struct ChainSyncer<FB: Send + Sync + 'static, TB: BlockLike + 'static> {
     pub block_provider: Arc<dyn BlockProvider<FB, TB>>,
-    pub chain: Arc<dyn BlockChain<TB>>,
+    pub chain: Arc<dyn BlockChainLike<TB>>,
     pub monitor: Arc<ProgressMonitor>,
 }
 
 impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
-    pub fn new(block_provider: Arc<dyn BlockProvider<FB, TB>>, chain: Arc<dyn BlockChain<TB>>) -> Self {
+    pub fn new(block_provider: Arc<dyn BlockProvider<FB, TB>>, chain: Arc<dyn BlockChainLike<TB>>) -> Self {
         Self { block_provider, chain, monitor: Arc::new(ProgressMonitor::new(1000)) }
     }
 
@@ -137,7 +137,7 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
         }
     }
 
-    fn chain_link(block: TB, block_provider: Arc<dyn BlockProvider<FB, TB>>, chain: Arc<dyn BlockChain<TB>>) -> Result<Vec<TB>, ChainSyncError> {
+    fn chain_link(block: TB, block_provider: Arc<dyn BlockProvider<FB, TB>>, chain: Arc<dyn BlockChainLike<TB>>) -> Result<Vec<TB>, ChainSyncError> {
         let header = block.header();
         let prev_headers = chain.get_header_by_hash(header.prev_hash())?;
 
@@ -175,7 +175,7 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
 
     }
 
-    pub fn persist_or_link(mut blocks: Vec<TB>, fork_detection_height: u32, block_provider: Arc<dyn BlockProvider<FB, TB>>, block_chain: Arc<dyn BlockChain<TB>>) -> Result<(), ChainSyncError> {
+    pub fn persist_or_link(mut blocks: Vec<TB>, fork_detection_height: u32, block_provider: Arc<dyn BlockProvider<FB, TB>>, block_chain: Arc<dyn BlockChainLike<TB>>) -> Result<(), ChainSyncError> {
         if blocks.is_empty() {
             error!("Received empty block batch, nothing to persist");
             Ok(())

@@ -1,5 +1,5 @@
 use crate::column::DbColumnMacros;
-use crate::field_parser::{ColumnDef, KeyDef, Multiplicity, ParentDef};
+use crate::field_parser::{ColumnDef, FieldDef, KeyDef, Multiplicity, OneToManyParentDef};
 use crate::pk::DbPkMacros;
 use crate::relationship::DbRelationshipMacros;
 use crate::rest::FunctionDef;
@@ -24,11 +24,11 @@ impl FieldMacros {
         entity_ident: &Ident,
         entity_type: &Type,
         stream_query_ty: &Type,
-    ) -> Result<(KeyDef, Option<ParentDef>, Vec<FieldMacros>), syn::Error> {
+    ) -> Result<(KeyDef, Option<OneToManyParentDef>, Vec<FieldMacros>), syn::Error> {
         let (key_def, field_macros) = field_parser::get_field_macros(item_struct)?;
-        let parent_def =
+        let one_to_many_parent_def =
             match key_def.clone() {
-                KeyDef::Fk{ field_def: _, multiplicity: Multiplicity::OneToMany , parent_type: Some(parent_ty)} => Some(ParentDef {
+                KeyDef::Fk{ field_def: _, multiplicity: Multiplicity::OneToMany , parent_type: Some(parent_ty)} => Some(OneToManyParentDef {
                     stream_query_ty: query::stream_query_type(&parent_ty),
                     parent_type: parent_ty.clone(),
                     parent_ident: match parent_ty {
@@ -55,7 +55,7 @@ impl FieldMacros {
                         entity_type,
                         field_def,
                         stream_query_ty,
-                        parent_def.clone()
+                        one_to_many_parent_def.clone()
                     ))
             },
             ColumnDef::Relationship(field, multiplicity) => {
@@ -65,15 +65,15 @@ impl FieldMacros {
                 FieldMacros::Transient(TransientMacros::new(field.clone()))
             }
         }).collect::<Vec<FieldMacros>>();
-        Ok((key_def, parent_def, field_macros))
+        Ok((key_def, one_to_many_parent_def, field_macros))
     }
 
-    pub fn field_name(&self) -> Ident {
+    pub fn field_def(&self) -> FieldDef {
         match self {
-            FieldMacros::Pk(pk) => pk.field_def.name.clone(),
-            FieldMacros::Plain(column) => column.field_def.name.clone(),
-            FieldMacros::Relationship(relationship) => relationship.field_def.name.clone(),
-            FieldMacros::Transient(transient) => transient.field_def.name.clone(),
+            FieldMacros::Pk(pk) => pk.field_def.clone(),
+            FieldMacros::Plain(column) => column.field_def.clone(),
+            FieldMacros::Relationship(relationship) => relationship.field_def.clone(),
+            FieldMacros::Transient(transient) => transient.field_def.clone(),
         }
     }
     

@@ -1,6 +1,6 @@
 use crate::btc_client::{BtcBlock, BtcClient};
 use crate::config::BitcoinConfig;
-use crate::model_v1::{Address, Block, BlockHash, BlockHeader, BlockPointer, BlockTimestamp, ExplorerError, Height, MerkleRoot, ScriptHash, TempInputRef, Transaction, TransactionPointer, TxHash, Utxo};
+use crate::model_v1::{Address, Block, BlockHash, Header, BlockPointer, BlockTimestamp, ExplorerError, Height, MerkleRoot, ScriptHash, TempInputRef, Transaction, TransactionPointer, TxHash, Utxo, Weight};
 use async_trait::async_trait;
 use futures::stream::StreamExt;
 use futures::Stream;
@@ -41,13 +41,13 @@ impl BtcBlockProvider {
             })
             .collect();
         
-        let header = BlockHeader {
+        let header = Header {
             height: block.height,
             timestamp: BlockTimestamp(block.underlying.header.time),
             hash: BlockHash(*block.underlying.block_hash().as_ref()),
             prev_hash: BlockHash(*block.underlying.header.prev_blockhash.as_ref()),
             merkle_root: MerkleRoot(*block.underlying.header.merkle_root.as_ref()),
-            weight: block_weight as u32,
+            weight: Weight(block_weight as u32),
         };
 
         Ok(Block {
@@ -101,12 +101,12 @@ impl BlockProvider<BtcBlock, Block> for BtcBlockProvider {
         Arc::new(|raw| Self::process_block_pure(raw))
     }
 
-    fn get_processed_block(&self, header: BlockHeader) -> Result<Block, ChainSyncError> {
+    fn get_processed_block(&self, header: Header) -> Result<Block, ChainSyncError> {
         let block = self.client.get_block_by_hash(header.hash)?;
         Self::process_block_pure(&block)
     }
 
-    async fn get_chain_tip(&self) -> Result<BlockHeader, ChainSyncError> {
+    async fn get_chain_tip(&self) -> Result<Header, ChainSyncError> {
         let best_block = self.client.get_best_block()?;
         let processed_block = Self::process_block_pure(&best_block)?;
         Ok(processed_block.header)
@@ -114,8 +114,8 @@ impl BlockProvider<BtcBlock, Block> for BtcBlockProvider {
 
     fn stream(
         &self,
-        chain_tip_header: BlockHeader,
-        last_header: Option<BlockHeader>,
+        chain_tip_header: Header,
+        last_header: Option<Header>,
     ) -> Pin<Box<dyn Stream<Item = BtcBlock> + Send + 'static>> {
         let last_height = last_header.map_or(0, |h| h.height.0);
         let heights = last_height..=chain_tip_header.height.0;
