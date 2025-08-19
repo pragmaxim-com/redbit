@@ -14,23 +14,16 @@ jobs:
     name: Run Cargo Tests
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Install Rust
+      - name: Setup Rust
         uses: dtolnay/rust-toolchain@nightly
 
-      - name: Cache Cargo dependencies
-        uses: actions/cache@v4
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/bin
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            cargo-${{ runner.os }}-
+          key: rust-cache-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Run tests
         run: |
@@ -45,40 +38,6 @@ jobs:
           cargo test --package demo --features ci
           cargo test --package demo --features integration,ci
 
-  criterion:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-
-      # Install Rust (uses rustup; honors rust-toolchain.toml if present)
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          toolchain: stable
-
-      - name: Run benchmarks
-        run: |
-          cargo bench --package btc --bench btc_benchmark  -- --quiet
-          cargo bench --package demo --bench demo_benchmark -- --quiet
-
-      - name: Upload Criterion report to Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: target/criterion
-
-  deploy:
-    needs: criterion
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-
   bench:
     runs-on: ubuntu-latest
     steps:
@@ -88,16 +47,10 @@ jobs:
       - name: setup | rust
         uses: dtolnay/rust-toolchain@nightly
 
-      - name: Cache Rust Binaries (flamegraph)
-        uses: actions/cache@v3
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/bin
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: rust-binaries-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            rust-binaries-${{ runner.os }}-
+          key: rust-cache-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Run Built-in Rust Benchmarks and Extract Metrics
         run: |
@@ -173,4 +126,41 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions@users.noreply.github.com"
           git diff --quiet || (git add README.md && git commit -m "Auto-update README with example code" && git push)
-          git push
+
+  criterion:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: setup | rust
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: rust-cache-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Run benchmarks
+        run: |
+          cargo bench --package btc --bench btc_benchmark  -- --quiet
+          cargo bench --package demo --bench demo_benchmark -- --quiet
+
+      - name: Upload Criterion report to Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: target/criterion
+
+  deploy:
+    needs: criterion
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
