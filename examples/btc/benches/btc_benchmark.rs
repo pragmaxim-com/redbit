@@ -31,7 +31,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     let processed_huge_block = BtcBlockProvider::process_block_pure(&huge_block).expect("Failed to process huge_block");
 
     info!("Initiating indexing");
-    let mut group = c.benchmark_group("persistence");
+    let mut group = c.benchmark_group("btc_chain");
     group.throughput(Throughput::Elements(1));
     group.warm_up_time(Duration::from_millis(50));
     group.measurement_time(Duration::from_millis(300));

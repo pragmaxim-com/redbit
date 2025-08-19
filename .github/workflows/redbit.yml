@@ -147,9 +147,10 @@ jobs:
           cargo bench --package demo --bench demo_benchmark -- --quiet
 
       - name: Upload Criterion report to Pages artifact
+        id: deployment
         uses: actions/upload-pages-artifact@v3
         with:
-          path: target/criterion
+          path: target/criterion/
 
   deploy:
     needs: criterion

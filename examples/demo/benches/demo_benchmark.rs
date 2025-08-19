@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 
 use chain::scheduler::Scheduler;
 use chain::settings::AppConfig;
-use criterion::{criterion_group, criterion_main, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use demo::block_provider::DemoBlockProvider;
 use demo::model_v1::{Block, BlockChain};
 use redbit::{info, Storage};
@@ -20,7 +20,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     config.indexer.fork_detection_heights = 5;
 
     info!("Initiating syncing");
-    let mut group = c.benchmark_group("chain");
+    let mut group = c.benchmark_group("demo_chain");
     group.throughput(Throughput::Elements(1));
     group.warm_up_time(Duration::from_millis(50));
     group.measurement_time(Duration::from_millis(300));
@@ -28,8 +28,8 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     let rt = Runtime::new().unwrap();
 
-    group.bench_function("sync", |b| {
-        b.to_async(&rt).iter(|| async {
+    group.bench_function(BenchmarkId::from_parameter("syncing"), |bencher| {
+        bencher.to_async(&rt).iter(|| async {
             scheduler.sync(config.indexer.clone()).await
         })
     });

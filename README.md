@@ -59,13 +59,6 @@ Check the [redbit-ui](http://github.com/pragmaxim-com/redbit-ui) for frontend de
 The utxo example has close to 500 frontend/backend derived tests and 130 benchmarks, so that if any redbit app derived from the definition compiles,
 it is transparent, well tested and benched already.
 
-### Chain  
-
-[chain](./chain) syncs blockchains with nodes : 
- - [btc](./examples/btc)
- - [cardano](./examples/cardano)
- - [ergo](./examples/ergo)
-
 Let's say we want to persist and query blockchain data using Redbit, declare annotated Structs `examples/utxo/src/lib.rs`:
 
 <!-- BEGIN_LIB -->
@@ -334,33 +327,15 @@ Deleting blocks:");
 
 The same api is accessible through http endpoints at http://127.0.0.1:3033/swagger-ui/.
 
-Performance wise, check 🔥[flamegraph](https://rawcdn.githack.com/pragmaxim-com/redbit/refs/heads/master/flamegraph.svg).
-The demo example persists data into 30 tables to allow for rich querying.
-
-### ⏱️ Performance Summary
-
-Indexing speed in logs is the **average**, for example, the first ~ 100k **bitcoin** blocks with just one Tx have 
-lower in/out indexing throughput because the block is indexed into ~ 24 tables in total.
-
-If node and indexer each uses its own SSD, then the throughput reaches :
-
- - 2.0GHz & NVMe on PCIe Gen3 : `~ 9 000 Inputs+outputs / s`
- - 3.0GHz & NVMe on PCIe Gen4 : `~ 15 000 Inputs+outputs / s`
- - 4.0GHz & NVMe on PCIe Gen5 : `~ 28 000 Inputs+outputs / s`
-
-In a nutshell, whole bitcoin up to height ~ 0.9M can be indexed in less than 4 days on a PCIe Gen5 SSD with 4.0GHz CPU.
-
 ### Flamegraphs
 
+Performance wise, check 🔥[flamegraph](https://rawcdn.githack.com/pragmaxim-com/redbit/refs/heads/master/flamegraph.svg).
+The demo example persists data into 30 tables to allow for rich querying.
 ```
-cargo flamegraph --bin target/release/ergo --release
-cargo flamegraph --bin target/release/cargo --release
-cargo flamegraph --bin target/release/btc --release
+cargo flamegraph --bin target/release/demo --release
 ```
 
-### ⏱ Benchmarks (results from github servers)
-
-Hand-made criterion benchmarks [deployed](http://github.com/pragmaxim-com/redbit/report/index.html).
+### ⏱ Redbit benchmarks (results from github servers)
 
 The slowest `block::_store_many` operation in this context persists 3 blocks of 3 transactions of 1 input and 3 utxos of 3 assets, ie.
 the operations writes :
@@ -521,3 +496,27 @@ model_v1::inputref::_first                                      1820698
 model_v1::header::_exists                                       1985664
 ```
 <!-- END_BENCH -->
+
+
+## Chain
+
+[chain](./chain) syncs blockchains with nodes :
+- [demo](./examples/demo)
+- [btc](./examples/btc)
+- [cardano](./examples/cardano)
+- [ergo](./examples/ergo)
+
+### ⏱️ Syncing performance Summary
+
+Hand-made criterion benchmarks [deployed](https://pragmaxim-com.github.io/redbit/report/index.html).
+
+Indexing speed in logs is the **average**, for example, the first ~ 100k **bitcoin** blocks with just one Tx have 
+lower in/out indexing throughput because the block is indexed into ~ 24 tables in total.
+
+If node and indexer each uses its own SSD, then the throughput reaches :
+
+ - 2.0GHz & NVMe on PCIe Gen3 : `~ 9 000 Inputs+outputs / s`
+ - 3.0GHz & NVMe on PCIe Gen4 : `~ 15 000 Inputs+outputs / s`
+ - 4.0GHz & NVMe on PCIe Gen5 : `~ 28 000 Inputs+outputs / s`
+
+In a nutshell, whole bitcoin up to height ~ 0.9M can be indexed in less than 4 days on a PCIe Gen5 SSD with 4.0GHz CPU.
