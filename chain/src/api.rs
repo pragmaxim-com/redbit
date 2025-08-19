@@ -62,6 +62,7 @@ pub trait BlockLike: Send + Sync {
 #[async_trait]
 pub trait BlockChainLike<B: BlockLike>: Send + Sync {
     fn init(&self) -> Result<(), ChainError>;
+    fn delete(&self) -> Result<(), ChainError>;
     fn get_last_header(&self) -> Result<Option<B::Header>, ChainError>;
     fn get_header_by_hash(&self, hash: [u8; 32]) -> Result<Vec<B::Header>, ChainError>;
     fn store_blocks(&self, blocks: Vec<B>) -> Result<(), ChainError>;

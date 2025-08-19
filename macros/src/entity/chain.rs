@@ -113,6 +113,17 @@ pub fn block_like(block_type: Type, field_defs: &[FieldDef]) -> Result<TokenStre
                 Ok(Block::init(Arc::clone(&self.storage))?)
             }
 
+            fn delete(&self) -> Result<(), chain::ChainError> {
+                if let Some(tip_header) = #header_type::last(&self.storage.begin_read()?)? {
+                    let write_tx = self.storage.begin_write()?;
+                    for height in 1..=tip_header.height.0 {
+                        #block_type::delete(&write_tx, &Height(height))?;
+                    }
+                    write_tx.commit()?;
+                }
+                Ok(())
+            }
+
             fn get_last_header(&self) -> Result<Option<#header_type>, chain::ChainError> {
                 let read_tx = self.storage.begin_read()?;
                 let last = #header_type::last(&read_tx)?;
