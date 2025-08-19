@@ -5,10 +5,14 @@ use hex::FromHexError;
 use redbit::AppError;
 use std::pin::Pin;
 use std::sync::Arc;
+use tokio::task::JoinError;
 use crate::batcher::SyncMode;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ChainError {
+    #[error("Join error: {0}")]
+    JoinError(#[from] JoinError),
+
     #[error("Database error: {0}")]
     Redb(#[from] redb::Error),
 

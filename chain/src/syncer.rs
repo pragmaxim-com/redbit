@@ -22,33 +22,33 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
         Self { block_provider, chain, monitor: Arc::new(ProgressMonitor::new(1000)) }
     }
 
-    pub async fn sync(&self, indexer_conf: IndexerSettings) {
+    pub async fn sync(&self, indexer_conf: IndexerSettings) -> Result<(), ChainError> {
         let block_provider = Arc::clone(&self.block_provider);
         let chain = Arc::clone(&self.chain);
         let monitor = Arc::clone(&self.monitor);
 
-        let node_chain_tip_header = block_provider.get_chain_tip().await.expect("Failed to get chain tip header");
+        let node_chain_tip_header = block_provider.get_chain_tip().await?;
         let chain_tip_height = node_chain_tip_header.height();
-        let last_persisted_header = chain.get_last_header().expect("Failed to get last header");
-        let height_to_index_from = last_persisted_header.as_ref().map_or(1, |h| h.height());
+        let last_persisted_header = chain.get_last_header()?;
+        let height_to_index_from = last_persisted_header.as_ref().map_or(1, |h| h.height() + 1);
         let heights_to_fetch = chain_tip_height - last_persisted_header.as_ref().map_or(0, |h| h.height());
 
         let indexing_par: usize = indexer_conf.processing_parallelism.clone().into();
         let fork_detection_height: u32 = chain_tip_height - indexer_conf.fork_detection_heights as u32;
 
         if heights_to_fetch <= 0 {
-            return;
+            return Ok(());
         }
-        let indexing_mode =
+        let (indexing_how, indexing_mode) =
              if heights_to_fetch > indexer_conf.fork_detection_heights as u32 {
-                 SyncMode::Batching
+                 ("batch", SyncMode::Batching)
              } else {
-                 SyncMode::Continuous
+                 ("continuously", SyncMode::Continuous)
              };
 
         info!(
-            "Going to index {} blocks from {} to {}, parallelism : {}, fork_detection @ {}",
-            heights_to_fetch, height_to_index_from, chain_tip_height, indexing_par, fork_detection_height
+            "Going to {} index {} blocks from {} to {}, parallelism : {}, fork_detection @ {}",
+            indexing_how, heights_to_fetch, height_to_index_from, chain_tip_height, indexing_par, fork_detection_height
         );
         let buffer_size = 8192;
         let batch_buffer_size = std::cmp::max(16, buffer_size / indexer_conf.min_batch_size);
@@ -154,9 +154,8 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
             })
         };
 
-        if let Err(e) = tokio::try_join!(fetch_handle, process_handle, sort_handle, persist_handle) {
-            error!("One of the pipeline tasks failed {}", e);
-        }
+        let _ = tokio::try_join!(fetch_handle, process_handle, sort_handle, persist_handle)?;
+        Ok(())
     }
 
     fn chain_link(block: TB, block_provider: Arc<dyn BlockProvider<FB, TB>>, chain: Arc<dyn BlockChainLike<TB>>) -> Result<Vec<TB>, ChainError> {

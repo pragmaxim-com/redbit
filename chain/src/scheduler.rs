@@ -5,6 +5,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::watch;
 use tokio::time;
+use redbit::error;
+use crate::ChainError;
 
 pub struct Scheduler<FB: Send + Sync + 'static, TB: BlockLike + 'static> {
     pub syncer: ChainSyncer<FB, TB>,
@@ -15,8 +17,8 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> Scheduler<FB, TB> {
         Scheduler { syncer: ChainSyncer::new(block_provider, chain) }
     }
 
-    pub async fn sync(&self, indexer_conf: IndexerSettings) {
-        self.syncer.sync(indexer_conf.clone()).await;
+    pub async fn sync(&self, indexer_conf: IndexerSettings) -> Result<(), ChainError> {
+        self.syncer.sync(indexer_conf.clone()).await
     }
 
     pub async fn schedule(&self, indexer_conf: IndexerSettings, mut shutdown: watch::Receiver<bool>) {
@@ -29,7 +31,10 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> Scheduler<FB, TB> {
                     break;
                 }
                 _ = interval.tick() => {
-                    self.syncer.sync(indexer_conf.clone()).await;
+                    match self.syncer.sync(indexer_conf.clone()).await {
+                        Ok(_) => {},
+                        Err(e) => error!("Sync failed: {:?}", e),
+                    }
                 }
            }
         }

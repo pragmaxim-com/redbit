@@ -14,7 +14,7 @@ async fn chain_sync() {
     let config = AppConfig::new("config/settings").expect("Failed to load app config");
     let scheduler = Scheduler::new(block_provider, chain.clone());
     let start = Instant::now();
-    scheduler.sync(config.indexer.clone()).await;
+    scheduler.sync(config.indexer.clone()).await.expect("Syncing failed");
     let elapsed = start.elapsed();
     let secs = elapsed.as_secs_f64();
     println!("Demo chain sync took {:.1}s", secs);

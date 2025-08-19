@@ -13,7 +13,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     let storage = Storage::temp("demo_benchmark", 1, true).expect("Failed to open database");
 
     let block_provider: Arc<dyn BlockProvider<Block, Block>> = DemoBlockProvider::new(10).expect("Failed to create block provider");
-    let mut chain: Arc<dyn BlockChainLike<Block>> = BlockChain::new(Arc::clone(&storage));
+    let chain: Arc<dyn BlockChainLike<Block>> = BlockChain::new(Arc::clone(&storage));
     chain.init().expect("Failed to initialize chain");
     let scheduler = Scheduler::new(block_provider, chain.clone());
     let mut config = AppConfig::new("config/settings").expect("Failed to load app config");
@@ -30,7 +30,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     group.bench_function(BenchmarkId::from_parameter("syncing"), |bencher| {
         bencher.to_async(&rt).iter(|| async {
-            scheduler.sync(config.indexer.clone()).await;
+            scheduler.sync(config.indexer.clone()).await.expect("Syncing failed"); // syncing is ~ as fast as deleting, which is good
             chain.delete()
         })
     });

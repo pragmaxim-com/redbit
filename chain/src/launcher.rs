@@ -4,7 +4,7 @@ use crate::settings::{AppConfig, HttpSettings, IndexerSettings};
 use crate::{combine, ChainError};
 use futures::future::ready;
 use redbit::storage::Storage;
-use redbit::{info, serve, OpenApiRouter, RequestState};
+use redbit::{error, info, serve, OpenApiRouter, RequestState};
 use std::env;
 use std::sync::Arc;
 use tokio::sync::watch;
@@ -38,8 +38,10 @@ pub async fn maybe_run_syncing<FB: Send + Sync + 'static, TB: BlockLike + 'stati
     if index_config.enable {
         if index_config.sync_interval_s.is_zero() {
             info!("Syncing initiated");
-            scheduler.sync(index_config).await;
-            info!("Syncing completed");
+            match scheduler.sync(index_config).await {
+                Ok(_) => info!("Syncing completed successfully"),
+                Err(e) => error!("Syncing failed: {}", e),
+            }
         } else {
             info!("Scheduling initiated");
             scheduler.schedule(index_config, shutdown).await

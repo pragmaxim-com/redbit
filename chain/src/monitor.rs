@@ -22,7 +22,7 @@ impl ProgressMonitor {
     }
 
     pub fn warn_gap(&self, need_height: u32, seen_height: u32, pending_heights: usize) {
-        warn!("Gab @ {} currently @ {} ... pending {} blocks", need_height, seen_height, pending_heights);
+        warn!("Block @ {} not fetched, currently @ {} ... pending {} blocks", need_height, seen_height, pending_heights);
     }
 
     pub fn log(
