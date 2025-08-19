@@ -360,6 +360,8 @@ cargo flamegraph --bin target/release/btc --release
 
 ### ⏱ Benchmarks (results from github servers)
 
+Hand-made criterion benchmarks [deployed](http://github.com/pragmaxim-com/redbit/report/index.html).
+
 The slowest `block::_store_many` operation in this context persists 3 blocks of 3 transactions of 1 input and 3 utxos of 3 assets, ie.
 the operations writes :
 - 3 blocks
