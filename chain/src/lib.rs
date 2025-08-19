@@ -7,5 +7,6 @@ pub mod combine;
 pub mod launcher;
 pub mod task;
 pub mod utils;
+pub mod batcher;
 
 pub use api::{BlockHeaderLike, BlockLike, BlockChainLike, ChainError};

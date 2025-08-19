@@ -13,6 +13,7 @@ use std::{pin::Pin, sync::Arc};
 use chain::api::{BlockProvider, ChainError};
 use chain::monitor::BoxWeight;
 use tokio::runtime::Runtime;
+use chain::batcher::SyncMode;
 use ExplorerError;
 
 pub struct CardanoBlockProvider {
@@ -158,9 +159,9 @@ impl BlockProvider<CBOR, Block> for CardanoBlockProvider {
         Ok(best_header.header)
     }
 
-    fn stream(&self, _chain_tip: BlockHeader, last_header: Option<BlockHeader>) -> Pin<Box<dyn Stream<Item = CBOR> + Send + 'static>> {
+    fn stream(&self, _remote_chain_tip: BlockHeader, last_persisted_header: Option<BlockHeader>, _mode: SyncMode) -> Pin<Box<dyn Stream<Item = CBOR> + Send + 'static>> {
         let node_client = Arc::clone(&self.client.node_client);
-        let last_point = last_header.as_ref().map_or(Point::Origin, |h| Point::new(h.slot.0 as u64, h.hash.0.to_vec()));
+        let last_point = last_persisted_header.as_ref().map_or(Point::Origin, |h| Point::new(h.slot.0 as u64, h.hash.0.to_vec()));
 
         stream! {
             let mut guard = node_client.lock().await;

@@ -1,7 +1,7 @@
 use std::{time::Instant};
 
 use std::sync::Mutex;
-use redbit::info;
+use redbit::{info, warn};
 
 pub type BatchWeight = usize;
 pub type BoxWeight = usize;
@@ -21,13 +21,17 @@ impl ProgressMonitor {
         }
     }
 
+    pub fn warn_gap(&self, need_height: u32, seen_height: u32, pending_heights: usize) {
+        warn!("Gab @ {} currently @ {} ... pending {} blocks", need_height, seen_height, pending_heights);
+    }
+
     pub fn log(
         &self,
         height: u32,
         timestamp: &str,
         hash: &str,
         cur_batch_size: usize,
-        batch_weight: &BatchWeight,
+        batch_weight: BatchWeight,
         buffer_size: usize,
     ) {
         let mut total_weight = self.total_and_last_report_weight.lock().unwrap();

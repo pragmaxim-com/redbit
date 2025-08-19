@@ -7,6 +7,7 @@
 - document each function with one smart sentence
 - always review the code from performance and memory usage perspective
 - avoid reformatting my code so I can diff it easily
+- keep extra attention to O(?) complexity optimizations and make code comments about it
 
 ### Rust best practices
 

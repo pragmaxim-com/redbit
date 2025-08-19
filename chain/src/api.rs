@@ -5,6 +5,7 @@ use hex::FromHexError;
 use redbit::AppError;
 use std::pin::Pin;
 use std::sync::Arc;
+use crate::batcher::SyncMode;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ChainError {
@@ -74,5 +75,5 @@ pub trait BlockProvider<FB: Send, TB: BlockLike>: Send + Sync {
     fn block_processor(&self) -> Arc<dyn Fn(&FB) -> Result<TB, ChainError> + Send + Sync>;
     fn get_processed_block(&self, header: TB::Header) -> Result<TB, ChainError>;
     async fn get_chain_tip(&self) -> Result<TB::Header, ChainError>;
-    fn stream(&self, chain_tip_header: TB::Header, last_header: Option<TB::Header>) -> Pin<Box<dyn Stream<Item = FB> + Send + 'static>>;
+    fn stream(&self, remote_chain_tip_header: TB::Header, last_persisted_header: Option<TB::Header>, mode: SyncMode) -> Pin<Box<dyn Stream<Item = FB> + Send + 'static>>;
 }

@@ -7,6 +7,7 @@ use std::pin::Pin;
 use std::sync::{Arc, RwLock};
 use redbit::info;
 use chain::api::{BlockProvider, ChainError};
+use chain::batcher::SyncMode;
 
 pub struct DemoBlockProvider {
     pub chain: Arc<RwLock<BTreeMap<Height, Block>>>,
@@ -55,11 +56,12 @@ impl BlockProvider<Block, Block> for DemoBlockProvider {
 
     fn stream(
         &self,
-        chain_tip_header: Header,
-        last_header: Option<Header>,
+        remote_chain_tip_header: Header,
+        last_persisted_header: Option<Header>,
+        _mode: SyncMode
     ) -> Pin<Box<dyn Stream<Item = Block> + Send + 'static>> {
-        let last_height = last_header.map_or(1, |h| h.height.0);
-        let heights = last_height..=chain_tip_header.height.0;
+        let height_to_index_from = last_persisted_header.map_or(1, |h| h.height.0 + 1);
+        let heights = height_to_index_from..=remote_chain_tip_header.height.0;
         let chain = self.chain.clone();
         tokio_stream::iter(heights)
             .map(move |height| {

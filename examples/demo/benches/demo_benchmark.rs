@@ -1,0 +1,42 @@
+use chain::api::{BlockChainLike, BlockProvider};
+use std::{sync::Arc, time::Duration};
+
+use chain::scheduler::Scheduler;
+use chain::settings::AppConfig;
+use criterion::{criterion_group, criterion_main, Criterion, Throughput};
+use demo::block_provider::DemoBlockProvider;
+use demo::model_v1::{Block, BlockChain};
+use redbit::{info, Storage};
+use tokio::runtime::Runtime;
+
+fn criterion_benchmark(c: &mut Criterion) {
+    let storage = Storage::temp("demo_benchmark", 1, true).expect("Failed to open database");
+
+    let block_provider: Arc<dyn BlockProvider<Block, Block>> = DemoBlockProvider::new(10).expect("Failed to create block provider");
+    let chain: Arc<dyn BlockChainLike<Block>> = BlockChain::new(Arc::clone(&storage));
+    chain.init().expect("Failed to initialize chain");
+    let scheduler = Scheduler::new(block_provider, chain.clone());
+    let mut config = AppConfig::new("config/settings").expect("Failed to load app config");
+    config.indexer.fork_detection_heights = 5;
+
+    info!("Initiating syncing");
+    let mut group = c.benchmark_group("chain");
+    group.throughput(Throughput::Elements(1));
+    group.warm_up_time(Duration::from_millis(50));
+    group.measurement_time(Duration::from_millis(300));
+    group.sample_size(10);
+
+    let rt = Runtime::new().unwrap();
+
+    group.bench_function("sync", |b| {
+        b.to_async(&rt).iter(|| async {
+            scheduler.sync(config.indexer.clone()).await
+        })
+    });
+
+    group.finish();
+}
+
+criterion_group!(benches, criterion_benchmark);
+criterion_main!(benches);
+

@@ -7,6 +7,7 @@ use futures::Stream;
 use redbit::*;
 use std::{pin::Pin, sync::Arc};
 use chain::api::{BlockProvider, ChainError};
+use chain::batcher::SyncMode;
 use chain::monitor::BoxWeight;
 
 pub const SENTINEL: [u8; 25] = [
@@ -114,22 +115,22 @@ impl BlockProvider<BtcBlock, Block> for BtcBlockProvider {
 
     fn stream(
         &self,
-        chain_tip_header: Header,
-        last_header: Option<Header>,
+        remote_chain_tip_header: Header,
+        last_persisted_header: Option<Header>,
+        mode: SyncMode
     ) -> Pin<Box<dyn Stream<Item = BtcBlock> + Send + 'static>> {
-        let last_height = last_header.map_or(0, |h| h.height.0);
-        let heights = last_height..=chain_tip_header.height.0;
+        let height_to_index_from = last_persisted_header.map_or(1, |h| h.height.0 + 1);
+        let heights = height_to_index_from..=remote_chain_tip_header.height.0;
         let client = Arc::clone(&self.client);
-        tokio_stream::iter(heights)
-            .map(move |height| {
-                let client = Arc::clone(&client);
-                tokio::task::spawn_blocking(move || client.get_block_by_height(Height(height)).expect("Failed to get block by height"))
-            })
-            .buffer_unordered(self.fetching_par)
-            .map(|res| match res {
-                Ok(block) => block,
-                Err(e) => panic!("Error: {:?}", e), // TODO lousy error handling
-            })
-            .boxed()
+        let s =
+            tokio_stream::iter(heights)
+                .map(move |height| {
+                    let client = Arc::clone(&client);
+                    tokio::task::spawn_blocking(move || client.get_block_by_height(Height(height)).expect("Failed to get block by height"))
+                });
+        match mode {
+            SyncMode::Batching => s.buffer_unordered(self.fetching_par).map(|res| res.expect("join failed")).boxed(),
+            SyncMode::Continuous => s.buffered(self.fetching_par).map(|res| res.expect("join failed")).boxed(),
+        }
     }
 }

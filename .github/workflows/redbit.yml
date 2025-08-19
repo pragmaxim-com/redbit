@@ -45,7 +45,41 @@ jobs:
           cargo test --package demo --features ci
           cargo test --package demo --features integration,ci
 
-  performance:
+  criterion:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Run benchmarks
+        run: |
+          cargo bench --package btc --bench btc_benchmark -- --quiet
+          cargo bench --package demo --bench demo_benchmark -- --quiet
+
+      - name: Upload Criterion report to Pages artifact
+        uses: actions/upload-pages-artifact@v1
+        with:
+          path: target/criterion
+
+  deploy:
+    needs: bench
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v2
+
+  bench:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -93,7 +127,6 @@ jobs:
           }
 
           run_bench demo
-          cargo bench --package btc --bench btc_benchmark -- --quiet
 
       - name: Update README with documentation
         run: |
@@ -135,7 +168,7 @@ jobs:
             !in_bench { print }
           ' README.md > README.md.tmp && mv README.md.tmp README.md
 
-      - name: Commit benchmark HTML
+      - name: Commit benchmark results to README
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions@users.noreply.github.com"

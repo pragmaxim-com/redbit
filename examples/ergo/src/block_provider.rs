@@ -19,6 +19,7 @@ use redbit::*;
 use reqwest::Url;
 use std::{pin::Pin, str::FromStr, sync::Arc};
 use chain::api::{BlockProvider, ChainError};
+use chain::batcher::SyncMode;
 use chain::monitor::BoxWeight;
 
 pub struct ErgoBlockProvider {
@@ -145,19 +146,24 @@ impl BlockProvider<FullBlock, Block> for ErgoBlockProvider {
 
     fn stream(
         &self,
-        chain_tip_header: BlockHeader,
-        last_header: Option<BlockHeader>,
+        remote_chain_tip_header: BlockHeader,
+        last_persisted_header: Option<BlockHeader>,
+        mode: SyncMode
     ) -> Pin<Box<dyn Stream<Item = FullBlock> + Send + 'static>> {
-        let last_height = last_header.map_or(1, |h| h.height.0);
-        let heights = last_height..=chain_tip_header.height.0;
+        let height_to_index_from = last_persisted_header.map_or(1, |h| h.height.0 + 1);
+        let heights = height_to_index_from..=remote_chain_tip_header.height.0;
         let client = Arc::clone(&self.client);
-        tokio_stream::iter(heights)
-            .map(move |height| {
+        let s =
+            tokio_stream::iter(heights).map(move |height| {
                 let client = Arc::clone(&client);
                 async move {
                     client.get_block_by_height_retry_async(Height(height)).await.expect("Failed to fetch block by height")
                 }
-            }).buffer_unordered(self.fetching_par)
-            .boxed()
+            });
+        
+        match mode {
+            SyncMode::Batching => s.buffer_unordered(self.fetching_par).boxed(),
+            SyncMode::Continuous => s.buffered(self.fetching_par).boxed(),
+        }
     }
 }

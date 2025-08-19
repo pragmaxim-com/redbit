@@ -9,6 +9,7 @@ use redbit::{error, info};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
+use crate::batcher::{Batcher, ReorderBuffer, SyncMode};
 
 pub struct ChainSyncer<FB: Send + Sync + 'static, TB: BlockLike + 'static> {
     pub block_provider: Arc<dyn BlockProvider<FB, TB>>,
@@ -29,8 +30,8 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
         let node_chain_tip_header = block_provider.get_chain_tip().await.expect("Failed to get chain tip header");
         let chain_tip_height = node_chain_tip_header.height();
         let last_persisted_header = chain.get_last_header().expect("Failed to get last header");
-        let last_persisted_height = last_persisted_header.as_ref().map_or(0, |h| h.height());
-        let heights_to_fetch = chain_tip_height - last_persisted_height;
+        let height_to_index_from = last_persisted_header.as_ref().map_or(1, |h| h.height());
+        let heights_to_fetch = chain_tip_height - last_persisted_header.as_ref().map_or(0, |h| h.height());
 
         let indexing_par: usize = indexer_conf.processing_parallelism.clone().into();
         let fork_detection_height: u32 = chain_tip_height - indexer_conf.fork_detection_heights as u32;
@@ -38,9 +39,16 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
         if heights_to_fetch <= 0 {
             return;
         }
+        let indexing_mode =
+             if heights_to_fetch > indexer_conf.fork_detection_heights as u32 {
+                 SyncMode::Batching
+             } else {
+                 SyncMode::Continuous
+             };
+
         info!(
             "Going to index {} blocks from {} to {}, parallelism : {}, fork_detection @ {}",
-            heights_to_fetch, last_persisted_height, chain_tip_height, indexing_par, fork_detection_height
+            heights_to_fetch, height_to_index_from, chain_tip_height, indexing_par, fork_detection_height
         );
         let buffer_size = 8192;
         let batch_buffer_size = std::cmp::max(16, buffer_size / indexer_conf.min_batch_size);
@@ -52,7 +60,7 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
         let fetch_handle = {
             let block_provider = Arc::clone(&self.block_provider);
             task::spawn_named("fetch", async move {
-                let mut s = block_provider.stream(node_chain_tip_header.clone(), last_persisted_header);
+                let mut s = block_provider.stream(node_chain_tip_header.clone(), last_persisted_header, indexing_mode);
                 while let Some(raw) = s.next().await {
                     if let Err(_) = fetch_tx.send(raw).await {
                         error!("fetch: raw_rx closed, stopping fetcher");
@@ -86,31 +94,45 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
         // Sort + process stage is executed at parallel so blocks are not coming in order
         let sort_handle = {
             let indexer_conf = indexer_conf.clone();
-            task::spawn_named("sort",async move {
-                let mut batch: Vec<TB> = Vec::with_capacity(indexer_conf.min_batch_size);
-                let mut weight: usize = 0;
-                let min_weight = indexer_conf.min_batch_size;
+            task::spawn_named("sort", async move {
+                let mut reorder: ReorderBuffer<TB> = ReorderBuffer::new(height_to_index_from, buffer_size);
+                let mut batcher: Batcher<TB> = Batcher::new(indexer_conf.min_batch_size, buffer_size, indexing_mode);
 
                 while let Some(block) = proc_rx.recv().await {
                     let header = block.header();
-                    weight += header.weight() as usize;
-                    let height = header.height();
-                    let idx = batch.binary_search_by_key(&height, |b| b.header().height()).unwrap_or_else(|i| i);
+                    let h = header.height();
 
-                    if weight >= min_weight {
-                        let block_size = batch.len() + 1;
-                        monitor.log(height, &header.timestamp_str(), &header.hash_str(), block_size, &weight, proc_rx.len());
-                        batch.insert(idx, block);
-                        if sort_tx.send(std::mem::take(&mut batch)).await.is_err() {
-                            break;
+                    // 1) Strict global reordering; returns only contiguous-from-next items.
+                    let ready = reorder.insert(h, block);
+
+                    // Optional observability/backpressure hint on wide gaps:
+                    if reorder.is_saturated() {
+                        if let Some((need, seen)) = reorder.gap_span() {
+                            monitor.warn_gap(need, seen, reorder.pending_len());
                         }
-                        weight = 0;
-                    } else {
-                        batch.insert(idx, block);
+                    }
+
+                    // 2) Feed in-order items into weight batcher.
+                    for b in ready {
+                        if let Some(out) = batcher.push_with(b, |x| x.header().weight() as usize) {
+                            if let Some(last) = out.last() {
+                                let lh = last.header();
+                                monitor.log(
+                                    lh.height(),
+                                    &lh.timestamp_str(),
+                                    &lh.hash_str(),
+                                    out.len(),
+                                    out.iter().map(|x| x.header().weight() as usize).sum::<usize>(),
+                                    proc_rx.len(),
+                                );
+                            }
+                            if sort_tx.send(out).await.is_err() { break; }
+                        }
                     }
                 }
-                if !batch.is_empty() {
-                    let _ = sort_tx.send(batch).await;
+
+                if let Some(out) = batcher.flush() {
+                    let _ = sort_tx.send(out).await;
                 }
                 drop(sort_tx);
             })
