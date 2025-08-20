@@ -29,7 +29,7 @@ impl CardanoBlockProvider {
         Arc::new(CardanoBlockProvider { client, genesis })
     }
 
-    fn process_block_pure(block: &CBOR, genesis: &GenesisValues) -> Result<Block, ChainError> {
+    pub fn process_block_pure(block: &CBOR, genesis: &GenesisValues) -> Result<Block, ChainError> {
         let b = MultiEraBlock::decode(block).map_err(ExplorerError::from)?;
 
         let hash: [u8; 32] = *b.header().hash();
