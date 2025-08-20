@@ -1,0 +1,8 @@
+workspace = true
+publish = false
+shared-version = true
+tag-name = "{{version}}"
+
+pre-release-replacements = [
+    { file = "README.md", search = "redbit = .*", replace = "redbit = \"{{version}}\"" },
+]

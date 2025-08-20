@@ -15,13 +15,13 @@ impl TransientMacros {
         let field_name = &field_def.name;
         let field_type = &field_def.tpe;
         let struct_default_init = quote! {
-            #field_name: (<#field_type>::default())
+            #field_name: <#field_type>::default()
         };
         let struct_init_with_query = quote! {
-            let #field_name = (<#field_type>::default());
+            let #field_name = <#field_type>::default();
         };
         let struct_default_init_with_query = quote! {
-            let #field_name = (<#field_type>::default());
+            let #field_name = <#field_type>::default();
         };
         TransientMacros {
             field_def,

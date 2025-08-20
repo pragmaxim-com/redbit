@@ -24,7 +24,7 @@ pub fn by_dict_def(
 
     let fn_name = format_ident!("stream_{}s_by_{}", parent_ident.to_string().to_lowercase(), column_name);
     let fn_stream = quote! {
-        pub fn #fn_name(tx: StorageReadTx, val: #column_type, query: Option<#stream_parent_query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#parent_type, AppError>> + Send + 'static>>, AppError> {
+        pub fn #fn_name(tx: StorageReadTx, val: #column_type, query: Option<#stream_parent_query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#parent_type, AppError>> + Send>>, AppError> {
             let val2birth = tx.open_table(#value_to_dict_pk)?;
             let birth_guard = val2birth.get(&val)?;
             let mut unique_parent_pointers = Vec::new();
@@ -165,7 +165,7 @@ pub fn by_index_def(
 
     let fn_name = format_ident!("stream_{}s_by_{}", parent_ident.to_string().to_lowercase(), column_name);
     let fn_stream = quote! {
-        pub fn #fn_name(tx: StorageReadTx, val: #column_type, query: Option<#stream_parent_query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#parent_type, AppError>> + Send + 'static>>, AppError> {
+        pub fn #fn_name(tx: StorageReadTx, val: #column_type, query: Option<#stream_parent_query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#parent_type, AppError>> + Send>>, AppError> {
             let mm_table = tx.open_multimap_table(#table)?;
             let iter = mm_table.get(&val)?;
             let mut unique_parent_pointers = Vec::new();

@@ -38,7 +38,6 @@ pub fn test_suite(entity_name: &Ident, parent_def: Option<OneToManyParentDef>, f
         mod #entity_tests {
             use super::*;
             use once_cell::sync::Lazy;
-            use tokio::sync::OnceCell;
             use test::Bencher;
             use tokio::runtime::Runtime;
 

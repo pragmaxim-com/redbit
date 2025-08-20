@@ -1,0 +1,29 @@
+[tasks.expand-demo]
+description = "Concatenate all expanded macro files into one huge redbit.rs"
+script = [
+    '''
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    TARGET_CRATE="${TARGET_CRATE:-demo}"
+
+    OUT_FILE="target/macros/examples/${TARGET_CRATE}_redbit.rs"
+    > "$OUT_FILE"
+
+    find target/macros/examples/${TARGET_CRATE}/ -type f -name "*.rs" | sort | while read -r file; do
+        echo "// ===== File: $file =====" >> "$OUT_FILE"
+
+        perl -pe '
+            s/#\[\s*column(\(.*?\))?\]//g;
+            s/#\[\s*fk(\(.*?\))?\]//g;
+            s/#\[\s*pk\s*\]//g;
+            s/\b(Entity|PointerKey|RootKey)\b,?\s*//g;
+            s/,+/,/g;
+            s/\[,/[/g;
+            s/,]/]/g;
+        ' "$file" >> "$OUT_FILE"
+
+        echo -e "\n" >> "$OUT_FILE"
+    done
+    '''
+]

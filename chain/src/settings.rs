@@ -1,4 +1,4 @@
-use config::{Config, ConfigError, File};
+use config::{Config, ConfigError, Environment, File};
 use serde::Deserialize;
 use std::net::SocketAddr;
 use std::str::FromStr;
@@ -82,7 +82,10 @@ pub struct HttpSettings {
 
 impl AppConfig {
     pub fn new(path: &str) -> Result<Self, ConfigError> {
-        let builder = Config::builder().add_source(File::with_name(path).required(true));
+        let builder =
+            Config::builder()
+                .add_source(File::with_name(path).required(true))
+                .add_source(Environment::with_prefix("REDBIT").try_parsing(true).separator("__"));
         let config = builder.build()?.try_deserialize();
         println!("{:#?}", config);
         config

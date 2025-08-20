@@ -87,10 +87,7 @@ use bincode::{decode_from_slice, encode_to_vec};
 use serde::de::DeserializeOwned;
 use std::any::type_name;
 use std::cmp::Ordering;
-use std::env;
 use std::fmt::Debug;
-use std::fs::OpenOptions;
-use std::io::Write;
 use std::net::SocketAddr;
 use std::ops::Add;
 use thiserror::Error;
@@ -471,27 +468,4 @@ pub async fn serve(
         })
         .await
         .unwrap();
-}
-
-//TODO duplicated with `macros/src/macro_utils.rs`
-pub fn write_to_local_file(lines: Vec<String>, dir_name: &str, file_name: &str) {
-    let dir_path = env::current_dir().expect("current dir inaccessible").join("target").join("macros").join(dir_name);
-    if let Err(e) = std::fs::create_dir_all(&dir_path) {
-        error!("Failed to create directory {:?}: {}", dir_path, e);
-        return;
-    }
-    let full_path = dir_path.join(file_name);
-
-    #[cfg(not(test))]
-    {
-        if let Err(e) = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(&full_path)
-            .and_then(|mut file| file.write_all(lines.join("\n").as_bytes()))
-        {
-            eprintln!("Failed to write to {:?}: {}", full_path, e);
-        }
-    }
 }

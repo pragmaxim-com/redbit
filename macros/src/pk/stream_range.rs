@@ -13,7 +13,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_field_def: &FieldDef, 
     let fn_name = format_ident!("stream_range");
     let fn_stream =
         quote! {
-            pub fn #fn_name(tx: StorageReadTx, from: #pk_type, until: #pk_type, query: Option<#stream_query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#entity_type, AppError>> + Send + 'static>>, AppError> {
+            pub fn #fn_name(tx: StorageReadTx, from: #pk_type, until: #pk_type, query: Option<#stream_query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#entity_type, AppError>> + Send>>, AppError> {
                 let table_pk_9 = tx.open_table(#table)?;
                 let range = from..until;
                 let iter_box = Box::new(table_pk_9.range::<#pk_type>(range)?);

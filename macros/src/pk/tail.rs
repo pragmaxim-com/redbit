@@ -17,7 +17,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
             let until = key.next_index();
             let from = until.rollback_or_init(n as u32);
             let range = from..until;
-            let mut iter = table_pk_12.range(range)?;
+            let iter = table_pk_12.range(range)?;
             let mut queue = VecDeque::with_capacity(n);
 
             for entry_res in iter {

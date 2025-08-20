@@ -1,14 +1,9 @@
-use proc_macro::TokenStream;
-use proc_macro2::Ident;
 use quote::quote;
-use std::env;
-use std::fs::OpenOptions;
-use std::io::Write;
-use syn::{Attribute, ItemStruct, Path, Type};
 use syn::punctuated::Punctuated;
 use syn::token::Comma;
+use syn::{Attribute, ItemStruct, Path, Type};
 
-pub fn extract_derives(attr: &Attribute) -> syn::Result<Vec<syn::Path>> {
+fn extract_derives(attr: &Attribute) -> syn::Result<Vec<syn::Path>> {
     let mut derives = Vec::new();
     attr.parse_nested_meta(|meta| {
         if let Some(ident) = meta.path.get_ident() {
@@ -156,42 +151,6 @@ pub enum InnerKind {
    // UtcDateTime,
     Time,
     Other,
-}
-
-pub fn write_to_local_file(lines: Vec<String>, dir_name: &str, file_name: &str) {
-    let dir_path = env::current_dir().expect("current dir inaccessible").join("target").join("macros").join(dir_name);
-    if let Err(e) = std::fs::create_dir_all(&dir_path) {
-        eprintln!("Failed to create directory {:?}: {}", dir_path, e);
-        return;
-    }
-    let full_path = dir_path.join(file_name);
-
-    #[cfg(not(test))]
-    {
-        if let Err(e) = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(&full_path)
-            .and_then(|mut file| file.write_all(lines.join("\n").as_bytes()))
-        {
-            eprintln!("Failed to write to {:?}: {}", full_path, e);
-        }
-    }
-}
-
-pub fn submit_struct_to_stream(stream: proc_macro2::TokenStream, dir: &str, struct_ident: &Ident, suffix: &str) -> TokenStream {
-    let formatted_token_stream =
-        match syn::parse2::<syn::File>(stream.clone()) {
-            Ok(ast) => prettyplease::unparse(&ast),
-            Err(_) => stream.to_string(),
-        };
-
-    write_to_local_file(vec![formatted_token_stream], dir, &format!("{}{}", struct_ident, suffix));
-
-    quote! {
-        #stream
-    }.into()
 }
 
 pub fn to_camel_case(input: &str, upper_first_char: bool) -> String {

@@ -1,10 +1,13 @@
 [package]
-name = "chain"
-version = "1.0.4"
 edition = "2024"
+name = "chain"
+version.workspace = true
 
 [features]
 tracing = ["console-subscriber"]
+
+[lib]
+name = "chain"
 
 [dependencies]
 redbit = { path = "../redbit" }

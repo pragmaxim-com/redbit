@@ -7,5 +7,5 @@ fn compile_pass_tests() {
 #[test]
 fn compile_fail_tests() {
     let t = trybuild::TestCases::new();
-    t.compile_fail("tests/failing/*.rs");
+    t.compile_fail("/failing/*.rs");
 }

@@ -62,7 +62,7 @@ pub async fn showcase() -> Result<(), AppError> {
     Transaction::get_utxos(&read_tx, &first_transaction.id)?;
     Transaction::get_maybe_value(&read_tx, &first_transaction.id)?;
     Transaction::parent_key(&read_tx, &first_transaction.id)?;
-    Transaction::stream_ids_by_hash(&read_tx, &first_transaction.hash)?.try_collect::<Vec<BlockPointer>>().await?;
+    Transaction::stream_ids_by_hash(storage.begin_read()?, first_transaction.hash.clone())?.try_collect::<Vec<BlockPointer>>().await?;
     Transaction::stream_by_hash(storage.begin_read()?, first_transaction.hash.clone(), None)?.try_collect::<Vec<Transaction>>().await?;
     Transaction::stream_range(storage.begin_read()?, first_transaction.id, last_transaction.id, None)?.try_collect::<Vec<Transaction>>().await?;
 
@@ -82,7 +82,7 @@ pub async fn showcase() -> Result<(), AppError> {
     Utxo::range(&read_tx, &first_utxo.id, &last_utxo.id, None)?;
     Utxo::get_assets(&read_tx, &first_utxo.id)?;
     Utxo::parent_key(&read_tx, &first_utxo.id)?;
-    Utxo::stream_ids_by_address(&read_tx, &first_utxo.address)?.try_collect::<Vec<TransactionPointer>>().await?;
+    Utxo::stream_ids_by_address(storage.begin_read()?, first_utxo.address.clone())?.try_collect::<Vec<TransactionPointer>>().await?;
     Utxo::stream_range(storage.begin_read()?, first_utxo.id, last_utxo.id, None)?.try_collect::<Vec<Utxo>>().await?;
     Utxo::stream_by_address(storage.begin_read()?, first_utxo.address.clone(), None)?.try_collect::<Vec<Utxo>>().await?;
     // even streaming parents is possible

@@ -8,7 +8,7 @@ use crate::endpoint::EndpointDef;
 pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type) -> FunctionDef {
     let fn_name = format_ident!("parent_key");
     let fn_stream = quote! {
-        pub fn #fn_name(tx: &StorageReadTx, pk: &#pk_type) -> Result<<#pk_type as ChildPointer>::Parent, AppError> {
+        pub fn #fn_name(_tx: &StorageReadTx, pk: &#pk_type) -> Result<<#pk_type as ChildPointer>::Parent, AppError> {
             Ok(pk.parent().clone())
         }
     };

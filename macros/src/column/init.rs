@@ -6,7 +6,7 @@ use crate::table::DictTableDefs;
 pub fn default_init_expr(column_type: &Type) -> TokenStream {
     quote! {
         {
-            let mut value = <#column_type as Default>::default();
+            let value = <#column_type as Default>::default();
             <#column_type as IterableColumn>::nth_value(&value, sample_index)
         }
     }

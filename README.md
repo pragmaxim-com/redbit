@@ -43,15 +43,21 @@ through auto-generated REST API.
 
 ❌ Root key must be newtype struct with numeric inner type (that's part of the design decision to achieve fast indexing of even whole bitcoin)
 
-
 ### Development
+
+To use redbit in your project:
+
+```toml
+[dependencies]
+redbit = "1.0.4"
+```
 
 ```
 cd examples/utxo
 cargo test                          # to let all the self-generated tests run
 cargo test --features integration   # to let http layer self-generated tests run
 cargo bench                         # to run benchmarks
-cargo run                           # to run the demo example and start the server
+cargo run --release                 # to run the demo example and start the server
 ```
 
 Check the [redbit-ui](http://github.com/pragmaxim-com/redbit-ui) for frontend dev.

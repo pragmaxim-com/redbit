@@ -150,7 +150,7 @@ pub fn store_and_commit_def(entity_name: &Ident, entity_type: &Type, pk_name: &I
             handler_impl_stream: quote! {
                 impl IntoResponse {
                     match #entity_name::#fn_name(Arc::clone(&state.storage), &body) {
-                        Ok(pk) => Response::builder().status(StatusCode::OK).body(Body::empty()).unwrap().into_response(),
+                        Ok(_) => Response::builder().status(StatusCode::OK).body(Body::empty()).unwrap().into_response(),
                         Err(err) => err.into_response(),
                     }
                 }

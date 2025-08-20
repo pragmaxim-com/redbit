@@ -1,3 +1,4 @@
+#![feature(proc_macro_span)]
 extern crate proc_macro;
 mod column;
 mod pk;
@@ -10,6 +11,7 @@ mod transient;
 mod endpoint;
 mod field;
 mod entity;
+mod expansion;
 
 use crate::pk::PointerType;
 use proc_macro::TokenStream;
@@ -57,7 +59,7 @@ pub fn column(attr: TokenStream, item: TokenStream) -> TokenStream {
             }
         };
 
-    macro_utils::submit_struct_to_stream(stream, "column", struct_ident, ".rs")
+    expansion::submit_struct_to_stream(stream, "column", struct_ident, ".rs")
 }
 
 struct LiteralAttr {
@@ -128,7 +130,7 @@ pub fn pointer_key(attr: TokenStream, item: TokenStream) -> TokenStream {
             pub index: #index_type,
         }
     };
-    macro_utils::submit_struct_to_stream(stream, "pk", struct_ident, "_attr.rs")
+    expansion::submit_struct_to_stream(stream, "pk", struct_ident, "_attr.rs")
 }
 
 #[proc_macro_derive(PointerKey)]
@@ -151,7 +153,7 @@ pub fn derive_pointer_key(input: TokenStream) -> TokenStream {
         #[allow(clippy::useless_conversion)]
         Err(e) => e.to_compile_error().into(),
     };
-    macro_utils::submit_struct_to_stream(stream, "pk", struct_ident, "_derive.rs")
+    expansion::submit_struct_to_stream(stream, "pk", struct_ident, "_derive.rs")
 }
 
 #[proc_macro_attribute]
@@ -164,7 +166,7 @@ pub fn root_key(_attr: TokenStream, item: TokenStream) -> TokenStream {
         #[derive(RootKey, Copy, Clone, Hash, Debug, Decode, Encode, Default, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
     });
     let stream = quote!(#s);
-    macro_utils::submit_struct_to_stream(stream, "pk", struct_ident, "_attr.rs")
+    expansion::submit_struct_to_stream(stream, "pk", struct_ident, "_attr.rs")
 }
 
 #[proc_macro_derive(RootKey)]
@@ -184,7 +186,7 @@ pub fn derive_root_key(input: TokenStream) -> TokenStream {
         },
         Err(e) => e.to_compile_error().into(),
     };
-    macro_utils::submit_struct_to_stream(stream, "pk", struct_ident, "_derive.rs")
+    expansion::submit_struct_to_stream(stream, "pk", struct_ident, "_derive.rs")
 }
 
 #[proc_macro_attribute]
@@ -199,7 +201,7 @@ pub fn entity(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let stream = quote! {
         #s
     };
-    macro_utils::submit_struct_to_stream(stream, "entity", struct_ident, "_attr.rs")
+    expansion::submit_struct_to_stream(stream, "entity", struct_ident, "_attr.rs")
 }
 
 #[proc_macro_derive(Entity, attributes(pk, fk, column))]
@@ -236,5 +238,5 @@ pub fn derive_entity(input: TokenStream) -> TokenStream {
         }
     };
 
-    macro_utils::submit_struct_to_stream(stream, "entity", &item_struct.ident, "_derive.rs")
+    expansion::submit_struct_to_stream(stream, "entity", &item_struct.ident, "_derive.rs")
 }
