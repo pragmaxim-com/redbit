@@ -77,13 +77,14 @@ where
     let full_path = env::home_dir().unwrap().join(&db_path);
     let (created, storage) = Storage::init(full_path, config.indexer.db_cache_size_gb)?;
     let chain: Arc<dyn BlockChainLike<TB>> = build_chain(Arc::clone(&storage));
-    if created {
-        chain.init()?;
-    } else {
-        info!("Validating chain for being linked");
-        chain.validate_chain().await?;
-        info!("Chain is linked and ready");
-    }
+    let _height_fixes: Vec<TB::Header> =
+        if created {
+            chain.init()?;
+            Vec::new()
+        } else {
+            info!("Validating chain for being linked");
+            chain.validate_chain().await?
+        };
     let scheduler: Scheduler<FB, TB> = Scheduler::new(block_provider, chain);
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
     let indexing_f = maybe_run_syncing(config.indexer, scheduler, shutdown_rx.clone());

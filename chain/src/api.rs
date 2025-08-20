@@ -72,7 +72,7 @@ pub trait BlockChainLike<B: BlockLike>: Send + Sync {
     fn store_blocks(&self, blocks: Vec<B>) -> Result<(), ChainError>;
     fn update_blocks(&self, blocks: Vec<B>) -> Result<(), ChainError>;
     fn populate_inputs(&self, blocks: &mut Vec<B>) -> Result<(), ChainError>;
-    async fn validate_chain(&self) -> Result<(), ChainError>;
+    async fn validate_chain(&self) -> Result<Vec<B::Header>, ChainError>;
 }
 
 #[async_trait]
