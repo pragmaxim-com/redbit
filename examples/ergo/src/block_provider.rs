@@ -3,9 +3,9 @@ use crate::ergo_client::ErgoClient;
 use crate::model_v1;
 use crate::model_v1::{Address, Asset, AssetAction, AssetName, AssetType, Block, BlockHash, BlockHeader, BlockPointer, BlockTimestamp, ExplorerError, Height, Transaction, TransactionPointer, TxHash, Utxo, UtxoPointer, Weight};
 use async_trait::async_trait;
-use ergo_lib::chain::transaction::TxIoVec;
 use ergo_lib::ergotree_ir::chain::address::AddressEncoder;
-use ergo_lib::{chain::block::FullBlock, wallet::signing::ErgoTransaction};
+use ergo_lib::chain::block::FullBlock;
+use ergo_lib::chain::transaction::ergo_transaction::ErgoTransaction;
 use ergo_lib::{
     ergotree_ir::{
         chain::{address, ergo_box::ErgoBox, token::TokenId},
@@ -49,7 +49,7 @@ impl ErgoBlockProvider {
         for (tx_index, tx) in b.block_transactions.transactions.iter().enumerate() {
             let tx_hash: [u8; 32] = tx.id().0.0;
             let tx_id = BlockPointer::from_parent(height, tx_index as u16);
-            let (box_weight, outputs) = Self::process_outputs(&tx.outputs(), &tx_id);
+            let (box_weight, outputs) = Self::process_outputs(tx.outputs(), &tx_id);
             let mut inputs = Vec::with_capacity(tx.inputs.len());
             for input in &tx.inputs {
                 inputs.push(model_v1::BoxId(input.box_id.as_ref().into()));
@@ -70,7 +70,7 @@ impl ErgoBlockProvider {
         Ok(Block { height, header, transactions: result_txs })
     }
 
-    fn process_outputs(outs: &TxIoVec<ErgoBox>, tx_pointer: &BlockPointer) -> (BoxWeight, Vec<Utxo>) {
+    fn process_outputs(outs: &[ErgoBox], tx_pointer: &BlockPointer) -> (BoxWeight, Vec<Utxo>) {
         let mut result_outs = Vec::with_capacity(outs.len());
         let mut asset_count = 0;
         for (out_index, out) in outs.iter().enumerate() {
@@ -100,7 +100,7 @@ impl ErgoBlockProvider {
                     let asset_id: Vec<u8> = asset.token_id.into();
                     let amount = asset.amount;
                     let amount_u64: u64 = amount.into();
-                    let new_token_id: TokenId = outs.first().box_id().into();
+                    let new_token_id: TokenId = outs.first().unwrap().box_id().into();
                     let is_mint = new_token_id == asset.token_id;
 
                     let action = match is_mint {
