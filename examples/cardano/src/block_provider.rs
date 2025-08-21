@@ -31,11 +31,11 @@ impl CardanoBlockProvider {
 
     pub fn process_block_pure(block: &CBOR, genesis: &GenesisValues) -> Result<Block, ChainError> {
         let b = MultiEraBlock::decode(block).map_err(ExplorerError::from)?;
-
-        let hash: [u8; 32] = *b.header().hash();
-        let prev_h = b.header().previous_hash().unwrap_or(pallas::crypto::hash::Hash::new([0u8; 32]));
+        let header = b.header();
+        let hash: [u8; 32] = *header.hash();
+        let prev_h = header.previous_hash().unwrap_or(pallas::crypto::hash::Hash::new([0u8; 32]));
         let prev_hash: [u8; 32] = *prev_h;
-        let height = Height(b.header().number() as u32);
+        let height = Height(header.number() as u32);
         let mut block_weight = 0;
         let txs: Vec<pallas::ledger::traverse::MultiEraTx> = b.txs();
         let mut result_txs = Vec::with_capacity(txs.len());

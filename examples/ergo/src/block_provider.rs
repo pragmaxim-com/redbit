@@ -74,16 +74,20 @@ impl ErgoBlockProvider {
         let mut result_outs = Vec::with_capacity(outs.len());
         let mut asset_count = 0;
         for (out_index, out) in outs.iter().enumerate() {
-            let box_id = out.box_id();
-            let box_id_slice: &[u8] = box_id.as_ref();
-            let ergo_tree_opt = out.ergo_tree.sigma_serialize_bytes().ok();
+            let ergo_box_id = out.box_id();
+            let box_id_slice: &[u8] = ergo_box_id.as_ref();
+            let box_id = model_v1::BoxId(box_id_slice.into());
             let ergo_tree_template_opt = out.ergo_tree.template_bytes().ok();
-            let address_opt =
-                address::Address::recreate_from_ergo_tree(&out.ergo_tree)
-                    .map(|a| AddressEncoder::encode_address_as_bytes(crate::codec::MAINNET, &a))
-                    .ok();
+            let address_opt = address::Address::recreate_from_ergo_tree(&out.ergo_tree).ok();
+            let ergo_tree_opt = match &address_opt {
+                Some(address::Address::P2S(sigma_bytes)) => Some(sigma_bytes.clone()),
+                _ => out.ergo_tree.sigma_serialize_bytes().ok()
+            };
 
-            let address = Address(address_opt.unwrap_or_default());
+            let address_bytes_opt =
+                address_opt.map(|a| AddressEncoder::encode_address_as_bytes(crate::codec::MAINNET, &a));
+
+            let address = Address(address_bytes_opt.unwrap_or_default());
             let tree = model_v1::Tree(ergo_tree_opt.unwrap_or_default());
             let tree_template = model_v1::TreeTemplate(ergo_tree_template_opt.unwrap_or_default());
 
@@ -117,7 +121,7 @@ impl ErgoBlockProvider {
                 assets,
                 address,
                 amount,
-                box_id: model_v1::BoxId(box_id_slice.into()),
+                box_id,
                 tree,
                 tree_template,
             })
