@@ -10,6 +10,9 @@ ci = []
 chain = ["redbit/chain"]
 tracing = ["chain/tracing"]
 
+[lib]
+doctest = false
+
 [[bench]]
 name = "btc_benchmark"
 harness = false

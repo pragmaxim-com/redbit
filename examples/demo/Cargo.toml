@@ -10,6 +10,17 @@ ci = []
 chain = ["redbit/chain"]
 tracing = ["chain/tracing"]
 
+[[bin]]
+name = "demo"
+path = "src/main.rs"
+
+[[bin]]
+name = "showcase"
+path = "src/showcase.rs"
+
+[lib]
+doctest = false
+
 [[bench]]
 name = "demo_benchmark"
 harness = false

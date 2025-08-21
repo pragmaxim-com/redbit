@@ -10,6 +10,9 @@ ci = []
 chain = ["redbit/chain"]
 tracing = ["chain/tracing"]
 
+[lib]
+doctest = false
+
 [dev-dependencies]
 axum-test = "17.3.0"
 

@@ -11,6 +11,7 @@ default = ["expansion_disabled"]
 
 [lib]
 proc-macro = true
+doctest = false
 
 [dependencies]
 proc-macro-error = "1"
