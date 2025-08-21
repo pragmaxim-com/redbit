@@ -13,6 +13,9 @@ pub enum ChainError {
     #[error("Join error: {0}")]
     JoinError(#[from] JoinError),
 
+    #[error("Shutdown: {0}")]
+    Shutdown(String),
+
     #[error("Database error: {0}")]
     Redb(#[from] redb::Error),
 

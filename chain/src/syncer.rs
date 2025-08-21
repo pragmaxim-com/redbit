@@ -23,7 +23,7 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
         Self { block_provider, chain, monitor: Arc::new(ProgressMonitor::new(1000)) }
     }
 
-    pub async fn sync(&self, indexer_conf: &IndexerSettings, mut shutdown: watch::Receiver<bool>,) -> Result<(), ChainError> {
+    pub async fn sync(&self, indexer_conf: &IndexerSettings, mut shutdown: watch::Receiver<bool>) -> Result<(), ChainError> {
         let block_provider = Arc::clone(&self.block_provider);
         let chain = Arc::clone(&self.chain);
         let monitor = Arc::clone(&self.monitor);
@@ -141,14 +141,27 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
 
         let persist_handle = {
             let block_provider = Arc::clone(&block_provider);
-            let chain   = Arc::clone(&chain);
-            task::spawn_blocking_named("persist",move || {
-                while let Some(batch) = sort_rx.blocking_recv() {
-                    match Self::persist_or_link(batch, fork_detection_height, Arc::clone(&block_provider), Arc::clone(&chain)) {
-                        Ok(()) => {},
-                        Err(e) => {
-                            error!("persist: persist_blocks returned error {}", e);
-                            return;
+            let chain = Arc::clone(&chain);
+            let shutdown = shutdown.clone();
+            task::spawn_blocking_named("persist", move || {
+                loop {
+                    if *shutdown.borrow() {
+                        info!("persist: shutdown signal received");
+                        break;
+                    } else {
+                        match sort_rx.blocking_recv() {
+                            Some(batch) => {
+                                if let Err(e) = Self::persist_or_link(
+                                    batch,
+                                    fork_detection_height,
+                                    Arc::clone(&block_provider),
+                                    Arc::clone(&chain),
+                                ) {
+                                    error!("persist: persist_blocks returned error {e}");
+                                    return;
+                                }
+                            }
+                            None => break,
                         }
                     }
                 }
@@ -160,8 +173,7 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
             if *shutdown.borrow() {
                 info!("shutdown signal received");
             }
-            // return an error to break try_join!
-            Err(ChainError::Custom("Shutdown signal received".to_string()))
+            Err(ChainError::Shutdown("Shutdown signal received".to_string()))
         });
 
         let _ = tokio::try_join!(fetch_handle, process_handle, sort_handle, persist_handle, shutdown_handle)?;
