@@ -38,7 +38,7 @@ impl ErgoBlockProvider {
         }))
     }
 
-    fn process_block_pure(b: &FullBlock) -> Result<Block, ChainError> {
+    pub fn process_block_pure(b: &FullBlock) -> Result<Block, ChainError> {
         let mut block_weight: usize = 0;
         let mut result_txs = Vec::with_capacity(b.block_transactions.transactions.len());
 

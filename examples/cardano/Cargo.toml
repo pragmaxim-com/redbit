@@ -10,10 +10,15 @@ ci = []
 chain = ["redbit/chain"]
 tracing = ["chain/tracing"]
 
+[[bench]]
+name = "cardano_benchmark"
+harness = false
+
 [lib]
 doctest = false
 
 [dev-dependencies]
+criterion = { version = "0.7.0", features = ["async_tokio", "html_reports"] }
 axum-test = "17.3.0"
 
 [dependencies]
