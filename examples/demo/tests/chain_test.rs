@@ -1,9 +1,10 @@
-use std::time::Instant;
+use chain::api::{BlockChainLike, BlockProvider};
+use chain::settings::AppConfig;
+use chain::syncer::ChainSyncer;
 use demo::block_provider::DemoBlockProvider;
 use demo::model_v1::*;
-use chain::api::{BlockChainLike, BlockProvider};
-use chain::scheduler::Scheduler;
-use chain::settings::AppConfig;
+use std::time::Instant;
+use tokio::sync::watch;
 
 #[tokio::test]
 async fn chain_sync() {
@@ -12,9 +13,10 @@ async fn chain_sync() {
     let chain: Arc<dyn BlockChainLike<Block>> = BlockChain::new(Arc::clone(&storage));
     chain.init().expect("Failed to initialize chain");
     let config = AppConfig::new("config/settings").expect("Failed to load app config");
-    let scheduler = Scheduler::new(block_provider, chain.clone());
+    let syncer = ChainSyncer::new(block_provider, chain.clone());
     let start = Instant::now();
-    scheduler.sync(config.indexer.clone()).await.expect("Syncing failed");
+    let (_, shutdown_rx) = watch::channel(false);
+    syncer.sync(&config.indexer, shutdown_rx).await.expect("Syncing failed");
     let elapsed = start.elapsed();
     let secs = elapsed.as_secs_f64();
     println!("Demo chain sync took {:.1}s", secs);
@@ -25,7 +27,7 @@ async fn chain_sync() {
     assert_eq!(block_headers.len(), 50); // genesis not stored
     let heights: Vec<u32> = block_headers.iter().map(|h| h.height.0).collect();
     assert_eq!(heights, (1..=50).collect::<Vec<u32>>());
-    let result = chain.validate_chain().await;
-    assert!(result.is_ok(), "Chain validation failed: {:?}", result.err());
+    let result = chain.validate_chain().await.expect("Chain validation returned an error");
+    assert!(result.is_empty(), "Chain validation failed: {:?}", result);
 }
 

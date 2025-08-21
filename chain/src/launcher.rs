@@ -7,9 +7,11 @@ use redbit::storage::Storage;
 use redbit::{error, info, serve, OpenApiRouter, RequestState};
 use std::env;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::watch;
 use tower_http::cors;
 use tower_http::cors::CorsLayer;
+use crate::syncer::ChainSyncer;
 
 pub async fn maybe_run_server(
     http_conf: HttpSettings,
@@ -26,27 +28,38 @@ pub async fn maybe_run_server(
             .allow_headers(cors::Any));
         serve(RequestState { storage: Arc::clone(&storage) }, http_conf.bind_address, extras, Some(cors), shutdown).await
     } else {
+        info!("HTTP server is disabled, skipping");
         ready(()).await
     }
 }
 
 pub async fn maybe_run_syncing<FB: Send + Sync + 'static, TB: BlockLike + 'static>(
+    index_config: &IndexerSettings,
+    syncer: Arc<ChainSyncer<FB, TB>>,
+    shutdown: watch::Receiver<bool>,
+) -> () {
+    if index_config.enable {
+        info!("Syncing initiated");
+        match syncer.sync(index_config, shutdown).await {
+            Ok(_) => info!("Syncing completed successfully"),
+            Err(e) => error!("Syncing failed: {}", e),
+        }
+    } else {
+        info!("Syncing is disabled, skipping");
+        ready(()).await
+    }
+}
+
+pub async fn maybe_run_scheduling<FB: Send + Sync + 'static, TB: BlockLike + 'static>(
     index_config: IndexerSettings,
     scheduler: Scheduler<FB, TB>,
     shutdown: watch::Receiver<bool>,
 ) -> () {
-    if index_config.enable {
-        if index_config.sync_interval_s.is_zero() {
-            info!("Syncing initiated");
-            match scheduler.sync(index_config).await {
-                Ok(_) => info!("Syncing completed successfully"),
-                Err(e) => error!("Syncing failed: {}", e),
-            }
-        } else {
-            info!("Scheduling initiated");
-            scheduler.schedule(index_config, shutdown).await
-        }
+    if index_config.enable && index_config.sync_interval_s.gt(&Duration::ZERO) {
+        info!("Scheduling initiated");
+        scheduler.schedule(&index_config, shutdown).await
     } else {
+        info!("Scheduling is disabled as sync_interval_s = 0, skipping");
         ready(()).await
     }
 }
@@ -77,16 +90,20 @@ where
     let full_path = env::home_dir().unwrap().join(&db_path);
     let (created, storage) = Storage::init(full_path, config.indexer.db_cache_size_gb)?;
     let chain: Arc<dyn BlockChainLike<TB>> = build_chain(Arc::clone(&storage));
-    if created {
-        chain.init()?;
-    } else {
-        info!("Validating chain for being linked");
-        chain.validate_chain().await?;
-        info!("Chain is linked and ready");
-    }
-    let scheduler: Scheduler<FB, TB> = Scheduler::new(block_provider, chain);
+    let _height_fixes: Vec<TB::Header> =
+        if created {
+            chain.init()?;
+            Vec::new()
+        } else {
+            info!("Validating chain for being linked");
+            chain.validate_chain().await?
+        };
+    let syncer: Arc<ChainSyncer<FB, TB>> =Arc::new(ChainSyncer::new(Arc::clone(&block_provider), Arc::clone(&chain)));
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
-    let indexing_f = maybe_run_syncing(config.indexer, scheduler, shutdown_rx.clone());
+    // we sync with the node first
+    maybe_run_syncing(&config.indexer, Arc::clone(&syncer), shutdown_rx.clone()).await;
+    // then we sync periodically with chain tip and start server
+    let indexing_f = maybe_run_scheduling(config.indexer, Scheduler::new(Arc::clone(&syncer)), shutdown_rx.clone());
     let server_f = maybe_run_server(config.http, Arc::clone(&storage), extras, cors, shutdown_rx.clone());
     Ok(combine::futures(indexing_f, server_f, shutdown_tx).await)
 }

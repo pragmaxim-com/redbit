@@ -9,6 +9,7 @@ chain = ["macros/chain"]  # forward feature to libC
 
 [lib]
 name = "redbit"
+doctest = false
 
 [dependencies]
 macros = { path = "../macros" }

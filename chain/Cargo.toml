@@ -8,6 +8,7 @@ tracing = ["console-subscriber"]
 
 [lib]
 name = "chain"
+doctest = false
 
 [dependencies]
 redbit = { path = "../redbit" }

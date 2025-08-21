@@ -1,8 +1,10 @@
-use redbit::{AppError, Storage};
+use anyhow::Result;
+use redbit::*;
 use std::sync::Arc;
-use crate::model_v1::*;
+use demo::model_v1::*;
 
-pub async fn showcase() -> Result<(), AppError> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let storage = Storage::temp("showcase", 1, true)?;
     let blocks = Block::sample_many(2);
     println!("Persisting blocks:");
@@ -28,7 +30,7 @@ pub async fn showcase() -> Result<(), AppError> {
     let block_infos = Block::table_info(Arc::clone(&storage))?;
     println!("Block persisted with tables :");
     for info in block_infos {
-        println!("{}", serde_json::to_string_pretty(&info).unwrap());
+        println!("{}", serde_json::to_string_pretty(&info)?);
     }
 
     let first_block_header = Header::first(&read_tx)?.unwrap();
@@ -48,7 +50,7 @@ pub async fn showcase() -> Result<(), AppError> {
     let block_header_infos = Header::table_info(Arc::clone(&storage))?;
     println!("\nBlock header persisted with tables :");
     for info in block_header_infos {
-        println!("{}", serde_json::to_string_pretty(&info).unwrap());
+        println!("{}", serde_json::to_string_pretty(&info)?);
     }
 
     let first_transaction = Transaction::first(&read_tx)?.unwrap();
@@ -69,7 +71,7 @@ pub async fn showcase() -> Result<(), AppError> {
     let transaction_infos = Transaction::table_info(Arc::clone(&storage))?;
     println!("\nTransaction persisted with tables :");
     for info in transaction_infos {
-        println!("{}", serde_json::to_string_pretty(&info).unwrap());
+        println!("{}", serde_json::to_string_pretty(&info)?);
     }
 
     let first_utxo = Utxo::first(&read_tx)?.unwrap();
@@ -91,7 +93,7 @@ pub async fn showcase() -> Result<(), AppError> {
     let utxo_infos = Utxo::table_info(Arc::clone(&storage))?;
     println!("\nUtxo persisted with tables :");
     for info in utxo_infos {
-        println!("{}", serde_json::to_string_pretty(&info).unwrap());
+        println!("{}", serde_json::to_string_pretty(&info)?);
     }
 
     let first_asset = Asset::first(&read_tx)?.unwrap();
@@ -110,7 +112,7 @@ pub async fn showcase() -> Result<(), AppError> {
     let asset_infos = Asset::table_info(Arc::clone(&storage))?;
     println!("\nAsset persisted with tables :");
     for info in asset_infos {
-        println!("{}", serde_json::to_string_pretty(&info).unwrap());
+        println!("{}", serde_json::to_string_pretty(&info)?);
     }
 
 

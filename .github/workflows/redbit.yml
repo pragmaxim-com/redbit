@@ -27,16 +27,8 @@ jobs:
 
       - name: Run tests
         run: |
-          cargo test --package redbit
-          cargo test --package chain
-          cargo test --package btc --features ci
-          cargo test --package btc --features integration,ci
-          cargo test --package cardano --features ci
-          cargo test --package cardano --features integration,ci
-          cargo test --package ergo --features ci
-          cargo test --package ergo --features integration,ci
-          cargo test --package demo --features ci
-          cargo test --package demo --features integration,ci
+          cargo test --workspace --features ci
+          cargo test --workspace --features integration,ci
 
   bench:
     runs-on: ubuntu-latest
@@ -84,7 +76,7 @@ jobs:
       - name: Update README with documentation
         run: |
           LIB_CONTENT=$(cat examples/demo/src/model_v1.rs | sed 's/^/    /')
-          MAIN_CONTENT=$(cat examples/demo/src/run.rs | sed 's/^/    /')
+          MAIN_CONTENT=$(cat examples/demo/src/showcase.rs | sed 's/^/    /')
 
           # Update BEGIN_LIB and BEGIN_MAIN sections
           awk -v lib_content="$LIB_CONTENT" -v main_content="$MAIN_CONTENT" '

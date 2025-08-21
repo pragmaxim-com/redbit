@@ -10,6 +10,9 @@ ci = []
 chain = ["redbit/chain"]
 tracing = ["chain/tracing"]
 
+[lib]
+doctest = false
+
 [[bench]]
 name = "btc_benchmark"
 harness = false
@@ -40,3 +43,4 @@ anyhow = "1.0.80"
 bincode = "2.0.1"
 serde_with = {  version = "3.14.0", features = ["hex", "chrono_0_4", "base64", "time_0_3"] }
 serde_json = "1.0.142"
+hex = "0.4.3"

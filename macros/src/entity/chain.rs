@@ -143,36 +143,38 @@ pub fn block_like(block_type: Type, field_defs: &[FieldDef]) -> Result<TokenStre
                 Ok(())
             }
 
-            async fn validate_chain(&self) -> Result<(), chain::ChainError> {
+            async fn validate_chain(&self) -> Result<Vec<#header_type>, chain::ChainError> {
                 use futures::StreamExt;
                 let read_tx = self.storage.begin_read()?; // kept as-is even if unused
+                let mut affected_headers: Vec<#header_type> = Vec::new();
                 if let Some(tip_header) = #header_type::last(&read_tx)? {
-                   let mut stream = #header_type::stream_range(self.storage.begin_read()?, Height(0), tip_header.height, None)?;
+                    let mut stream = #header_type::stream_range(self.storage.begin_read()?, Height(0), tip_header.height, None)?;
 
-                   // get the first header (nothing to validate yet)
-                   let mut prev = match stream.next().await {
-                       Some(Ok(h)) => h,
-                       Some(Err(e)) => return Err(chain::ChainError::new(format!("Stream error: {}", e))),
-                       None => return Ok(()), // empty chain
-                   };
+                    // get the first header (nothing to validate yet)
+                    let mut prev = match stream.next().await {
+                        Some(Ok(h)) => h,
+                        Some(Err(e)) => return Err(chain::ChainError::new(format!("Stream error: {}", e))),
+                        None => return Ok(Vec::new()), // empty chain
+                    };
 
-                   while let Some(item) = stream.next().await {
-                       let curr = match item {
-                           Ok(h) => h,
-                           Err(e) => return Err(chain::ChainError::new(format!("Stream error: {}", e))),
-                       };
+                    while let Some(item) = stream.next().await {
+                        let curr = match item {
+                            Ok(h) => h,
+                            Err(e) => return Err(chain::ChainError::new(format!("Stream error: {}", e))),
+                        };
 
-                       // compare prev.hash with curr.prev_hash
-                       chain::utils::ensure_hashes_equal(
-                           format!("{:?}", prev.hash),
-                           format!("{:?}", curr.prev_hash),
-                           curr.height.0
-                       )?;
-
-                       prev = curr;
-                   }
+                        if prev.hash != curr.prev_hash {
+                           error!(
+                             "Chain unlinked, curr {} @ {:?}, prev {} @ {:?}",
+                             hex::encode(curr.prev_hash.0), curr.height, hex::encode(prev.hash.0), prev.height
+                           );
+                           affected_headers.push(curr.clone());
+                           affected_headers.push(prev.clone());
+                        }
+                        prev = curr;
+                    }
                 }
-                Ok(())
+                Ok(affected_headers)
             }
 
             fn update_blocks(&self, blocks: Vec<#block_type>) -> Result<(), chain::ChainError> {
