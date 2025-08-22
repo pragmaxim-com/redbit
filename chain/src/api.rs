@@ -81,7 +81,7 @@ pub trait BlockChainLike<B: BlockLike>: Send + Sync {
 #[async_trait]
 pub trait BlockProvider<FB: Send, TB: BlockLike>: Send + Sync {
     fn block_processor(&self) -> Arc<dyn Fn(&FB) -> Result<TB, ChainError> + Send + Sync>;
-    fn get_processed_block(&self, header: TB::Header) -> Result<TB, ChainError>;
+    fn get_processed_block(&self, hash: [u8; 32]) -> Result<Option<TB>, ChainError>;
     async fn get_chain_tip(&self) -> Result<TB::Header, ChainError>;
     fn stream(&self, remote_chain_tip_header: TB::Header, last_persisted_header: Option<TB::Header>, mode: SyncMode) -> Pin<Box<dyn Stream<Item = FB> + Send + 'static>>;
 }

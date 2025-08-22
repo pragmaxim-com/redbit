@@ -2,3 +2,4 @@
 node_modules
 openapi-ts-error*
 ui/src/hey/
+nohup.out

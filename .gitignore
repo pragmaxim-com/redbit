@@ -4,3 +4,5 @@ todo
 todo.png
 Cargo.lock
 client_calls.ts
+infra/
+nohup.out

@@ -12,7 +12,6 @@ use pallas_traverse::wellknown::GenesisValues;
 use std::{pin::Pin, sync::Arc};
 use chain::api::{BlockProvider, ChainError};
 use chain::monitor::BoxWeight;
-use tokio::runtime::Runtime;
 use chain::batcher::SyncMode;
 use ExplorerError;
 
@@ -144,12 +143,8 @@ impl BlockProvider<CBOR, Block> for CardanoBlockProvider {
         })
     }
 
-    fn get_processed_block(&self, h: BlockHeader) -> Result<Block, ChainError> {
-        let point = Point::new(h.slot.0 as u64, h.hash.0.to_vec());
-        let rt = Runtime::new().unwrap();
-        let cbor = rt.block_on(self.client.get_block_by_point(point))?;
-        let genesis = Arc::clone(&self.genesis);
-        Self::process_block_pure(&cbor, &genesis)
+    fn get_processed_block(&self, _h: [u8; 32]) -> Result<Option<Block>, ChainError> {
+        Ok(None) // pallas chain sync rolls back, this method is not needed
     }
 
     async fn get_chain_tip(&self) -> Result<BlockHeader, ChainError> {

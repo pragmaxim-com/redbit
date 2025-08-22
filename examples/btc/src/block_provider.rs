@@ -102,9 +102,14 @@ impl BlockProvider<BtcBlock, Block> for BtcBlockProvider {
         Arc::new(|raw| Self::process_block_pure(raw))
     }
 
-    fn get_processed_block(&self, header: Header) -> Result<Block, ChainError> {
-        let block = self.client.get_block_by_hash(header.hash)?;
-        Self::process_block_pure(&block)
+    fn get_processed_block(&self, hash: [u8; 32]) -> Result<Option<Block>, ChainError> {
+        match self.client.get_block_by_hash(BlockHash(hash)) {
+            Ok(block) => {
+                let processed_block = Self::process_block_pure(&block)?;
+                Ok(Some(processed_block))
+            },
+            Err(_) => Ok(None),
+        }
     }
 
     async fn get_chain_tip(&self) -> Result<Header, ChainError> {

@@ -5,7 +5,7 @@ use crate::monitor::ProgressMonitor;
 use crate::settings::IndexerSettings;
 use crate::task;
 use futures::StreamExt;
-use redbit::{error, info};
+use redbit::{error, info, warn};
 use std::sync::Arc;
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
@@ -183,33 +183,40 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
     fn chain_link(block: TB, block_provider: Arc<dyn BlockProvider<FB, TB>>, chain: Arc<dyn BlockChainLike<TB>>) -> Result<Vec<TB>, ChainError> {
         let header = block.header();
         let prev_headers = chain.get_header_by_hash(header.prev_hash())?;
+        let height = header.height();
+        let hash_str = &header.hash_str()[..12];
+        let prev_hash_str = &header.prev_hash_str()[..12];
 
-        if header.height() == 1 {
+        if height == 1 {
             // Base case: genesis
             Ok(vec![block])
-        } else if prev_headers.first().map(|ph| ph.height() == header.height() - 1).unwrap_or(false) {
+        } else if prev_headers.first().map(|ph| ph.height() == height - 1).unwrap_or(false) {
             // If the DB already has the direct predecessor, we can stop here
-            info!("Block @ {} : {} linked with parent {}", header.height(), &header.hash_str()[..12], &header.prev_hash_str()[..12]);
+            info!("Block @ {} : {} linked with parent {}", height, hash_str, prev_hash_str);
             Ok(vec![block])
         } else if prev_headers.is_empty() {
             // Otherwise we need to fetch the parent and prepend it
-            info!("Fork detected @ {} : {} - downloading his parent {}", header.height(), &header.hash_str()[..12], &header.prev_hash_str()[..12]);
-            let parent_header = header.clone();
-            let parent_block = block_provider.get_processed_block(parent_header)?;
-            // recurse to fetch the missing fork
-            let mut chain = Self::chain_link(parent_block, block_provider, chain)?;
-            // now append our current block at the end of the fork
-            chain.push(block);
-            Ok(chain)
+            info!("Fork detected @ {} : {} - downloading his parent {}", height, hash_str, prev_hash_str);
+            match block_provider.get_processed_block(header.prev_hash())? {
+                None => {
+                    warn!("Fork cannot be formed because parent {} @ {} cannot be fetched from node", prev_hash_str, height);
+                    Ok(vec![])
+                },
+                Some(parent_block) => {
+                    let mut fork = Self::chain_link(parent_block, block_provider, chain)?;
+                    fork.push(block);
+                    Ok(fork)
+                }
+            }
         } else {
             if let Some(prev_header) = prev_headers.first() {
                 panic!(
                     "Found prev header {} with different height {} @ {} : {} -> {}",
                     &prev_header.hash_str()[..12],
                     prev_header.height(),
-                    header.height(),
-                    &header.hash_str()[..12],
-                    &header.prev_hash_str()[..12]
+                    height,
+                    hash_str,
+                    prev_hash_str
                 );
             } else {
                 panic!("Found {} prev headers", prev_headers.len())
@@ -230,7 +237,7 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
             for block in blocks.drain(..) {
                 let chain = Self::chain_link(block, Arc::clone(&block_provider), Arc::clone(&block_chain))?;
                 match chain.len() {
-                    0 => unreachable!("chain_link never returns empty Vec"),
+                    0 => (),
                     1 => block_chain.store_blocks(chain)?,
                     _ => block_chain.update_blocks(chain)?,
                 }
