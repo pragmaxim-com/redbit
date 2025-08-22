@@ -86,10 +86,10 @@ impl BlockChain {
 }
 ```
 
-- [Demo](../examples/btc)
-- [Btc](../examples/btc)
-- [Cardano](../examples/cardano)
-- [Ergo](../examples/ergo)
+- [Demo](../chains/btc)
+- [Btc](../chains/btc)
+- [Cardano](../chains/cardano)
+- [Ergo](../chains/ergo)
 
 ### Troubleshooting 
 

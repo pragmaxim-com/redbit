@@ -11,10 +11,10 @@ members = [
     "macros",
     "redbit",
     "chain",
-    "examples/demo",
-    "examples/cardano",
-    "examples/btc",
-    "examples/ergo",
+    "chains/demo",
+    "chains/cardano",
+    "chains/btc",
+    "chains/ergo",
 ]
 default-members = ["macros", "redbit", "chain"]
 

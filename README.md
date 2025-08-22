@@ -34,7 +34,7 @@ through auto-generated REST API.
 ✅ Optional column is basically `One-to-Option` relationship, we build a table for optional "values" \
 ✅ Column encodings of binary columns : `hex`, `base64`, `utf-8` + custom impl of `ByteVecColumnSerde` \
 ✅ All types have binary (db) and human-readable (http) serde support \
-✅ Macro derived http rest API at http://127.0.0.1:3033/swagger-ui/ with examples \
+✅ Macro derived http rest API at http://127.0.0.1:3033/swagger-ui/ \
 ✅ Macro derived unit tests and integration tests on axum test server and benchmarks \
 ✅ TypeScript client generated from OpenAPI spec with tests suite requesting all endpoints \
 ✅ For other features, check the [redbit-ui](http://github.com/pragmaxim-com/redbit-ui)
@@ -53,7 +53,7 @@ redbit = "1.0.4"
 ```
 
 ```
-cd examples/utxo
+cd chains/demo
 cargo test                          # to let all the self-generated tests run
 cargo test --features integration   # to let http layer self-generated tests run
 cargo bench                         # to run benchmarks
@@ -65,7 +65,7 @@ Check the [redbit-ui](http://github.com/pragmaxim-com/redbit-ui) for frontend de
 The utxo example has close to 500 frontend/backend derived tests and 130 benchmarks, so that if any redbit app derived from the definition compiles,
 it is transparent, well tested and benched already.
 
-Let's say we want to persist and query blockchain data using Redbit, declare annotated Structs `examples/utxo/src/lib.rs`:
+Let's say we want to persist and query blockchain data using Redbit, declare annotated Structs `chains/demo/src/lib.rs`:
 
 <!-- BEGIN_LIB -->
 ```rust
@@ -197,7 +197,7 @@ Let's say we want to persist and query blockchain data using Redbit, declare ann
 ```
 <!-- END_LIB -->
 
-And R/W entire instances efficiently using indexes and dictionaries `examples/utxo/src/demo.rs`:
+And R/W entire instances efficiently using indexes and dictionaries `chains/demo/src/demo.rs`:
 
 <!-- BEGIN_MAIN -->
 ```rust
@@ -509,10 +509,10 @@ model_v1::maybevalue::_exists                                   1861747
 ## Chain
 
 [chain](./chain) syncs blockchains with nodes :
-- [demo](./examples/demo)
-- [btc](./examples/btc)
-- [cardano](./examples/cardano)
-- [ergo](./examples/ergo)
+- [demo](chains/demo)
+- [btc](chains/btc)
+- [cardano](chains/cardano)
+- [ergo](chains/ergo)
 
 ### ⏱️ Syncing performance Summary
 

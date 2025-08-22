@@ -75,8 +75,8 @@ jobs:
 
       - name: Update README with documentation
         run: |
-          LIB_CONTENT=$(cat examples/demo/src/model_v1.rs | sed 's/^/    /')
-          MAIN_CONTENT=$(cat examples/demo/src/showcase.rs | sed 's/^/    /')
+          LIB_CONTENT=$(cat chains/demo/src/model_v1.rs | sed 's/^/    /')
+          MAIN_CONTENT=$(cat chains/demo/src/showcase.rs | sed 's/^/    /')
 
           # Update BEGIN_LIB and BEGIN_MAIN sections
           awk -v lib_content="$LIB_CONTENT" -v main_content="$MAIN_CONTENT" '
