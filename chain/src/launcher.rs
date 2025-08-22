@@ -35,12 +35,13 @@ pub async fn maybe_run_server(
 
 pub async fn maybe_run_syncing<FB: Send + Sync + 'static, TB: BlockLike + 'static>(
     index_config: &IndexerSettings,
+    last_header: Option<TB::Header>,
     syncer: Arc<ChainSyncer<FB, TB>>,
     shutdown: watch::Receiver<bool>,
 ) -> () {
     if index_config.enable {
         info!("Syncing initiated");
-        match syncer.sync(index_config, shutdown).await {
+        match syncer.sync(index_config, last_header, shutdown).await {
             Ok(_) => info!("Syncing completed successfully"),
             Err(e) => error!("Syncing failed: {}", e),
         }
@@ -90,7 +91,7 @@ where
     let full_path = env::home_dir().unwrap().join(&db_path);
     let (created, storage) = Storage::init(full_path, config.indexer.db_cache_size_gb)?;
     let chain: Arc<dyn BlockChainLike<TB>> = build_chain(Arc::clone(&storage));
-    let _height_fixes: Vec<TB::Header> =
+    let unlinked_headers: Vec<TB::Header> =
         if created {
             chain.init()?;
             Vec::new()
@@ -101,7 +102,7 @@ where
     let syncer: Arc<ChainSyncer<FB, TB>> =Arc::new(ChainSyncer::new(Arc::clone(&block_provider), Arc::clone(&chain)));
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
     // we sync with the node first
-    maybe_run_syncing(&config.indexer, Arc::clone(&syncer), shutdown_rx.clone()).await;
+    maybe_run_syncing(&config.indexer, unlinked_headers.first().cloned(), Arc::clone(&syncer), shutdown_rx.clone()).await;
     // then we sync periodically with chain tip and start server
     let indexing_f = maybe_run_scheduling(config.indexer, Scheduler::new(Arc::clone(&syncer)), shutdown_rx.clone());
     let server_f = maybe_run_server(config.http, Arc::clone(&storage), extras, cors, shutdown_rx.clone());

@@ -1,6 +1,7 @@
-use crate::api::{BlockChainLike, BlockLike};
 use crate::api::BlockHeaderLike;
+use crate::api::{BlockChainLike, BlockLike};
 use crate::api::{BlockProvider, ChainError};
+use crate::batcher::{Batcher, ReorderBuffer, SyncMode};
 use crate::monitor::ProgressMonitor;
 use crate::settings::IndexerSettings;
 use crate::task;
@@ -8,9 +9,7 @@ use futures::StreamExt;
 use redbit::{error, info, warn};
 use std::sync::Arc;
 use tokio::sync::{mpsc, watch};
-use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
-use crate::batcher::{Batcher, ReorderBuffer, SyncMode};
 
 pub struct ChainSyncer<FB: Send + Sync + 'static, TB: BlockLike + 'static> {
     pub block_provider: Arc<dyn BlockProvider<FB, TB>>,
@@ -23,14 +22,14 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
         Self { block_provider, chain, monitor: Arc::new(ProgressMonitor::new(1000)) }
     }
 
-    pub async fn sync(&self, indexer_conf: &IndexerSettings, mut shutdown: watch::Receiver<bool>) -> Result<(), ChainError> {
+    pub async fn sync(&self, indexer_conf: &IndexerSettings, last_header: Option<TB::Header>, mut shutdown: watch::Receiver<bool>) -> Result<(), ChainError> {
         let block_provider = Arc::clone(&self.block_provider);
         let chain = Arc::clone(&self.chain);
         let monitor = Arc::clone(&self.monitor);
 
         let node_chain_tip_header = block_provider.get_chain_tip().await?;
         let chain_tip_height = node_chain_tip_header.height();
-        let last_persisted_header = chain.get_last_header()?;
+        let last_persisted_header = last_header.or(chain.get_last_header()?);
         let height_to_index_from = last_persisted_header.as_ref().map_or(1, |h| h.height() + 1);
         let heights_to_fetch = chain_tip_height - last_persisted_header.as_ref().map_or(0, |h| h.height());
 
@@ -52,7 +51,8 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
             indexing_how, heights_to_fetch, height_to_index_from, chain_tip_height, indexing_par, fork_detection_height
         );
         let buffer_size = 8192;
-        let batch_buffer_size = std::cmp::max(16, buffer_size / indexer_conf.min_batch_size);
+        let min_batch_size = indexer_conf.min_batch_size;
+        let batch_buffer_size = std::cmp::max(16, buffer_size / min_batch_size);
         let (fetch_tx, fetch_rx) = mpsc::channel::<FB>(buffer_size);
         let (proc_tx, mut proc_rx) = mpsc::channel::<TB>(buffer_size);
         let (sort_tx, mut sort_rx) = mpsc::channel::<Vec<TB>>(batch_buffer_size);
@@ -94,10 +94,9 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
 
         // Sort + process stage is executed at parallel so blocks are not coming in order
         let sort_handle = {
-            let indexer_conf = indexer_conf.clone();
             task::spawn_named("sort", async move {
                 let mut reorder: ReorderBuffer<TB> = ReorderBuffer::new(height_to_index_from, buffer_size);
-                let mut batcher: Batcher<TB> = Batcher::new(indexer_conf.min_batch_size, buffer_size, indexing_mode);
+                let mut batcher: Batcher<TB> = Batcher::new(min_batch_size, buffer_size, indexing_mode);
 
                 while let Some(block) = proc_rx.recv().await {
                     let header = block.header();
@@ -168,15 +167,7 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
             })
         };
 
-        let shutdown_handle: JoinHandle<Result<(), ChainError>> = tokio::spawn(async move {
-            shutdown.changed().await.ok();
-            if *shutdown.borrow() {
-                info!("shutdown signal received");
-            }
-            Err(ChainError::Shutdown("Shutdown signal received".to_string()))
-        });
-
-        let _ = tokio::try_join!(fetch_handle, process_handle, sort_handle, persist_handle, shutdown_handle)?;
+        let _ = tokio::try_join!(fetch_handle, process_handle, sort_handle, persist_handle)?;
         Ok(())
     }
 

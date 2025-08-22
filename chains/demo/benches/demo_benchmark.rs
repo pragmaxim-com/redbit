@@ -31,7 +31,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     let (_, shutdown_rx) = watch::channel(false);
     group.bench_function(BenchmarkId::from_parameter("syncing"), |bencher| {
         bencher.to_async(&rt).iter(|| async {
-            syncer.sync(&config.indexer, shutdown_rx.clone()).await.expect("Syncing failed"); // syncing is ~ as fast as deleting, which is good
+            syncer.sync(&config.indexer, None, shutdown_rx.clone()).await.expect("Syncing failed"); // syncing is ~ as fast as deleting, which is good
             chain.delete()
         })
     });

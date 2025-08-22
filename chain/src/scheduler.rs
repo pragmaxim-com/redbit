@@ -26,7 +26,7 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> Scheduler<FB, TB> {
                     break;
                 }
                 _ = interval.tick() => {
-                    match self.syncer.sync(indexer_conf, shutdown.clone()).await {
+                    match self.syncer.sync(indexer_conf, None, shutdown.clone()).await {
                         Ok(_) => {},
                         Err(e) => error!("Sync failed: {:?}", e),
                     }

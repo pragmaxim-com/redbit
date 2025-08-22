@@ -168,7 +168,6 @@ pub fn block_like(block_type: Type, field_defs: &[FieldDef]) -> Result<TokenStre
                              "Chain unlinked, curr {} @ {:?}, prev {} @ {:?}",
                              hex::encode(curr.prev_hash.0), curr.height, hex::encode(prev.hash.0), prev.height
                            );
-                           affected_headers.push(curr.clone());
                            affected_headers.push(prev.clone());
                         }
                         prev = curr;

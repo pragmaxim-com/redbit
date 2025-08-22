@@ -5,35 +5,35 @@ use demo::block_provider::DemoBlockProvider;
 use demo::model_v1::*;
 use std::time::Instant;
 use tokio::sync::watch;
-use chain::ChainError;
 
-async fn test_chain_sync(block_provider: Arc<dyn BlockProvider<Block, Block>>) -> Result<(), ChainError>{
+#[tokio::test]
+async fn test_chain_sync() {
     let storage = Storage::temp("chain_sync_test", 1, true).expect("Failed to open database");
     let chain: Arc<dyn BlockChainLike<Block>> = BlockChain::new(Arc::clone(&storage));
     chain.init().expect("Failed to initialize chain");
     let config = AppConfig::new("config/settings").expect("Failed to load app config");
+    let block_provider: Arc<dyn BlockProvider<Block, Block>> = DemoBlockProvider::new(50).expect("Failed to create block provider");
     let syncer = ChainSyncer::new(block_provider, chain.clone());
     let start = Instant::now();
     let (_, shutdown_rx) = watch::channel(false);
-    syncer.sync(&config.indexer, shutdown_rx).await.expect("Syncing failed");
+    syncer.sync(&config.indexer, None, shutdown_rx.clone()).await.expect("Syncing failed");
     let elapsed = start.elapsed();
     let secs = elapsed.as_secs_f64();
     println!("Demo chain sync took {:.1}s", secs);
-    let last_header = chain.get_last_header()?.expect("Last header must be present");
+    let last_header = chain.get_last_header().unwrap().expect("Last header must be present");
     assert_eq!(last_header.height, Height(50));
     let read_tx = storage.begin_read().expect("Failed to open database");
-    let block_headers = Header::range(&read_tx, &Height(0), &Height(51), None)?;
+    let block_headers = Header::range(&read_tx, &Height(0), &Height(51), None).unwrap();
+    let header_40 = block_headers.get(39).cloned().unwrap();
     assert_eq!(block_headers.len(), 50); // genesis not stored
     let heights: Vec<u32> = block_headers.iter().map(|h| h.height.0).collect();
     assert_eq!(heights, (1..=50).collect::<Vec<u32>>());
     let result = chain.validate_chain().await.expect("Chain validation returned an error");
     assert!(result.is_empty(), "Chain validation failed: {:?}", result);
-    Ok(())
-}
 
-#[tokio::test]
-async fn chain_sync_without_fork() {
-    let block_provider: Arc<dyn BlockProvider<Block, Block>> = DemoBlockProvider::new(50).expect("Failed to create block provider");
-    test_chain_sync(block_provider).await.unwrap()
+    // sync again from header 40
+    syncer.sync(&config.indexer, Some(header_40), shutdown_rx).await.expect("Syncing from 40 failed");
+    let result = chain.validate_chain().await.expect("Chain validation returned an error");
+    assert!(result.is_empty(), "Chain validation failed: {:?}", result);
 }
 
