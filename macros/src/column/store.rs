@@ -24,18 +24,18 @@ pub fn store_index_def(column_name: &Ident, pk_name: &Ident, table: &Ident, inde
         let mut table_col_6 = tx.open_table(#table)?;
         table_col_6.insert(&instance.#pk_name, &instance.#column_name)?;
 
-        let mut mm = tx.open_multimap_table(#index_table)?;
-        mm.insert(&instance.#column_name, &instance.#pk_name)?;
+        let mut mm_6 = tx.open_multimap_table(#index_table)?;
+        mm_6.insert(&instance.#column_name, &instance.#pk_name)?;
     }
 }
 
 pub fn store_many_index_def(column_name: &Ident, pk_name: &Ident, table: &Ident, index_table: &Ident) -> TokenStream {
     quote! {
         let mut table_col_7 = tx.open_table(#table)?;
-        let mut mm = tx.open_multimap_table(#index_table)?;
+        let mut mm_7 = tx.open_multimap_table(#index_table)?;
         for instance in instances.iter() {
             table_col_7.insert(&instance.#pk_name, &instance.#column_name)?;
-            mm.insert(&instance.#column_name, &instance.#pk_name)?;
+            mm_7.insert(&instance.#column_name, &instance.#pk_name)?;
         };
     }
 }

@@ -34,8 +34,8 @@ pub fn delete_index_statement(table: &Ident, index_table: &Ident) -> TokenStream
             }
         };
         if let Some(value) = maybe_value {
-            let mut mm = tx.open_multimap_table(#index_table)?;
-            removed.push(mm.remove(&value, pk)?);
+            let mut mm_8 = tx.open_multimap_table(#index_table)?;
+            removed.push(mm_8.remove(&value, pk)?);
         }
     }
 }
@@ -43,11 +43,11 @@ pub fn delete_index_statement(table: &Ident, index_table: &Ident) -> TokenStream
 pub fn delete_many_index_statement(table: &Ident, index_table: &Ident) -> TokenStream {
     quote! {
         let mut table_col_9 = tx.open_table(#table)?;
-        let mut mm = tx.open_multimap_table(#index_table)?;
+        let mut mm_9 = tx.open_multimap_table(#index_table)?;
         for pk in pks.iter() {
             if let Some(value_guard) = table_col_9.remove(pk)? {
                 let value = value_guard.value();
-                removed.push(mm.remove(&value, pk)?);
+                removed.push(mm_9.remove(&value, pk)?);
             } else {
                 removed.push(false);
             }

@@ -22,7 +22,7 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
         Self { block_provider, chain, monitor: Arc::new(ProgressMonitor::new(1000)) }
     }
 
-    pub async fn sync(&self, indexer_conf: &IndexerSettings, last_header: Option<TB::Header>, mut shutdown: watch::Receiver<bool>) -> Result<(), ChainError> {
+    pub async fn sync(&self, indexer_conf: &IndexerSettings, last_header: Option<TB::Header>, shutdown: watch::Receiver<bool>) -> Result<(), ChainError> {
         let block_provider = Arc::clone(&self.block_provider);
         let chain = Arc::clone(&self.chain);
         let monitor = Arc::clone(&self.monitor);

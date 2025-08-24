@@ -137,9 +137,11 @@ pub fn block_like(block_type: Type, field_defs: &[FieldDef]) -> Result<TokenStre
             }
 
             fn store_blocks(&self, blocks: Vec<#block_type>) -> Result<(), chain::ChainError> {
+                let write_tx = self.storage.begin_write()?;
                 for block in &blocks {
-                    #block_type::store_and_commit(Arc::clone(&self.storage), block)?;
+                    #block_type::store(&write_tx, block)?;
                 }
+                write_tx.commit()?;
                 Ok(())
             }
 
