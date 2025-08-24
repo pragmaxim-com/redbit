@@ -55,8 +55,8 @@ pub fn delete_and_commit_def(
             let storage = random_storage();
             let entity_count: usize = 3;
             for test_entity in #entity_type::sample_many(entity_count) {
-                #entity_name::store_and_commit(Arc::clone(&storage), &test_entity).expect("Failed to store and commit instance");
                 let pk = test_entity.#pk_name;
+                #entity_name::store_and_commit(Arc::clone(&storage), test_entity).expect("Failed to store and commit instance");
                 let removed = #entity_name::#fn_name(Arc::clone(&storage), &pk).expect("Failed to delete and commit instance");
                 let read_tx = storage.begin_read().expect("Failed to begin read transaction");
                 let is_empty = #entity_name::get(&read_tx, &pk).expect("Failed to get instance").is_none();
@@ -72,8 +72,8 @@ pub fn delete_and_commit_def(
         fn #bench_fn_name(b: &mut Bencher) {
             let storage = random_storage();
             let test_entity = #entity_type::sample();
-            #entity_name::store_and_commit(Arc::clone(&storage), &test_entity).expect("Failed to store and commit instance");
             let pk = test_entity.#pk_name;
+            #entity_name::store_and_commit(Arc::clone(&storage), test_entity).expect("Failed to store and commit instance");
             b.iter(|| {
                 #entity_name::#fn_name(Arc::clone(&storage), &pk).expect("Failed to delete and commit instance");
             });

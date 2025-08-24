@@ -13,7 +13,7 @@ pub mod column_impls;
 
 use crate::field_parser::{FieldDef, IndexingType, OneToManyParentDef};
 use crate::rest::*;
-use crate::table::{DictTableDefs, TableDef};
+use crate::table::{DictTableDefs, StoreManyStmnt, TableDef};
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::Type;
@@ -30,7 +30,7 @@ pub struct DbColumnMacros {
     pub struct_default_init: TokenStream,
     pub struct_default_init_with_query: TokenStream,
     pub store_statement: TokenStream,
-    pub store_many_statement: TokenStream,
+    pub store_many_statement: StoreManyStmnt,
     pub delete_statement: TokenStream,
     pub delete_many_statement: TokenStream,
     pub function_defs: Vec<FunctionDef>,
@@ -215,16 +215,23 @@ impl DbColumnMacros {
     }
 }
 
-pub(crate) fn open_dict_tables(dict_table_defs: &DictTableDefs) -> TokenStream {
+pub(crate) fn open_dict_tables(dict_table_defs: &DictTableDefs) -> (TokenStream, Ident, Ident, Ident, Ident) {
     let table_dict_pk_by_pk = &dict_table_defs.dict_pk_by_pk_table_def.name;
     let table_value_to_dict_pk = &dict_table_defs.value_to_dict_pk_table_def.name;
     let table_value_by_dict_pk = &dict_table_defs.value_by_dict_pk_table_def.name;
     let table_dict_index = &dict_table_defs.dict_index_table_def.name;
 
-    quote! {
-        let mut dict_pk_by_pk       = tx.open_table(#table_dict_pk_by_pk)?;
-        let mut value_to_dict_pk    = tx.open_table(#table_value_to_dict_pk)?;
-        let mut value_by_dict_pk    = tx.open_table(#table_value_by_dict_pk)?;
-        let mut dict_index          = tx.open_multimap_table(#table_dict_index)?;
-    }
+    let dict_pk_by_pk_var = Ident::new(&format!("{}_col_var", table_dict_pk_by_pk).to_lowercase(), table_dict_pk_by_pk.span());
+    let value_to_dict_pk_var = Ident::new(&format!("{}_col_var", table_value_to_dict_pk).to_lowercase(), table_dict_pk_by_pk.span());
+    let value_by_dict_pk_var = Ident::new(&format!("{}_col_var", table_value_by_dict_pk).to_lowercase(), table_dict_pk_by_pk.span());
+    let dict_index_var = Ident::new(&format!("{}_col_var", table_dict_index).to_lowercase(), table_dict_pk_by_pk.span());
+
+    let stream =
+        quote! {
+            let mut #dict_pk_by_pk_var       = tx.open_table(#table_dict_pk_by_pk)?;
+            let mut #value_to_dict_pk_var    = tx.open_table(#table_value_to_dict_pk)?;
+            let mut #value_by_dict_pk_var    = tx.open_table(#table_value_by_dict_pk)?;
+            let mut #dict_index_var          = tx.open_multimap_table(#table_dict_index)?;
+        };
+    (stream, dict_pk_by_pk_var, value_to_dict_pk_var, value_by_dict_pk_var, dict_index_var)
 }

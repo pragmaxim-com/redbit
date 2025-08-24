@@ -10,6 +10,7 @@ use proc_macro2::{Ident, TokenStream};
 use syn::Type;
 use crate::entity;
 use crate::entity::query::StreamQueryItem;
+use crate::table::StoreManyStmnt;
 
 pub struct DbRelationshipMacros {
     pub field_def: FieldDef,
@@ -19,7 +20,7 @@ pub struct DbRelationshipMacros {
     pub struct_default_init: TokenStream,
     pub struct_default_init_with_query: TokenStream,
     pub store_statement: TokenStream,
-    pub store_many_statement: TokenStream,
+    pub store_many_statement: StoreManyStmnt,
     pub delete_statement: TokenStream,
     pub delete_many_statement: TokenStream,
     pub function_def: FunctionDef,

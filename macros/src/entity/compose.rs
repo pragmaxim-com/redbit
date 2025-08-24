@@ -19,7 +19,7 @@ pub fn compose_token_stream(entity_name: &Ident, entity_type: &Type, pk_type: &T
                 let storage = random_storage();
                 let pk = #pk_type::default();
                 let sample_entity = #entity_name::sample();
-                let write_result = #entity_name::store_and_commit(Arc::clone(&storage), &sample_entity);
+                let write_result = #entity_name::store_and_commit(Arc::clone(&storage), sample_entity);
                 let tx = storage.begin_read().unwrap();
                 let entity = #entity_name::compose(&tx, &pk).unwrap();
                 assert!(write_result.is_ok());
@@ -50,7 +50,7 @@ pub fn compose_with_filter_token_stream(entity_type: &Type, pk_type: &Type, stre
                 let storage = random_storage();
                 let pk = #pk_type::default();
                 let sample_entity = #entity_type::sample();
-                let write_result = #entity_type::store_and_commit(Arc::clone(&storage), &sample_entity);
+                let write_result = #entity_type::store_and_commit(Arc::clone(&storage), sample_entity);
                 let query = #stream_query_type::default();
                 let tx = storage.begin_read().unwrap();
                 let entity = #entity_type::compose_with_filter(&tx, &pk, &query).expect("Failed to compose entity").expect("Entity does not match");

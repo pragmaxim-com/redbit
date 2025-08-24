@@ -27,7 +27,7 @@ pub fn test_suite(entity_name: &Ident, parent_def: Option<OneToManyParentDef>, f
             let storage = random_storage();
             let entities = #sample_entity::sample_many(#sample_count);
             for entity in entities {
-                #sample_entity::store_and_commit(Arc::clone(&storage), &entity).expect("Failed to persist entity");
+                #sample_entity::store_and_commit(Arc::clone(&storage), entity).expect("Failed to persist entity");
             }
             Arc::clone(&storage)
         });

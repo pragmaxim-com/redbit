@@ -17,7 +17,7 @@ pub mod root_impls;
 
 use crate::field_parser::{FieldDef, Multiplicity};
 use crate::rest::FunctionDef;
-use crate::table::TableDef;
+use crate::table::{StoreManyStmnt, TableDef};
 use proc_macro2::{Ident, TokenStream};
 use syn::Type;
 use crate::entity;
@@ -37,7 +37,7 @@ pub struct DbPkMacros {
     pub struct_default_init_with_query: TokenStream,
     pub range_query: RangeQuery,
     pub store_statement: TokenStream,
-    pub store_many_statement: TokenStream,
+    pub store_many_statement: StoreManyStmnt,
     pub delete_statement: TokenStream,
     pub delete_many_statement: TokenStream,
     pub function_defs: Vec<FunctionDef>,

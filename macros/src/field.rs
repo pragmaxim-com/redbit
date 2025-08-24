@@ -3,7 +3,7 @@ use crate::field_parser::{ColumnDef, FieldDef, KeyDef, Multiplicity, OneToManyPa
 use crate::pk::DbPkMacros;
 use crate::relationship::DbRelationshipMacros;
 use crate::rest::FunctionDef;
-use crate::table::TableDef;
+use crate::table::{StoreManyStmnt, TableDef};
 use crate::transient::TransientMacros;
 use crate::field_parser;
 use proc_macro2::{Ident, TokenStream};
@@ -155,7 +155,7 @@ impl FieldMacros {
         }
     }
 
-    pub fn store_many_statements(&self) -> Vec<TokenStream> {
+    pub fn store_many_statements(&self) -> Vec<StoreManyStmnt> {
         match self {
             FieldMacros::Pk(pk) => vec![pk.store_many_statement.clone()],
             FieldMacros::Plain(column) => vec![column.store_many_statement.clone()],

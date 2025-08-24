@@ -44,6 +44,13 @@ impl DictTableDefs {
 }
 
 #[derive(Clone, Debug)]
+pub struct StoreManyStmnt {
+    pub pre: TokenStream,
+    pub insert: TokenStream,
+    pub post: TokenStream,
+}
+
+#[derive(Clone, Debug)]
 pub struct TableDef {
     pub name: Ident,
     pub cache: Option<(Ident, TokenStream)>,

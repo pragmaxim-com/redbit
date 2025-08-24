@@ -11,8 +11,9 @@ pub fn init(root_entity_ident: &Ident, key_def: &KeyDef) -> Vec<FunctionDef> {
                 fn_stream: quote! {
                     pub fn init(storage: Arc<Storage>) -> redb::Result<(), AppError> {
                         let sample_block = #root_entity_ident::sample();
-                        #root_entity_ident::store_and_commit(Arc::clone(&storage), &sample_block)?;
-                        #root_entity_ident::delete_and_commit(Arc::clone(&storage), &sample_block.#key_ident)?;
+                        let pk = sample_block.#key_ident;
+                        #root_entity_ident::store_and_commit(Arc::clone(&storage), sample_block)?;
+                        #root_entity_ident::delete_and_commit(Arc::clone(&storage), &pk)?;
                         Ok(())
                     }
                 },

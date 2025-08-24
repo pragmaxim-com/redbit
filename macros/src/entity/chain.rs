@@ -138,10 +138,28 @@ pub fn block_like(block_type: Type, field_defs: &[FieldDef]) -> Result<TokenStre
 
             fn store_blocks(&self, blocks: Vec<#block_type>) -> Result<(), chain::ChainError> {
                 let write_tx = self.storage.begin_write()?;
-                for block in &blocks {
+                for block in blocks.into_iter() {
                     #block_type::store(&write_tx, block)?;
                 }
                 write_tx.commit()?;
+                Ok(())
+            }
+
+            fn update_blocks(&self, blocks: Vec<#block_type>) -> Result<(), chain::ChainError> {
+                let write_tx = self.storage.begin_write()?;
+                for block in &blocks {
+                    #block_type::delete(&write_tx, &block.height)?;
+                }
+                write_tx.commit()?;
+                self.store_blocks(blocks)?;
+                Ok(())
+            }
+
+            fn populate_inputs(&self, blocks: &mut Vec<Block>) -> Result<(), chain::ChainError> {
+                let read_tx = self.storage.begin_read()?;
+                for block in blocks.iter_mut() {
+                    self.resolve_tx_inputs(&read_tx, block)?;
+                }
                 Ok(())
             }
 
@@ -176,24 +194,6 @@ pub fn block_like(block_type: Type, field_defs: &[FieldDef]) -> Result<TokenStre
                     }
                 }
                 Ok(affected_headers)
-            }
-
-            fn update_blocks(&self, blocks: Vec<#block_type>) -> Result<(), chain::ChainError> {
-                let write_tx = self.storage.begin_write()?;
-                for block in &blocks {
-                    #block_type::delete(&write_tx, &block.height)?;
-                }
-                write_tx.commit()?;
-                self.store_blocks(blocks)?;
-                Ok(())
-            }
-
-            fn populate_inputs(&self, blocks: &mut Vec<Block>) -> Result<(), chain::ChainError> {
-                let read_tx = self.storage.begin_read()?;
-                for block in blocks.iter_mut() {
-                    self.resolve_tx_inputs(&read_tx, block)?;
-                }
-                Ok(())
             }
         }
     })

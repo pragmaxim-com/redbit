@@ -5,7 +5,7 @@ fn init_temp_storage(name: &str, db_cache_size_gb: u8) -> (Vec<Block>, Arc<Stora
     let storage = Storage::temp(name, db_cache_size_gb, true).unwrap();
     let write_tx = storage.begin_write().expect("Failed to begin write transaction");
     let blocks = Block::sample_many(3);
-    Block::store_many(&write_tx, &blocks).expect("Failed to persist blocks");
+    Block::store_many(&write_tx, blocks.clone()).expect("Failed to persist blocks");
     write_tx.commit().expect("Failed to commit transaction");
     (blocks, storage)
 }
@@ -38,7 +38,7 @@ fn it_should_commit_multiple_blocks_in_a_single_tx() {
 
     let single_tx_db = Storage::temp("db_test_2", 0, true).unwrap();
     let write_tx = single_tx_db.begin_write().expect("Failed to begin write transaction");
-    blocks.iter().for_each(|block| Block::store(&write_tx, block).expect("Failed to persist blocks"));
+    blocks.into_iter().for_each(|block| Block::store(&write_tx, block).expect("Failed to persist blocks"));
     write_tx.commit().unwrap();
 
     let multi_tx_blocks = Block::take(&multi_tx_storage.begin_read().unwrap(), 100).unwrap();
@@ -114,7 +114,7 @@ async fn store_many_utxos() {
     let (blocks, storage) = init_temp_storage("db_test", 0);
     let all_utxos = blocks.iter().flat_map(|b| b.transactions.iter().flat_map(|t| t.utxos.clone())).collect::<Vec<Utxo>>();
     let write_tx = storage.begin_write().unwrap();
-    Utxo::store_many(&write_tx, &all_utxos).expect("Failed to store UTXO");
+    Utxo::store_many(&write_tx, all_utxos).expect("Failed to store UTXO");
 }
 
 #[tokio::test]
@@ -227,16 +227,17 @@ fn it_should_get_related_one_to_one_entity() {
 fn it_should_override_entity() {
     let (blocks, storage) = init_temp_storage("db_test", 0);
     let read_tx = storage.begin_read().unwrap();
-    let block = blocks.first().unwrap();
+    let block = blocks.first().cloned().unwrap();
+    let block_height = block.height;
 
-    let loaded_block = Block::get(&read_tx, &block.height).expect("Failed to get by ID").unwrap();
+    let loaded_block = Block::get(&read_tx, &block_height).expect("Failed to get by ID").unwrap();
 
-    assert_eq!(block, &loaded_block);
+    assert_eq!(&block, &loaded_block);
 
-    Block::store_and_commit(Arc::clone(&storage), &block).expect("Failed to delete by ID");
-    let loaded_block2 = Block::get(&read_tx, &block.height).expect("Failed to get by ID").unwrap();
+    Block::store_and_commit(Arc::clone(&storage), block.clone()).expect("Failed to delete by ID");
+    let loaded_block2 = Block::get(&read_tx, &block_height).expect("Failed to get by ID").unwrap();
 
-    assert_eq!(block, &loaded_block2);
+    assert_eq!(&block, &loaded_block2);
 }
 
 #[test]
