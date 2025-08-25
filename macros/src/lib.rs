@@ -19,9 +19,10 @@ use proc_macro_error::proc_macro_error;
 use quote::quote;
 use syn::parse::Parse;
 use syn::spanned::Spanned;
-use syn::{parse_macro_input, parse_quote, DeriveInput, Fields, ItemStruct, Lit, Path, Type};
+use syn::{parse_macro_input, parse_quote, parse_str, DeriveInput, Fields, ItemStruct, Lit, Path, Type};
 use syn::punctuated::Punctuated;
 use syn::token::Comma;
+use crate::column::column_codec;
 use crate::entity::chain;
 
 #[proc_macro_attribute]
@@ -30,12 +31,13 @@ pub fn column(attr: TokenStream, item: TokenStream) -> TokenStream {
     let attr_args = parse_macro_input!(attr as LiteralAttr);
     let mut input = parse_macro_input!(item as ItemStruct);
     let struct_ident = &input.ident.clone();
+    let struct_type: Type = parse_str(&format!("{}", struct_ident)).expect("Invalid Struct type");
     let stream =
         match &mut input.fields {
             Fields::Unnamed(fields) if fields.unnamed.len() == 1 => {
                 let inner_ty = &fields.unnamed[0].ty;
                 let (impls, maybe_field_attr, extra_derive_impls) =
-                    column::column_impls::generate_column_impls(struct_ident, inner_ty, attr_args.literal);
+                    column::column_impls::generate_column_impls(struct_ident, &struct_type, inner_ty, attr_args.literal);
 
                 if let Some(attr) = maybe_field_attr {
                     input.attrs.push(syn::parse_quote! { #[serde_with::serde_as] });
@@ -51,9 +53,11 @@ pub fn column(attr: TokenStream, item: TokenStream) -> TokenStream {
                 }
             },
             _ => {
-                let derives: Punctuated<Path, Comma> = syn::parse_quote![Decode, Encode, Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Eq, utoipa::ToSchema];
+                let custom_db_codec = column_codec::emit_newtype_serde_impls(&struct_type);
+                let derives: Punctuated<Path, Comma> = syn::parse_quote![Decode, Encode, Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Ord, PartialOrd, Eq, utoipa::ToSchema];
                 macro_utils::merge_struct_derives(&mut input, derives);
                 quote! {
+                    #custom_db_codec
                     #input
                 }
             }

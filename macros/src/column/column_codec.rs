@@ -1,0 +1,158 @@
+use proc_macro2::{Literal, TokenStream as TokenStream2};
+use quote::quote;
+use syn::Type;
+use crate::macro_utils::IntegerType;
+
+pub fn emit_newtype_integer_impls(newtype_ty: &Type, int_ty: IntegerType) -> TokenStream2 {
+    let mut tokens = TokenStream2::new();
+    let int_str = int_ty.as_str(); // "u32", "i64", etc.
+    let inner_name_lit = Literal::string(int_str);
+    let int_ty_tokens: TokenStream2 = syn::parse_str(int_str).expect("valid integer type");
+
+    tokens.extend(quote! {
+        impl redb::Value for #newtype_ty {
+            type SelfType<'a> = #newtype_ty where Self: 'a;
+            type AsBytes<'a> = [u8; std::mem::size_of::<#int_ty_tokens>()] where Self: 'a;
+
+            fn fixed_width() -> Option<usize> { Some(std::mem::size_of::<#int_ty_tokens>()) }
+
+            fn from_bytes<'a>(data: &'a [u8]) -> #newtype_ty
+            where Self: 'a {
+                #newtype_ty(<#int_ty_tokens>::from_le_bytes(data.try_into().unwrap()))
+            }
+
+            fn as_bytes<'a, 'b: 'a>(value: &'a Self::SelfType<'b>) -> [u8; std::mem::size_of::<#int_ty_tokens>()]
+            where Self: 'a, Self: 'b {
+                value.0.to_le_bytes()
+            }
+
+            fn type_name() -> redb::TypeName { redb::TypeName::new(#inner_name_lit) }
+        }
+
+        impl redb::Key for #newtype_ty {
+            fn compare(data1: &[u8], data2: &[u8]) -> std::cmp::Ordering {
+                let v1 = <#int_ty_tokens>::from_le_bytes(data1.try_into().unwrap());
+                let v2 = <#int_ty_tokens>::from_le_bytes(data2.try_into().unwrap());
+                v1.cmp(&v2)
+            }
+        }
+    });
+
+    tokens
+}
+
+pub fn emit_newtype_byte_array_impls(newtype_ty: &Type, len: usize) -> TokenStream2 {
+    let mut tokens = TokenStream2::new();
+    let n_lit = Literal::usize_unsuffixed(len);
+    let inner_type_name = Literal::string(&format!("[u8;{}]", len));
+
+    tokens.extend(quote! {
+        impl redb::Value for #newtype_ty {
+            type SelfType<'a> = #newtype_ty where Self: 'a;
+            type AsBytes<'a> = &'a [u8; #n_lit] where Self: 'a;
+
+            fn fixed_width() -> Option<usize> { Some(#n_lit) }
+
+            fn from_bytes<'a>(data: &'a [u8]) -> #newtype_ty
+            where Self: 'a {
+                #newtype_ty(data.try_into().unwrap())
+            }
+
+            fn as_bytes<'a, 'b: 'a>(value: &'a Self::SelfType<'b>) -> &'a [u8; #n_lit]
+            where Self: 'a, Self: 'b {
+                &value.0
+            }
+
+            fn type_name() -> redb::TypeName { redb::TypeName::new(#inner_type_name) }
+        }
+
+        impl redb::Key for #newtype_ty {
+            fn compare(data1: &[u8], data2: &[u8]) -> std::cmp::Ordering {
+                data1.cmp(data2)
+            }
+        }
+    });
+
+    tokens
+}
+
+pub fn emit_newtype_byte_vec_impls(newtype_ty: &Type) -> TokenStream2 {
+    let mut tokens = TokenStream2::new();
+    let inner_type_name = Literal::string("Vec<u8>");
+
+    tokens.extend(quote! {
+        impl redb::Value for #newtype_ty {
+            type SelfType<'a> = #newtype_ty where Self: 'a;
+            type AsBytes<'a> = &'a [u8] where Self: 'a;
+
+            fn fixed_width() -> Option<usize> { None }
+
+            fn from_bytes<'a>(data: &'a [u8]) -> #newtype_ty
+            where Self: 'a {
+                #newtype_ty(data.to_vec())
+            }
+
+            fn as_bytes<'a, 'b: 'a>(value: &'a Self::SelfType<'b>) -> &'a [u8]
+            where Self: 'a, Self: 'b {
+                value.0.as_ref()
+            }
+
+            fn type_name() -> redb::TypeName { redb::TypeName::new(#inner_type_name) }
+        }
+
+        impl redb::Key for #newtype_ty {
+            fn compare(data1: &[u8], data2: &[u8]) -> std::cmp::Ordering {
+                data1.cmp(data2)
+            }
+        }
+    });
+
+    tokens
+}
+
+/// Fourth case: the *type itself* implements bincode::Encode + bincode::Decode<()>.
+/// We encode/decode with bincode for persistence.
+pub fn emit_newtype_serde_impls(newtype_ty: &Type) -> TokenStream2 {
+    let mut tokens = TokenStream2::new();
+
+    tokens.extend(quote! {
+        impl redb::Value for #newtype_ty {
+            type SelfType<'a> = #newtype_ty where Self: 'a;
+            // Bincode encoding allocates; expose owned bytes.
+            type AsBytes<'a> = Vec<u8> where Self: 'a;
+
+            fn fixed_width() -> Option<usize> { None }
+
+            fn from_bytes<'a>(data: &'a [u8]) -> #newtype_ty
+            where Self: 'a {
+                // Requires: #newtype_ty: bincode::Decode<()>
+                bincode::decode_from_slice::<#newtype_ty, _>(data, bincode::config::standard())
+                    .unwrap()
+                    .0
+            }
+
+            fn as_bytes<'a, 'b: 'a>(value: &'a Self::SelfType<'b>) -> Vec<u8>
+            where Self: 'a, Self: 'b {
+                // Requires: #newtype_ty: bincode::Encode
+                bincode::encode_to_vec(value, bincode::config::standard()).unwrap()
+            }
+
+            fn type_name() -> redb::TypeName {
+                // Use the concrete type name; bincode layout depends on the type.
+                redb::TypeName::new(std::any::type_name::<#newtype_ty>())
+            }
+        }
+
+        impl redb::Key for #newtype_ty {
+            fn compare(data1: &[u8], data2: &[u8]) -> std::cmp::Ordering {
+                let v1 = bincode::decode_from_slice::<#newtype_ty, _>(data1, bincode::config::standard())
+                    .unwrap().0;
+                let v2 = bincode::decode_from_slice::<#newtype_ty, _>(data2, bincode::config::standard())
+                    .unwrap().0;
+                v1.cmp(&v2)
+            }
+        }
+    });
+
+    tokens
+}

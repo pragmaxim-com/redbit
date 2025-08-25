@@ -10,6 +10,7 @@ mod range_by;
 mod get_by;
 mod get_keys_by;
 pub mod column_impls;
+pub mod column_codec;
 
 use crate::field_parser::{FieldDef, IndexingType, OneToManyParentDef};
 use crate::rest::*;

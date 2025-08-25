@@ -51,19 +51,6 @@ pub fn is_bool(ty: &Type) -> bool {
     matches!(ty, Type::Path(tp) if tp.path.is_ident("bool"))
 }
 
-pub fn is_byte_array(ty: &Type) -> bool {
-    matches!(ty, Type::Array(arr) if matches!(&*arr.elem, Type::Path(tp) if tp.path.is_ident("u8")))
-}
-
-pub fn get_array_len(ty: &Type) -> Option<usize> {
-    if let Type::Array(arr) = ty {
-        if let syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Int(int), .. }) = &arr.len {
-            return int.base10_parse::<usize>().ok();
-        }
-    }
-    None
-}
-
 pub fn is_vec_u8(ty: &Type) -> bool {
     matches!(ty, Type::Path(tp) if {
         tp.path.segments.last().is_some_and(|seg| {
@@ -74,16 +61,6 @@ pub fn is_vec_u8(ty: &Type) -> bool {
         })
     })
 }
-
-pub fn is_integer(ty: &Type) -> bool {
-    if let Type::Path(tp) = ty {
-        let ident = &tp.path.segments.last().unwrap().ident;
-        matches!(ident.to_string().as_str(), "u8" | "u16" | "u32" | "u64" | "usize" | "i8" | "i16" | "i32" | "i64" | "isize")
-    } else {
-        false
-    }
-}
-
 
 pub fn is_uuid(ty: &Type) -> bool {
     matches!(ty, Type::Path(tp) if {
@@ -123,10 +100,6 @@ pub fn classify_inner_type(ty: &Type) -> InnerKind {
         InnerKind::String
     } else if is_vec_u8(ty) {
         InnerKind::VecU8
-    } else if is_byte_array(ty) {
-        InnerKind::ByteArray(get_array_len(ty).unwrap())
-    } else if is_integer(ty) {
-        InnerKind::Integer
     } else if is_bool(ty) {
         InnerKind::Bool
     } else if is_uuid(ty) {
@@ -136,7 +109,85 @@ pub fn classify_inner_type(ty: &Type) -> InnerKind {
     } else if is_time(ty) {
         InnerKind::Time
     } else {
+        if let Type::Path(tp) = ty {
+            if let Some(seg) = tp.path.segments.last() {
+                let ident = seg.ident.to_string();
+                match ident.as_str() {
+                    // unsigned
+                    "u8" => return InnerKind::Integer(IntegerType::U8),
+                    "u16" => return InnerKind::Integer(IntegerType::U16),
+                    "u32" => return InnerKind::Integer(IntegerType::U32),
+                    "u64" => return InnerKind::Integer(IntegerType::U64),
+                    "u128" => return InnerKind::Integer(IntegerType::U128),
+                    "usize" => return InnerKind::Integer(IntegerType::Usize),
+                    // signed
+                    "i8" => return InnerKind::Integer(IntegerType::I8),
+                    "i16" => return InnerKind::Integer(IntegerType::I16),
+                    "i32" => return InnerKind::Integer(IntegerType::I32),
+                    "i64" => return InnerKind::Integer(IntegerType::I64),
+                    "i128" => return InnerKind::Integer(IntegerType::I128),
+                    "isize" => return InnerKind::Integer(IntegerType::Isize),
+                    // byte arrays like [u8; N]
+                    _ => {
+                        // Detect path like ` [ u8 ; N ] ` may be parsed as Type::Array
+                    }
+                }
+            }
+        }
+
+        // Explicit check for array like `[u8; N]`
+        if let Type::Array(arr) = ty {
+            if let Type::Path(tp) = &*arr.elem {
+                if let Some(seg) = tp.path.segments.last() {
+                    if seg.ident == "u8" {
+                        if let syn::Expr::Lit(expr_lit) = &arr.len {
+                            if let syn::Lit::Int(int_lit) = &expr_lit.lit {
+                                if let Ok(n) = int_lit.base10_parse::<usize>() {
+                                    return InnerKind::ByteArray(n);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         InnerKind::Other
+    }
+}
+
+#[derive(Debug)]
+pub enum IntegerType {
+    U8,
+    U16,
+    U32,
+    U64,
+    U128,
+    Usize,
+    I8,
+    I16,
+    I32,
+    I64,
+    I128,
+    Isize,
+}
+
+impl IntegerType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            IntegerType::U8 => "u8",
+            IntegerType::U16 => "u16",
+            IntegerType::U32 => "u32",
+            IntegerType::U64 => "u64",
+            IntegerType::U128 => "u128",
+            IntegerType::Usize => "usize",
+            IntegerType::I8 => "i8",
+            IntegerType::I16 => "i16",
+            IntegerType::I32 => "i32",
+            IntegerType::I64 => "i64",
+            IntegerType::I128 => "i128",
+            IntegerType::Isize => "isize",
+        }
     }
 }
 
@@ -145,7 +196,7 @@ pub enum InnerKind {
     String,
     VecU8,
     ByteArray(usize),
-    Integer,
+    Integer(IntegerType),
     Bool,
     Uuid,
    // UtcDateTime,

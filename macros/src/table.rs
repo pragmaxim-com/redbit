@@ -64,7 +64,7 @@ impl TableDef {
         let name_str = name.to_string();
         let definition =
             quote! {
-                pub const #name: TableDefinition<'static, Bincode<#pk_type>, ()> = TableDefinition::new(#name_str);
+                pub const #name: TableDefinition<'static, #pk_type, ()> = TableDefinition::new(#name_str);
             };
         TableDef {
             name,
@@ -83,7 +83,7 @@ impl TableDef {
     );
         let name_str = &name.to_string();
         let definition = quote! {
-            pub const #name: TableDefinition<'static, Bincode<#pk_type>, Bincode<#column_type>> = TableDefinition::new(#name_str);
+            pub const #name: TableDefinition<'static, #pk_type, #column_type> = TableDefinition::new(#name_str);
         };
         TableDef {
             name,
@@ -97,7 +97,7 @@ impl TableDef {
         let name = format_ident!("{}_{}_INDEX", entity_name.to_string().to_uppercase(), column_name.to_string().to_uppercase());
         let name_str = &name.to_string();
         let definition = quote! {
-            pub const #name: MultimapTableDefinition<'static, Bincode<#column_type>, Bincode<#pk_type>> = MultimapTableDefinition::new(#name_str);
+            pub const #name: MultimapTableDefinition<'static, #column_type, #pk_type> = MultimapTableDefinition::new(#name_str);
         };
         TableDef {
             name,
@@ -112,7 +112,7 @@ impl TableDef {
         let name_str = &name.to_string();
         let definition =
         quote! {
-            pub const #name: MultimapTableDefinition<'static, Bincode<#pk_type>, Bincode<#pk_type>>= MultimapTableDefinition::new(#name_str);
+            pub const #name: MultimapTableDefinition<'static, #pk_type, #pk_type>= MultimapTableDefinition::new(#name_str);
         };
         TableDef {
             name,
@@ -127,7 +127,7 @@ impl TableDef {
         let name_str = &name.to_string();
         let definition =
             quote! {
-            pub const #name: TableDefinition<'static, Bincode<#pk_type>, Bincode<#column_type>> = TableDefinition::new(#name_str);
+            pub const #name: TableDefinition<'static, #pk_type, #column_type> = TableDefinition::new(#name_str);
         };
         TableDef {
             name,
@@ -141,7 +141,7 @@ impl TableDef {
         let name = format_ident!("{}_{}_TO_DICT_PK", entity_name.to_string().to_uppercase(), column_name.to_string().to_uppercase());
         let name_str = &name.to_string();
         let definition = quote! {
-            pub const #name: TableDefinition<'static, Bincode<#column_type>, Bincode<#pk_type>> = TableDefinition::new(#name_str);
+            pub const #name: TableDefinition<'static, #column_type, #pk_type> = TableDefinition::new(#name_str);
         };
 
         let cache = cache_size_opt.map(|cache_size| {
@@ -171,7 +171,7 @@ impl TableDef {
         );
         let name_str = &name.to_string();
         let definition = quote! {
-            pub const #name: TableDefinition<'static, Bincode<#pk_type>, Bincode<#pk_type>> = TableDefinition::new(#name_str);
+            pub const #name: TableDefinition<'static, #pk_type, #pk_type> = TableDefinition::new(#name_str);
         };
         TableDef {
             name,

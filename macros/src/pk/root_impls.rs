@@ -1,12 +1,16 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
-use syn::Field;
+use syn::{parse_str, Field, Type};
+use crate::column::column_codec;
 
 /// Generates trait implementations for **Root Pointers** (IndexedPointer + RootPointer)
 /// and also derives Display, FromStr, Serialize, and Deserialize based on a dash-separated format.
 pub fn new(struct_name: &Ident, index_field: Field) -> TokenStream {
     let index_type = &index_field.ty;
+    let struct_type: Type = parse_str(&format!("{}", struct_name)).expect("Invalid Struct type");
+    let custom_db_codec = column_codec::emit_newtype_serde_impls(&struct_type);
     quote! {
+        #custom_db_codec
         impl ColInnerType for #struct_name {
             type Repr = #index_type;
         }

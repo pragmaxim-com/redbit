@@ -14,7 +14,7 @@ doctest = false
 [dependencies]
 macros = { path = "../macros" }
 thiserror = "2.0.12"
-redb = "3.0.0"
+redb = "3.0.1"
 bincode = "2.0.1"
 serde = { version = "1.0.219", features = ["derive"] }
 axum = {  version = "0.8.4", features = ["default", "macros"] }

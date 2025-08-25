@@ -26,7 +26,7 @@ overflow-checks = false
 [dev-dependencies]
 redbit = { path = "redbit" }
 trybuild = "1.0"
-redb = "3.0.0"
+redb = "3.0.1"
 bincode = "2.0.1"
 axum = { version = "0.8.4", features = ["default", "macros"] }
 utoipa = { version = "5.3.1", features = ["axum_extras", "debug"] }

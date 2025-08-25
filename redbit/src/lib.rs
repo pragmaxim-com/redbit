@@ -22,8 +22,6 @@ pub use axum::http::StatusCode;
 pub use axum::response::IntoResponse;
 pub use axum::response::Response;
 pub use axum_streams;
-pub use bincode::Encode;
-pub use bincode::Decode;
 pub use chrono;
 pub use futures;
 pub use futures::stream::{self, StreamExt};
@@ -61,6 +59,7 @@ pub use serde_with;
 pub use std::collections::VecDeque;
 pub use std::pin::Pin;
 pub use std::sync::Arc;
+pub use std::time::Duration;
 pub use urlencoding;
 pub use utoipa;
 pub use utoipa::openapi;
@@ -74,20 +73,20 @@ pub use cache::CacheDef;
 pub use storage::Storage;
 pub use storage::StorageWriteTx;
 pub use storage::StorageReadTx;
+pub use bincode::{Encode, Decode, decode_from_slice, encode_to_vec};
+pub use std::any::type_name;
+pub use std::cmp::Ordering;
+pub use crate::redb::{Key, TypeName, Value};
+pub use std::fmt::Debug;
 
 use crate::axum::extract::rejection::JsonRejection;
 use crate::axum::extract::FromRequest;
 use crate::axum::Router;
-use crate::redb::{Key, TypeName, Value};
 use crate::utoipa::OpenApi;
 use crate::utoipa_swagger_ui::SwaggerUi;
 use axum::body::Bytes;
 use axum::extract::Request;
-use bincode::{decode_from_slice, encode_to_vec};
 use serde::de::DeserializeOwned;
-use std::any::type_name;
-use std::cmp::Ordering;
-use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::ops::Add;
 use thiserror::Error;
@@ -255,59 +254,6 @@ pub enum ParsePointerError {
 impl From<AppError> for axum::Error {
     fn from(val: AppError) -> Self {
         axum::Error::new(val.to_string())
-    }
-}
-
-/// Wrapper type to handle keys and values using bincode serialization
-#[derive(Debug)]
-pub struct Bincode<T>(pub T);
-
-impl<T> Value for Bincode<T>
-where
-    T: Debug + Encode + Decode<()>,
-{
-    type SelfType<'a>
-    = T
-    where
-        Self: 'a;
-
-    type AsBytes<'a>
-    = Vec<u8>
-    where
-        Self: 'a;
-
-    fn fixed_width() -> Option<usize> {
-        None
-    }
-
-    fn from_bytes<'a>(data: &'a [u8]) -> Self::SelfType<'a>
-    where
-        Self: 'a,
-    {
-        decode_from_slice(data, bincode::config::standard())
-            .unwrap()
-            .0
-    }
-
-    fn as_bytes<'a, 'b: 'a>(value: &'a Self::SelfType<'b>) -> Self::AsBytes<'a>
-    where
-        Self: 'a,
-        Self: 'b,
-    {
-        encode_to_vec(value, bincode::config::standard()).unwrap()
-    }
-
-    fn type_name() -> TypeName {
-        TypeName::new(&format!("Bincode<{}>", type_name::<T>()))
-    }
-}
-
-impl<T> Key for Bincode<T>
-where
-    T: Debug + Decode<()> + Encode + Ord,
-{
-    fn compare(data1: &[u8], data2: &[u8]) -> Ordering {
-        Self::from_bytes(data1).cmp(&Self::from_bytes(data2))
     }
 }
 
