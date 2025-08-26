@@ -15,7 +15,7 @@ Redbit reads struct annotations and derives code necessary for persisting and qu
 ✅ All goodies including intuitive data ordering without writing custom codecs \
 ✅ All keys and all newType column types with fixed-sized value implement `Copy` => minimal cloning \
 ✅ Http response streaming api with efficient querying (ie. get txs or utxos for really HOT address) \
-✅ Query contraints : `eq`, `ne`, `lt`, `le`, `gt`, `ge`, `in` with logical `AND`
+✅ Query constraints : `eq`, `ne`, `lt`, `le`, `gt`, `ge`, `in` with logical `AND`
   ```json
   {
     "header": {
@@ -523,8 +523,8 @@ lower in/out indexing throughput because the block is indexed into ~ 24 tables i
 
 If node and indexer each uses its own SSD, then the throughput reaches :
 
- - 2.0GHz & NVMe on PCIe Gen3 : `~ 9 000 Inputs+outputs / s`
- - 3.0GHz & NVMe on PCIe Gen4 : `~ 15 000 Inputs+outputs / s`
- - 4.0GHz & NVMe on PCIe Gen5 : `~ 28 000 Inputs+outputs / s`
+ - 2.0GHz & NVMe on PCIe Gen3 : `~ 11 000 Inputs+outputs / s`
+ - 3.0GHz & NVMe on PCIe Gen4 : `~ 18 000 Inputs+outputs / s`
+ - 4.0GHz & NVMe on PCIe Gen5 : `~ 26 000 Inputs+outputs / s`
 
-In a nutshell, whole bitcoin up to height ~ 0.9M can be indexed in less than 4 days on a PCIe Gen5 SSD with 4.0GHz CPU.
+In a nutshell, whole bitcoin up to height ~ 0.9M can be indexed in 3-4 days on a PCIe Gen5 SSD with 4.0GHz CPU.

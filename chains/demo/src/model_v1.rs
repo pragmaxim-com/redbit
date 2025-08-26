@@ -16,6 +16,7 @@ pub use redbit::*;
 #[column("utf-8")] pub struct AssetName(pub Vec<u8>); // String is supported but this is more efficient
 #[column] pub struct Duration(pub std::time::Duration);
 #[column] pub struct Weight(pub u32);
+
 #[column] pub struct Timestamp(pub u32);
 
 #[column]

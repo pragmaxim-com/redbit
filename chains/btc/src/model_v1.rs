@@ -1,8 +1,6 @@
 use bitcoin::block::Bip34Error;
 use chain::api::{BlockHeaderLike, BlockLike, ChainError};
-use chrono::DateTime;
 pub use redbit::*;
-use std::fmt;
 
 // feel free to add custom #[derive(Foo, Bar)] attributes to your types, they will get merged with the ones from redbit
 
@@ -12,7 +10,6 @@ use std::fmt;
 #[pointer_key(u16)] pub struct TransactionPointer(BlockPointer);
 #[pointer_key(u8)] pub struct UtxoPointer(TransactionPointer);
 
-#[column] pub struct Hash(pub String);
 #[column("hex")] pub struct BlockHash(pub [u8; 32]);
 #[column("hex")] pub struct MerkleRoot(pub [u8; 32]);
 #[column("hex")] pub struct TxHash(pub [u8; 32]);
@@ -30,13 +27,6 @@ pub struct TempInputRef {
 
 #[column]
 pub struct BlockTimestamp(pub u32);
-impl fmt::Display for BlockTimestamp {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let datetime = DateTime::from_timestamp(self.0 as i64, 0).unwrap();
-        let readable_date = datetime.format("%Y-%m-%d %H:%M:%S").to_string();
-        write!(f, "{}", readable_date)
-    }
-}
 
 #[entity]
 pub struct Block {

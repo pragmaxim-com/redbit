@@ -1,7 +1,5 @@
 use std::error::Error;
-use chrono::DateTime;
 pub use redbit::*;
-use std::fmt;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 #[derive(Clone, Copy, Debug, IntoPrimitive, PartialEq, TryFromPrimitive, )]
@@ -27,19 +25,8 @@ pub enum AssetType {
 #[column("hex")] pub struct BlockHash(pub [u8; 32]);
 #[column("hex")] pub struct TxHash(pub [u8; 32]);
 #[column] pub struct Weight(pub u32);
-#[column("crate::codec::Base58")]
-pub struct Address(pub Vec<u8>);
-
-#[column]
-#[derive(Copy, Hash)]
-pub struct BlockTimestamp(pub u32);
-impl fmt::Display for BlockTimestamp {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let datetime = DateTime::from_timestamp(self.0 as i64, 0).unwrap();
-        let readable_date = datetime.format("%Y-%m-%d %H:%M:%S").to_string();
-        write!(f, "{}", readable_date)
-    }
-}
+#[column] pub struct BlockTimestamp(pub u32);
+#[column("crate::codec::Base58")] pub struct Address(pub Vec<u8>);
 
 #[entity]
 pub struct Block {

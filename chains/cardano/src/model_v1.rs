@@ -1,9 +1,7 @@
 use chain::api::{BlockHeaderLike, BlockLike, ChainError};
-use chrono::DateTime;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use pallas::network::miniprotocols::{blockfetch, chainsync, localstate};
 pub use redbit::*;
-use std::fmt;
 
 #[derive(Clone, Copy, Debug, IntoPrimitive, PartialEq, TryFromPrimitive, )]
 #[repr(u8)]
@@ -38,13 +36,6 @@ pub struct TempInputRef {
 #[column]
 #[derive(Copy, Hash)]
 pub struct BlockTimestamp(pub u32);
-impl fmt::Display for BlockTimestamp {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let datetime = DateTime::from_timestamp(self.0 as i64, 0).unwrap();
-        let readable_date = datetime.format("%Y-%m-%d %H:%M:%S").to_string();
-        write!(f, "{}", readable_date)
-    }
-}
 
 #[entity]
 pub struct Block {
