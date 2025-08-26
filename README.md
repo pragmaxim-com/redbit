@@ -5,8 +5,7 @@ analytical db like [DuckDB](https://duckdb.org/) right on the node would be stil
 [Redb](https://github.com/cberner/redb) or [RocksDb](https://rocksdb.org/).
 
 Redbit reads struct annotations and derives code necessary for persisting and querying structured data into/from
-[Redb](https://github.com/cberner/redb) using secondary indexes and dictionaries, served by [axum](https://github.com/tokio-rs/axum)
-through auto-generated REST API.
+[Redb](https://github.com/cberner/redb) using secondary indexes and dictionaries, served by [axum](https://github.com/tokio-rs/axum) through auto-generated REST API.
 
 ### Major Out-of-the-Box Features
 

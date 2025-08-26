@@ -9,7 +9,7 @@ pub fn new(struct_name: &Ident, parent_field: Field, index_field: Field) -> Toke
     let index_name = &index_field.ident;
     let index_type = &index_field.ty;
     let struct_type: Type = parse_str(&format!("{}", struct_name)).expect("Invalid Struct type");
-    let custom_db_codec = column_codec::emit_newtype_serde_impls(&struct_type);
+    let custom_db_codec = column_codec::emit_pointer_redb_impls(&struct_type);
     quote! {
         #custom_db_codec
         impl IndexedPointer for #struct_name {
@@ -26,6 +26,28 @@ pub fn new(struct_name: &Ident, parent_field: Field, index_field: Field) -> Toke
             fn is_pointer(&self) -> bool { true }
             fn parent(&self) -> Self::Parent { self.#parent_name }
             fn from_parent(parent: Self::Parent, index: #index_type) -> Self { #struct_name { #parent_name: parent, #index_name: index } }
+        }
+
+        impl BinaryCodec for #struct_name {
+            fn from_bytes(bytes: &[u8]) -> Self {
+                let parent_size = <#parent_type as BinaryCodec>::size();
+                let index_size = std::mem::size_of::<#index_type>();
+                assert_eq!(bytes.len(), parent_size + index_size, "invalid byte length for child pointer");
+                let (parent_bytes, index_bytes) = bytes.split_at(parent_size);
+                let parent = <#parent_type as BinaryCodec>::from_bytes(parent_bytes);
+                let index_arr: [u8; std::mem::size_of::<#index_type>()] = index_bytes.try_into().unwrap();
+                let index = <#index_type>::from_le_bytes(index_arr);
+                #struct_name { #parent_name: parent, #index_name: index }
+            }
+
+            fn as_bytes(&self) -> Vec<u8> {
+                let mut buf = self.#parent_name.as_bytes();
+                buf.extend_from_slice(&self.#index_name.to_le_bytes());
+                buf
+            }
+            fn size() -> usize {
+                <#parent_type as BinaryCodec>::size() + std::mem::size_of::<#index_type>()
+            }
         }
 
         impl Into<String> for #struct_name {

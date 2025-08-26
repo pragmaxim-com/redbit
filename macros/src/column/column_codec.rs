@@ -110,7 +110,47 @@ pub fn emit_newtype_byte_vec_impls(newtype_ty: &Type) -> TokenStream2 {
     tokens
 }
 
-/// Fourth case: the *type itself* implements bincode::Encode + bincode::Decode<()>.
+pub fn emit_pointer_redb_impls(pointer_type: &Type) -> TokenStream2 {
+    let mut tokens = TokenStream2::new();
+    let inner_type_name = Literal::string(&quote!(#pointer_type).to_string());
+
+    tokens.extend(quote! {
+        impl redb::Value for #pointer_type {
+            type SelfType<'a> = #pointer_type where Self: 'a;
+            type AsBytes<'a> = std::borrow::Cow<'a, [u8]> where Self: 'a;
+
+            fn fixed_width() -> Option<usize> {
+                Some(<#pointer_type as BinaryCodec>::size())
+            }
+
+            fn from_bytes<'a>(data: &'a [u8]) -> #pointer_type
+            where Self: 'a {
+                <#pointer_type as BinaryCodec>::from_bytes(data)
+            }
+
+            fn as_bytes<'a, 'b: 'a>(value: &'a Self::SelfType<'b>) -> Self::AsBytes<'a>
+            where Self: 'a, Self: 'b {
+                std::borrow::Cow::Owned(value.as_bytes())
+            }
+
+            fn type_name() -> redb::TypeName {
+                redb::TypeName::new(#inner_type_name)
+            }
+        }
+
+        impl redb::Key for #pointer_type {
+            fn compare(data1: &[u8], data2: &[u8]) -> std::cmp::Ordering {
+                let a = <#pointer_type as BinaryCodec>::from_bytes(data1);
+                let b = <#pointer_type as BinaryCodec>::from_bytes(data2);
+                a.cmp(&b)
+            }
+        }
+    });
+
+    tokens
+}
+
+/// Last case: the *type itself* implements bincode::Encode + bincode::Decode<()>.
 /// We encode/decode with bincode for persistence.
 pub fn emit_newtype_serde_impls(newtype_ty: &Type) -> TokenStream2 {
     let mut tokens = TokenStream2::new();

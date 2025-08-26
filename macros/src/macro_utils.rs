@@ -95,6 +95,36 @@ fn is_time(ty: &Type) -> bool {
     }
 }
 
+pub fn extract_int_type(ty: &Type) -> InnerKind {
+    if let Type::Path(tp) = ty {
+        if let Some(seg) = tp.path.segments.last() {
+            let ident = seg.ident.to_string();
+            match ident.as_str() {
+                // unsigned
+                "u8" => InnerKind::Integer(IntegerType::U8),
+                "u16" => InnerKind::Integer(IntegerType::U16),
+                "u32" => InnerKind::Integer(IntegerType::U32),
+                "u64" => InnerKind::Integer(IntegerType::U64),
+                "u128" => InnerKind::Integer(IntegerType::U128),
+                "usize" => InnerKind::Integer(IntegerType::Usize),
+                // signed
+                "i8" => InnerKind::Integer(IntegerType::I8),
+                "i16" => InnerKind::Integer(IntegerType::I16),
+                "i32" => InnerKind::Integer(IntegerType::I32),
+                "i64" => InnerKind::Integer(IntegerType::I64),
+                "i128" => InnerKind::Integer(IntegerType::I128),
+                "isize" => InnerKind::Integer(IntegerType::Isize),
+                // byte arrays like [u8; N]
+                _ => InnerKind::Other
+            }
+        } else {
+            InnerKind::Other
+        }
+    } else {
+        InnerKind::Other
+    }
+}
+
 pub fn classify_inner_type(ty: &Type) -> InnerKind {
     if is_string(ty) {
         InnerKind::String
@@ -109,33 +139,6 @@ pub fn classify_inner_type(ty: &Type) -> InnerKind {
     } else if is_time(ty) {
         InnerKind::Time
     } else {
-        if let Type::Path(tp) = ty {
-            if let Some(seg) = tp.path.segments.last() {
-                let ident = seg.ident.to_string();
-                match ident.as_str() {
-                    // unsigned
-                    "u8" => return InnerKind::Integer(IntegerType::U8),
-                    "u16" => return InnerKind::Integer(IntegerType::U16),
-                    "u32" => return InnerKind::Integer(IntegerType::U32),
-                    "u64" => return InnerKind::Integer(IntegerType::U64),
-                    "u128" => return InnerKind::Integer(IntegerType::U128),
-                    "usize" => return InnerKind::Integer(IntegerType::Usize),
-                    // signed
-                    "i8" => return InnerKind::Integer(IntegerType::I8),
-                    "i16" => return InnerKind::Integer(IntegerType::I16),
-                    "i32" => return InnerKind::Integer(IntegerType::I32),
-                    "i64" => return InnerKind::Integer(IntegerType::I64),
-                    "i128" => return InnerKind::Integer(IntegerType::I128),
-                    "isize" => return InnerKind::Integer(IntegerType::Isize),
-                    // byte arrays like [u8; N]
-                    _ => {
-                        // Detect path like ` [ u8 ; N ] ` may be parsed as Type::Array
-                    }
-                }
-            }
-        }
-
-        // Explicit check for array like `[u8; N]`
         if let Type::Array(arr) = ty {
             if let Type::Path(tp) = &*arr.elem {
                 if let Some(seg) = tp.path.segments.last() {
@@ -151,8 +154,7 @@ pub fn classify_inner_type(ty: &Type) -> InnerKind {
                 }
             }
         }
-
-        InnerKind::Other
+        extract_int_type(ty)
     }
 }
 

@@ -8,7 +8,7 @@ use crate::column::column_codec;
 pub fn new(struct_name: &Ident, index_field: Field) -> TokenStream {
     let index_type = &index_field.ty;
     let struct_type: Type = parse_str(&format!("{}", struct_name)).expect("Invalid Struct type");
-    let custom_db_codec = column_codec::emit_newtype_serde_impls(&struct_type);
+    let custom_db_codec = column_codec::emit_pointer_redb_impls(&struct_type);
     quote! {
         #custom_db_codec
         impl ColInnerType for #struct_name {
@@ -26,6 +26,21 @@ pub fn new(struct_name: &Ident, index_field: Field) -> TokenStream {
         }
         impl RootPointer for #struct_name {
             fn is_pointer(&self) -> bool { false }
+        }
+
+        impl BinaryCodec for #struct_name {
+            fn from_bytes(bytes: &[u8]) -> Self {
+                let arr: [u8; std::mem::size_of::<#index_type>()] = bytes.try_into().expect("invalid byte length for index");
+                Self(<#index_type>::from_le_bytes(arr))
+            }
+
+            fn as_bytes(&self) -> Vec<u8> {
+                self.0.to_le_bytes().to_vec()
+            }
+
+            fn size() -> usize {
+                std::mem::size_of::<#index_type>()
+            }
         }
 
         impl UrlEncoded for #struct_name {

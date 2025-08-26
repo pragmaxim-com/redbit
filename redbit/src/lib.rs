@@ -48,6 +48,7 @@ pub use redb::ReadableTable;
 pub use redb::ReadableDatabase;
 pub use redb::TableDefinition;
 pub use redb::Database;
+pub use redb::{Key, TypeName, Value};
 pub use serde;
 pub use serde::Deserialize;
 pub use serde::Deserializer;
@@ -76,7 +77,6 @@ pub use storage::StorageReadTx;
 pub use bincode::{Encode, Decode, decode_from_slice, encode_to_vec};
 pub use std::any::type_name;
 pub use std::cmp::Ordering;
-pub use crate::redb::{Key, TypeName, Value};
 pub use std::fmt::Debug;
 
 use crate::axum::extract::rejection::JsonRejection;
@@ -161,6 +161,12 @@ impl_iterable_column_for_primitive!(u8, u16, u32, u64, usize, i8, i16, i32, i64,
 
 pub trait UrlEncoded {
     fn url_encode(&self) -> String;
+}
+
+pub trait BinaryCodec {
+    fn from_bytes(bytes: &[u8]) -> Self;
+    fn as_bytes(&self) -> Vec<u8>;
+    fn size() -> usize;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
