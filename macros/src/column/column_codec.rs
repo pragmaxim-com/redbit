@@ -152,7 +152,7 @@ pub fn emit_pointer_redb_impls(pointer_type: &Type) -> TokenStream2 {
 
 /// Last case: the *type itself* implements bincode::Encode + bincode::Decode<()>.
 /// We encode/decode with bincode for persistence.
-pub fn emit_newtype_serde_impls(newtype_ty: &Type) -> TokenStream2 {
+pub fn emit_newtype_bincode_impls(newtype_ty: &Type) -> TokenStream2 {
     let mut tokens = TokenStream2::new();
 
     tokens.extend(quote! {

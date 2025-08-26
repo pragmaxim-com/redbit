@@ -52,7 +52,7 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
         );
         let buffer_size = 1024;
         let min_batch_size = indexer_conf.min_batch_size;
-        let batch_buffer_size = std::cmp::max(16, buffer_size / min_batch_size);
+        let batch_buffer_size = std::cmp::max(128, buffer_size / 4);
         let (fetch_tx, fetch_rx) = mpsc::channel::<FB>(buffer_size);
         let (proc_tx, mut proc_rx) = mpsc::channel::<TB>(buffer_size);
         let (sort_tx, mut sort_rx) = mpsc::channel::<Vec<TB>>(batch_buffer_size);

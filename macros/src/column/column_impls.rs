@@ -93,7 +93,7 @@ pub fn generate_column_impls(
                 }
                 Self(String::from_utf8(bytes).expect("Invalid UTF-8"))
             };
-            custom_db_codec = emit_newtype_serde_impls(new_type);
+            custom_db_codec = emit_newtype_bincode_impls(new_type);
         }
         InnerKind::Bool => {
             schema_type = quote! { SchemaType::Type(Type::Boolean) };
@@ -101,7 +101,7 @@ pub fn generate_column_impls(
             url_encoded_code = quote! { self.0.to_string() };
             iterable_code = quote! { Self(!self.0) };
             extra_derive_impls.push(syn::parse_quote!(Copy));
-            custom_db_codec = emit_newtype_serde_impls(new_type);
+            custom_db_codec = emit_newtype_bincode_impls(new_type);
         }
         InnerKind::Uuid => {
             default_code = quote! { Self(uuid::Uuid::nil()) };
@@ -118,7 +118,7 @@ pub fn generate_column_impls(
                 }
                 Self(uuid::Uuid::from_bytes(bytes))
             };
-            custom_db_codec = emit_newtype_serde_impls(new_type);
+            custom_db_codec = emit_newtype_bincode_impls(new_type);
         }
 /*        InnerKind::UtcDateTime => {
             struct_attr = Some(syn::parse_quote! { #[serde_as(as = "serde_with::TimestampMilliSeconds<i64>")] });
@@ -127,7 +127,7 @@ pub fn generate_column_impls(
             url_encoded_code = quote! { format!("{}", self.0.timestamp_millis()) };
             schema_example = quote! { vec![Some(0)] };
             iterable_code = quote! { Self(self.0 + chrono::Duration::milliseconds(1)) };
-            extra_derive_impls.push(syn::parse_quote![Encode, Decode]);
+            custom_db_codec = emit_newtype_bincode_impls(new_type);
         }
 */        InnerKind::Time => {
             struct_attr = Some(syn::parse_quote! { #[serde_as(as = "serde_with::DurationMilliSeconds")] });
@@ -136,7 +136,7 @@ pub fn generate_column_impls(
             url_encoded_code = quote! { format!("{}", self.0.as_millis()) };
             schema_example = quote! { vec![Some(0)] };
             iterable_code = quote! { Self(self.0 + std::time::Duration::from_millis(1)) };
-            custom_db_codec = emit_newtype_serde_impls(new_type);
+            custom_db_codec = emit_newtype_bincode_impls(new_type);
         }
 /*        InnerKind::EnumReprU8 => {
             struct_attr = Some(syn::parse_quote! { #[serde_as(as = "serde_with::DisplayFromStr")] }, );

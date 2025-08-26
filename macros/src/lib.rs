@@ -53,7 +53,7 @@ pub fn column(attr: TokenStream, item: TokenStream) -> TokenStream {
                 }
             },
             _ => {
-                let custom_db_codec = column_codec::emit_newtype_serde_impls(&struct_type);
+                let custom_db_codec = column_codec::emit_newtype_bincode_impls(&struct_type);
                 let derives: Punctuated<Path, Comma> = syn::parse_quote![Decode, Encode, Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Ord, PartialOrd, Eq, utoipa::ToSchema];
                 macro_utils::merge_struct_derives(&mut input, derives);
                 quote! {
