@@ -4,6 +4,8 @@ use crate::rest::Rest;
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::{parse_quote, ItemStruct, Type};
+use crate::entity::context::TxType;
+
 pub mod query;
 mod store;
 mod delete;
@@ -19,9 +21,10 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
     let entity_ident = &item_struct.ident;
     let entity_type: Type = parse_quote! { #entity_ident };
     let stream_query_type = query::stream_query_type(&entity_type);
-    let tx_context_type = context::tx_context_type(&entity_type);
+    let write_tx_context_type = context::entity_tx_context_type(&entity_type, TxType::Write);
+    let read_tx_context_type = context::entity_tx_context_type(&entity_type, TxType::Read);
     let (key_def, one_to_many_parent_def, field_macros) =
-        FieldMacros::new(item_struct, entity_ident, &entity_type, &stream_query_type)?;
+        FieldMacros::new(item_struct, entity_ident, &entity_type, &read_tx_context_type, &stream_query_type)?;
     let key = key_def.field_def();
     let mut field_defs = Vec::new();
     let mut table_defs = Vec::new();
@@ -59,21 +62,22 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
 
     let mut function_defs = Vec::new();
     function_defs.push(store::store_and_commit_def(entity_ident, &entity_type, &key.name, &key.tpe, &store_statements));
-    function_defs.push(store::store_def(entity_ident, &entity_type, &tx_context_type, &store_statements));
-    function_defs.push(store::store_many_def(entity_ident, &entity_type, &tx_context_type, &store_many_statements));
-    function_defs.push(context::begin_write_fn_def(&tx_context_type));
+    function_defs.push(store::store_def(entity_ident, &entity_type, &write_tx_context_type, &store_statements));
+    function_defs.push(store::store_many_def(entity_ident, &entity_type, &write_tx_context_type, &store_many_statements));
+    function_defs.push(context::begin_write_fn_def(&write_tx_context_type));
+    function_defs.push(context::begin_read_fn_def(&read_tx_context_type));
     function_defs.extend(column_function_defs.clone());
     function_defs.push(delete::delete_and_commit_def(entity_ident, &entity_type, &key.name, &key.tpe, &delete_statements));
-    function_defs.push(delete::delete_def(&key.tpe, &tx_context_type, &delete_statements));
-    function_defs.push(delete::delete_many_def(&key.tpe, &tx_context_type, &delete_many_statements));
+    function_defs.push(delete::delete_def(&key.tpe, &write_tx_context_type, &delete_statements));
+    function_defs.push(delete::delete_many_def(&key.tpe, &write_tx_context_type, &delete_many_statements));
     function_defs.push(info::table_info_fn(entity_ident, &table_defs));
-    function_defs.push(compose::compose_token_stream(entity_ident, &entity_type, &key.tpe, &struct_inits));
-    function_defs.push(compose::compose_with_filter_token_stream(&entity_type, &key.tpe, &stream_query_type, &field_names, &struct_inits_with_query));
+    function_defs.push(compose::compose_token_stream(entity_ident, &entity_type, &key.tpe, &read_tx_context_type, &struct_inits));
+    function_defs.push(compose::compose_with_filter_token_stream(&entity_type, &key.tpe, &read_tx_context_type, &stream_query_type, &field_names, &struct_inits_with_query));
     function_defs.extend(sample::sample_token_fns(entity_ident, &entity_type, &key.tpe, &stream_query_type, &struct_default_inits, &struct_default_inits_with_query, &field_names));
     function_defs.extend(init::init(entity_ident, &key_def));
 
     let stream_query_struct = query::stream_query(&stream_query_type, &stream_queries);
-    let tx_context_struct = context::write_tx_context(&tx_context_type, &tx_context_items);
+    let tx_context_structs = context::tx_context(&write_tx_context_type, &read_tx_context_type, &tx_context_items);
     let range_query_structs = range_queries.into_iter().map(|rq| rq.stream).collect::<Vec<_>>();
 
     let table_definitions: Vec<TokenStream> = table_defs.iter().map(|table_def| table_def.definition.clone()).collect();
@@ -89,8 +93,8 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
         quote! {
             // StreamQuery is passed from the rest api as POST body and used to filter the stream of entities
             #stream_query_struct
-            // TxContext is used to open tables in a write transaction
-            #tx_context_struct
+            // TxContext is used to open tables
+            #tx_context_structs
             // Query structs to map query params into
             #(#range_query_structs)*
             // table definitions are not in the impl object because they are accessed globally with semantic meaning

@@ -4,13 +4,12 @@ use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
 
-pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> FunctionDef {
+pub fn fn_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &Type, table: &Ident) -> FunctionDef {
     let fn_name = format_ident!("first");
     let fn_stream = quote! {
-        pub fn #fn_name(tx: &StorageReadTx) -> Result<Option<#entity_type>, AppError> {
-            let table_pk_7 = tx.open_table(#table)?;
-            if let Some((k, _)) = table_pk_7.first()? {
-                return Self::compose(&tx, &k.value()).map(Some);
+        pub fn #fn_name(tx_context: &#tx_context_ty) -> Result<Option<#entity_type>, AppError> {
+            if let Some((k, _)) = tx_context.#table.first()? {
+                return Self::compose(&tx_context, &k.value()).map(Some);
             }
             Ok(None)
         }
@@ -20,8 +19,9 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
         #[test]
         fn #fn_name() {
             let storage = STORAGE.clone();
-            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
-            let entity = #entity_name::first(&read_tx).expect("Failed to get first entity by PK").expect("Expected first entity to exist");
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
+            let entity = #entity_name::first(&tx_context).expect("Failed to get first entity by PK").expect("Expected first entity to exist");
             let expected_enity = #entity_type::sample();
             assert_eq!(entity, expected_enity, "First entity does not match expected");
         }
@@ -32,9 +32,10 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
             let storage = STORAGE.clone();
-            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
             b.iter(|| {
-                #entity_name::first(&read_tx).expect("Failed to get first entity by PK").expect("Expected first entity to exist");
+                #entity_name::first(&tx_context).expect("Failed to get first entity by PK").expect("Expected first entity to exist");
             });
         }
     });
@@ -52,8 +53,9 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                Result<AppJson<Vec<#entity_type>>, AppError> {
-                    let read_tx = state.storage.begin_read()?;
-                    let result: Vec<#entity_type> = #entity_name::#fn_name(&read_tx).map(|r| r.into_iter().collect())?;
+                    let read_tx = state.storage.db.begin_read()?;
+                    let tx_context = #entity_name::begin_read_tx(&read_tx)?;
+                    let result: Vec<#entity_type> = #entity_name::#fn_name(&tx_context).map(|r| r.into_iter().collect())?;
                     Ok(AppJson(result))
                 }
             },

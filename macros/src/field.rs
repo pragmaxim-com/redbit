@@ -1,16 +1,16 @@
 use crate::column::DbColumnMacros;
+use crate::entity::context::{TxContextItem, TxType};
+use crate::entity::query::{RangeQuery, StreamQueryItem};
+use crate::entity::{context, query};
+use crate::field_parser;
 use crate::field_parser::{ColumnDef, FieldDef, KeyDef, Multiplicity, OneToManyParentDef};
 use crate::pk::DbPkMacros;
 use crate::relationship::DbRelationshipMacros;
 use crate::rest::FunctionDef;
 use crate::table::TableDef;
 use crate::transient::TransientMacros;
-use crate::field_parser;
 use proc_macro2::{Ident, TokenStream};
 use syn::{ItemStruct, Type};
-use crate::entity::context::TxContextItem;
-use crate::entity::query;
-use crate::entity::query::{RangeQuery, StreamQueryItem};
 
 pub enum FieldMacros {
     Pk(DbPkMacros),
@@ -24,12 +24,14 @@ impl FieldMacros {
         item_struct: &ItemStruct,
         entity_ident: &Ident,
         entity_type: &Type,
+        read_tx_context_ty: &Type,
         stream_query_ty: &Type,
     ) -> Result<(KeyDef, Option<OneToManyParentDef>, Vec<FieldMacros>), syn::Error> {
         let (key_def, field_macros) = field_parser::get_field_macros(item_struct)?;
         let one_to_many_parent_def =
             match key_def.clone() {
                 KeyDef::Fk{ field_def: _, multiplicity: Multiplicity::OneToMany , parent_type: Some(parent_ty)} => Some(OneToManyParentDef {
+                    tx_context_ty: context::entity_tx_context_type(&parent_ty, TxType::Read),
                     stream_query_ty: query::stream_query_type(&parent_ty),
                     parent_type: parent_ty.clone(),
                     parent_ident: match parent_ty {
@@ -55,6 +57,7 @@ impl FieldMacros {
                         entity_ident,
                         entity_type,
                         &field_def,
+                        read_tx_context_ty,
                         stream_query_ty,
                         one_to_many_parent_def.clone()
                     ))

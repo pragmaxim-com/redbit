@@ -4,13 +4,12 @@ use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
 
-pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> FunctionDef {
+pub fn fn_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &Type, table: &Ident) -> FunctionDef {
     let fn_name = format_ident!("last");
     let fn_stream = quote! {
-        pub fn #fn_name(tx: &StorageReadTx) -> Result<Option<#entity_type>, AppError> {
-            let table_pk_8 = tx.open_table(#table)?;
-            if let Some((k, _)) = table_pk_8.last()? {
-                return Self::compose(&tx, &k.value()).map(Some);
+        pub fn #fn_name(tx_context: &#tx_context_ty) -> Result<Option<#entity_type>, AppError> {
+            if let Some((k, _)) = tx_context.#table.last()? {
+                return Self::compose(&tx_context, &k.value()).map(Some);
             }
             Ok(None)
         }
@@ -21,8 +20,9 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
         fn #fn_name() {
             let storage = STORAGE.clone();
             let entity_count: usize = 3;
-            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
-            let entity = #entity_name::last(&read_tx).expect("Failed to get last entity by PK").expect("Expected last entity to exist");
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
+            let entity = #entity_name::last(&tx_context).expect("Failed to get last entity by PK").expect("Expected last entity to exist");
             let expected_entity = #entity_type::sample_many(entity_count).last().expect("Expected at least one entity").clone();
             assert_eq!(entity, expected_entity, "Last entity does not match expected");
         }
@@ -33,9 +33,10 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
             let storage = STORAGE.clone();
-            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
             b.iter(|| {
-                #entity_name::last(&read_tx).expect("Failed to get last entity by PK").expect("Expected last entity to exist");
+                #entity_name::last(&tx_context).expect("Failed to get last entity by PK").expect("Expected last entity to exist");
             });
         }
     });
@@ -53,8 +54,9 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                Result<AppJson<Vec<#entity_type>>, AppError> {
-                    let read_tx = state.storage.begin_read()?;
-                    let result: Vec<#entity_type> = #entity_name::#fn_name(&read_tx).map(|r| r.into_iter().collect())?;
+                    let read_tx = state.storage.db.begin_read()?;
+                    let tx_context = #entity_name::begin_read_tx(&read_tx)?;
+                    let result: Vec<#entity_type> = #entity_name::#fn_name(&tx_context).map(|r| r.into_iter().collect())?;
                     Ok(AppJson(result))
                 }
             },

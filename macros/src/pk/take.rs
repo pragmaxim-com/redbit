@@ -5,12 +5,11 @@ use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
 
-pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> FunctionDef {
+pub fn fn_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &Type, table: &Ident) -> FunctionDef {
     let fn_name = format_ident!("take");
     let fn_stream = quote! {
-        pub fn #fn_name(tx: &StorageReadTx, n: usize) -> Result<Vec<#entity_type>, AppError> {
-            let table_pk_6 = tx.open_table(#table)?;
-            let mut iter = table_pk_6.iter()?;
+        pub fn #fn_name(tx_context: &#tx_context_ty, n: usize) -> Result<Vec<#entity_type>, AppError> {
+            let mut iter = tx_context.#table.iter()?;
             let mut results = Vec::new();
             let mut count: usize = 0;
             if n > 100 {
@@ -21,7 +20,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
                         break;
                     }
                     let pk = entry_res?.0.value();
-                    results.push(Self::compose(&tx, &pk)?);
+                    results.push(Self::compose(&tx_context, &pk)?);
                     count += 1;
                 }
                 Ok(results)
@@ -33,9 +32,10 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
         #[test]
         fn #fn_name() {
             let storage = STORAGE.clone();
-            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let n: usize = 2;
-            let entities = #entity_name::#fn_name(&read_tx, n).expect("Failed to take entities");
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
+            let entities = #entity_name::#fn_name(&tx_context, n).expect("Failed to take entities");
             let expected_entities = #entity_type::sample_many(n);
             assert_eq!(entities, expected_entities, "Expected to take 2 entities");
         }
@@ -46,10 +46,11 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
             let storage = STORAGE.clone();
-            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let n: usize = 2;
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
             b.iter(|| {
-                #entity_name::#fn_name(&read_tx, n).expect("Failed to take entities");
+                #entity_name::#fn_name(&tx_context, n).expect("Failed to take entities");
             });
         }
     });
@@ -71,8 +72,9 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                Result<AppJson<Vec<#entity_type>>, AppError> {
-                    let read_tx = state.storage.begin_read()?;
-                    let result = #entity_name::#fn_name(&read_tx, query.take)?;
+                    let read_tx = state.storage.db.begin_read()?;
+                    let tx_context = #entity_name::begin_read_tx(&read_tx)?;
+                    let result = #entity_name::#fn_name(&tx_context, query.take)?;
                     Ok(AppJson(result))
                 }
             },

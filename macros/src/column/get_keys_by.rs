@@ -10,25 +10,21 @@ pub fn by_dict_def(
     pk_type: &Type,
     column_name: &Ident,
     column_type: &Type,
+    tx_context_ty: &Type,
     dict_table_defs: &DictTableDefs,
 ) -> FunctionDef {
-    let value_to_dict_pk = &dict_table_defs.value_to_dict_pk_table_def.name;
-    let dict_index_table = &dict_table_defs.dict_index_table_def.name;
+    let value_to_dict_pk = &dict_table_defs.value_to_dict_pk_table_def.var_name;
+    let dict_index_table = &dict_table_defs.dict_index_table_def.var_name;
 
     let fn_name = format_ident!("get_{}s_by_{}", pk_name, column_name);
     let fn_stream = quote! {
-        pub fn #fn_name(
-            tx: &StorageReadTx,
-            val: &#column_type
-        ) -> Result<Vec<#pk_type>, AppError> {
-            let val2birth = tx.open_table(#value_to_dict_pk)?;
-            let birth_guard = val2birth.get(val)?;
+        pub fn #fn_name(tx_context: &#tx_context_ty,val: &#column_type) -> Result<Vec<#pk_type>, AppError> {
+            let birth_guard = tx_context.#value_to_dict_pk.get(val)?;
             let birth_id = match birth_guard {
                 Some(g) => g.value().clone(),
                 None => return Ok(Vec::new()),
             };
-            let birth2pks = tx.open_multimap_table(#dict_index_table)?;
-            let mut iter = birth2pks.get(&birth_id)?;
+            let mut iter = tx_context.#dict_index_table.get(&birth_id)?;
             let mut results = Vec::new();
             while let Some(x) = iter.next() {
                 let pk = x?.value();
@@ -42,9 +38,10 @@ pub fn by_dict_def(
         #[test]
         fn #fn_name() {
             let storage = STORAGE.clone();
-            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
-            let entity_pks = #entity_name::#fn_name(&read_tx, &val).expect("Failed to get entity pks by dictionary index");
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
+            let entity_pks = #entity_name::#fn_name(&tx_context, &val).expect("Failed to get entity pks by dictionary index");
             let expected_entity_pks = vec![#pk_type::default()];
             assert_eq!(expected_entity_pks, entity_pks, "Expected entity pks to be returned for the given dictionary index");
         }
@@ -55,10 +52,11 @@ pub fn by_dict_def(
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
             let storage = STORAGE.clone();
-            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
             b.iter(|| {
-                #entity_name::#fn_name(&read_tx, &val).expect("Failed to get entity pks by dictionary index");
+                #entity_name::#fn_name(&tx_context, &val).expect("Failed to get entity pks by dictionary index");
             });
         }
     });
@@ -71,15 +69,14 @@ pub fn by_dict_def(
     }
 }
 
-pub fn by_index_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, column_name: &Ident, column_type: &Type, table: &Ident) -> FunctionDef {
+pub fn by_index_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, column_name: &Ident, column_type: &Type, tx_context_ty: &Type, table: &Ident) -> FunctionDef {
     let fn_name = format_ident!("get_{}s_by_{}", pk_name, column_name);
     let fn_stream = quote! {
         pub fn #fn_name(
-            tx: &StorageReadTx,
+            tx_context: &#tx_context_ty,
             val: &#column_type
         ) -> Result<Vec<#pk_type>, AppError> {
-            let mm_table = tx.open_multimap_table(#table)?;
-            let mut iter = mm_table.get(val)?;
+            let mut iter = tx_context.#table.get(val)?;
             let mut results = Vec::new();
             while let Some(x) = iter.next() {
                 let pk = x?.value();
@@ -93,9 +90,10 @@ pub fn by_index_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, column
         #[test]
         fn #fn_name() {
             let storage = STORAGE.clone();
-            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
-            let entity_pks = #entity_name::#fn_name(&read_tx, &val).expect("Failed to get entity pks by index");
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
+            let entity_pks = #entity_name::#fn_name(&tx_context, &val).expect("Failed to get entity pks by index");
             let expected_entity_pks = vec![#pk_type::default()];
             assert_eq!(expected_entity_pks, entity_pks, "Expected entity pks to be returned for the given index");
         }
@@ -106,10 +104,11 @@ pub fn by_index_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, column
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
             let storage = STORAGE.clone();
-            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let val = #column_type::default();
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
             b.iter(|| {
-                #entity_name::#fn_name(&read_tx, &val).expect("Failed to get entity pks by index");
+                #entity_name::#fn_name(&tx_context, &val).expect("Failed to get entity pks by index");
             });
         }
     });

@@ -22,7 +22,7 @@ use proc_macro2::{Ident, TokenStream};
 use syn::Type;
 use crate::entity;
 use crate::entity::context;
-use crate::entity::context::TxContextItem;
+use crate::entity::context::{TxContextItem, TxType};
 use crate::entity::query::RangeQuery;
 
 pub enum PointerType {
@@ -52,19 +52,20 @@ impl DbPkMacros {
         let pk_type = pk_field_def.tpe.clone();
         let table_def = TableDef::pk(entity_name, &pk_name, &pk_type);
         let range_query = entity::query::pk_range_query(entity_name, &pk_name, &pk_type);
-        let tx_context_ty = context::tx_context_type(entity_type);
+        let write_tx_context_ty = context::entity_tx_context_type(entity_type, TxType::Write);
+        let read_tx_context_ty = context::entity_tx_context_type(entity_type, TxType::Read);
 
         let mut function_defs: Vec<FunctionDef> = vec![
-            get::fn_def(entity_name, entity_type, &pk_name, &pk_type, &table_def.name),
-            filter::fn_def(entity_name, entity_type, &pk_type, &table_def.name, stream_query_ty, no_columns),
-            take::fn_def(entity_name, entity_type, &table_def.name),
-            tail::fn_def(entity_name, entity_type, &table_def.name),
-            first::fn_def(entity_name, entity_type, &table_def.name),
-            last::fn_def(entity_name, entity_type, &table_def.name),
-            exists::fn_def(entity_name, &pk_name, &pk_type, &table_def.name),
-            range::fn_def(entity_name, entity_type, &pk_type, &table_def.name, stream_query_ty, no_columns),
-            stream_range::fn_def(entity_name, entity_type, pk_field_def, &table_def.name, &range_query.ty, stream_query_ty, no_columns),
-            pk_range::fn_def(entity_name, entity_type, &pk_name, &pk_type, &table_def.name, &tx_context_ty),
+            get::fn_def(entity_name, entity_type, &pk_name, &pk_type, &read_tx_context_ty, &table_def.var_name),
+            filter::fn_def(entity_name, entity_type, &pk_type, &read_tx_context_ty, &table_def.var_name, stream_query_ty, no_columns),
+            take::fn_def(entity_name, entity_type, &read_tx_context_ty, &table_def.var_name),
+            tail::fn_def(entity_name, entity_type, &read_tx_context_ty, &table_def.var_name),
+            first::fn_def(entity_name, entity_type, &read_tx_context_ty, &table_def.var_name),
+            last::fn_def(entity_name, entity_type, &read_tx_context_ty, &table_def.var_name),
+            exists::fn_def(entity_name, &pk_name, &pk_type, &read_tx_context_ty, &table_def.var_name),
+            range::fn_def(entity_name, entity_type, &pk_type, &read_tx_context_ty, &table_def.var_name, stream_query_ty, no_columns),
+            stream_range::fn_def(entity_name, entity_type, pk_field_def, &read_tx_context_ty, &table_def.var_name, &range_query.ty, stream_query_ty, no_columns),
+            pk_range::fn_def(entity_name, entity_type, &pk_name, &pk_type, &table_def.var_name, &write_tx_context_ty),
         ];
 
         if let Some(Multiplicity::OneToMany) = multiplicity {
@@ -78,12 +79,12 @@ impl DbPkMacros {
             struct_init_with_query: init::pk_init_with_query(&pk_name),
             struct_default_init: init::pk_default_init(&pk_name),
             struct_default_init_with_query: init::pk_init_with_query(&pk_name),
-            tx_context_item: context::write_tx_context_item(&table_def),
+            tx_context_item: context::tx_context_item(&table_def),
             range_query,
-            store_statement: store::store_statement(&pk_name, &table_def.name),
-            store_many_statement: store::store_many_statement(&pk_name, &table_def.name),
-            delete_statement: delete::delete_statement(&table_def.name),
-            delete_many_statement: delete::delete_many_statement(&table_def.name),
+            store_statement: store::store_statement(&pk_name, &table_def.var_name),
+            store_many_statement: store::store_many_statement(&pk_name, &table_def.var_name),
+            delete_statement: delete::delete_statement(&table_def.var_name),
+            delete_many_statement: delete::delete_many_statement(&table_def.var_name),
             function_defs,
         }
     }

@@ -132,10 +132,10 @@ impl BlockChain {
         Arc::new(BlockChain { storage })
     }
 
-    fn resolve_tx_inputs(&self, read_tx: &StorageReadTx, block: &mut Block) -> Result<(), ChainError> {
+    fn resolve_tx_inputs(&self, tx_context: &BlockReadTxContext, block: &mut Block) -> Result<(), ChainError> {
         for tx in &mut block.transactions {
             for box_id in tx.transient_inputs.iter_mut() {
-                let utxo_pointers = Utxo::get_ids_by_box_id(read_tx, box_id).expect("Failed to get Utxo by ErgoBox");
+                let utxo_pointers = Utxo::get_ids_by_box_id(&tx_context.transactions.utxos, box_id).expect("Failed to get Utxo by ErgoBox");
                 match utxo_pointers.first() {
                     Some(utxo_pointer) => {
                         tx.inputs.push(InputRef { id: TransactionPointer::from_parent(utxo_pointer.parent, utxo_pointer.index()) })

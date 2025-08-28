@@ -3,15 +3,13 @@ use quote::quote;
 use crate::column::open_dict_tables;
 use crate::table::DictTableDefs;
 
-pub fn delete_statement(table: &Ident) -> TokenStream {
-    let table_var = Ident::new(&format!("{}", table).to_lowercase(), table.span());
+pub fn delete_statement(table_var: &Ident) -> TokenStream {
     quote! {
         removed.push(tx_context.#table_var.remove(pk)?.is_some());
     }
 }
 
-pub fn delete_many_statement(table: &Ident) -> TokenStream {
-    let table_var = Ident::new(&format!("{}", table).to_lowercase(), table.span());
+pub fn delete_many_statement(table_var: &Ident) -> TokenStream {
     quote! {
         for pk in pks.iter() {
             if tx_context.#table_var.remove(pk)?.is_none() {
@@ -21,9 +19,7 @@ pub fn delete_many_statement(table: &Ident) -> TokenStream {
     }
 }
 
-pub fn delete_index_statement(table: &Ident, index_table: &Ident) -> TokenStream {
-    let table_var = Ident::new(&format!("{}", table).to_lowercase(), table.span());
-    let index_table_var = Ident::new(&format!("{}", index_table).to_lowercase(), table.span());
+pub fn delete_index_statement(table_var: &Ident, index_table_var: &Ident) -> TokenStream {
     quote! {
         let maybe_value = {
             if let Some(value_guard) = tx_context.#table_var.remove(pk)? {
@@ -39,9 +35,7 @@ pub fn delete_index_statement(table: &Ident, index_table: &Ident) -> TokenStream
     }
 }
 
-pub fn delete_many_index_statement(table: &Ident, index_table: &Ident) -> TokenStream {
-    let table_var = Ident::new(&format!("{}", table).to_lowercase(), table.span());
-    let index_table_var = Ident::new(&format!("{}", index_table).to_lowercase(), table.span());
+pub fn delete_many_index_statement(table_var: &Ident, index_table_var: &Ident) -> TokenStream {
     quote! {
         for pk in pks.iter() {
             if let Some(value_guard) = tx_context.#table_var.remove(pk)? {

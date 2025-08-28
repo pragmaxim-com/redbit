@@ -23,8 +23,9 @@ async fn test_chain_sync() {
     println!("Demo chain sync took {:.1}s", secs);
     let last_header = chain.get_last_header().unwrap().expect("Last header must be present");
     assert_eq!(last_header.height, Height(target_height));
-    let read_tx = storage.begin_read().expect("Failed to open database");
-    let block_headers = Header::range(&read_tx, &Height(0), &Height(target_height + 1), None).unwrap();
+    let read_tx = storage.db.begin_read().expect("Failed to open database");
+    let tx_context = Header::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
+    let block_headers = Header::range(&tx_context, &Height(0), &Height(target_height + 1), None).unwrap();
     let header_near_tip = block_headers.get(target_height as usize - 11).cloned().unwrap();
     assert_eq!(block_headers.len(), target_height as usize); // genesis not stored
     let heights: Vec<u32> = block_headers.iter().map(|h| h.height.0).collect();

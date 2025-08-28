@@ -215,7 +215,7 @@ And R/W entire instances efficiently using indexes and dictionaries `chains/demo
         Block::store_many(&write_tx, blocks)?;
         write_tx.commit()?;
     
-        let read_tx = storage.begin_read()?;
+        let read_tx = storage.db.begin_read()?;
     
         let first_block = Block::first(&read_tx)?.unwrap();
         let last_block = Block::last(&read_tx)?.unwrap();
@@ -228,7 +228,7 @@ And R/W entire instances efficiently using indexes and dictionaries `chains/demo
         Block::exists(&read_tx, &first_block.height)?;
         Block::first(&read_tx)?;
         Block::last(&read_tx)?;
-        Block::stream_range(storage.begin_read()?, first_block.height, last_block.height, None)?.try_collect::<Vec<Block>>().await?;
+        Block::stream_range(storage.db.begin_read()?, first_block.height, last_block.height, None)?.try_collect::<Vec<Block>>().await?;
     
         let block_infos = Block::table_info(Arc::clone(&storage))?;
         println!("Block persisted with tables :");
@@ -245,10 +245,10 @@ And R/W entire instances efficiently using indexes and dictionaries `chains/demo
         Header::get(&read_tx, &first_block_header.height)?;
         Header::range(&read_tx, &first_block_header.height, &last_block_header.height, None)?;
         Header::range_by_timestamp(&read_tx, &first_block_header.timestamp, &last_block_header.timestamp)?;
-        Header::stream_by_hash(storage.begin_read()?, first_block_header.hash, None)?.try_collect::<Vec<Header>>().await?;
-        Header::stream_by_timestamp(storage.begin_read()?, first_block_header.timestamp, None)?.try_collect::<Vec<Header>>().await?;
-        Header::stream_range(storage.begin_read()?, first_block_header.height, last_block_header.height, None)?.try_collect::<Vec<Header>>().await?;
-        Header::stream_range_by_timestamp(storage.begin_read()?, first_block_header.timestamp, last_block_header.timestamp, None)?.try_collect::<Vec<Header>>().await?;
+        Header::stream_by_hash(storage.db.begin_read()?, first_block_header.hash, None)?.try_collect::<Vec<Header>>().await?;
+        Header::stream_by_timestamp(storage.db.begin_read()?, first_block_header.timestamp, None)?.try_collect::<Vec<Header>>().await?;
+        Header::stream_range(storage.db.begin_read()?, first_block_header.height, last_block_header.height, None)?.try_collect::<Vec<Header>>().await?;
+        Header::stream_range_by_timestamp(storage.db.begin_read()?, first_block_header.timestamp, last_block_header.timestamp, None)?.try_collect::<Vec<Header>>().await?;
     
         let block_header_infos = Header::table_info(Arc::clone(&storage))?;
         println!("
@@ -268,9 +268,9 @@ Block header persisted with tables :");
         Transaction::get_utxos(&read_tx, &first_transaction.id)?;
         Transaction::get_maybe_value(&read_tx, &first_transaction.id)?;
         Transaction::parent_key(&read_tx, &first_transaction.id)?;
-        Transaction::stream_ids_by_hash(storage.begin_read()?, first_transaction.hash.clone())?.try_collect::<Vec<BlockPointer>>().await?;
-        Transaction::stream_by_hash(storage.begin_read()?, first_transaction.hash.clone(), None)?.try_collect::<Vec<Transaction>>().await?;
-        Transaction::stream_range(storage.begin_read()?, first_transaction.id, last_transaction.id, None)?.try_collect::<Vec<Transaction>>().await?;
+        Transaction::stream_ids_by_hash(storage.db.begin_read()?, first_transaction.hash.clone())?.try_collect::<Vec<BlockPointer>>().await?;
+        Transaction::stream_by_hash(storage.db.begin_read()?, first_transaction.hash.clone(), None)?.try_collect::<Vec<Transaction>>().await?;
+        Transaction::stream_range(storage.db.begin_read()?, first_transaction.id, last_transaction.id, None)?.try_collect::<Vec<Transaction>>().await?;
     
         let transaction_infos = Transaction::table_info(Arc::clone(&storage))?;
         println!("
@@ -289,11 +289,11 @@ Transaction persisted with tables :");
         Utxo::range(&read_tx, &first_utxo.id, &last_utxo.id, None)?;
         Utxo::get_assets(&read_tx, &first_utxo.id)?;
         Utxo::parent_key(&read_tx, &first_utxo.id)?;
-        Utxo::stream_ids_by_address(storage.begin_read()?, first_utxo.address.clone())?.try_collect::<Vec<TransactionPointer>>().await?;
-        Utxo::stream_range(storage.begin_read()?, first_utxo.id, last_utxo.id, None)?.try_collect::<Vec<Utxo>>().await?;
-        Utxo::stream_by_address(storage.begin_read()?, first_utxo.address.clone(), None)?.try_collect::<Vec<Utxo>>().await?;
+        Utxo::stream_ids_by_address(storage.db.begin_read()?, first_utxo.address.clone())?.try_collect::<Vec<TransactionPointer>>().await?;
+        Utxo::stream_range(storage.db.begin_read()?, first_utxo.id, last_utxo.id, None)?.try_collect::<Vec<Utxo>>().await?;
+        Utxo::stream_by_address(storage.db.begin_read()?, first_utxo.address.clone(), None)?.try_collect::<Vec<Utxo>>().await?;
         // even streaming parents is possible
-        Utxo::stream_transactions_by_address(storage.begin_read()?, first_utxo.address, None)?.try_collect::<Vec<Transaction>>().await?;
+        Utxo::stream_transactions_by_address(storage.db.begin_read()?, first_utxo.address, None)?.try_collect::<Vec<Transaction>>().await?;
     
         let utxo_infos = Utxo::table_info(Arc::clone(&storage))?;
         println!("
@@ -310,10 +310,10 @@ Utxo persisted with tables :");
         Asset::get(&read_tx, &first_asset.id)?;
         Asset::range(&read_tx, &first_asset.id, &last_asset.id, None)?;
         Asset::parent_key(&read_tx, &first_asset.id)?;
-        Asset::stream_by_name(storage.begin_read()?, first_asset.name.clone(), None)?.try_collect::<Vec<Asset>>().await?;
-        Asset::stream_range(storage.begin_read()?, first_asset.id, last_asset.id, None)?.try_collect::<Vec<Asset>>().await?;
+        Asset::stream_by_name(storage.db.begin_read()?, first_asset.name.clone(), None)?.try_collect::<Vec<Asset>>().await?;
+        Asset::stream_range(storage.db.begin_read()?, first_asset.id, last_asset.id, None)?.try_collect::<Vec<Asset>>().await?;
         // even streaming parents is possible
-        Asset::stream_utxos_by_name(storage.begin_read()?, first_asset.name, None)?.try_collect::<Vec<Utxo>>().await?;
+        Asset::stream_utxos_by_name(storage.db.begin_read()?, first_asset.name, None)?.try_collect::<Vec<Utxo>>().await?;
     
         let asset_infos = Asset::table_info(Arc::clone(&storage))?;
         println!("
@@ -523,8 +523,8 @@ lower in/out indexing throughput because the block is indexed into ~ 24 tables i
 
 If node and indexer each uses its own SSD, then the throughput reaches :
 
- - 2.0GHz & NVMe on PCIe Gen3 : `~ 11 000 Inputs+outputs / s`
- - 3.0GHz & NVMe on PCIe Gen4 : `~ 18 000 Inputs+outputs / s`
- - 4.0GHz & NVMe on PCIe Gen5 : `~ 26 000 Inputs+outputs / s`
+ - 2.0GHz & NVMe on PCIe Gen3 : `~ 17 000 Inputs+outputs / s`
+ - 3.0GHz & NVMe on PCIe Gen4 : `~ 26 000 Inputs+outputs / s`
+ - 4.0GHz & NVMe on PCIe Gen5 : `~ 41 000 Inputs+outputs / s`
 
 In a nutshell, whole bitcoin up to height ~ 0.9M can be indexed in 3-4 days on a PCIe Gen5 SSD with 4.0GHz CPU.

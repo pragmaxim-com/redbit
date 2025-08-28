@@ -5,19 +5,18 @@ use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
 
-pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> FunctionDef {
+pub fn fn_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &Type, table: &Ident) -> FunctionDef {
     let fn_name = format_ident!("tail");
     let fn_stream = quote! {
-        pub fn #fn_name(tx: &StorageReadTx, n: usize) -> Result<Vec<#entity_type>, AppError> {
-            let table_pk_12 = tx.open_table(#table)?;
-            let Some((key_guard, _)) = table_pk_12.last()? else {
+        pub fn #fn_name(tx_context: &#tx_context_ty, n: usize) -> Result<Vec<#entity_type>, AppError> {
+            let Some((key_guard, _)) = tx_context.#table.last()? else {
                 return Ok(Vec::new());
             };
             let key = key_guard.value();
             let until = key.next_index();
             let from = until.rollback_or_init(n as u32);
             let range = from..until;
-            let iter = table_pk_12.range(range)?;
+            let iter = tx_context.#table.range(range)?;
             let mut queue = VecDeque::with_capacity(n);
 
             for entry_res in iter {
@@ -30,7 +29,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
 
             queue
                 .into_iter()
-                .map(|pk| Self::compose(tx, &pk))
+                .map(|pk| Self::compose(tx_context, &pk))
                 .collect::<Result<Vec<#entity_type>, AppError>>()
         }
     };
@@ -39,9 +38,10 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
         #[test]
         fn #fn_name() {
             let storage = STORAGE.clone();
-            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let n: usize = 2;
-            let entities = #entity_name::#fn_name(&read_tx, n).expect("Failed to tail entities");
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
+            let entities = #entity_name::#fn_name(&tx_context, n).expect("Failed to tail entities");
             let mut expected_entities = #entity_type::sample_many(3);
             expected_entities.remove(0);
             assert_eq!(entities, expected_entities, "Expected to take last 2 entities");
@@ -53,10 +53,11 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
             let storage = STORAGE.clone();
-            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let n: usize = 2;
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
             b.iter(|| {
-                #entity_name::#fn_name(&read_tx, n).expect("Failed to tail entities");
+                #entity_name::#fn_name(&tx_context, n).expect("Failed to tail entities");
             });
         }
     });
@@ -78,8 +79,9 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, table: &Ident) -> Functio
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                Result<AppJson<Vec<#entity_type>>, AppError> {
-                    let read_tx = state.storage.begin_read()?;
-                    let result = #entity_name::#fn_name(&read_tx, query.tail)?;
+                    let read_tx = state.storage.db.begin_read()?;
+                    let tx_context = #entity_name::begin_read_tx(&read_tx)?;
+                    let result = #entity_name::#fn_name(&tx_context, query.tail)?;
                     Ok(AppJson(result))
                 }
             },

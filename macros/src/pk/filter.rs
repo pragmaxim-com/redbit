@@ -3,13 +3,12 @@ use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
 
-pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, table: &Ident, stream_query_type: &Type, no_columns: bool) -> FunctionDef {
+pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, tx_context_ty: &Type, table: &Ident, stream_query_type: &Type, no_columns: bool) -> FunctionDef {
     let fn_name = format_ident!("filter");
     let fn_stream = quote! {
-        pub fn #fn_name(tx: &StorageReadTx, pk: &#pk_type, query: &#stream_query_type) -> Result<Option<#entity_type>, AppError> {
-            let table_pk_5 = tx.open_table(#table)?;
-            if table_pk_5.get(pk)?.is_some() {
-                Ok(Self::compose_with_filter(&tx, pk, query)?)
+        pub fn #fn_name(tx_context: &#tx_context_ty, pk: &#pk_type, query: &#stream_query_type) -> Result<Option<#entity_type>, AppError> {
+            if tx_context.#table.get(pk)?.is_some() {
+                Ok(Self::compose_with_filter(&tx_context, pk, query)?)
             } else {
                 Ok(None)
             }
@@ -24,10 +23,11 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, table: &I
             #[test]
             fn #test_with_filter_fn_name() {
                 let storage = STORAGE.clone();
-                let read_tx = storage.begin_read().expect("Failed to begin read transaction");
                 let query = #stream_query_type::sample();
                 let pk_default_next = #pk_type::default().next_index();
-                let entity_opt = #entity_name::#fn_name(&read_tx, &pk_default_next, &query).expect("Failed to get entity by PK");
+                let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+                let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
+                let entity_opt = #entity_name::#fn_name(&tx_context, &pk_default_next, &query).expect("Failed to get entity by PK");
                 assert_eq!(entity_opt, None, "Filter is set for default value {:?}", query);
             }
         })
@@ -37,10 +37,11 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, table: &I
         #[test]
         fn #fn_name() {
             let storage = STORAGE.clone();
-            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let query = #stream_query_type::sample();
             let pk_default = #pk_type::default();
-            let entity = #entity_name::#fn_name(&read_tx, &pk_default, &query).expect("Failed to get entity by PK").expect("Expected entity to exist");
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
+            let entity = #entity_name::#fn_name(&tx_context, &pk_default, &query).expect("Failed to get entity by PK").expect("Expected entity to exist");
             let expected_entity = #entity_type::sample_with_query(&pk_default, 0, &query).expect("Failed to create sample entity with query");
             assert_eq!(entity, expected_entity, "Entity PK does not match the requested PK");
         }
@@ -52,11 +53,12 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, table: &I
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
             let storage = STORAGE.clone();
-            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let query = #stream_query_type::sample();
             let pk_default = #pk_type::default();
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
             b.iter(|| {
-                #entity_name::#fn_name(&read_tx, &pk_default, &query).expect("Failed to get entity by PK").expect("Expected entity to exist");
+                #entity_name::#fn_name(&tx_context, &pk_default, &query).expect("Failed to get entity by PK").expect("Expected entity to exist");
             });
         }
     });

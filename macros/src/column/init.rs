@@ -34,8 +34,7 @@ pub fn default_init_with_query(column_name: &Ident, column_type: &Type) -> Token
 pub fn plain_init_expr(table: &Ident) -> TokenStream {
     quote! {
         {
-            let table_col_5 = tx.open_table(#table)?;
-            let guard = table_col_5.get(pk)?;
+            let guard = tx_context.#table.get(pk)?;
             guard.ok_or_else(|| AppError::NotFound(format!(
                     "table `{}`: no row for primary key {:?}",
                     stringify!(#table),
@@ -68,8 +67,7 @@ pub fn plain_init_with_query(column_name: &Ident, table: &Ident) -> TokenStream 
 pub fn index_init_expr(table: &Ident) -> TokenStream {
     quote! {
         {
-            let table_col_10 = tx.open_table(#table)?;
-            let guard = table_col_10.get(pk)?;
+            let guard = tx_context.#table.get(pk)?;
             guard.ok_or_else(|| AppError::NotFound(format!(
                     "table `{}`: no row for primary key {:?}",
                     stringify!(#table),
@@ -102,16 +100,14 @@ pub fn index_init(column_name: &Ident, table: &Ident) -> TokenStream {
 pub fn dict_init_expr(table_dict_pk_by_pk: &Ident, table_value_by_dict_pk: &Ident) -> TokenStream {
     quote! {
         {
-            let pk2birth = tx.open_table(#table_dict_pk_by_pk)?;
-            let birth_guard = pk2birth.get(pk)?;
+            let birth_guard = tx_context.#table_dict_pk_by_pk.get(pk)?;
             let birth_id = birth_guard.ok_or_else(|| AppError::NotFound(format!(
                     "table_dict_pk_by_pk_ident `{}`: no row for primary key {:?}",
                     stringify!(#table_dict_pk_by_pk),
                     pk
                 ))
             )?.value();
-            let birth2val = tx.open_table(#table_value_by_dict_pk)?;
-            let val_guard = birth2val.get(&birth_id)?;
+            let val_guard = tx_context.#table_value_by_dict_pk.get(&birth_id)?;
             val_guard.ok_or_else(|| AppError::NotFound(format!(
                     "table_value_by_dict_pk `{}`: no row for birth id {:?}",
                     stringify!(#table_value_by_dict_pk),
@@ -123,14 +119,14 @@ pub fn dict_init_expr(table_dict_pk_by_pk: &Ident, table_value_by_dict_pk: &Iden
 }
 
 pub fn dict_init(column_name: &Ident, dict_table_defs: &DictTableDefs,) -> TokenStream {
-    let init_expr = dict_init_expr(&dict_table_defs.dict_pk_by_pk_table_def.name, &dict_table_defs.value_by_dict_pk_table_def.name);
+    let init_expr = dict_init_expr(&dict_table_defs.dict_pk_by_pk_table_def.var_name, &dict_table_defs.value_by_dict_pk_table_def.var_name);
     quote! {
         #column_name: #init_expr
     }
 }
 
 pub fn dict_init_with_query(column_name: &Ident, dict_table_defs: &DictTableDefs) -> TokenStream {
-    let init_expr = dict_init_expr(&dict_table_defs.dict_pk_by_pk_table_def.name, &dict_table_defs.value_by_dict_pk_table_def.name);
+    let init_expr = dict_init_expr(&dict_table_defs.dict_pk_by_pk_table_def.var_name, &dict_table_defs.value_by_dict_pk_table_def.var_name);
     quote! {
         let #column_name = #init_expr;
         if let Some(filter_op) = stream_query.#column_name.clone() {

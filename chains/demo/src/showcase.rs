@@ -13,20 +13,25 @@ async fn main() -> Result<()> {
         Block::store_and_commit(Arc::clone(&storage), block)?;
     }
 
-    let read_tx = storage.begin_read()?;
+    let read_tx = storage.db.begin_read()?;
+    let block_tx = Block::begin_read_tx(&read_tx)?;
+    let transaction_tx = &block_tx.transactions;
+    let header_tx = &block_tx.header;
+    let utxo_tx = &transaction_tx.utxos;
+    let maybe_value_tx = &transaction_tx.maybe_value;
+    let asset_tx = &utxo_tx.assets;
 
-    let first_block = Block::first(&read_tx)?.unwrap();
-    let last_block = Block::last(&read_tx)?.unwrap();
+    let first_block = Block::first(&block_tx)?.unwrap();
+    let last_block = Block::last(&block_tx)?.unwrap();
 
-    Block::take(&read_tx, 100)?;
-    Block::get(&read_tx, &first_block.height)?;
-    Block::range(&read_tx, &first_block.height, &last_block.height, None)?;
-    Block::get_transactions(&read_tx, &first_block.height)?;
-    Block::get_header(&read_tx, &first_block.height)?;
-    Block::exists(&read_tx, &first_block.height)?;
-    Block::first(&read_tx)?;
-    Block::last(&read_tx)?;
-    Block::stream_range(storage.begin_read()?, first_block.height, last_block.height, None)?.try_collect::<Vec<Block>>().await?;
+    Block::take(&block_tx, 100)?;
+    Block::get(&block_tx, &first_block.height)?;
+    Block::range(&block_tx, &first_block.height, &last_block.height, None)?;
+    Block::get_transactions(&transaction_tx, &first_block.height)?;
+    Block::get_header(&header_tx, &first_block.height)?;
+    Block::exists(&block_tx, &first_block.height)?;
+    Block::first(&block_tx)?;
+    Block::last(&block_tx)?;
 
     let block_infos = Block::table_info(Arc::clone(&storage))?;
     println!("Block persisted with tables :");
@@ -34,19 +39,15 @@ async fn main() -> Result<()> {
         println!("{}", serde_json::to_string_pretty(&info)?);
     }
 
-    let first_block_header = Header::first(&read_tx)?.unwrap();
-    let last_block_header = Header::last(&read_tx)?.unwrap();
+    let first_block_header = Header::first(&header_tx)?.unwrap();
+    let last_block_header = Header::last(&header_tx)?.unwrap();
 
-    Header::get_by_hash(&read_tx, &first_block_header.hash)?;
-    Header::get_by_timestamp(&read_tx, &first_block_header.timestamp)?;
-    Header::take(&read_tx, 100)?;
-    Header::get(&read_tx, &first_block_header.height)?;
-    Header::range(&read_tx, &first_block_header.height, &last_block_header.height, None)?;
-    Header::range_by_timestamp(&read_tx, &first_block_header.timestamp, &last_block_header.timestamp)?;
-    Header::stream_by_hash(storage.begin_read()?, first_block_header.hash, None)?.try_collect::<Vec<Header>>().await?;
-    Header::stream_by_timestamp(storage.begin_read()?, first_block_header.timestamp, None)?.try_collect::<Vec<Header>>().await?;
-    Header::stream_range(storage.begin_read()?, first_block_header.height, last_block_header.height, None)?.try_collect::<Vec<Header>>().await?;
-    Header::stream_range_by_timestamp(storage.begin_read()?, first_block_header.timestamp, last_block_header.timestamp, None)?.try_collect::<Vec<Header>>().await?;
+    Header::get_by_hash(&header_tx, &first_block_header.hash)?;
+    Header::get_by_timestamp(&header_tx, &first_block_header.timestamp)?;
+    Header::take(&header_tx, 100)?;
+    Header::get(&header_tx, &first_block_header.height)?;
+    Header::range(&header_tx, &first_block_header.height, &last_block_header.height, None)?;
+    Header::range_by_timestamp(&header_tx, &first_block_header.timestamp, &last_block_header.timestamp)?;
 
     let block_header_infos = Header::table_info(Arc::clone(&storage))?;
     println!("\nBlock header persisted with tables :");
@@ -54,20 +55,17 @@ async fn main() -> Result<()> {
         println!("{}", serde_json::to_string_pretty(&info)?);
     }
 
-    let first_transaction = Transaction::first(&read_tx)?.unwrap();
-    let last_transaction = Transaction::last(&read_tx)?.unwrap();
+    let first_transaction = Transaction::first(&transaction_tx)?.unwrap();
+    let last_transaction = Transaction::last(&transaction_tx)?.unwrap();
 
-    Transaction::get_ids_by_hash(&read_tx, &first_transaction.hash)?;
-    Transaction::get_by_hash(&read_tx, &first_transaction.hash)?;
-    Transaction::take(&read_tx, 100)?;
-    Transaction::get(&read_tx, &first_transaction.id)?;
-    Transaction::range(&read_tx, &first_transaction.id, &last_transaction.id, None)?;
-    Transaction::get_utxos(&read_tx, &first_transaction.id)?;
-    Transaction::get_maybe_value(&read_tx, &first_transaction.id)?;
-    Transaction::parent_key(&read_tx, &first_transaction.id)?;
-    Transaction::stream_ids_by_hash(storage.begin_read()?, first_transaction.hash.clone())?.try_collect::<Vec<BlockPointer>>().await?;
-    Transaction::stream_by_hash(storage.begin_read()?, first_transaction.hash.clone(), None)?.try_collect::<Vec<Transaction>>().await?;
-    Transaction::stream_range(storage.begin_read()?, first_transaction.id, last_transaction.id, None)?.try_collect::<Vec<Transaction>>().await?;
+    Transaction::get_ids_by_hash(&transaction_tx, &first_transaction.hash)?;
+    Transaction::get_by_hash(&transaction_tx, &first_transaction.hash)?;
+    Transaction::take(&transaction_tx, 100)?;
+    Transaction::get(&transaction_tx, &first_transaction.id)?;
+    Transaction::range(&transaction_tx, &first_transaction.id, &last_transaction.id, None)?;
+    Transaction::get_utxos(&utxo_tx, &first_transaction.id)?;
+    Transaction::get_maybe_value(&maybe_value_tx, &first_transaction.id)?;
+    Transaction::parent_key(&first_transaction.id)?;
 
     let transaction_infos = Transaction::table_info(Arc::clone(&storage))?;
     println!("\nTransaction persisted with tables :");
@@ -75,21 +73,16 @@ async fn main() -> Result<()> {
         println!("{}", serde_json::to_string_pretty(&info)?);
     }
 
-    let first_utxo = Utxo::first(&read_tx)?.unwrap();
-    let last_utxo = Utxo::last(&read_tx)?.unwrap();
+    let first_utxo = Utxo::first(&utxo_tx)?.unwrap();
+    let last_utxo = Utxo::last(&utxo_tx)?.unwrap();
 
-    Utxo::get_by_address(&read_tx, &first_utxo.address)?;
-    Utxo::get_ids_by_address(&read_tx, &first_utxo.address)?;
-    Utxo::take(&read_tx, 100)?;
-    Utxo::get(&read_tx, &first_utxo.id)?;
-    Utxo::range(&read_tx, &first_utxo.id, &last_utxo.id, None)?;
-    Utxo::get_assets(&read_tx, &first_utxo.id)?;
-    Utxo::parent_key(&read_tx, &first_utxo.id)?;
-    Utxo::stream_ids_by_address(storage.begin_read()?, first_utxo.address.clone())?.try_collect::<Vec<TransactionPointer>>().await?;
-    Utxo::stream_range(storage.begin_read()?, first_utxo.id, last_utxo.id, None)?.try_collect::<Vec<Utxo>>().await?;
-    Utxo::stream_by_address(storage.begin_read()?, first_utxo.address.clone(), None)?.try_collect::<Vec<Utxo>>().await?;
-    // even streaming parents is possible
-    Utxo::stream_transactions_by_address(storage.begin_read()?, first_utxo.address, None)?.try_collect::<Vec<Transaction>>().await?;
+    Utxo::get_by_address(&utxo_tx, &first_utxo.address)?;
+    Utxo::get_ids_by_address(&utxo_tx, &first_utxo.address)?;
+    Utxo::take(&utxo_tx, 100)?;
+    Utxo::get(&utxo_tx, &first_utxo.id)?;
+    Utxo::range(&utxo_tx, &first_utxo.id, &last_utxo.id, None)?;
+    Utxo::get_assets(&asset_tx, &first_utxo.id)?;
+    Utxo::parent_key(&first_utxo.id)?;
 
     let utxo_infos = Utxo::table_info(Arc::clone(&storage))?;
     println!("\nUtxo persisted with tables :");
@@ -97,18 +90,14 @@ async fn main() -> Result<()> {
         println!("{}", serde_json::to_string_pretty(&info)?);
     }
 
-    let first_asset = Asset::first(&read_tx)?.unwrap();
-    let last_asset = Asset::last(&read_tx)?.unwrap();
+    let first_asset = Asset::first(&asset_tx)?.unwrap();
+    let last_asset = Asset::last(&asset_tx)?.unwrap();
 
-    Asset::get_by_name(&read_tx, &first_asset.name)?;
-    Asset::take(&read_tx, 100)?;
-    Asset::get(&read_tx, &first_asset.id)?;
-    Asset::range(&read_tx, &first_asset.id, &last_asset.id, None)?;
-    Asset::parent_key(&read_tx, &first_asset.id)?;
-    Asset::stream_by_name(storage.begin_read()?, first_asset.name.clone(), None)?.try_collect::<Vec<Asset>>().await?;
-    Asset::stream_range(storage.begin_read()?, first_asset.id, last_asset.id, None)?.try_collect::<Vec<Asset>>().await?;
-    // even streaming parents is possible
-    Asset::stream_utxos_by_name(storage.begin_read()?, first_asset.name, None)?.try_collect::<Vec<Utxo>>().await?;
+    Asset::get_by_name(&asset_tx, &first_asset.name)?;
+    Asset::take(&asset_tx, 100)?;
+    Asset::get(&asset_tx, &first_asset.id)?;
+    Asset::range(&asset_tx, &first_asset.id, &last_asset.id, None)?;
+    Asset::parent_key(&first_asset.id)?;
 
     let asset_infos = Asset::table_info(Arc::clone(&storage))?;
     println!("\nAsset persisted with tables :");
@@ -116,6 +105,24 @@ async fn main() -> Result<()> {
         println!("{}", serde_json::to_string_pretty(&info)?);
     }
 
+    /* Streaming examples */
+    Block::stream_range(Block::begin_read_tx(&read_tx)?, first_block.height, last_block.height, None)?.try_collect::<Vec<Block>>().await?;
+    Header::stream_by_hash(Header::begin_read_tx(&read_tx)?, first_block_header.hash, None)?.try_collect::<Vec<Header>>().await?;
+    Header::stream_by_timestamp(Header::begin_read_tx(&read_tx)?, first_block_header.timestamp, None)?.try_collect::<Vec<Header>>().await?;
+    Header::stream_range(Header::begin_read_tx(&read_tx)?, first_block_header.height, last_block_header.height, None)?.try_collect::<Vec<Header>>().await?;
+    Header::stream_range_by_timestamp(Header::begin_read_tx(&read_tx)?, first_block_header.timestamp, last_block_header.timestamp, None)?.try_collect::<Vec<Header>>().await?;
+    Transaction::stream_ids_by_hash(Transaction::begin_read_tx(&read_tx)?, first_transaction.hash.clone())?.try_collect::<Vec<BlockPointer>>().await?;
+    Transaction::stream_by_hash(Transaction::begin_read_tx(&read_tx)?, first_transaction.hash.clone(), None)?.try_collect::<Vec<Transaction>>().await?;
+    Transaction::stream_range(Transaction::begin_read_tx(&read_tx)?, first_transaction.id, last_transaction.id, None)?.try_collect::<Vec<Transaction>>().await?;
+    Utxo::stream_ids_by_address(Utxo::begin_read_tx(&read_tx)?, first_utxo.address.clone())?.try_collect::<Vec<TransactionPointer>>().await?;
+    Utxo::stream_range(Utxo::begin_read_tx(&read_tx)?, first_utxo.id, last_utxo.id, None)?.try_collect::<Vec<Utxo>>().await?;
+    Utxo::stream_by_address(Utxo::begin_read_tx(&read_tx)?, first_utxo.address.clone(), None)?.try_collect::<Vec<Utxo>>().await?;
+    // streaming parents
+    Utxo::stream_transactions_by_address(Transaction::begin_read_tx(&read_tx)?, first_utxo.address, None)?.try_collect::<Vec<Transaction>>().await?;
+    Asset::stream_by_name(Asset::begin_read_tx(&read_tx)?, first_asset.name.clone(), None)?.try_collect::<Vec<Asset>>().await?;
+    Asset::stream_range(Asset::begin_read_tx(&read_tx)?, first_asset.id, last_asset.id, None)?.try_collect::<Vec<Asset>>().await?;
+    // streaming parents
+    Asset::stream_utxos_by_name(Utxo::begin_read_tx(&read_tx)?, first_asset.name, None)?.try_collect::<Vec<Utxo>>().await?;
 
     println!("\nDeleting blocks:");
     for height in block_heights.iter() {

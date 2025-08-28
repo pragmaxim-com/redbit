@@ -6,20 +6,19 @@ use syn::Type;
 use crate::endpoint::EndpointDef;
 use crate::field_parser::FieldDef;
 
-pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, col_field_def: &FieldDef, pk_type: &Type, table: &Ident, range_query_ty: &Type, stream_query_type: &Type) -> FunctionDef {
+pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, col_field_def: &FieldDef, pk_type: &Type, tx_context_ty: &Type, table: &Ident, range_query_ty: &Type, stream_query_type: &Type) -> FunctionDef {
     let column_name = &col_field_def.name.clone();
     let column_type = &col_field_def.tpe.clone();
 
     let fn_name = format_ident!("stream_range_by_{}", column_name);
     let fn_stream = quote! {
         pub fn #fn_name(
-            tx: StorageReadTx,
+            tx_context: #tx_context_ty,
             from: #column_type,
             until: #column_type,
             query: Option<#stream_query_type>
         ) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#entity_type, AppError>> + Send>>, AppError> {
-            let mm_table = tx.open_multimap_table(#table)?;
-            let outer_iter = mm_table.range::<#column_type>(from..until)?;
+            let outer_iter = tx_context.#table.range::<#column_type>(from..until)?;
             let outer_stream = futures::stream::iter(outer_iter).map_err(AppError::from);
             let pk_stream = outer_stream.map_ok(|(_key, value_iter)| {
                 futures::stream::iter(value_iter).map(|res| {
@@ -33,13 +32,13 @@ pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, col_fi
                         match pk_res {
                             Ok(pk) => {
                                 if let Some(ref stream_query) = query {
-                                    match Self::compose_with_filter(&tx, &pk, stream_query) {
+                                    match Self::compose_with_filter(&tx_context, &pk, stream_query) {
                                         Ok(Some(entity)) => Some(Ok(entity)),
                                         Ok(None) => None,
                                         Err(e) => Some(Err(e)),
                                     }
                                 } else {
-                                    Some(Self::compose(&tx, &pk)) // <- already Result<T, AppError>
+                                    Some(Self::compose(&tx_context, &pk)) // <- already Result<T, AppError>
                                 }
                             }
                             Err(e) => Some(Err(e)),
@@ -56,10 +55,11 @@ pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, col_fi
         #[tokio::test]
         async fn #fn_name() {
             let storage = STORAGE.clone();
-            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let from_value = #column_type::default();
             let until_value = #column_type::default().nth_value(2);
-            let entity_stream = #entity_name::#fn_name(read_tx, from_value, until_value, None).expect("Failed to range entities by index");
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
+            let entity_stream = #entity_name::#fn_name(tx_context, from_value, until_value, None).expect("Failed to range entities by index");
             let entities = entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
             let expected_entities = #entity_type::sample_many(2);
             assert_eq!(expected_entities, entities, "Expected entities to be returned for the given stream_range by index");
@@ -67,12 +67,13 @@ pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, col_fi
         #[tokio::test]
         async fn #test_with_filter_fn_name() {
             let storage = STORAGE.clone();
-            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let pk = #pk_type::default();
             let from_value = #column_type::default();
             let until_value = #column_type::default().nth_value(3);
             let query = #stream_query_type::sample();
-            let entity_stream = #entity_name::#fn_name(read_tx, from_value, until_value, Some(query.clone())).expect("Failed to range entities by index");
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
+            let entity_stream = #entity_name::#fn_name(tx_context, from_value, until_value, Some(query.clone())).expect("Failed to range entities by index");
             let entities = entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
             let expected_entity = #entity_type::sample_with_query(&pk, 0, &query).expect("Failed to create sample entity with query");
             assert_eq!(entities.len(), 1, "Expected only one entity to be returned for the given range by with filter");
@@ -91,8 +92,9 @@ pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, col_fi
                 rt.block_on(async {
                     let from_value = #column_type::default();
                     let until_value = #column_type::default().nth_value(3);
-                    let read_tx = storage.begin_read().unwrap();
-                    let entity_stream = #entity_name::#fn_name(read_tx, from_value, until_value, Some(query.clone())).expect("Failed to range entities by index");
+                    let read_tx = storage.db.begin_read().unwrap();
+                    let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
+                    let entity_stream = #entity_name::#fn_name(tx_context, from_value, until_value, Some(query.clone())).expect("Failed to range entities by index");
                     entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
                 })
             });
@@ -121,9 +123,10 @@ pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, col_fi
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                impl IntoResponse {
-                   match state.storage.begin_read()
+                   match state.storage.db.begin_read()
                         .map_err(AppError::from)
-                        .and_then(|tx| #entity_name::#fn_name(tx, query.from, query.until, body)) {
+                        .and_then(|tx| #entity_name::begin_read_tx(&tx).map_err(AppError::from) )
+                        .and_then(|tx_context| #entity_name::#fn_name(tx_context, query.from, query.until, body)) {
                             Ok(stream) => axum_streams::StreamBodyAs::json_nl_with_errors(stream).header("Content-Type", HeaderValue::from_str("application/x-ndjson").unwrap()).into_response(),
                             Err(err)   => err.into_response(),
                     }

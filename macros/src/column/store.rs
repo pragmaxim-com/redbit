@@ -1,33 +1,27 @@
+use crate::column::open_dict_tables;
+use crate::table::DictTableDefs;
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
-use crate::column::open_dict_tables;
-use crate::table::{DictTableDefs};
 
-pub fn store_statement(pk_name: &Ident, column_name: &Ident, table: &Ident) -> TokenStream {
-    let table_var = Ident::new(&format!("{}", table).to_lowercase(), table.span());
+pub fn store_statement(pk_name: &Ident, column_name: &Ident, table_var: &Ident) -> TokenStream {
     quote! {
         tx_context.#table_var.insert(&instance.#pk_name, &instance.#column_name)?;
     }
 }
 
-pub fn store_many_statement(pk_name: &Ident, column_name: &Ident, table: &Ident) -> TokenStream {
-    let table_var = Ident::new(&format!("{}", table).to_lowercase(), table.span());
+pub fn store_many_statement(pk_name: &Ident, column_name: &Ident, table_var: &Ident) -> TokenStream {
     quote! {
         tx_context.#table_var.insert(&instance.#pk_name, &instance.#column_name)?;
     }
 }
 
-pub fn store_index_def(column_name: &Ident, pk_name: &Ident, table: &Ident, index_table: &Ident) -> TokenStream {
-    let table_var = Ident::new(&format!("{}", table).to_lowercase(), table.span());
-    let mm_var = Ident::new(&format!("{}", index_table).to_lowercase(), index_table.span());
+pub fn store_index_def(column_name: &Ident, pk_name: &Ident, table_var: &Ident, mm_var: &Ident) -> TokenStream {
     quote! {
         tx_context.#table_var.insert(&instance.#pk_name, &instance.#column_name)?;
         tx_context.#mm_var.insert(&instance.#column_name, &instance.#pk_name)?;
     }
 }
-pub fn store_many_index_def(column_name: &Ident, pk_name: &Ident, table: &Ident, index_table: &Ident) -> TokenStream {
-    let table_var = Ident::new(&format!("{}", table).to_lowercase(), table.span());
-    let mm_var = Ident::new(&format!("{}", index_table).to_lowercase(), index_table.span());
+pub fn store_many_index_def(column_name: &Ident, pk_name: &Ident, table_var: &Ident, mm_var: &Ident) -> TokenStream {
     quote! {
         tx_context.#table_var.insert(&instance.#pk_name, &instance.#column_name)?;
         tx_context.#mm_var.insert(&instance.#column_name, &instance.#pk_name)?;

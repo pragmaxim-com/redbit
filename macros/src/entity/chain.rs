@@ -114,7 +114,9 @@ pub fn block_like(block_type: Type, field_defs: &[FieldDef]) -> Result<TokenStre
             }
 
             fn delete(&self) -> Result<(), chain::ChainError> {
-                if let Some(tip_header) = #header_type::last(&self.storage.begin_read()?)? {
+                let read_tx = self.storage.db.begin_read()?;
+                let tx_context = #header_type::begin_read_tx(&read_tx)?;
+                if let Some(tip_header) = #header_type::last(&tx_context)? {
                     let write_tx = self.storage.db.begin_write()?;
                     {
                         let mut tx_context = #block_type::begin_write_tx(&write_tx)?;
@@ -128,14 +130,16 @@ pub fn block_like(block_type: Type, field_defs: &[FieldDef]) -> Result<TokenStre
             }
 
             fn get_last_header(&self) -> Result<Option<#header_type>, chain::ChainError> {
-                let read_tx = self.storage.begin_read()?;
-                let last = #header_type::last(&read_tx)?;
+                let read_tx = self.storage.db.begin_read()?;
+                let tx_context = #header_type::begin_read_tx(&read_tx)?;
+                let last = #header_type::last(&tx_context)?;
                 Ok(last)
             }
 
             fn get_header_by_hash(&self, hash: [u8; 32]) -> Result<Vec<#header_type>, chain::ChainError> {
-                let read_tx = self.storage.begin_read()?;
-                let header = #header_type::get_by_hash(&read_tx, &BlockHash(hash))?;
+                let read_tx = self.storage.db.begin_read()?;
+                let tx_context = #header_type::begin_read_tx(&read_tx)?;
+                let header = #header_type::get_by_hash(&tx_context, &BlockHash(hash))?;
                 Ok(header)
             }
 
@@ -165,19 +169,21 @@ pub fn block_like(block_type: Type, field_defs: &[FieldDef]) -> Result<TokenStre
             }
 
             fn populate_inputs(&self, blocks: &mut Vec<Block>) -> Result<(), chain::ChainError> {
-                let read_tx = self.storage.begin_read()?;
+                let read_tx = self.storage.db.begin_read()?;
+                let tx_context = #block_type::begin_read_tx(&read_tx)?; // kept as-is even if unused
                 for block in blocks.iter_mut() {
-                    self.resolve_tx_inputs(&read_tx, block)?;
+                    self.resolve_tx_inputs(&tx_context, block)?;
                 }
                 Ok(())
             }
 
             async fn validate_chain(&self) -> Result<Vec<#header_type>, chain::ChainError> {
                 use futures::StreamExt;
-                let read_tx = self.storage.begin_read()?; // kept as-is even if unused
+                let read_tx = self.storage.db.begin_read()?; // kept as-is even if unused
+                let tx_context = #header_type::begin_read_tx(&read_tx)?; // kept as-is even if unused
                 let mut affected_headers: Vec<#header_type> = Vec::new();
-                if let Some(tip_header) = #header_type::last(&read_tx)? {
-                    let mut stream = #header_type::stream_range(self.storage.begin_read()?, Height(0), tip_header.height, None)?;
+                if let Some(tip_header) = #header_type::last(&tx_context)? {
+                    let mut stream = #header_type::stream_range(tx_context, Height(0), tip_header.height, None)?;
 
                     // get the first header (nothing to validate yet)
                     let mut prev = match stream.next().await {

@@ -3,9 +3,8 @@ use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
 
-pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type: &Type, table: &Ident, tx_context_ty: &Type) -> FunctionDef {
+pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type: &Type, table_var: &Ident, tx_context_ty: &Type) -> FunctionDef {
     let fn_name = format_ident!("pk_range");
-    let table_var = Ident::new(&format!("{}", table).to_lowercase(), table.span());
     let fn_stream = quote! {
         fn #fn_name(tx_context: &mut #tx_context_ty, from: &#pk_type, until: &#pk_type) -> Result<Vec<#pk_type>, AppError> {
             let range = from.clone()..until.clone();

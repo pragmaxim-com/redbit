@@ -3,22 +3,21 @@ use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
 
-pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident, column_type: &Type, table: &Ident) -> FunctionDef {
+pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident, column_type: &Type, tx_context_ty: &Type, table: &Ident) -> FunctionDef {
     let fn_name = format_ident!("range_by_{}", column_name);
     let fn_stream = quote! {
         pub fn #fn_name(
-            tx: &StorageReadTx,
+            tx_context: &#tx_context_ty,
             from: &#column_type,
             until: &#column_type
         ) -> Result<Vec<#entity_type>, AppError> {
-            let mm_table = tx.open_multimap_table(#table)?;
-            let range_iter = mm_table.range::<#column_type>(from..until)?;
+            let range_iter = tx_context.#table.range::<#column_type>(from..until)?;
             let mut results = Vec::new();
             for entry_res in range_iter {
                 let (_, mut multi_iter) = entry_res?;
                 while let Some(x) = multi_iter.next() {
                     let pk = x?.value();
-                    match Self::compose(&tx, &pk) {
+                    match Self::compose(&tx_context, &pk) {
                         Ok(item) => {
                             results.push(item);
                         }
@@ -36,10 +35,11 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
         #[test]
         fn #fn_name() {
             let storage = STORAGE.clone();
-            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let from_value = #column_type::default();
             let until_value = #column_type::default().next_value();
-            let entities = #entity_name::#fn_name(&read_tx, &from_value, &until_value).expect("Failed to get entities by range");
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
+            let entities = #entity_name::#fn_name(&tx_context, &from_value, &until_value).expect("Failed to get entities by range");
             let expected_entities = vec![#entity_type::sample()];
             assert_eq!(expected_entities, entities, "Expected entities to be returned for the given range by index");
         }
@@ -50,11 +50,12 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
             let storage = STORAGE.clone();
-            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let from_value = #column_type::default();
             let until_value = #column_type::default().next_value();
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
             b.iter(|| {
-                #entity_name::#fn_name(&read_tx, &from_value, &until_value).expect("Failed to get entities by range");
+                #entity_name::#fn_name(&tx_context, &from_value, &until_value).expect("Failed to get entities by range");
             });
         }
     });

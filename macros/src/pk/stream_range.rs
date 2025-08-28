@@ -6,34 +6,33 @@ use syn::Type;
 use crate::endpoint::EndpointDef;
 use crate::field_parser::FieldDef;
 
-pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_field_def: &FieldDef, table: &Ident, range_query_ty: &Type, stream_query_type: &Type, no_columns: bool) -> FunctionDef {
+pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_field_def: &FieldDef, tx_context_ty: &Type, table: &Ident, range_query_ty: &Type, stream_query_type: &Type, no_columns: bool) -> FunctionDef {
     let pk_name = pk_field_def.name.clone();
     let pk_type = pk_field_def.tpe.clone();
 
     let fn_name = format_ident!("stream_range");
     let fn_stream =
         quote! {
-            pub fn #fn_name(tx: StorageReadTx, from: #pk_type, until: #pk_type, query: Option<#stream_query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#entity_type, AppError>> + Send>>, AppError> {
-                let table_pk_9 = tx.open_table(#table)?;
+            pub fn #fn_name(tx_context: #tx_context_ty, from: #pk_type, until: #pk_type, query: Option<#stream_query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#entity_type, AppError>> + Send>>, AppError> {
                 let range = from..until;
-                let iter_box = Box::new(table_pk_9.range::<#pk_type>(range)?);
+                let iter_box = Box::new(tx_context.#table.range::<#pk_type>(range)?);
                 let stream = futures::stream::unfold(
-                    (iter_box, tx, query),
-                    |(mut iter, tx, query)| async move {
+                    (iter_box, tx_context, query),
+                    |(mut iter, tx_context, query)| async move {
                         match iter.next() {
                             Some(Ok((key, _val))) => {
                                 let pk = key.value().clone();
                                 if let Some(ref stream_query) = query {
-                                    match Self::compose_with_filter(&tx, &pk, stream_query) {
-                                        Ok(Some(entity)) => Some((Ok(entity), (iter, tx, query))),
+                                    match Self::compose_with_filter(&tx_context, &pk, stream_query) {
+                                        Ok(Some(entity)) => Some((Ok(entity), (iter, tx_context, query))),
                                         Ok(None) => None,
-                                        Err(e) => Some((Err(e), (iter, tx, query))),
+                                        Err(e) => Some((Err(e), (iter, tx_context, query))),
                                     }
                                 } else {
-                                    Some((Self::compose(&tx, &pk), (iter, tx, query)))
+                                    Some((Self::compose(&tx_context, &pk), (iter, tx_context, query)))
                                 }
                             }
-                            Some(Err(e)) => Some((Err(AppError::from(e)), (iter, tx, query))),
+                            Some(Err(e)) => Some((Err(AppError::from(e)), (iter, tx_context, query))),
                             None => None,
                         }
                     },
@@ -50,12 +49,13 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_field_def: &FieldDef, 
             #[tokio::test]
             async fn #test_with_filter_fn_name() {
                 let storage = STORAGE.clone();
-                let read_tx = storage.begin_read().expect("Failed to begin read transaction");
                 let pk = #pk_type::default();
                 let from_value = #pk_type::default();
                 let until_value = #pk_type::default().next_index().next_index().next_index();
                 let query = #stream_query_type::sample();
-                let entity_stream = #entity_name::#fn_name(read_tx, from_value, until_value, Some(query.clone())).expect("Failed to range entities by pk");
+                let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+                let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
+                let entity_stream = #entity_name::#fn_name(tx_context, from_value, until_value, Some(query.clone())).expect("Failed to range entities by pk");
                 let entities = entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
                 let expected_entity = #entity_type::sample_with_query(&pk, 0, &query).expect("Failed to create sample entity with query");
                 assert_eq!(entities.len(), 1, "Expected only one entity to be returned for the given stream range with filter");
@@ -68,10 +68,11 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_field_def: &FieldDef, 
         #[tokio::test]
         async fn #fn_name() {
             let storage = STORAGE.clone();
-            let read_tx = storage.begin_read().expect("Failed to begin read transaction");
             let from_value = #pk_type::default();
             let until_value = #pk_type::default().next_index().next_index();
-            let entity_stream = #entity_name::#fn_name(read_tx, from_value, until_value, None).expect("Failed to range entities by pk");
+            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+            let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
+            let entity_stream = #entity_name::#fn_name(tx_context, from_value, until_value, None).expect("Failed to range entities by pk");
             let entities = entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
             let expected_entities = #entity_type::sample_many(2);
             assert_eq!(expected_entities, entities, "Expected entities to be returned for the given range");
@@ -90,8 +91,9 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_field_def: &FieldDef, 
                 rt.block_on(async {
                     let from_value = #pk_type::default();
                     let until_value = #pk_type::default().next_index().next_index().next_index();
-                    let read_tx = storage.begin_read().unwrap();
-                    let entity_stream = #entity_name::#fn_name(read_tx, from_value, until_value, Some(query.clone())).expect("Failed to range entities by pk");
+                    let read_tx = storage.db.begin_read().unwrap();
+                    let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
+                    let entity_stream = #entity_name::#fn_name(tx_context, from_value, until_value, Some(query.clone())).expect("Failed to range entities by pk");
                     entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
                 })
             });
@@ -120,9 +122,10 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_field_def: &FieldDef, 
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                impl IntoResponse {
-                   match state.storage.begin_read()
+                   match state.storage.db.begin_read()
                         .map_err(AppError::from)
-                        .and_then(|tx| #entity_name::#fn_name(tx, query.from, query.until, body)) {
+                        .and_then(|tx| #entity_name::begin_read_tx(&tx).map_err(AppError::from) )
+                        .and_then(|tx_context| #entity_name::#fn_name(tx_context, query.from, query.until, body)) {
                             Ok(stream) => axum_streams::StreamBodyAs::json_nl_with_errors(stream).header("Content-Type", HeaderValue::from_str("application/x-ndjson").unwrap()).into_response(),
                             Err(err)   => err.into_response(),
                     }

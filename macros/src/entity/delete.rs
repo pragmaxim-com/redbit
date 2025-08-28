@@ -59,8 +59,9 @@ pub fn delete_and_commit_def(
                 let pk = test_entity.#pk_name;
                 #entity_name::store_and_commit(Arc::clone(&storage), test_entity).expect("Failed to store and commit instance");
                 let removed = #entity_name::#fn_name(Arc::clone(&storage), &pk).expect("Failed to delete and commit instance");
-                let read_tx = storage.begin_read().expect("Failed to begin read transaction");
-                let is_empty = #entity_name::get(&read_tx, &pk).expect("Failed to get instance").is_none();
+                let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
+                let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
+                let is_empty = #entity_name::get(&tx_context, &pk).expect("Failed to get instance").is_none();
                 assert!(removed, "Instance should be deleted");
                 assert!(is_empty, "Instance should be deleted");
             }

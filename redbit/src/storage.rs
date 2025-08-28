@@ -1,5 +1,5 @@
 use crate::*;
-use redb::{Database, Key, MultimapTableDefinition, ReadOnlyMultimapTable, ReadOnlyTable, ReadTransaction, TableDefinition, TableError, TransactionError, Value, WriteTransaction};
+use redb::{Database, TableError, WriteTransaction};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::{env, fs};
@@ -41,41 +41,16 @@ impl Storage {
         }
     }
 
-    pub fn begin_read(&self) -> redb::Result<StorageReadTx, TransactionError> {
-        use redb::ReadableDatabase;
-        let tx = self.db.begin_read()?;
-        Ok(StorageReadTx { tx })
-    }
-
 }
 
-pub trait TxContext<'txn> {
+pub trait WriteTxContext<'txn> {
     fn begin_write_tx(tx: &'txn WriteTransaction) -> redb::Result<Self, TableError>
     where
         Self: Sized;
 }
 
-pub struct StorageReadTx {
-    tx: ReadTransaction,
-}
-
-impl StorageReadTx {
-    pub fn open_table<K, V>(&self, def: TableDefinition<K, V>) -> redb::Result<ReadOnlyTable<K, V>, TableError>
+pub trait ReadTxContext {
+    fn begin_read_tx(tx: &ReadTransaction) -> redb::Result<Self, TableError>
     where
-        K: Key + 'static,
-        V: Value + 'static,
-    {
-        self.tx.open_table(def)
-    }
-
-    pub fn open_multimap_table<K, V>(
-        &self,
-        def: MultimapTableDefinition<K, V>,
-    ) -> redb::Result<ReadOnlyMultimapTable<K, V>, TableError>
-    where
-        K: Key + 'static,
-        V: Key + 'static,
-    {
-        self.tx.open_multimap_table(def)
-    }
+        Self: Sized;
 }

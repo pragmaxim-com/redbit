@@ -17,7 +17,7 @@ pub fn table_info_fn(entity_name: &Ident, table_defs: &[TableDef]) -> FunctionDe
 
         quote! {
             {
-                let tx = storage.begin_read()?;
+                let tx = storage.db.begin_read()?;
                 let table = tx.#open_method(#table_ident)?;
                 let stats = table.stats()?;
                 tables.push(TableInfo {

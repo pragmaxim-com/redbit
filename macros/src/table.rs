@@ -46,6 +46,7 @@ impl DictTableDefs {
 #[derive(Clone)]
 pub struct TableDef {
     pub name: Ident,
+    pub var_name: Ident,
     pub key_type: Type,
     pub value_type: Option<Type>,
     pub cache: Option<(Ident, TokenStream)>,
@@ -57,12 +58,14 @@ impl TableDef {
     pub fn pk(entity_name: &Ident, pk_name: &Ident, pk_type: &Type) -> TableDef {
         let name = format_ident!("{}_{}", entity_name.to_string().to_uppercase(), pk_name.to_string().to_uppercase());
         let name_str = name.to_string();
+        let var_name = Ident::new(&format!("{}", name).to_lowercase(), name.span());
         let definition =
             quote! {
                 pub const #name: TableDefinition<'static, #pk_type, ()> = TableDefinition::new(#name_str);
             };
         TableDef {
             name,
+            var_name,
             cache: None,
             key_type: pk_type.clone(),
             value_type: None,
@@ -79,11 +82,13 @@ impl TableDef {
         pk_name.to_string().to_uppercase()
     );
         let name_str = &name.to_string();
+        let var_name = Ident::new(&format!("{}", name).to_lowercase(), name.span());
         let definition = quote! {
             pub const #name: TableDefinition<'static, #pk_type, #column_type> = TableDefinition::new(#name_str);
         };
         TableDef {
             name,
+            var_name,
             key_type: pk_type.clone(),
             value_type: Some(column_type.clone()),
             cache: None,
@@ -94,12 +99,14 @@ impl TableDef {
     
     pub fn index_table_def(entity_name: &Ident, column_name: &Ident, column_type: &Type, pk_type: &Type) -> TableDef {
         let name = format_ident!("{}_{}_INDEX", entity_name.to_string().to_uppercase(), column_name.to_string().to_uppercase());
+        let var_name = Ident::new(&format!("{}", name).to_lowercase(), name.span());
         let name_str = &name.to_string();
         let definition = quote! {
             pub const #name: MultimapTableDefinition<'static, #column_type, #pk_type> = MultimapTableDefinition::new(#name_str);
         };
         TableDef {
             name,
+            var_name,
             key_type: column_type.clone(),
             value_type: Some(pk_type.clone()),
             cache: None,
@@ -110,6 +117,7 @@ impl TableDef {
 
     pub fn dict_index_table_def(entity_name: &Ident, column_name: &Ident, pk_type: &Type) -> TableDef {
         let name = format_ident!("{}_{}_DICT_INDEX", entity_name.to_string().to_uppercase(), column_name.to_string().to_uppercase());
+        let var_name = Ident::new(&format!("{}", name).to_lowercase(), name.span());
         let name_str = &name.to_string();
         let definition =
         quote! {
@@ -117,6 +125,7 @@ impl TableDef {
         };
         TableDef {
             name,
+            var_name,
             key_type: pk_type.clone(),
             value_type: Some(pk_type.clone()),
             cache: None,
@@ -127,6 +136,7 @@ impl TableDef {
 
     pub fn value_by_dict_pk_table_def(entity_name: &Ident, column_name: &Ident, column_type: &Type, pk_type: &Type) -> TableDef {
         let name = format_ident!("{}_{}_BY_DICT_PK", entity_name.to_string().to_uppercase(), column_name.to_string().to_uppercase());
+        let var_name = Ident::new(&format!("{}", name).to_lowercase(), name.span());
         let name_str = &name.to_string();
         let definition =
             quote! {
@@ -134,6 +144,7 @@ impl TableDef {
         };
         TableDef {
             name,
+            var_name,
             key_type: pk_type.clone(),
             value_type: Some(column_type.clone()),
             cache: None,
@@ -144,6 +155,7 @@ impl TableDef {
 
     pub fn value_to_dict_pk_table_def(entity_name: &Ident, column_name: &Ident, column_type: &Type, pk_type: &Type, cache_size_opt: Option<usize>) -> TableDef {
         let name = format_ident!("{}_{}_TO_DICT_PK", entity_name.to_string().to_uppercase(), column_name.to_string().to_uppercase());
+        let var_name = Ident::new(&format!("{}", name).to_lowercase(), name.span());
         let name_str = &name.to_string();
         let definition = quote! {
             pub const #name: TableDefinition<'static, #column_type, #pk_type> = TableDefinition::new(#name_str);
@@ -161,6 +173,7 @@ impl TableDef {
 
         TableDef {
             name,
+            var_name,
             key_type: column_type.clone(),
             value_type: Some(pk_type.clone()),
             cache,
@@ -176,12 +189,14 @@ impl TableDef {
             column_name.to_string().to_uppercase(),
             pk_name.to_string().to_uppercase()
         );
+        let var_name = Ident::new(&format!("{}", name).to_lowercase(), name.span());
         let name_str = &name.to_string();
         let definition = quote! {
             pub const #name: TableDefinition<'static, #pk_type, #pk_type> = TableDefinition::new(#name_str);
         };
         TableDef {
             name,
+            var_name,
             key_type: pk_type.clone(),
             value_type: Some(pk_type.clone()),
             cache: None,

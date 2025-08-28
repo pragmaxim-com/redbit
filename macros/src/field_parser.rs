@@ -18,7 +18,8 @@ pub enum Multiplicity {
 pub struct OneToManyParentDef {
     pub parent_type: Type,
     pub parent_ident: Ident,
-    pub stream_query_ty: Type
+    pub stream_query_ty: Type,
+    pub tx_context_ty: Type
 }
 
 #[derive(Clone)]
