@@ -3,13 +3,13 @@ use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
 
-pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type: &Type, table: &Ident) -> FunctionDef {
+pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type: &Type, table: &Ident, tx_context_ty: &Type) -> FunctionDef {
     let fn_name = format_ident!("pk_range");
+    let table_var = Ident::new(&format!("{}", table).to_lowercase(), table.span());
     let fn_stream = quote! {
-        fn #fn_name(tx: &StorageWriteTx, from: &#pk_type, until: &#pk_type) -> Result<Vec<#pk_type>, AppError> {
-            let table_pk_10 = tx.open_table(#table)?;
+        fn #fn_name(tx_context: &mut #tx_context_ty, from: &#pk_type, until: &#pk_type) -> Result<Vec<#pk_type>, AppError> {
             let range = from.clone()..until.clone();
-            let mut iter = table_pk_10.range(range)?;
+            let mut iter = tx_context.#table_var.range(range)?;
             let mut results = Vec::new();
             while let Some(entry_res) = iter.next() {
                 let pk = entry_res?.0.value();
@@ -24,10 +24,14 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
         fn #fn_name() {
             let storage = STORAGE.clone();
             let entity_count: usize = 3;
-            let write_tx = storage.begin_write().expect("Failed to begin write transaction");
             let from_value = #pk_type::default();
             let until_value = #pk_type::default().next_index().next_index().next_index();
-            let pks = #entity_name::#fn_name(&write_tx, &from_value, &until_value).expect("Failed to get PKs in range");
+            let write_tx = storage.db.begin_write().unwrap();
+            let pks = {
+                let mut tx_context = #entity_name::begin_write_tx(&write_tx).unwrap();
+                #entity_name::#fn_name(&mut tx_context, &from_value, &until_value).expect("Failed to get PKs in range")
+            };
+            write_tx.commit().expect("Failed to commit transaction");
             let test_pks: Vec<#pk_type> = #entity_type::sample_many(entity_count).iter().map(|e| e.#pk_name).collect();
             assert_eq!(test_pks, pks, "Expected PKs to be returned for the given range");
         }
@@ -38,11 +42,15 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
             let storage = STORAGE.clone();
-            let write_tx = storage.begin_write().expect("Failed to begin write transaction");
             let from_value = #pk_type::default();
             let until_value = #pk_type::default().next_index().next_index().next_index();
             b.iter(|| {
-                #entity_name::#fn_name(&write_tx, &from_value, &until_value).expect("Failed to get PKs in range");
+                let write_tx = storage.db.begin_write().unwrap();
+                {
+                    let mut tx_context = #entity_name::begin_write_tx(&write_tx).unwrap();
+                    #entity_name::#fn_name(&mut tx_context, &from_value, &until_value).expect("Failed to get PKs in range");
+                }
+                write_tx.commit().expect("Failed to commit transaction");
             });
         }
     });

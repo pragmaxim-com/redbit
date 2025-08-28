@@ -9,9 +9,9 @@ async fn main() -> Result<()> {
     let blocks = Block::sample_many(2);
     let block_heights: Vec<Height> = blocks.iter().map(|b|b.height).collect();
     println!("Persisting blocks:");
-    let write_tx = storage.begin_write()?;
-    Block::store_many(&write_tx, blocks)?;
-    write_tx.commit()?;
+    for block in blocks {
+        Block::store_and_commit(Arc::clone(&storage), block)?;
+    }
 
     let read_tx = storage.begin_read()?;
 

@@ -5,10 +5,10 @@ use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use syn::Type;
 
-pub fn delete_def(pk_type: &Type, delete_statements: &[TokenStream]) -> FunctionDef {
+pub fn delete_def(pk_type: &Type, tx_context_ty: &Type, delete_statements: &[TokenStream]) -> FunctionDef {
     let fn_name = format_ident!("delete");
     let fn_stream = quote! {
-        pub fn #fn_name(tx: &StorageWriteTx, pk: &#pk_type) -> Result<bool, AppError> {
+        pub fn #fn_name(tx_context: &mut #tx_context_ty, pk: &#pk_type) -> Result<bool, AppError> {
             let mut removed: Vec<bool> = Vec::new();
             #(#delete_statements)*
             Ok(!removed.contains(&false))
@@ -17,10 +17,10 @@ pub fn delete_def(pk_type: &Type, delete_statements: &[TokenStream]) -> Function
     FunctionDef { fn_stream, endpoint: None, test_stream: None, bench_stream: None }
 }
 
-pub fn delete_many_def(pk_type: &Type, delete_many_statements: &[TokenStream]) -> FunctionDef {
+pub fn delete_many_def(pk_type: &Type, tx_context_ty: &Type, delete_many_statements: &[TokenStream]) -> FunctionDef {
     let fn_name = format_ident!("delete_many");
     let fn_stream = quote! {
-        pub fn #fn_name(tx: &StorageWriteTx, pks: &[#pk_type]) -> Result<bool, AppError> {
+        pub fn #fn_name(tx_context: &mut #tx_context_ty, pks: &[#pk_type]) -> Result<bool, AppError> {
             let mut removed: Vec<bool> = Vec::new();
             #(#delete_many_statements)*
             Ok(!removed.contains(&false))
@@ -39,13 +39,14 @@ pub fn delete_and_commit_def(
     let fn_name = format_ident!("delete_and_commit");
     let fn_stream = quote! {
         pub fn #fn_name(storage: Arc<Storage>, pk: &#pk_type) -> Result<bool, AppError> {
-            let tx = storage.begin_write()?;
-            let mut removed: Vec<bool> = Vec::new();
-            {
-               #(#delete_statements)*
-            }
-            tx.commit()?;
-            Ok(!removed.contains(&false))
+           let mut removed: Vec<bool> = Vec::new();
+           let write_tx = storage.db.begin_write()?;
+           {
+             let mut tx_context = #entity_name::begin_write_tx(&write_tx)?;
+              #(#delete_statements)*
+           }
+           write_tx.commit()?;
+           Ok(!removed.contains(&false))
        }
     };
 

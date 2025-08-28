@@ -4,12 +4,11 @@ use crate::rest::HttpParams::Body;
 use crate::rest::{BodyExpr, EndpointTag, FunctionDef, HttpMethod};
 use quote::{format_ident, quote};
 use syn::Type;
-use crate::table::StoreManyStmnt;
 
-pub fn store_def(entity_name: &Ident, entity_type: &Type, store_statements: &[TokenStream]) -> FunctionDef {
+pub fn store_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &Type, store_statements: &[TokenStream]) -> FunctionDef {
     let fn_name = format_ident!("store");
     let fn_stream = quote! {
-        pub fn #fn_name(tx: &StorageWriteTx, instance: #entity_type) -> Result<(), AppError> {
+        pub fn #fn_name(tx_context: &mut #tx_context_ty, instance: #entity_type) -> Result<(), AppError> {
             #(#store_statements)*
             Ok(())
         }
@@ -21,9 +20,12 @@ pub fn store_def(entity_name: &Ident, entity_type: &Type, store_statements: &[To
             let storage = random_storage();
             let entity_count: usize = 3;
             for test_entity in #entity_type::sample_many(entity_count) {
-                let tx = storage.begin_write().expect("Failed to begin write transaction");
-                let pk = #entity_name::#fn_name(&tx, test_entity).expect("Failed to store and commit instance");
-                tx.commit().expect("Failed to commit transaction");
+                let write_tx = storage.db.begin_write().unwrap();
+                {
+                    let mut tx_context = #entity_name::begin_write_tx(&write_tx).unwrap();
+                    let pk = #entity_name::#fn_name(&mut tx_context, test_entity).expect("Failed to store and commit instance");
+                }
+                write_tx.commit().expect("Failed to commit transaction");
             }
         }
     });
@@ -35,9 +37,12 @@ pub fn store_def(entity_name: &Ident, entity_type: &Type, store_statements: &[To
             let storage = random_storage();
             let test_entity = #entity_type::sample();
             b.iter(|| {
-                let tx = storage.begin_write().expect("Failed to begin write transaction");
-                #entity_name::#fn_name(&tx, test_entity.clone()).expect("Failed to store and commit instance");
-                tx.commit().expect("Failed to commit transaction");
+                let write_tx = storage.db.begin_write().unwrap();
+                {
+                    let mut tx_context = #entity_name::begin_write_tx(&write_tx).unwrap();
+                    #entity_name::#fn_name(&mut tx_context, test_entity.clone()).expect("Failed to store and commit instance");
+                }
+                write_tx.commit().expect("Failed to commit transaction");
             });
         }
     });
@@ -50,18 +55,13 @@ pub fn store_def(entity_name: &Ident, entity_type: &Type, store_statements: &[To
     }
 }
 
-pub fn store_many_def(entity_name: &Ident, entity_type: &Type, store_many_statements: &[StoreManyStmnt]) -> FunctionDef {
+pub fn store_many_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &Type, store_many_statements: &[TokenStream]) -> FunctionDef {
     let fn_name = format_ident!("store_many");
-    let pres: Vec<TokenStream> = store_many_statements.iter().map(|s| s.pre.clone()).collect();
-    let inserts: Vec<TokenStream> = store_many_statements.iter().map(|s| s.insert.clone()).collect();
-    let posts: Vec<TokenStream> = store_many_statements.iter().map(|s| s.post.clone()).collect();
     let fn_stream = quote! {
-        pub fn #fn_name(tx: &StorageWriteTx, instances: Vec<#entity_type>) -> Result<(), AppError> {
-            #(#pres)*
-            for mut instance in instances {
-                #(#inserts)*
+        pub fn #fn_name(tx_context: &mut #tx_context_ty, instances: Vec<#entity_type>) -> Result<(), AppError> {
+            for instance in instances {
+                #(#store_many_statements)*
             }
-            #(#posts)*
             Ok(())
         }
     };
@@ -72,9 +72,12 @@ pub fn store_many_def(entity_name: &Ident, entity_type: &Type, store_many_statem
             let storage = random_storage();
             let entity_count: usize = 3;
             let test_entities = #entity_type::sample_many(entity_count);
-            let tx = storage.begin_write().expect("Failed to begin write transaction");
-            let pk = #entity_name::#fn_name(&tx, test_entities).expect("Failed to store and commit instance");
-            tx.commit().expect("Failed to commit transaction");
+            let write_tx = storage.db.begin_write().unwrap();
+            {
+                let mut tx_context = #entity_name::begin_write_tx(&write_tx).unwrap();
+                let pk = #entity_name::#fn_name(&mut tx_context, test_entities).expect("Failed to store and commit instance");
+            }
+            write_tx.commit().expect("Failed to commit transaction");
         }
     });
 
@@ -86,9 +89,12 @@ pub fn store_many_def(entity_name: &Ident, entity_type: &Type, store_many_statem
             let entity_count = 3;
             let test_entities = #entity_type::sample_many(entity_count);
             b.iter(|| {
-                let tx = storage.begin_write().expect("Failed to begin write transaction");
-                #entity_name::#fn_name(&tx, test_entities.clone()).expect("Failed to store and commit instance");
-                tx.commit().expect("Failed to commit transaction");
+                let write_tx = storage.db.begin_write().unwrap();
+                {
+                    let mut tx_context = #entity_name::begin_write_tx(&write_tx).unwrap();
+                    #entity_name::#fn_name(&mut tx_context, test_entities.clone()).expect("Failed to store and commit instance");
+                }
+                write_tx.commit().expect("Failed to commit transaction");
             });
         }
     });
@@ -106,12 +112,13 @@ pub fn store_and_commit_def(entity_name: &Ident, entity_type: &Type, pk_name: &I
     let fn_name = format_ident!("store_and_commit");
     let fn_stream = quote! {
         pub fn #fn_name(storage: Arc<Storage>, instance: #entity_type) -> Result<#pk_type, AppError> {
-           let tx = storage.begin_write()?;
            let pk = instance.#pk_name;
+           let write_tx = storage.db.begin_write()?;
            {
-               #(#store_statements)*
+             let mut tx_context = #entity_name::begin_write_tx(&write_tx)?;
+             #(#store_statements)*
            }
-           tx.commit()?;
+           write_tx.commit()?;
            Ok(pk)
        }
     };

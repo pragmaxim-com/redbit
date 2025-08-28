@@ -40,10 +40,10 @@ impl KeyDef {
             KeyDef::Fk { .. } => false,
         }
     }
-    pub fn field_def(&self) -> &FieldDef {
+    pub fn field_def(&self) -> FieldDef {
         match self {
-            KeyDef::Pk(field_def) => field_def,
-            KeyDef::Fk { field_def, .. } => field_def,
+            KeyDef::Pk(field_def) => field_def.clone(),
+            KeyDef::Fk { field_def, .. } => field_def.clone(),
         }
     }
 }

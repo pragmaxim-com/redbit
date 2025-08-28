@@ -1,11 +1,4 @@
-use std::{
-    any::{Any, TypeId},
-    collections::HashMap,
-    hash::Hash,
-    num::NonZeroUsize,
-    sync::{Arc, Mutex},
-};
-use lru::LruCache;
+/*use std::{any::TypeId, hash::Hash, num::NonZeroUsize};
 
 // ---------- Typed cache token (like TableDefinition) ----------
 pub struct CacheDef<K, V> {
@@ -29,29 +22,4 @@ impl CacheKey {
         Self { name, type_id: TypeId::of::<(K, V)>() }
     }
 }
-
-#[derive(Default)]
-pub struct Caches {
-    inner: Mutex<HashMap<CacheKey, Arc<dyn Any + Send + Sync>>>,
-}
-impl Caches {
-    fn new_cache<K, V>(capacity: NonZeroUsize) -> Arc<dyn Any + Send + Sync>
-    where
-        K: Eq + Hash + Clone + Send + Sync + 'static,
-        V: Clone + Send + Sync + 'static,
-    {
-        Arc::new(Mutex::new(LruCache::<K, V>::new(capacity))) as Arc<dyn Any + Send + Sync>
-    }
-
-    pub(crate) fn get_cache<K, V>(&self, def: &'static CacheDef<K, V>) -> Arc<Mutex<LruCache<K, V>>>
-    where
-        K: Eq + Hash + Clone + Send + Sync + 'static,
-        V: Clone + Send + Sync + 'static,
-    {
-        let key = CacheKey::of::<K, V>(def.name);
-        let mut map = self.inner.lock().unwrap();
-        let erased = map.entry(key).or_insert_with(|| Self::new_cache::<K, V>(def.capacity)).clone();
-        drop(map);
-        Arc::downcast::<Mutex<LruCache<K, V>>>(erased).unwrap_or_else(|_| panic!("cache '{}' reused with different K/V types", def.name))
-    }
-}
+*/

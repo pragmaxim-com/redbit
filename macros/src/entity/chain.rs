@@ -115,9 +115,12 @@ pub fn block_like(block_type: Type, field_defs: &[FieldDef]) -> Result<TokenStre
 
             fn delete(&self) -> Result<(), chain::ChainError> {
                 if let Some(tip_header) = #header_type::last(&self.storage.begin_read()?)? {
-                    let write_tx = self.storage.begin_write()?;
-                    for height in 1..=tip_header.height.0 {
-                        #block_type::delete(&write_tx, &Height(height))?;
+                    let write_tx = self.storage.db.begin_write()?;
+                    {
+                        let mut tx_context = #block_type::begin_write_tx(&write_tx)?;
+                        for height in 1..=tip_header.height.0 {
+                            #block_type::delete(&mut tx_context, &Height(height))?;
+                        }
                     }
                     write_tx.commit()?;
                 }
@@ -137,18 +140,24 @@ pub fn block_like(block_type: Type, field_defs: &[FieldDef]) -> Result<TokenStre
             }
 
             fn store_blocks(&self, blocks: Vec<#block_type>) -> Result<(), chain::ChainError> {
-                let write_tx = self.storage.begin_write()?;
-                for block in blocks.into_iter() {
-                    #block_type::store(&write_tx, block)?;
+                let write_tx = self.storage.db.begin_write()?;
+                {
+                    let mut tx_context = #block_type::begin_write_tx(&write_tx)?;
+                    for block in blocks.into_iter() {
+                        #block_type::store(&mut tx_context, block)?;
+                    }
                 }
                 write_tx.commit()?;
                 Ok(())
             }
 
             fn update_blocks(&self, blocks: Vec<#block_type>) -> Result<(), chain::ChainError> {
-                let write_tx = self.storage.begin_write()?;
-                for block in &blocks {
-                    #block_type::delete(&write_tx, &block.height)?;
+                let write_tx = self.storage.db.begin_write()?;
+                {
+                    let mut tx_context = #block_type::begin_write_tx(&write_tx)?;
+                    for block in &blocks {
+                        #block_type::delete(&mut tx_context, &block.height)?;
+                    }
                 }
                 write_tx.commit()?;
                 self.store_blocks(blocks)?;

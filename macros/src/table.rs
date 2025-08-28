@@ -13,7 +13,7 @@ pub enum TableType {
     DictPkByPk,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct DictTableDefs {
     pub(crate) value_to_dict_pk_cache: Option<Ident>,
     pub(crate) dict_index_table_def: TableDef,
@@ -43,16 +43,11 @@ impl DictTableDefs {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct StoreManyStmnt {
-    pub pre: TokenStream,
-    pub insert: TokenStream,
-    pub post: TokenStream,
-}
-
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct TableDef {
     pub name: Ident,
+    pub key_type: Type,
+    pub value_type: Option<Type>,
     pub cache: Option<(Ident, TokenStream)>,
     pub table_type: TableType,
     pub definition: TokenStream,
@@ -69,6 +64,8 @@ impl TableDef {
         TableDef {
             name,
             cache: None,
+            key_type: pk_type.clone(),
+            value_type: None,
             table_type: TableType::Pk,
             definition
         }
@@ -87,6 +84,8 @@ impl TableDef {
         };
         TableDef {
             name,
+            key_type: pk_type.clone(),
+            value_type: Some(column_type.clone()),
             cache: None,
             table_type: TableType::Plain,
             definition
@@ -101,6 +100,8 @@ impl TableDef {
         };
         TableDef {
             name,
+            key_type: column_type.clone(),
+            value_type: Some(pk_type.clone()),
             cache: None,
             table_type: TableType::Index,
             definition
@@ -116,6 +117,8 @@ impl TableDef {
         };
         TableDef {
             name,
+            key_type: pk_type.clone(),
+            value_type: Some(pk_type.clone()),
             cache: None,
             table_type: TableType::DictIndex,
             definition
@@ -131,6 +134,8 @@ impl TableDef {
         };
         TableDef {
             name,
+            key_type: pk_type.clone(),
+            value_type: Some(column_type.clone()),
             cache: None,
             table_type: TableType::ValueByDictPk,
             definition
@@ -156,6 +161,8 @@ impl TableDef {
 
         TableDef {
             name,
+            key_type: column_type.clone(),
+            value_type: Some(pk_type.clone()),
             cache,
             table_type: TableType::ValueToDictPk,
             definition,
@@ -175,6 +182,8 @@ impl TableDef {
         };
         TableDef {
             name,
+            key_type: pk_type.clone(),
+            value_type: Some(pk_type.clone()),
             cache: None,
             table_type: TableType::DictPkByPk,
             definition

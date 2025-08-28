@@ -22,6 +22,9 @@ pub enum ChainError {
     #[error("Transaction error: {0}")]
     RedbTransaction(#[from] redb::TransactionError),
 
+    #[error("Transaction error: {0}")]
+    RedbTable(#[from] redb::TableError),
+
     #[error("Commit error: {0}")]
     RedbCommit(#[from] redb::CommitError),
 

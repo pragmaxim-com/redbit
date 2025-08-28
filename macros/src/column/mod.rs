@@ -12,14 +12,15 @@ mod get_keys_by;
 pub mod column_impls;
 pub mod column_codec;
 
-use crate::field_parser::{FieldDef, IndexingType, OneToManyParentDef};
-use crate::rest::*;
-use crate::table::{DictTableDefs, StoreManyStmnt, TableDef};
-use proc_macro2::{Ident, TokenStream};
-use quote::quote;
-use syn::Type;
 use crate::entity;
 use crate::entity::query::{RangeQuery, StreamQueryItem};
+use crate::field_parser::{FieldDef, IndexingType, OneToManyParentDef};
+use crate::rest::*;
+use crate::table::{DictTableDefs, TableDef};
+use proc_macro2::{Ident, TokenStream};
+use syn::Type;
+use crate::entity::context;
+use crate::entity::context::TxContextItem;
 
 pub struct DbColumnMacros {
     pub field_def: FieldDef,
@@ -27,11 +28,12 @@ pub struct DbColumnMacros {
     pub table_definitions: Vec<TableDef>,
     pub struct_init: TokenStream,
     pub stream_query_init: StreamQueryItem,
+    pub tx_context_items: Vec<TxContextItem>,
     pub struct_init_with_query: TokenStream,
     pub struct_default_init: TokenStream,
     pub struct_default_init_with_query: TokenStream,
     pub store_statement: TokenStream,
-    pub store_many_statement: StoreManyStmnt,
+    pub store_many_statement: TokenStream,
     pub delete_statement: TokenStream,
     pub delete_many_statement: TokenStream,
     pub function_defs: Vec<FunctionDef>,
@@ -73,11 +75,13 @@ impl DbColumnMacros {
         let column_name = &field_def.name.clone();
         let column_type = &field_def.tpe.clone();
         let table_def = TableDef::plain_table_def(entity_name, column_name, column_type, pk_name, pk_type);
+        let table_definitions = vec![table_def.clone()];
         DbColumnMacros {
             field_def: field_def.clone(),
             range_query: None,
             stream_query_init: query::stream_query_init(column_name, column_type),
-            table_definitions: vec![table_def.clone()],
+            tx_context_items: context::write_tx_context_items(&table_definitions),
+            table_definitions,
             struct_init: init::plain_init(column_name, &table_def.name),
             struct_init_with_query: init::plain_init_with_query(column_name, &table_def.name),
             struct_default_init: init::default_init(column_name, column_type),
@@ -106,6 +110,8 @@ impl DbColumnMacros {
 
         let plain_table_def = TableDef::plain_table_def(entity_name, column_name, column_type, pk_name, pk_type);
         let index_table_def = TableDef::index_table_def(entity_name, column_name, column_type, pk_type);
+
+        let table_definitions = vec![plain_table_def.clone(), index_table_def.clone()];
 
         let mut function_defs: Vec<FunctionDef> = Vec::new();
         function_defs.push(get_by::get_by_index_def(entity_name, entity_type, column_name, column_type, &index_table_def.name));
@@ -156,7 +162,8 @@ impl DbColumnMacros {
             field_def: col_field_def.clone(),
             range_query,
             stream_query_init: query::stream_query_init(column_name, column_type),
-            table_definitions: vec![plain_table_def.clone(), index_table_def.clone()],
+            tx_context_items: context::write_tx_context_items(&table_definitions),
+            table_definitions,
             struct_init: init::index_init(column_name, &plain_table_def.name),
             struct_init_with_query: init::index_init_with_query(column_name, &plain_table_def.name),
             struct_default_init: init::default_init(column_name, column_type),
@@ -184,6 +191,7 @@ impl DbColumnMacros {
         let pk_type = &pk_field_def.tpe;
 
         let dict_tables = DictTableDefs::new(entity_name, column_name, column_type, pk_name, pk_type, cache_size);
+        let table_definitions = dict_tables.all_table_defs();
 
         let mut function_defs: Vec<FunctionDef> = Vec::new();
 
@@ -202,7 +210,8 @@ impl DbColumnMacros {
             field_def: col_field_def.clone(),
             range_query: None,
             stream_query_init: query::stream_query_init(column_name, column_type),
-            table_definitions: dict_tables.all_table_defs(),
+            tx_context_items: context::write_tx_context_items(&table_definitions),
+            table_definitions,
             struct_init: init::dict_init(column_name, &dict_tables),
             struct_init_with_query: init::dict_init_with_query(column_name, &dict_tables),
             struct_default_init_with_query: init::default_init_with_query(column_name, column_type),
@@ -216,23 +225,16 @@ impl DbColumnMacros {
     }
 }
 
-pub(crate) fn open_dict_tables(dict_table_defs: &DictTableDefs) -> (TokenStream, Ident, Ident, Ident, Ident) {
+pub(crate) fn open_dict_tables(dict_table_defs: &DictTableDefs) -> (Ident, Ident, Ident, Ident) {
     let table_dict_pk_by_pk = &dict_table_defs.dict_pk_by_pk_table_def.name;
     let table_value_to_dict_pk = &dict_table_defs.value_to_dict_pk_table_def.name;
     let table_value_by_dict_pk = &dict_table_defs.value_by_dict_pk_table_def.name;
     let table_dict_index = &dict_table_defs.dict_index_table_def.name;
 
-    let dict_pk_by_pk_var = Ident::new(&format!("{}_col_var", table_dict_pk_by_pk).to_lowercase(), table_dict_pk_by_pk.span());
-    let value_to_dict_pk_var = Ident::new(&format!("{}_col_var", table_value_to_dict_pk).to_lowercase(), table_dict_pk_by_pk.span());
-    let value_by_dict_pk_var = Ident::new(&format!("{}_col_var", table_value_by_dict_pk).to_lowercase(), table_dict_pk_by_pk.span());
-    let dict_index_var = Ident::new(&format!("{}_col_var", table_dict_index).to_lowercase(), table_dict_pk_by_pk.span());
+    let dict_pk_by_pk_var = Ident::new(&format!("{}", table_dict_pk_by_pk).to_lowercase(), table_dict_pk_by_pk.span());
+    let value_to_dict_pk_var = Ident::new(&format!("{}", table_value_to_dict_pk).to_lowercase(), table_dict_pk_by_pk.span());
+    let value_by_dict_pk_var = Ident::new(&format!("{}", table_value_by_dict_pk).to_lowercase(), table_dict_pk_by_pk.span());
+    let dict_index_var = Ident::new(&format!("{}", table_dict_index).to_lowercase(), table_dict_pk_by_pk.span());
 
-    let stream =
-        quote! {
-            let mut #dict_pk_by_pk_var       = tx.open_table(#table_dict_pk_by_pk)?;
-            let mut #value_to_dict_pk_var    = tx.open_table(#table_value_to_dict_pk)?;
-            let mut #value_by_dict_pk_var    = tx.open_table(#table_value_by_dict_pk)?;
-            let mut #dict_index_var          = tx.open_multimap_table(#table_dict_index)?;
-        };
-    (stream, dict_pk_by_pk_var, value_to_dict_pk_var, value_by_dict_pk_var, dict_index_var)
+    (dict_pk_by_pk_var, value_to_dict_pk_var, value_by_dict_pk_var, dict_index_var)
 }

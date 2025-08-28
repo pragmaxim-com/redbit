@@ -3,11 +3,12 @@ use crate::field_parser::{ColumnDef, FieldDef, KeyDef, Multiplicity, OneToManyPa
 use crate::pk::DbPkMacros;
 use crate::relationship::DbRelationshipMacros;
 use crate::rest::FunctionDef;
-use crate::table::{StoreManyStmnt, TableDef};
+use crate::table::TableDef;
 use crate::transient::TransientMacros;
 use crate::field_parser;
 use proc_macro2::{Ident, TokenStream};
 use syn::{ItemStruct, Type};
+use crate::entity::context::TxContextItem;
 use crate::entity::query;
 use crate::entity::query::{RangeQuery, StreamQueryItem};
 
@@ -53,7 +54,7 @@ impl FieldMacros {
                         indexing_type.clone(),
                         entity_ident,
                         entity_type,
-                        field_def,
+                        &field_def,
                         stream_query_ty,
                         one_to_many_parent_def.clone()
                     ))
@@ -132,7 +133,16 @@ impl FieldMacros {
     pub fn stream_queries(&self) -> Vec<StreamQueryItem> {
         match self {
             FieldMacros::Plain(column) => vec![column.stream_query_init.clone()],
-            FieldMacros::Relationship(column) => vec![column.stream_query_init.clone()],
+            FieldMacros::Relationship(rel) => vec![rel.stream_query_init.clone()],
+            _ => vec![],
+        }
+    }
+
+    pub fn tx_context_items(&self) -> Vec<TxContextItem> {
+        match self {
+            FieldMacros::Pk(pk) => vec![pk.tx_context_item.clone()],
+            FieldMacros::Plain(column) => column.tx_context_items.clone(),
+            FieldMacros::Relationship(rel) => vec![rel.tx_context_item.clone()],
             _ => vec![],
         }
     }
@@ -155,7 +165,7 @@ impl FieldMacros {
         }
     }
 
-    pub fn store_many_statements(&self) -> Vec<StoreManyStmnt> {
+    pub fn store_many_statements(&self) -> Vec<TokenStream> {
         match self {
             FieldMacros::Pk(pk) => vec![pk.store_many_statement.clone()],
             FieldMacros::Plain(column) => vec![column.store_many_statement.clone()],

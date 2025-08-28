@@ -17,10 +17,12 @@ pub mod root_impls;
 
 use crate::field_parser::{FieldDef, Multiplicity};
 use crate::rest::FunctionDef;
-use crate::table::{StoreManyStmnt, TableDef};
+use crate::table::TableDef;
 use proc_macro2::{Ident, TokenStream};
 use syn::Type;
 use crate::entity;
+use crate::entity::context;
+use crate::entity::context::TxContextItem;
 use crate::entity::query::RangeQuery;
 
 pub enum PointerType {
@@ -35,9 +37,10 @@ pub struct DbPkMacros {
     pub struct_init_with_query: TokenStream,
     pub struct_default_init: TokenStream,
     pub struct_default_init_with_query: TokenStream,
+    pub tx_context_item: TxContextItem,
     pub range_query: RangeQuery,
     pub store_statement: TokenStream,
-    pub store_many_statement: StoreManyStmnt,
+    pub store_many_statement: TokenStream,
     pub delete_statement: TokenStream,
     pub delete_many_statement: TokenStream,
     pub function_defs: Vec<FunctionDef>,
@@ -49,6 +52,7 @@ impl DbPkMacros {
         let pk_type = pk_field_def.tpe.clone();
         let table_def = TableDef::pk(entity_name, &pk_name, &pk_type);
         let range_query = entity::query::pk_range_query(entity_name, &pk_name, &pk_type);
+        let tx_context_ty = context::tx_context_type(entity_type);
 
         let mut function_defs: Vec<FunctionDef> = vec![
             get::fn_def(entity_name, entity_type, &pk_name, &pk_type, &table_def.name),
@@ -60,7 +64,7 @@ impl DbPkMacros {
             exists::fn_def(entity_name, &pk_name, &pk_type, &table_def.name),
             range::fn_def(entity_name, entity_type, &pk_type, &table_def.name, stream_query_ty, no_columns),
             stream_range::fn_def(entity_name, entity_type, pk_field_def, &table_def.name, &range_query.ty, stream_query_ty, no_columns),
-            pk_range::fn_def(entity_name, entity_type, &pk_name, &pk_type, &table_def.name),
+            pk_range::fn_def(entity_name, entity_type, &pk_name, &pk_type, &table_def.name, &tx_context_ty),
         ];
 
         if let Some(Multiplicity::OneToMany) = multiplicity {
@@ -74,6 +78,7 @@ impl DbPkMacros {
             struct_init_with_query: init::pk_init_with_query(&pk_name),
             struct_default_init: init::pk_default_init(&pk_name),
             struct_default_init_with_query: init::pk_init_with_query(&pk_name),
+            tx_context_item: context::write_tx_context_item(&table_def),
             range_query,
             store_statement: store::store_statement(&pk_name, &table_def.name),
             store_many_statement: store::store_many_statement(&pk_name, &table_def.name),

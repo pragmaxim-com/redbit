@@ -3,10 +3,10 @@ use std::collections::HashSet;
 
 fn init_temp_storage(name: &str, db_cache_size_gb: u8) -> (Vec<Block>, Arc<Storage>) {
     let storage = Storage::temp(name, db_cache_size_gb, true).unwrap();
-    let write_tx = storage.begin_write().expect("Failed to begin write transaction");
     let blocks = Block::sample_many(3);
-    Block::store_many(&write_tx, blocks.clone()).expect("Failed to persist blocks");
-    write_tx.commit().expect("Failed to commit transaction");
+    for block in blocks.iter() {
+        Block::store_and_commit(Arc::clone(&storage), block.clone()).expect("Failed to persist blocks");
+    }
     (blocks, storage)
 }
 
@@ -37,8 +37,11 @@ fn it_should_commit_multiple_blocks_in_a_single_tx() {
     let (blocks, multi_tx_storage) = init_temp_storage("db_test", 0);
 
     let single_tx_db = Storage::temp("db_test_2", 0, true).unwrap();
-    let write_tx = single_tx_db.begin_write().expect("Failed to begin write transaction");
-    blocks.into_iter().for_each(|block| Block::store(&write_tx, block).expect("Failed to persist blocks"));
+    let write_tx = single_tx_db.db.begin_write().unwrap();
+    {
+        let mut tx_context = Block::begin_write_tx(&write_tx).unwrap();
+        blocks.into_iter().for_each(|block| Block::store(&mut tx_context, block).expect("Failed to persist blocks"));
+    }
     write_tx.commit().unwrap();
 
     let multi_tx_blocks = Block::take(&multi_tx_storage.begin_read().unwrap(), 100).unwrap();
@@ -113,8 +116,11 @@ async fn it_should_stream_entities_by_index_with_dict() {
 async fn store_many_utxos() {
     let (blocks, storage) = init_temp_storage("db_test", 0);
     let all_utxos = blocks.iter().flat_map(|b| b.transactions.iter().flat_map(|t| t.utxos.clone())).collect::<Vec<Utxo>>();
-    let write_tx = storage.begin_write().unwrap();
-    Utxo::store_many(&write_tx, all_utxos).expect("Failed to store UTXO");
+    let write_tx = storage.db.begin_write().unwrap();
+    {
+        let mut tx_context = Utxo::begin_write_tx(&write_tx).unwrap();
+        Utxo::store_many(&mut tx_context, all_utxos).expect("Failed to store UTXO");
+    }
 }
 
 #[tokio::test]

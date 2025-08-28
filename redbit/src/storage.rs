@@ -1,20 +1,17 @@
-use std::{env, fs};
-use std::hash::Hash;
-use std::sync::Arc;
-use redb::{Database, WriteTransaction, TableDefinition, Table, Key, Value, CommitError, TransactionError, TableError, MultimapTableDefinition, MultimapTable, ReadTransaction, ReadOnlyTable, ReadOnlyMultimapTable};
-use crate::cache::Caches;
 use crate::*;
+use redb::{Database, Key, MultimapTableDefinition, ReadOnlyMultimapTable, ReadOnlyTable, ReadTransaction, TableDefinition, TableError, TransactionError, Value, WriteTransaction};
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::{env, fs};
 
 #[derive(Clone)]
 pub struct Storage {
     pub db: Arc<Database>,
-    caches: Arc<Caches>, // your existing cache holder
 }
 
 impl Storage {
     pub fn new(db: Arc<Database>) -> Self {
-        Self { db: Arc::clone(&db), caches: Arc::new(Caches::default()) }
+        Self { db: Arc::clone(&db) }
     }
 
     pub fn temp(name: &str, db_cache_size_gb: u8, random: bool) -> redb::Result<Arc<Storage>, AppError> {
@@ -50,10 +47,12 @@ impl Storage {
         Ok(StorageReadTx { tx })
     }
 
-    pub fn begin_write(&self) -> redb::Result<StorageWriteTx, TransactionError> {
-        let tx = self.db.begin_write()?;
-        Ok(StorageWriteTx { tx, caches: Arc::clone(&self.caches) })
-    }
+}
+
+pub trait TxContext<'txn> {
+    fn begin_write_tx(tx: &'txn WriteTransaction) -> redb::Result<Self, TableError>
+    where
+        Self: Sized;
 }
 
 pub struct StorageReadTx {
@@ -78,63 +77,5 @@ impl StorageReadTx {
         V: Key + 'static,
     {
         self.tx.open_multimap_table(def)
-    }
-}
-
-pub struct StorageWriteTx {
-    tx: WriteTransaction,
-    pub(crate) caches: Arc<Caches>,
-}
-
-impl StorageWriteTx {
-    pub fn commit(self) -> redb::Result<(), CommitError> {
-        self.tx.commit()
-    }
-
-    pub fn open_table<'txn, K, V>(&'txn self, def: TableDefinition<K, V>) -> redb::Result<Table<'txn, K, V>, TableError>
-    where
-        K: Key + 'static,
-        V: Value + 'static,
-    {
-        self.tx.open_table(def)
-    }
-
-    pub fn open_multimap_table<'txn, K, V>(
-        &'txn self,
-        def: MultimapTableDefinition<K, V>,
-    ) -> redb::Result<MultimapTable<'txn, K, V>, TableError>
-    where
-        K: Key + 'static,
-        V: Key + 'static,
-    {
-        self.tx.open_multimap_table(def)
-    }
-
-    pub fn cache_get_or_put<K, V, F>(&self, def: &'static CacheDef<K, V>, k: &K, compute: F) -> Result<(V, bool), AppError>
-    where
-        K: Eq + Hash + Clone + Send + Sync + 'static,
-        V: Clone + Send + Sync + 'static,
-        F: FnOnce() -> Result<(V, bool), AppError>,
-    {
-        let cache = self.caches.get_cache(def);
-        let mut c = cache.lock().unwrap();
-
-        if let Some(cached) = c.get(&k) {
-            return Ok((cached.clone(), false));
-        }
-
-        let (value, created) = compute()?;
-        let _ = c.put(k.clone(), value.clone());
-        Ok((value, created))
-    }
-
-    pub fn cache_remove<K, V>(&self, def: &'static CacheDef<K, V>, k: &K) -> Option<V>
-    where
-        K: Eq + Hash + Clone + Send + Sync + 'static,
-        V: Clone + Send + Sync + 'static,
-    {
-        let cache = self.caches.get_cache(def);
-        let mut c = cache.lock().unwrap();
-        c.pop(k)
     }
 }

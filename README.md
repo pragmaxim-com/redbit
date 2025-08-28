@@ -211,7 +211,7 @@ And R/W entire instances efficiently using indexes and dictionaries `chains/demo
         let blocks = Block::sample_many(2);
         let block_heights: Vec<Height> = blocks.iter().map(|b|b.height).collect();
         println!("Persisting blocks:");
-        let write_tx = storage.begin_write()?;
+        let write_tx = storage.db.begin_write()?;
         Block::store_many(&write_tx, blocks)?;
         write_tx.commit()?;
     
