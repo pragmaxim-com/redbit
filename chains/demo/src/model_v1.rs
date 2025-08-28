@@ -70,7 +70,7 @@ pub struct Utxo {
     pub id: TransactionPointer,
     #[column]
     pub amount: u64,
-    #[column(dictionary(cache = 10000))]
+    #[column(dictionary)]
     pub address: Address,
     pub assets: Vec<Asset>,
 }
@@ -95,7 +95,7 @@ pub struct Asset {
     pub id: UtxoPointer,
     #[column]
     pub amount: u64,
-    #[column(dictionary(cache = 10000))]
+    #[column(dictionary)]
     pub name: AssetName,
 }
 
