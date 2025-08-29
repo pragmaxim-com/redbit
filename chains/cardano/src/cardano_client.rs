@@ -4,11 +4,18 @@ use pallas::network::{
     miniprotocols::{localstate::queries_v16, Point, MAINNET_MAGIC},
 };
 use std::sync::Arc;
+use chain::api::SizeLike;
 use redbit::info;
 use crate::config::CardanoConfig;
 use crate::model_v1::ExplorerError;
 
-pub type CBOR = Vec<u8>;
+pub struct CardanoCBOR(pub Vec<u8>);
+
+impl SizeLike for CardanoCBOR {
+    fn size(&self) -> usize {
+        self.0.len()
+    }
+}
 
 pub struct CardanoClient {
     pub peer_client: Arc<Mutex<PeerClient>>,
@@ -28,7 +35,7 @@ impl CardanoClient {
 }
 
 impl CardanoClient {
-    pub async fn get_best_block(&self) -> Result<CBOR, ExplorerError> {
+    pub async fn get_best_block(&self) -> Result<CardanoCBOR, ExplorerError> {
         let mut client = self.node_client.lock().await;
         info!("Getting chain tip from Cardano node client");
         let c = client.statequery();
@@ -38,9 +45,9 @@ impl CardanoClient {
         self.get_block_by_point(tip).await
     }
 
-    pub async fn get_block_by_point(&self, point: Point) -> Result<CBOR, ExplorerError> {
+    pub async fn get_block_by_point(&self, point: Point) -> Result<CardanoCBOR, ExplorerError> {
         info!("Getting block from Cardano peer client");
-        let block = self.peer_client.lock().await.blockfetch().fetch_single(point).await?;
-        Ok(block)
+        let bytes = self.peer_client.lock().await.blockfetch().fetch_single(point).await?;
+        Ok(CardanoCBOR(bytes))
     }
 }

@@ -3,24 +3,24 @@ use std::{fs, sync::Arc, time::Duration};
 
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
 use ergo::block_provider::ErgoBlockProvider;
+use ergo::ergo_client::ErgoCBOR;
 use ergo::model_v1::{Block, BlockChain};
-use ergo_lib::chain::block::FullBlock;
-use redbit::{info, serde_json, Storage};
+use redbit::{info, Storage};
 
-fn block_from_file(size: &str, tx_count: usize) -> FullBlock {
+fn block_from_file(size: &str, tx_count: usize) -> ErgoCBOR {
     info!("Getting {} block with {} txs", size, tx_count);
     let path = format!("blocks/{}_block.json", size);
-    let file_content = fs::read_to_string(path).expect("Failed to read block file");
-    serde_json::from_str(&file_content).expect("Failed to deserialize block from JSON")
+    let file_content = fs::read(path).expect("Failed to read block file");
+    ErgoCBOR(file_content)
 }
 
 fn criterion_benchmark(c: &mut Criterion) {
     let storage = Storage::temp("ergo_benchmark", 1, true).expect("Failed to open database");
     let chain: Arc<dyn BlockChainLike<Block>> = BlockChain::new(Arc::clone(&storage));
 
-    let small_block: FullBlock = block_from_file("small", 8);
-    let avg_block: FullBlock = block_from_file("avg", 49);
-    let huge_block: FullBlock = block_from_file("huge", 320);
+    let small_block: ErgoCBOR = block_from_file("small", 8);
+    let avg_block: ErgoCBOR = block_from_file("avg", 49);
+    let huge_block: ErgoCBOR = block_from_file("huge", 320);
 
     info!("Initiating processing");
     let processed_small_block = ErgoBlockProvider::process_block_pure(&small_block).expect("Failed to process small_block");

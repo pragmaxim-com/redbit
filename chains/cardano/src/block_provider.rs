@@ -1,8 +1,11 @@
-use super::cardano_client::{CardanoClient, CBOR};
+use super::cardano_client::{CardanoCBOR, CardanoClient};
 use crate::config::CardanoConfig;
 use crate::model_v1::*;
 use async_stream::stream;
 use async_trait::async_trait;
+use chain::api::{BlockProvider, ChainError};
+use chain::batcher::SyncMode;
+use chain::monitor::BoxWeight;
 use futures::{Stream, StreamExt};
 use pallas::codec::minicbor::{Encode, Encoder};
 use pallas::ledger::traverse::{MultiEraBlock, MultiEraInput, MultiEraOutput};
@@ -10,9 +13,6 @@ use pallas::network::miniprotocols::chainsync::{N2CClient, NextResponse};
 use pallas::network::miniprotocols::Point;
 use pallas_traverse::wellknown::GenesisValues;
 use std::{pin::Pin, sync::Arc};
-use chain::api::{BlockProvider, ChainError};
-use chain::monitor::BoxWeight;
-use chain::batcher::SyncMode;
 use ExplorerError;
 
 pub struct CardanoBlockProvider {
@@ -28,8 +28,8 @@ impl CardanoBlockProvider {
         Arc::new(CardanoBlockProvider { client, genesis })
     }
 
-    pub fn process_block_pure(block: &CBOR, genesis: &GenesisValues) -> Result<Block, ChainError> {
-        let b = MultiEraBlock::decode(block).map_err(ExplorerError::from)?;
+    pub fn process_block_pure(cbor: &CardanoCBOR, genesis: &GenesisValues) -> Result<Block, ChainError> {
+        let b = MultiEraBlock::decode(&cbor.0).map_err(ExplorerError::from)?;
         let header = b.header();
         let hash: [u8; 32] = *header.hash();
         let prev_h = header.previous_hash().unwrap_or(pallas::crypto::hash::Hash::new([0u8; 32]));
@@ -134,11 +134,11 @@ impl CardanoBlockProvider {
 }
 
 #[async_trait]
-impl BlockProvider<CBOR, Block> for CardanoBlockProvider {
-    fn block_processor(&self) -> Arc<dyn Fn(&CBOR) -> Result<Block, ChainError> + Send + Sync> {
+impl BlockProvider<CardanoCBOR, Block> for CardanoBlockProvider {
+    fn block_processor(&self) -> Arc<dyn Fn(&CardanoCBOR) -> Result<Block, ChainError> + Send + Sync> {
         let genesis = Arc::clone(&self.genesis);
         // capture Arc<GenesisValues>; closure itself is zero-alloc per call
-        Arc::new(move |cbor: &CBOR| {
+        Arc::new(move |cbor: &CardanoCBOR| {
             CardanoBlockProvider::process_block_pure(cbor, &genesis)
         })
     }
@@ -154,7 +154,7 @@ impl BlockProvider<CBOR, Block> for CardanoBlockProvider {
         Ok(best_header.header)
     }
 
-    fn stream(&self, _remote_chain_tip: BlockHeader, last_persisted_header: Option<BlockHeader>, _mode: SyncMode) -> Pin<Box<dyn Stream<Item = CBOR> + Send + 'static>> {
+    fn stream(&self, _remote_chain_tip: BlockHeader, last_persisted_header: Option<BlockHeader>, _mode: SyncMode) -> Pin<Box<dyn Stream<Item = CardanoCBOR> + Send + 'static>> {
         let node_client = Arc::clone(&self.client.node_client);
         let last_point = last_persisted_header.as_ref().map_or(Point::Origin, |h| Point::new(h.slot.0 as u64, h.hash.0.to_vec()));
 
@@ -167,8 +167,8 @@ impl BlockProvider<CBOR, Block> for CardanoBlockProvider {
 
             loop {
                 match cs.request_next().await.expect("chainsync request_next failed") {
-                    NextResponse::RollForward(block_bytes, _new_tip) => {
-                        yield block_bytes.0;
+                    NextResponse::RollForward(bytes, _new_tip) => {
+                        yield CardanoCBOR(bytes.0);
                     }
                     NextResponse::RollBackward(_point, new_tip) => {
                         info !("Cardano roll backward to: {:?} ", new_tip);

@@ -1,4 +1,4 @@
-use crate::api::BlockLike;
+use crate::api::{BlockLike, SizeLike};
 use crate::settings::IndexerSettings;
 use crate::syncer::ChainSyncer;
 use redbit::error;
@@ -7,11 +7,11 @@ use std::time::Duration;
 use tokio::sync::watch;
 use tokio::time;
 
-pub struct Scheduler<FB: Send + Sync + 'static, TB: BlockLike + 'static> {
+pub struct Scheduler<FB: SizeLike + 'static, TB: BlockLike + 'static> {
     pub syncer: Arc<ChainSyncer<FB, TB>>,
 }
 
-impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> Scheduler<FB, TB> {
+impl<FB: SizeLike + 'static, TB: BlockLike + 'static> Scheduler<FB, TB> {
     pub fn new(syncer: Arc<ChainSyncer<FB, TB>>) -> Self {
         Scheduler { syncer }
     }

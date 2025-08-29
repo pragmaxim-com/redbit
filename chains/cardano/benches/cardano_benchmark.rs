@@ -1,17 +1,17 @@
 use chain::api::BlockChainLike;
 use std::{fs, sync::Arc, time::Duration};
-
 use cardano::block_provider::CardanoBlockProvider;
-use cardano::cardano_client::CBOR;
+use cardano::cardano_client::CardanoCBOR;
 use cardano::model_v1::{Block, BlockChain};
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
 use pallas_traverse::wellknown::GenesisValues;
 use redbit::{info, Storage};
 
-fn block_from_file(size: &str, tx_count: usize) -> CBOR {
+fn block_from_file(size: &str, tx_count: usize) -> CardanoCBOR {
     info!("Getting {} block with {} txs", size, tx_count);
     let path = format!("blocks/{}_block.cbor", size);
-    fs::read(&path).expect("Failed to deserialize block from CBOR")
+    let bytes = fs::read(&path).expect("Failed to deserialize block from CBOR");
+    CardanoCBOR(bytes)
 }
 
 fn criterion_benchmark(c: &mut Criterion) {
@@ -19,9 +19,9 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     let chain: Arc<dyn BlockChainLike<Block>> = BlockChain::new(Arc::clone(&storage));
 
-    let small_block: CBOR = block_from_file("small", 8);
-    let avg_block: CBOR = block_from_file("avg", 42);
-    let huge_block: CBOR = block_from_file("huge", 322);
+    let small_block: CardanoCBOR = block_from_file("small", 8);
+    let avg_block: CardanoCBOR = block_from_file("avg", 42);
+    let huge_block: CardanoCBOR = block_from_file("huge", 322);
 
     let genesis_value = GenesisValues::mainnet();
 

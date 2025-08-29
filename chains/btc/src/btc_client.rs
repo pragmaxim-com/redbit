@@ -1,16 +1,21 @@
 use crate::config::BitcoinConfig;
-use crate::model_v1::{BlockHash, Height, ExplorerError};
+use crate::model_v1::{BlockHash, ExplorerError, Height};
 use bitcoin::hashes::Hash;
 use bitcoincore_rpc::{Auth, Client, RpcApi};
+use chain::api::SizeLike;
+use redbit::retry::retry_with_delay_sync;
 use std::sync::Arc;
 use std::time::Duration;
-use serde::{Deserialize, Serialize};
-use redbit::retry::retry_with_delay_sync;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct BtcBlock {
-    pub height: Height,
-    pub underlying: bitcoin::Block,
+pub struct BtcCBOR {
+    pub hex: String,
+    pub height: Height // bip34 hack
+}
+
+impl SizeLike for BtcCBOR {
+    fn size(&self) -> usize {
+        self.hex.len()
+    }
 }
 
 pub struct BtcClient {
@@ -32,40 +37,32 @@ impl BtcClient {
 }
 
 impl BtcClient {
-    pub fn get_best_block(&self) -> Result<BtcBlock, ExplorerError> {
+    pub fn get_best_block(&self) -> Result<BtcCBOR, ExplorerError> {
         retry_with_delay_sync(3, Duration::from_millis(1000), || {
             let best_block_hash = self.rpc_client.get_best_block_hash()?;
-            let best_block = self.rpc_client.get_block(&best_block_hash)?;
-            let height = self.get_block_height(&best_block)?;
-            Ok(BtcBlock { height, underlying: best_block })
+            let best_block_hex = self.rpc_client.get_block_hex(&best_block_hash)?;
+            let verbose_block = self.rpc_client.get_block_info(&best_block_hash)?;
+            let height = Height(verbose_block.height as u32);
+            Ok(BtcCBOR { height, hex: best_block_hex })
         })
+
     }
 
-    pub fn get_block_by_hash(&self, hash: BlockHash) -> Result<BtcBlock, ExplorerError> {
+    pub fn get_block_by_hash(&self, hash: BlockHash) -> Result<BtcCBOR, ExplorerError> {
         let bitcoin_hash = bitcoin::BlockHash::from_raw_hash(Hash::from_byte_array(hash.0));
         retry_with_delay_sync(3, Duration::from_millis(1000), || {
-            let block = self.rpc_client.get_block(&bitcoin_hash)?;
-            let height = self.get_block_height(&block)?;
-            Ok(BtcBlock { height, underlying: block })
+            let block_hex = self.rpc_client.get_block_hex(&bitcoin_hash)?;
+            let verbose_block = self.rpc_client.get_block_info(&bitcoin_hash)?;
+            let height = Height(verbose_block.height as u32);
+            Ok(BtcCBOR { height, hex: block_hex })
         })
     }
 
-    pub fn get_block_by_height(&self, height: Height) -> Result<BtcBlock, ExplorerError> {
+    pub fn get_block_by_height(&self, height: Height) -> Result<BtcCBOR, ExplorerError> {
         retry_with_delay_sync(3, Duration::from_millis(1000), || {
             let block_hash = self.rpc_client.get_block_hash(height.0 as u64)?;
-            let block = self.rpc_client.get_block(&block_hash)?;
-            Ok(BtcBlock { height, underlying: block })
-        })
-    }
-
-    fn get_block_height(&self, block: &bitcoin::Block) -> Result<Height, ExplorerError> {
-        if let Ok(height) = block.bip34_block_height() {
-            return Ok(Height(height as u32));
-        }
-        let block_hash = block.block_hash();
-        retry_with_delay_sync(3, Duration::from_millis(1000), || {
-            let verbose_block = self.rpc_client.get_block_info(&block_hash)?;
-            Ok(Height(verbose_block.height as u32))
+            let block_hex = self.rpc_client.get_block_hex(&block_hash)?;
+            Ok(BtcCBOR{ height, hex: block_hex })
         })
     }
 }

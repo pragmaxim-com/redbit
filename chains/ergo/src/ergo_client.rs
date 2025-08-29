@@ -1,10 +1,8 @@
 use crate::model_v1::{BlockHash, ExplorerError, Height};
+use chain::api::SizeLike;
 use ergo_lib::chain::block::FullBlock;
 use redbit::retry::retry_with_delay_async;
-use reqwest::{
-    blocking, header::{HeaderMap, HeaderValue, ACCEPT, CONTENT_TYPE}, Client,
-    Url,
-};
+use reqwest::{blocking, header::{HeaderMap, HeaderValue, ACCEPT, CONTENT_TYPE}, Client, Response, Url};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
@@ -22,6 +20,14 @@ pub struct ErgoClient {
     node_url: Url,
     http: Client,
     headers: HeaderMap,
+}
+
+pub struct ErgoCBOR(pub Vec<u8>);
+
+impl SizeLike for ErgoCBOR {
+    fn size(&self) -> usize {
+        self.0.len()
+    }
 }
 
 impl ErgoClient {
@@ -45,19 +51,18 @@ impl ErgoClient {
         Ok(Self { node_url, http, headers: headers.clone() })
     }
 
-    pub(crate) async fn get_block_by_height_retry_async(&self, height: Height) -> Result<FullBlock, ExplorerError> {
+    pub(crate) async fn get_cbor_by_height_retry_async(&self, height: Height) -> Result<ErgoCBOR, ExplorerError> {
         retry_with_delay_async(5, Duration::from_millis(1000), || {
             async move {
                 let block_ids = self.get_block_ids_by_height_async(height).await?;
-                self.get_block_by_hash_async(block_ids.first().unwrap()).await
+                self.get_cbor_by_hash_async(block_ids.first().unwrap()).await
             }
         }).await
     }
 
-    pub(crate) async fn get_block_by_height_async(&self, height: Height) -> Result<FullBlock, ExplorerError> {
+    pub(crate) async fn get_cbor_by_height_async(&self, height: Height) -> Result<ErgoCBOR, ExplorerError> {
         let block_ids = self.get_block_ids_by_height_async(height).await?;
-
-        self.get_block_by_hash_async(block_ids.first().unwrap()).await
+        self.get_cbor_by_hash_async(block_ids.first().unwrap()).await
     }
 
     pub(crate) async fn get_node_info_async(&self) -> Result<NodeInfo, ExplorerError> {
@@ -74,9 +79,9 @@ impl ErgoClient {
         }
     }
 
-    pub(crate) async fn get_best_block_async(&self) -> Result<FullBlock, ExplorerError> {
+    pub(crate) async fn get_best_block_async(&self) -> Result<ErgoCBOR, ExplorerError> {
         let node_info = self.get_node_info_async().await?;
-        self.get_block_by_height_async(Height(node_info.full_height)).await
+        self.get_cbor_by_height_async(Height(node_info.full_height)).await
     }
 
     pub async fn get_block_ids_by_height_async(&self, height: Height) -> Result<Vec<String>, ExplorerError> {
@@ -89,10 +94,21 @@ impl ErgoClient {
         Ok(block_ids)
     }
 
-    pub(crate) async fn get_block_by_hash_async(&self, block_hash: &str) -> Result<FullBlock, ExplorerError> {
+    pub(crate) async fn get_block_by_hash_response_async(&self, block_hash: &str) -> Result<Response, ExplorerError> {
         let url = self.node_url.join(&format!("blocks/{}", block_hash))?;
-        let block = self.http.get(url).send().await?.json::<FullBlock>().await?;
+        let response = self.http.get(url).send().await?;
+        Ok(response)
+    }
+
+    #[allow(dead_code)]
+    pub(crate) async fn get_block_by_hash_async(&self, block_hash: &str) -> Result<FullBlock, ExplorerError> {
+        let block = self.get_block_by_hash_response_async(block_hash).await?.json::<FullBlock>().await?;
         Ok(block)
+    }
+
+    pub(crate) async fn get_cbor_by_hash_async(&self, block_hash: &str) -> Result<ErgoCBOR, ExplorerError> {
+        let cbor = self.get_block_by_hash_response_async(block_hash).await?.bytes().await?.to_vec();
+        Ok(ErgoCBOR(cbor))
     }
 
     // BLOCKING CLIENT
@@ -113,12 +129,21 @@ impl ErgoClient {
         Ok(block_ids)
     }
 
-    pub fn get_block_by_hash_sync(&self, hash: BlockHash) -> Result<FullBlock, ExplorerError> {
+    pub fn get_block_by_hash_response_sync(&self, hash: BlockHash) -> Result<blocking::Response, ExplorerError> {
         let url = self.node_url.join(&format!("blocks/{}", hex::encode(hash.0)))?;
-        let block = self.blocking_client().get(url).send()?.json::<FullBlock>()?;
+        let response = self.blocking_client().get(url).send()?;
+        Ok(response)
+    }
+
+    pub fn get_block_by_hash_sync(&self, hash: BlockHash) -> Result<FullBlock, ExplorerError> {
+        let block = self.get_block_by_hash_response_sync(hash)?.json::<FullBlock>()?;
         Ok(block)
     }
 
+    pub fn get_cbor_by_hash_sync(&self, hash: BlockHash) -> Result<ErgoCBOR, ExplorerError> {
+        let cbor = self.get_block_by_hash_response_sync(hash)?.bytes()?.to_vec();
+        Ok(ErgoCBOR(cbor))
+    }
 }
 
 #[cfg(all(test, not(feature = "ci")))]

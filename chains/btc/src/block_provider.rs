@@ -1,14 +1,14 @@
-use crate::btc_client::{BtcBlock, BtcClient};
+use crate::btc_client::{BtcCBOR, BtcClient};
 use crate::config::BitcoinConfig;
-use crate::model_v1::{Address, Block, BlockHash, Header, BlockPointer, BlockTimestamp, ExplorerError, Height, MerkleRoot, ScriptHash, TempInputRef, Transaction, TransactionPointer, TxHash, Utxo, Weight};
+use crate::model_v1::{Address, Block, BlockHash, BlockPointer, BlockTimestamp, ExplorerError, Header, Height, MerkleRoot, ScriptHash, TempInputRef, Transaction, TransactionPointer, TxHash, Utxo, Weight};
 use async_trait::async_trait;
+use chain::api::{BlockProvider, ChainError};
+use chain::batcher::SyncMode;
+use chain::monitor::BoxWeight;
 use futures::stream::StreamExt;
 use futures::Stream;
 use redbit::*;
 use std::{pin::Pin, sync::Arc};
-use chain::api::{BlockProvider, ChainError};
-use chain::batcher::SyncMode;
-use chain::monitor::BoxWeight;
 
 pub const SENTINEL: [u8; 25] = [
     0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -29,30 +29,31 @@ impl BtcBlockProvider {
         Ok(Arc::new(BtcBlockProvider { client, fetching_par }))
     }
 
-    pub fn process_block_pure(block: &BtcBlock) -> Result<Block, ChainError> {
+    pub fn process_block_pure(cbor: &BtcCBOR) -> Result<Block, ChainError> {
+        let block: bitcoin::Block = bitcoin::consensus::encode::deserialize_hex(&cbor.hex).map_err(|e| ChainError::new(&format!("Failed to deser CBOR: {}", e)))?;
+        let height = cbor.height;
         let mut block_weight = 0;
         let transactions = block
-            .underlying
             .txdata
             .iter()
             .enumerate()
             .map(|(tx_index, tx)| {
                 block_weight += tx.input.len() + tx.output.len();
-                Self::process_tx(block.height, tx_index as u16, &tx)
+                Self::process_tx(height, tx_index as u16, &tx)
             })
             .collect();
         
         let header = Header {
-            height: block.height,
-            timestamp: BlockTimestamp(block.underlying.header.time),
-            hash: BlockHash(*block.underlying.block_hash().as_ref()),
-            prev_hash: BlockHash(*block.underlying.header.prev_blockhash.as_ref()),
-            merkle_root: MerkleRoot(*block.underlying.header.merkle_root.as_ref()),
+            height: height.clone(),
+            timestamp: BlockTimestamp(block.header.time),
+            hash: BlockHash(*block.block_hash().as_ref()),
+            prev_hash: BlockHash(*block.header.prev_blockhash.as_ref()),
+            merkle_root: MerkleRoot(*block.header.merkle_root.as_ref()),
             weight: Weight(block_weight as u32),
         };
 
         Ok(Block {
-            height: block.height,
+            height,
             header,
             transactions,
         })
@@ -97,8 +98,8 @@ impl BtcBlockProvider {
 }
 
 #[async_trait]
-impl BlockProvider<BtcBlock, Block> for BtcBlockProvider {
-    fn block_processor(&self) -> Arc<dyn Fn(&BtcBlock) -> Result<Block, ChainError> + Send + Sync> {
+impl BlockProvider<BtcCBOR, Block> for BtcBlockProvider {
+    fn block_processor(&self) -> Arc<dyn Fn(&BtcCBOR) -> Result<Block, ChainError> + Send + Sync> {
         Arc::new(|raw| Self::process_block_pure(raw))
     }
 
@@ -123,7 +124,7 @@ impl BlockProvider<BtcBlock, Block> for BtcBlockProvider {
         remote_chain_tip_header: Header,
         last_persisted_header: Option<Header>,
         mode: SyncMode
-    ) -> Pin<Box<dyn Stream<Item = BtcBlock> + Send + 'static>> {
+    ) -> Pin<Box<dyn Stream<Item = BtcCBOR> + Send + 'static>> {
         let height_to_index_from = last_persisted_header.map_or(1, |h| h.height.0 + 1);
         let heights = height_to_index_from..=remote_chain_tip_header.height.0;
         let client = Arc::clone(&self.client);

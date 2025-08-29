@@ -6,8 +6,14 @@ use std::collections::{BTreeMap, HashMap};
 use std::pin::Pin;
 use std::sync::{Arc, RwLock};
 use redbit::info;
-use chain::api::{BlockProvider, ChainError};
+use chain::api::{BlockProvider, ChainError, SizeLike};
 use chain::batcher::SyncMode;
+
+impl SizeLike for Block {
+    fn size(&self) -> usize {
+        512 // Dummy fixed size for demo purposes
+    }
+}
 
 pub struct DemoBlockProvider {
     pub hash_by_height: Arc<RwLock<BTreeMap<Height, BlockHash>>>,

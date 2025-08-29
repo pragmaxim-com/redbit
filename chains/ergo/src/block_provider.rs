@@ -1,11 +1,14 @@
 use crate::config::ErgoConfig;
-use crate::ergo_client::ErgoClient;
+use crate::ergo_client::{ErgoCBOR, ErgoClient};
 use crate::model_v1;
 use crate::model_v1::{Address, Asset, AssetAction, AssetName, AssetType, Block, BlockHash, BlockHeader, BlockPointer, BlockTimestamp, ExplorerError, Height, Transaction, TransactionPointer, TxHash, Utxo, UtxoPointer, Weight};
 use async_trait::async_trait;
-use ergo_lib::ergotree_ir::chain::address::AddressEncoder;
+use chain::api::{BlockProvider, ChainError};
+use chain::batcher::SyncMode;
+use chain::monitor::BoxWeight;
 use ergo_lib::chain::block::FullBlock;
 use ergo_lib::chain::transaction::ergo_transaction::ErgoTransaction;
+use ergo_lib::ergotree_ir::chain::address::AddressEncoder;
 use ergo_lib::{
     ergotree_ir::{
         chain::{address, ergo_box::ErgoBox, token::TokenId},
@@ -18,9 +21,6 @@ use futures::Stream;
 use redbit::*;
 use reqwest::Url;
 use std::{pin::Pin, str::FromStr, sync::Arc};
-use chain::api::{BlockProvider, ChainError};
-use chain::batcher::SyncMode;
-use chain::monitor::BoxWeight;
 
 pub struct ErgoBlockProvider {
     pub client: Arc<ErgoClient>,
@@ -38,7 +38,8 @@ impl ErgoBlockProvider {
         }))
     }
 
-    pub fn process_block_pure(b: &FullBlock) -> Result<Block, ChainError> {
+    pub fn process_block_pure(cbor: &ErgoCBOR) -> Result<Block, ChainError> {
+        let b: FullBlock = serde_json::from_slice(&cbor.0).map_err(|e| ChainError::new(&format!("Failed to parse block CBOR: {}", e)))?;
         let mut block_weight: usize = 0;
         let mut result_txs = Vec::with_capacity(b.block_transactions.transactions.len());
 
@@ -131,14 +132,14 @@ impl ErgoBlockProvider {
 }
 
 #[async_trait]
-impl BlockProvider<FullBlock, Block> for ErgoBlockProvider {
+impl BlockProvider<ErgoCBOR, Block> for ErgoBlockProvider {
 
-    fn block_processor(&self) -> Arc<dyn Fn(&FullBlock) -> Result<Block, ChainError> + Send + Sync> {
+    fn block_processor(&self) -> Arc<dyn Fn(&ErgoCBOR) -> Result<Block, ChainError> + Send + Sync> {
         Arc::new(|raw| ErgoBlockProvider::process_block_pure(raw))
     }
 
     fn get_processed_block(&self, hash: [u8; 32]) -> Result<Option<Block>, ChainError> {
-        match self.client.get_block_by_hash_sync(BlockHash(hash)) {
+        match self.client.get_cbor_by_hash_sync(BlockHash(hash)) {
             Ok(block) => {
                 let processed_block = Self::process_block_pure(&block)?;
                 Ok(Some(processed_block))
@@ -158,7 +159,7 @@ impl BlockProvider<FullBlock, Block> for ErgoBlockProvider {
         remote_chain_tip_header: BlockHeader,
         last_persisted_header: Option<BlockHeader>,
         mode: SyncMode
-    ) -> Pin<Box<dyn Stream<Item = FullBlock> + Send + 'static>> {
+    ) -> Pin<Box<dyn Stream<Item = ErgoCBOR> + Send + 'static>> {
         let height_to_index_from = last_persisted_header.map_or(1, |h| h.height.0 + 1);
         let heights = height_to_index_from..=remote_chain_tip_header.height.0;
         let client = Arc::clone(&self.client);
@@ -166,7 +167,7 @@ impl BlockProvider<FullBlock, Block> for ErgoBlockProvider {
             tokio_stream::iter(heights).map(move |height| {
                 let client = Arc::clone(&client);
                 async move {
-                    client.get_block_by_height_retry_async(Height(height)).await.expect("Failed to fetch block by height")
+                    client.get_cbor_by_height_retry_async(Height(height)).await.expect("Failed to fetch block by height")
                 }
             });
         

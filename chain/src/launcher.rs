@@ -1,4 +1,4 @@
-use crate::api::{BlockChainLike, BlockLike, BlockProvider};
+use crate::api::{BlockChainLike, BlockLike, BlockProvider, SizeLike};
 use crate::scheduler::Scheduler;
 use crate::settings::{AppConfig, HttpSettings, IndexerSettings};
 use crate::{combine, ChainError};
@@ -33,7 +33,7 @@ pub async fn maybe_run_server(
     }
 }
 
-pub async fn maybe_run_syncing<FB: Send + Sync + 'static, TB: BlockLike + 'static>(
+pub async fn maybe_run_syncing<FB: SizeLike + 'static, TB: BlockLike + 'static>(
     index_config: &IndexerSettings,
     last_header: Option<TB::Header>,
     syncer: Arc<ChainSyncer<FB, TB>>,
@@ -51,7 +51,7 @@ pub async fn maybe_run_syncing<FB: Send + Sync + 'static, TB: BlockLike + 'stati
     }
 }
 
-pub async fn maybe_run_scheduling<FB: Send + Sync + 'static, TB: BlockLike + 'static>(
+pub async fn maybe_run_scheduling<FB: SizeLike + 'static, TB: BlockLike + 'static>(
     index_config: IndexerSettings,
     scheduler: Scheduler<FB, TB>,
     shutdown: watch::Receiver<bool>,
@@ -76,7 +76,7 @@ fn maybe_console_init() {
     info!("Running production build without console subscriber");
 }
 
-pub async fn launch<FB: Send + Sync + 'static, TB: BlockLike + 'static, F>(
+pub async fn launch<FB: SizeLike + 'static, TB: BlockLike + 'static, F>(
     block_provider: Arc<dyn BlockProvider<FB, TB>>,
     build_chain: F,
     extras: Option<OpenApiRouter<RequestState>>,
@@ -99,7 +99,7 @@ where
             info!("Validating chain for being linked");
             chain.validate_chain().await?
         };
-    let syncer: Arc<ChainSyncer<FB, TB>> =Arc::new(ChainSyncer::new(Arc::clone(&block_provider), Arc::clone(&chain)));
+    let syncer: Arc<ChainSyncer<FB, TB>> = Arc::new(ChainSyncer::new(Arc::clone(&block_provider), Arc::clone(&chain)));
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
     // we sync with the node first
     maybe_run_syncing(&config.indexer, unlinked_headers.first().cloned(), Arc::clone(&syncer), shutdown_rx.clone()).await;

@@ -1,4 +1,4 @@
-use crate::api::BlockHeaderLike;
+use crate::api::{BlockHeaderLike, SizeLike};
 use crate::api::{BlockChainLike, BlockLike};
 use crate::api::{BlockProvider, ChainError};
 use crate::batcher::{Batcher, ReorderBuffer, SyncMode};
@@ -11,13 +11,13 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, watch};
 use tokio_stream::wrappers::ReceiverStream;
 
-pub struct ChainSyncer<FB: Send + Sync + 'static, TB: BlockLike + 'static> {
+pub struct ChainSyncer<FB: SizeLike + 'static, TB: BlockLike + 'static> {
     pub block_provider: Arc<dyn BlockProvider<FB, TB>>,
     pub chain: Arc<dyn BlockChainLike<TB>>,
     pub monitor: Arc<ProgressMonitor>,
 }
 
-impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
+impl<FB: SizeLike + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
     pub fn new(block_provider: Arc<dyn BlockProvider<FB, TB>>, chain: Arc<dyn BlockChainLike<TB>>) -> Self {
         Self { block_provider, chain, monitor: Arc::new(ProgressMonitor::new(1000)) }
     }
@@ -51,6 +51,7 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
             indexing_how, heights_to_fetch, height_to_index_from, chain_tip_height, indexing_par, fork_detection_height
         );
         let buffer_size = 1024;
+        let block_byte_size_blocking_limit = 96 * 1024;
         let min_batch_size = indexer_conf.min_batch_size;
         let batch_buffer_size = std::cmp::max(128, buffer_size / 4);
         let (fetch_tx, fetch_rx) = mpsc::channel::<FB>(buffer_size);
@@ -77,13 +78,21 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
             let proc_fn = block_provider.block_processor();
             task::spawn_named("process", async move {
                 ReceiverStream::new(fetch_rx)
-                    .for_each_concurrent(indexing_par, move |raw| {
+                    .for_each_concurrent(indexing_par, move |raw_block| {
                         let tx = proc_tx_stream.clone();
                         let proc_fn = proc_fn.clone();
                         async move {
-                            match proc_fn(&raw) {
-                                Ok(block)   => { let _ = tx.send(block).await; }
-                                Err(e)      => { error!("process: {e}"); }
+                            if raw_block.size() < block_byte_size_blocking_limit {
+                                match proc_fn(&raw_block) {
+                                    Ok(block)    => { let _ = tx.send(block).await; }
+                                    Err(e)  => { error!("Small block processing failure: {e}"); }
+                                }
+                            } else {
+                                match tokio::task::spawn_blocking(move || proc_fn(&raw_block)).await {
+                                    Ok(Ok(block))    => { let _ = tx.send(block).await; }
+                                    Ok(Err(e))  => { error!("Big block processing failure: {e}"); }
+                                    Err(e)       => { error!("spawn_blocking join error: {e}"); }
+                                }
                             }
                         }
                     })

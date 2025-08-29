@@ -69,6 +69,10 @@ pub trait BlockLike: Send + Sync {
     fn header(&self) -> &Self::Header;
 }
 
+pub trait SizeLike: Send + Sync {
+    fn size(&self) -> usize;
+}
+
 #[async_trait]
 pub trait BlockChainLike<B: BlockLike>: Send + Sync {
     fn init(&self) -> Result<(), ChainError>;
@@ -82,7 +86,7 @@ pub trait BlockChainLike<B: BlockLike>: Send + Sync {
 }
 
 #[async_trait]
-pub trait BlockProvider<FB: Send, TB: BlockLike>: Send + Sync {
+pub trait BlockProvider<FB: SizeLike, TB: BlockLike>: Send + Sync {
     fn block_processor(&self) -> Arc<dyn Fn(&FB) -> Result<TB, ChainError> + Send + Sync>;
     fn get_processed_block(&self, hash: [u8; 32]) -> Result<Option<TB>, ChainError>;
     async fn get_chain_tip(&self) -> Result<TB::Header, ChainError>;
