@@ -15,16 +15,13 @@ sudo apt-get install rustup
 
 ### Usage
 
-Run bitcoin node locally, rpc at port 8332 can be changed in `config/btc.toml`, for example:
+Run bitcoin node locally and enable -rest api which is under port 8332 by default and can be changed in `config/btc.toml`, for example:
 ```
-cat ~/snap/bitcoin-core/common/.bitcoin/bitcoin.conf | grep rpc
-rpcthreads=40
-rpcworkqueue=512
-rpcuser=foo
-rpcpassword=bar
-rpcallowip=10.0.1.0/24
-rpcport=8332
-rpcbind=0.0.0.0
+cat ~/snap/bitcoin-core/common/.bitcoin/bitcoin.conf
+rest=1
+nodebuglogfile=1
+disablewallet=1
+blocksonly=1
 
 bitcoin-core.daemon -daemon
 ```
@@ -33,11 +30,7 @@ Then check if node is running and synced:
 bitcoin-core.cli getblockchaininfo
 tail -f ~/snap/bitcoin-core/common/.bitcoin/debug.log
 ```
-export secrets or set them in `.env` file :
-```
-export BITCOIN__API_USERNAME="foo"
-export BITCOIN__API_PASSWORD="bar"
-```
+
 Then : 
 ```
 cargo run --release 

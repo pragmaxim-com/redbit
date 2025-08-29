@@ -19,6 +19,7 @@ harness = false
 
 [dev-dependencies]
 criterion = { version = "0.7.0", features = ["async_tokio", "html_reports"] }
+bitcoincore-rpc = {git = "https://github.com/clarkmoody/rust-bitcoincore-rpc", branch = "support-core-22-and-23"}
 axum-test = "17.3.0"
 
 [dependencies]
@@ -28,7 +29,6 @@ tokio = { version = "1.45.1", features = ["full", "tracing"] }
 tokio-stream = { version = "0.1.17", features = ["sync"] }
 config = "0.15.11"
 bitcoin = "0.32.0"
-bitcoincore-rpc = {git = "https://github.com/clarkmoody/rust-bitcoincore-rpc", branch = "support-core-22-and-23"}
 bitcoin_hashes = "0.16.0"
 async-trait = "0.1.81"
 futures = "0.3.30"
@@ -44,3 +44,7 @@ bincode = "2.0.1"
 serde_with = {  version = "3.14.0", features = ["hex", "chrono_0_4", "base64", "time_0_3"] }
 serde_json = "1.0.142"
 hex = "0.4.3"
+reqwest = { version = "0.12.23", default-features = false, features = [
+    "json",
+    "blocking",
+] }

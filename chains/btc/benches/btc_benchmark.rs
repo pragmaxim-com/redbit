@@ -2,11 +2,10 @@ use chain::api::BlockChainLike;
 use std::{fs, sync::Arc, time::Duration};
 
 use btc::block_provider::BtcBlockProvider;
-use btc::btc_client::BtcCBOR;
 use btc::model_v1::{Block, BlockChain, Height};
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
 use serde_json;
-
+use btc::rest_client::BtcCBOR;
 use redbit::{info, Storage};
 
 fn block_from_file(size: &str, tx_count: usize) -> bitcoin::Block {
@@ -21,9 +20,9 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     let chain: Arc<dyn BlockChainLike<Block>> = BlockChain::new(Arc::clone(&storage));
 
-    let small_block: BtcCBOR = BtcCBOR { height: Height(135204), hex: bitcoin::consensus::encode::serialize_hex(&block_from_file("small", 29)) };
-    let avg_block: BtcCBOR = BtcCBOR { height: Height(217847), hex: bitcoin::consensus::encode::serialize_hex(&block_from_file("avg", 343)) };
-    let huge_block: BtcCBOR = BtcCBOR { height: Height(908244), hex: bitcoin::consensus::encode::serialize_hex(&block_from_file("huge", 3713)) };
+    let small_block: BtcCBOR = BtcCBOR { height: Height(135204), raw: bitcoin::consensus::encode::serialize(&block_from_file("small", 29)) };
+    let avg_block: BtcCBOR = BtcCBOR { height: Height(217847), raw: bitcoin::consensus::encode::serialize(&block_from_file("avg", 343)) };
+    let huge_block: BtcCBOR = BtcCBOR { height: Height(908244), raw: bitcoin::consensus::encode::serialize(&block_from_file("huge", 3713)) };
 
     info!("Initiating processing");
     let processed_small_block = BtcBlockProvider::process_block_pure(&small_block).expect("Failed to process small_block");
