@@ -1,14 +1,6 @@
-use std::error::Error;
 pub use redbit::*;
-use num_enum::{IntoPrimitive, TryFromPrimitive};
-
-#[derive(Clone, Copy, Debug, IntoPrimitive, PartialEq, TryFromPrimitive, )]
-#[repr(u8)]
-pub enum AssetType {
-    Mint = 0,
-    Transfer = 1,
-    Burn = 2,
-}
+pub use chain::*;
+use crate::block_chain::BlockChain;
 
 #[root_key] pub struct Height(pub u32);
 
@@ -95,56 +87,4 @@ pub struct Asset {
 pub struct InputRef {
     #[fk(one2many)]
     pub id: TransactionPointer,
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum ExplorerError {
-    #[error("Reqwest error: {source}{}", source.source().map(|e| format!(": {}", e)).unwrap_or_default())]
-    Reqwest {
-        #[from]
-        source: reqwest::Error,
-    },
-
-    #[error("Url parsing error: {0}")]
-    Url(#[from] url::ParseError),
-
-    #[error("Invalid http header value : {0}")]
-    InvalidHeaderValue(#[from] reqwest::header::InvalidHeaderValue),
-
-    #[error("Custom error: {0}")]
-    Custom(String),
-}
-
-impl From<ExplorerError> for ChainError {
-    fn from(err: ExplorerError) -> Self {
-        ChainError::new(&err.to_string())
-    }
-}
-
-use chain::api::*;
-
-pub struct BlockChain {
-    pub storage: Arc<Storage>,
-}
-
-impl BlockChain {
-    pub fn new(storage: Arc<Storage>) -> Arc<dyn BlockChainLike<Block>> {
-        Arc::new(BlockChain { storage })
-    }
-
-    fn resolve_tx_inputs(&self, tx_context: &BlockReadTxContext, block: &mut Block) -> Result<(), ChainError> {
-        for tx in &mut block.transactions {
-            for box_id in tx.transient_inputs.iter_mut() {
-                let utxo_pointers = Utxo::get_ids_by_box_id(&tx_context.transactions.utxos, box_id).expect("Failed to get Utxo by ErgoBox");
-                match utxo_pointers.first() {
-                    Some(utxo_pointer) => {
-                        tx.inputs.push(InputRef { id: TransactionPointer::from_parent(utxo_pointer.parent, utxo_pointer.index()) })
-                    }
-                    None => tx.inputs.push(InputRef { id: TransactionPointer::from_parent(BlockPointer::from_parent(Height(0), 0), 0) }),
-                }
-            }
-        }
-        Ok(())
-    }
-
 }

@@ -2,9 +2,10 @@ use chain::api::BlockChainLike;
 use std::{fs, sync::Arc, time::Duration};
 use cardano::block_provider::CardanoBlockProvider;
 use cardano::cardano_client::CardanoCBOR;
-use cardano::model_v1::{Block, BlockChain};
+use cardano::model_v1::Block;
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
 use pallas_traverse::wellknown::GenesisValues;
+use cardano::block_chain::BlockChain;
 use redbit::{info, Storage};
 
 fn block_from_file(size: &str, tx_count: usize) -> CardanoCBOR {

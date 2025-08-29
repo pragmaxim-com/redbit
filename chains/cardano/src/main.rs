@@ -1,6 +1,6 @@
 use cardano::block_provider::CardanoBlockProvider;
 use anyhow::Result;
-use cardano::model_v1::BlockChain;
+use cardano::block_chain::BlockChain;
 use chain::launcher;
 
 #[tokio::main]

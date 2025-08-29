@@ -2,9 +2,10 @@ use chain::api::BlockChainLike;
 use std::{fs, sync::Arc, time::Duration};
 
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
+use ergo::block_chain::BlockChain;
 use ergo::block_provider::ErgoBlockProvider;
 use ergo::ergo_client::ErgoCBOR;
-use ergo::model_v1::{Block, BlockChain};
+use ergo::model_v1::Block;
 use redbit::{info, Storage};
 
 fn block_from_file(size: &str, tx_count: usize) -> ErgoCBOR {

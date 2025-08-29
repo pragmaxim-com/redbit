@@ -1,10 +1,11 @@
 use crate::config::BitcoinConfig;
-use crate::model_v1::{BlockHash, ExplorerError, Height};
+use crate::model_v1::{BlockHash, Height};
 use chain::api::SizeLike;
 use redbit::retry::{retry_with_delay_async, retry_with_delay_sync};
 use reqwest::{blocking, Client};
 use std::sync::Arc;
 use std::time::Duration;
+use crate::ExplorerError;
 
 pub struct BtcCBOR {
     pub raw: Vec<u8>,

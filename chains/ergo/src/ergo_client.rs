@@ -1,10 +1,11 @@
-use crate::model_v1::{BlockHash, ExplorerError, Height};
+use crate::model_v1::{BlockHash, Height};
 use chain::api::SizeLike;
 use ergo_lib::chain::block::FullBlock;
 use redbit::retry::retry_with_delay_async;
 use reqwest::{blocking, header::{HeaderMap, HeaderValue, ACCEPT, CONTENT_TYPE}, Client, Response, Url};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
+use crate::ExplorerError;
 
 #[derive(Default, Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 #[repr(C)]

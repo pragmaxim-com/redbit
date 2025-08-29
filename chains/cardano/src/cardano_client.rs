@@ -7,7 +7,7 @@ use std::sync::Arc;
 use chain::api::SizeLike;
 use redbit::info;
 use crate::config::CardanoConfig;
-use crate::model_v1::ExplorerError;
+use crate::ExplorerError;
 
 pub struct CardanoCBOR(pub Vec<u8>);
 

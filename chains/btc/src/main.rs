@@ -1,6 +1,6 @@
 use anyhow::Result;
+use btc::block_chain::BlockChain;
 use btc::block_provider::BtcBlockProvider;
-use btc::model_v1::BlockChain;
 use chain::launcher;
 
 #[tokio::main]

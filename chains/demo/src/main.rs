@@ -1,8 +1,8 @@
 use anyhow::Result;
 use demo::block_provider::DemoBlockProvider;
-use demo::model_v1::BlockChain;
 use redbit::*;
 use chain::launcher;
+use demo::block_chain::BlockChain;
 use demo::routes;
 
 #[tokio::main]

@@ -8,4 +8,4 @@ pub mod launcher;
 pub mod task;
 pub mod batcher;
 
-pub use api::{BlockHeaderLike, BlockLike, BlockChainLike, ChainError};
+pub use api::{BlockHeaderLike, SizeLike, BlockLike, BlockChainLike, ChainError};

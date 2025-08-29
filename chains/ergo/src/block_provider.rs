@@ -1,7 +1,7 @@
 use crate::config::ErgoConfig;
 use crate::ergo_client::{ErgoCBOR, ErgoClient};
-use crate::model_v1;
-use crate::model_v1::{Address, Asset, AssetAction, AssetName, AssetType, Block, BlockHash, BlockHeader, BlockPointer, BlockTimestamp, ExplorerError, Height, Transaction, TransactionPointer, TxHash, Utxo, UtxoPointer, Weight};
+use crate::{model_v1, AssetType, ExplorerError};
+use crate::model_v1::{Address, Asset, AssetAction, AssetName, Block, BlockHash, BlockHeader, BlockPointer, BlockTimestamp, Height, Transaction, TransactionPointer, TxHash, Utxo, UtxoPointer, Weight};
 use async_trait::async_trait;
 use chain::api::{BlockProvider, ChainError};
 use chain::batcher::SyncMode;

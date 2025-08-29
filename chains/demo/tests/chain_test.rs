@@ -5,6 +5,7 @@ use demo::block_provider::DemoBlockProvider;
 use demo::model_v1::*;
 use std::time::Instant;
 use tokio::sync::watch;
+use demo::block_chain::BlockChain;
 
 #[tokio::test]
 async fn test_chain_sync() {

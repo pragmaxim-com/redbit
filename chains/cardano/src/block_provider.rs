@@ -13,7 +13,7 @@ use pallas::network::miniprotocols::chainsync::{N2CClient, NextResponse};
 use pallas::network::miniprotocols::Point;
 use pallas_traverse::wellknown::GenesisValues;
 use std::{pin::Pin, sync::Arc};
-use ExplorerError;
+use crate::{AssetType, ExplorerError};
 
 pub struct CardanoBlockProvider {
     client: CardanoClient,

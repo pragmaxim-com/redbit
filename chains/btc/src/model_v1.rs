@@ -1,6 +1,6 @@
-use bitcoin::block::Bip34Error;
-use chain::api::{BlockHeaderLike, BlockLike, ChainError};
 pub use redbit::*;
+pub use chain::*;
+use crate::block_chain::BlockChain;
 
 // feel free to add custom #[derive(Foo, Bar)] attributes to your types, they will get merged with the ones from redbit
 
@@ -80,48 +80,4 @@ pub struct Utxo {
 pub struct InputRef {
     #[fk(one2many)]
     pub id: TransactionPointer,
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum ExplorerError {
-    #[error("Height decoding error: {0}")]
-    Bip34(#[from] Bip34Error),
-
-    #[error("Reqwest error: {0}")]
-    Reqwest(#[from] reqwest::Error),
-
-    #[error("Custom error: {0}")]
-    Custom(String),
-}
-
-impl From<ExplorerError> for ChainError {
-    fn from(err: ExplorerError) -> Self {
-        ChainError::new(&err.to_string())
-    }
-}
-
-use chain::api::*;
-
-pub struct BlockChain {
-    pub storage: Arc<Storage>,
-}
-
-impl BlockChain {
-    pub fn new(storage: Arc<Storage>) -> Arc<dyn BlockChainLike<Block>> {
-        Arc::new(BlockChain { storage })
-    }
-
-    fn resolve_tx_inputs(&self, tx_context: &BlockReadTxContext, block: &mut Block) -> Result<(), ChainError> {
-        for tx in &mut block.transactions {
-            for transient_input in tx.transient_inputs.iter_mut() {
-                let tx_pointers = Transaction::get_ids_by_hash(&tx_context.transactions, &transient_input.tx_hash)?;
-
-                match tx_pointers.first() {
-                    Some(tx_pointer) => tx.inputs.push(InputRef { id: TransactionPointer::from_parent(*tx_pointer, transient_input.index as u16) }),
-                    None => tx.inputs.push(InputRef { id: TransactionPointer::from_parent(BlockPointer::from_parent(Height(0), 0), 0) }),
-                }
-            }
-        }
-        Ok(())
-    }
 }

@@ -1,5 +1,5 @@
 use crate::config::BitcoinConfig;
-use crate::model_v1::{Address, Block, BlockHash, BlockPointer, BlockTimestamp, ExplorerError, Header, Height, MerkleRoot, ScriptHash, TempInputRef, Transaction, TransactionPointer, TxHash, Utxo, Weight};
+use crate::model_v1::{Address, Block, BlockHash, BlockPointer, BlockTimestamp, Header, Height, MerkleRoot, ScriptHash, TempInputRef, Transaction, TransactionPointer, TxHash, Utxo, Weight};
 use async_trait::async_trait;
 use chain::api::{BlockProvider, ChainError};
 use chain::batcher::SyncMode;
@@ -8,6 +8,7 @@ use futures::stream::StreamExt;
 use futures::Stream;
 use redbit::*;
 use std::{pin::Pin, sync::Arc};
+use crate::ExplorerError;
 use crate::rest_client::{BtcCBOR, BtcClient};
 
 pub const SENTINEL: [u8; 25] = [

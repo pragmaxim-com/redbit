@@ -1,15 +1,6 @@
-use chain::api::{BlockHeaderLike, BlockLike, ChainError};
-use num_enum::{IntoPrimitive, TryFromPrimitive};
-use pallas::network::miniprotocols::{blockfetch, chainsync, localstate};
 pub use redbit::*;
-
-#[derive(Clone, Copy, Debug, IntoPrimitive, PartialEq, TryFromPrimitive, )]
-#[repr(u8)]
-pub enum AssetType {
-    Mint = 0,
-    Transfer = 1,
-    Burn = 2,
-}
+pub use chain::*;
+use crate::block_chain::BlockChain;
 
 #[root_key] pub struct Height(pub u32);
 
@@ -104,54 +95,4 @@ pub struct Asset {
 pub struct InputRef {
     #[fk(one2many)]
     pub id: TransactionPointer,
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum ExplorerError {
-    #[error("Cardano chain sync error: {0}")]
-    ChainSyncError(#[from] chainsync::ClientError),
-
-    #[error("Cardano block fetch error: {0}")]
-    BlockFetchError(#[from] blockfetch::ClientError),
-
-    #[error("Cardano local state error: {0}")]
-    LocalStateError(#[from] localstate::ClientError),
-
-    #[error("Cardano pallas traverse error: {0}")]
-    PallasTraverseError(#[from] pallas_traverse::Error),
-
-    #[error("Custom error: {0}")]
-    Custom(String),
-}
-
-impl From<ExplorerError> for ChainError {
-    fn from(err: ExplorerError) -> Self {
-        ChainError::new(&err.to_string())
-    }
-}
-
-use chain::api::*;
-
-pub struct BlockChain {
-    pub storage: Arc<Storage>,
-}
-
-impl BlockChain {
-    pub fn new(storage: Arc<Storage>) -> Arc<dyn BlockChainLike<Block>> {
-        Arc::new(BlockChain { storage })
-    }
-
-    fn resolve_tx_inputs(&self, tx_context: &BlockReadTxContext, block: &mut Block) -> Result<(), ChainError> {
-        for tx in &mut block.transactions {
-            for transient_input in tx.transient_inputs.iter_mut() {
-                let tx_pointers = Transaction::get_ids_by_hash(&tx_context.transactions, &transient_input.tx_hash)?;
-
-                match tx_pointers.first() {
-                    Some(tx_pointer) => tx.inputs.push(InputRef { id: TransactionPointer::from_parent(*tx_pointer, transient_input.index as u16) }),
-                    None => tx.inputs.push(InputRef { id: TransactionPointer::from_parent(BlockPointer::from_parent(Height(0), 0), 0) }),
-                }
-            }
-        }
-        Ok(())
-    }
 }
