@@ -1,4 +1,4 @@
-use crate::config::BitcoinConfig;
+/*use crate::config::BitcoinConfig;
 use crate::model_v1::{BlockHash, ExplorerError, Height};
 use bitcoin::hashes::Hash;
 use bitcoincore_rpc::{Auth, Client, RpcApi};
@@ -45,7 +45,6 @@ impl BtcClient {
             let height = Height(verbose_block.height as u32);
             Ok(BtcCBOR { height, hex: best_block_hex })
         })
-
     }
 
     pub fn get_block_by_hash(&self, hash: BlockHash) -> Result<BtcCBOR, ExplorerError> {
@@ -66,3 +65,4 @@ impl BtcClient {
         })
     }
 }
+*/

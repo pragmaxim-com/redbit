@@ -1,4 +1,3 @@
-use crate::btc_client::{BtcCBOR, BtcClient};
 use crate::config::BitcoinConfig;
 use crate::model_v1::{Address, Block, BlockHash, BlockPointer, BlockTimestamp, ExplorerError, Header, Height, MerkleRoot, ScriptHash, TempInputRef, Transaction, TransactionPointer, TxHash, Utxo, Weight};
 use async_trait::async_trait;
@@ -9,6 +8,7 @@ use futures::stream::StreamExt;
 use futures::Stream;
 use redbit::*;
 use std::{pin::Pin, sync::Arc};
+use crate::rest_client::{BtcCBOR, BtcClient};
 
 pub const SENTINEL: [u8; 25] = [
     0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -30,7 +30,7 @@ impl BtcBlockProvider {
     }
 
     pub fn process_block_pure(cbor: &BtcCBOR) -> Result<Block, ChainError> {
-        let block: bitcoin::Block = bitcoin::consensus::encode::deserialize_hex(&cbor.hex).map_err(|e| ChainError::new(&format!("Failed to deser CBOR: {}", e)))?;
+        let block: bitcoin::Block = bitcoin::consensus::encode::deserialize(&cbor.raw).map_err(|e| ChainError::new(&format!("Failed to deser CBOR: {}", e)))?;
         let height = cbor.height;
         let mut block_weight = 0;
         let transactions = block
@@ -104,7 +104,7 @@ impl BlockProvider<BtcCBOR, Block> for BtcBlockProvider {
     }
 
     fn get_processed_block(&self, hash: [u8; 32]) -> Result<Option<Block>, ChainError> {
-        match self.client.get_block_by_hash(BlockHash(hash)) {
+        match self.client.get_block_by_hash_str_sync(BlockHash(hash)) {
             Ok(block) => {
                 let processed_block = Self::process_block_pure(&block)?;
                 Ok(Some(processed_block))
@@ -114,7 +114,7 @@ impl BlockProvider<BtcCBOR, Block> for BtcBlockProvider {
     }
 
     async fn get_chain_tip(&self) -> Result<Header, ChainError> {
-        let best_block = self.client.get_best_block()?;
+        let best_block = self.client.get_best_block().await?;
         let processed_block = Self::process_block_pure(&best_block)?;
         Ok(processed_block.header)
     }
@@ -129,14 +129,15 @@ impl BlockProvider<BtcCBOR, Block> for BtcBlockProvider {
         let heights = height_to_index_from..=remote_chain_tip_header.height.0;
         let client = Arc::clone(&self.client);
         let s =
-            tokio_stream::iter(heights)
-                .map(move |height| {
-                    let client = Arc::clone(&client);
-                    tokio::task::spawn_blocking(move || client.get_block_by_height(Height(height)).expect("Failed to get block by height"))
-                });
+            tokio_stream::iter(heights).map(move |height| {
+                let client = Arc::clone(&client);
+                async move {
+                    client.get_block_by_height(Height(height)).await.expect("Failed to fetch block by height")
+                }
+            });
         match mode {
-            SyncMode::Batching => s.buffer_unordered(self.fetching_par).map(|res| res.expect("join failed")).boxed(),
-            SyncMode::Continuous => s.buffered(self.fetching_par).map(|res| res.expect("join failed")).boxed(),
+            SyncMode::Batching => s.buffer_unordered(self.fetching_par).boxed(),
+            SyncMode::Continuous => s.buffered(self.fetching_par).boxed(),
         }
     }
 }
