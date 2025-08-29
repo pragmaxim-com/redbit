@@ -84,9 +84,6 @@ pub struct InputRef {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ExplorerError {
-    #[error("RPC error: {0}")]
-    Rpc(#[from] bitcoincore_rpc::Error),
-
     #[error("Height decoding error: {0}")]
     Bip34(#[from] Bip34Error),
 
