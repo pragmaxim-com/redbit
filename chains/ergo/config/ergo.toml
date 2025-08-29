@@ -1,3 +1,3 @@
 api_host = "http://127.0.0.1:9053"
 api_key = "foo"
-fetching_parallelism = "mild"   # low / mild / high
+fetching_parallelism = "high"   # low / mild / high
