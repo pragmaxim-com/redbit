@@ -95,7 +95,7 @@ impl<FB: Send + Sync + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
         // Sort + process stage is executed at parallel so blocks are not coming in order
         let sort_handle = {
             task::spawn_named("sort", async move {
-                let mut reorder: ReorderBuffer<TB> = ReorderBuffer::new(height_to_index_from, buffer_size);
+                let mut reorder: ReorderBuffer<TB> = ReorderBuffer::new(height_to_index_from, buffer_size * 4);
                 let mut batcher: Batcher<TB> = Batcher::new(min_batch_size, buffer_size, indexing_mode);
 
                 while let Some(block) = proc_rx.recv().await {

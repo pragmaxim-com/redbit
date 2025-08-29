@@ -8,7 +8,7 @@ use tokio::sync::watch;
 
 #[tokio::test]
 async fn test_chain_sync() {
-    let target_height = 100u32;
+    let target_height = 200u32;
     let storage = Storage::temp("chain_sync_test", 1, true).expect("Failed to open database");
     let chain: Arc<dyn BlockChainLike<Block>> = BlockChain::new(Arc::clone(&storage));
     chain.init().expect("Failed to initialize chain");
