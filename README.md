@@ -69,6 +69,8 @@ Let's say we want to persist and query blockchain data using Redbit, declare ann
 <!-- BEGIN_LIB -->
 ```rust
     pub use redbit::*;
+    pub use chain::*;
+    use crate::block_chain::BlockChain;
     
     // feel free to add custom #[derive(Foo, Bar)] attributes to your types, they will get merged with the ones from redbit
     
@@ -128,10 +130,10 @@ Let's say we want to persist and query blockchain data using Redbit, declare ann
         #[column(index)]
         pub hash: TxHash,
         pub utxos: Vec<Utxo>,
-        pub inputs: Vec<InputRef>,
+        pub inputs: Vec<Input>,
         pub maybe_value: Option<MaybeValue>, // just to demonstrate option is possible
         #[column(transient)]
-        pub transient_inputs: Vec<TempInputRef>,
+        pub temp_input_refs: Vec<TempInputRef>,
     }
     
     #[entity]
@@ -146,7 +148,7 @@ Let's say we want to persist and query blockchain data using Redbit, declare ann
     }
     
     #[entity]
-    pub struct InputRef {
+    pub struct Input {
         #[fk(one2many)]
         pub id: TransactionPointer,
     }
@@ -167,32 +169,6 @@ Let's say we want to persist and query blockchain data using Redbit, declare ann
         pub amount: u64,
         #[column(dictionary)]
         pub name: AssetName,
-    }
-    
-    use chain::api::*;
-    
-    pub struct BlockChain {
-        pub storage: Arc<Storage>,
-    }
-    
-    impl BlockChain {
-        pub fn new(storage: Arc<Storage>) -> Arc<dyn BlockChainLike<Block>> {
-            Arc::new(BlockChain { storage })
-        }
-    
-        fn resolve_tx_inputs(&self, tx_context: &BlockReadTxContext, block: &mut Block) -> Result<(), ChainError> {
-            for tx in &mut block.transactions {
-                for transient_input in tx.transient_inputs.iter_mut() {
-                    let tx_pointers = Transaction::get_ids_by_hash(&tx_context.transactions, &transient_input.tx_hash)?;
-    
-                    match tx_pointers.first() {
-                        Some(tx_pointer) => tx.inputs.push(InputRef { id: TransactionPointer::from_parent(*tx_pointer, transient_input.index as u16) }),
-                        None => tx.inputs.push(InputRef { id: TransactionPointer::from_parent(BlockPointer::from_parent(Height(0), 0), 0) }),
-                    }
-                }
-            }
-            Ok(())
-        }
     }
 ```
 <!-- END_LIB -->
@@ -367,149 +343,149 @@ the operations writes :
 ```
 function                                                          ops/s
 -------------------------------------------------------------
-model_v1::block::_store                                             950
-model_v1::block::_store_and_commit                                  951
-model_v1::block::_store_many                                       1002
-model_v1::transaction::_store_and_commit                           1214
-model_v1::transaction::_store                                      1250
-model_v1::transaction::_store_many                                 1300
-model_v1::header::_store_many                                      2125
-model_v1::header::_store                                           2146
-model_v1::utxo::_store                                             2161
-model_v1::header::_store_and_commit                                2166
-model_v1::utxo::_store_and_commit                                  2209
-model_v1::utxo::_store_many                                        2216
-model_v1::asset::_store_and_commit                                 3800
-model_v1::asset::_store_many                                       3800
-model_v1::asset::_store                                            3802
-model_v1::maybevalue::_store_many                                  4709
-model_v1::maybevalue::_store_and_commit                            4740
-model_v1::maybevalue::_store                                       4776
-model_v1::inputref::_store_and_commit                              6222
-model_v1::inputref::_store_many                                    6254
-model_v1::inputref::_store                                         6333
-model_v1::block::_pk_range                                         6695
-model_v1::block::_delete_and_commit                                7131
-model_v1::transaction::_delete_and_commit                          8033
-model_v1::transaction::_pk_range                                   8539
-model_v1::header::_delete_and_commit                               8992
-model_v1::utxo::_pk_range                                          9129
-model_v1::utxo::_delete_and_commit                                 9263
-model_v1::asset::_pk_range                                         9360
-model_v1::header::_pk_range                                        9696
-model_v1::asset::_delete_and_commit                               10243
-model_v1::maybevalue::_pk_range                                   10527
-model_v1::maybevalue::_delete_and_commit                          10593
-model_v1::inputref::_pk_range                                     10825
-model_v1::inputref::_delete_and_commit                            11227
-model_v1::block::_take                                            18342
-model_v1::block::_tail                                            18950
-model_v1::block::_get                                             37674
-model_v1::block::_first                                           37803
-model_v1::block::_last                                            38435
-model_v1::block::_get_transactions                                38784
-model_v1::block::_stream_range                                    43914
-model_v1::transaction::_stream_blocks_by_hash                     45718
-model_v1::transaction::_tail                                      61533
-model_v1::transaction::_take                                      61895
-model_v1::transaction::_stream_range                              63286
-model_v1::transaction::_stream_by_hash                            68700
-model_v1::utxo::_stream_transactions_by_address                   72865
-model_v1::transaction::_stream_ids_by_hash                       107103
-model_v1::utxo::_stream_range                                    116760
-model_v1::utxo::_stream_by_address                               121023
-model_v1::transaction::_get_by_hash                              125402
-model_v1::asset::_stream_utxos_by_name                           125986
-model_v1::transaction::_get                                      127449
-model_v1::transaction::_first                                    128255
-model_v1::transaction::_last                                     130371
-model_v1::transaction::_get_utxos                                149352
-model_v1::header::_stream_range_by_duration                      152090
-model_v1::header::_stream_range_by_timestamp                     157687
-model_v1::block::_range                                          160706
-model_v1::utxo::_stream_ids_by_address                           169682
-model_v1::header::_stream_range                                  179179
-model_v1::header::_stream_by_hash                                182962
-model_v1::header::_stream_by_duration                            184112
-model_v1::header::_stream_by_prev_hash                           185786
-model_v1::header::_stream_by_timestamp                           185934
-model_v1::block::_filter                                         192299
-model_v1::transaction::_range                                    222580
-model_v1::header::_stream_heights_by_duration                    222804
-model_v1::utxo::_tail                                            224291
-model_v1::header::_stream_heights_by_prev_hash                   227732
-model_v1::header::_stream_heights_by_hash                        228557
-model_v1::header::_stream_heights_by_timestamp                   228757
-model_v1::utxo::_take                                            234659
-model_v1::asset::_stream_range                                   241479
-model_v1::asset::_stream_by_name                                 263091
-model_v1::transaction::_filter                                   279004
-model_v1::asset::_stream_ids_by_name                             329144
-model_v1::utxo::_range                                           404505
-model_v1::utxo::_get_by_address                                  452860
-model_v1::maybevalue::_stream_range                              454025
-model_v1::utxo::_first                                           509762
-model_v1::utxo::_get                                             515796
-model_v1::utxo::_last                                            528075
-model_v1::maybevalue::_stream_by_hash                            536884
-model_v1::utxo::_filter                                          605448
-model_v1::utxo::_get_assets                                      611352
-model_v1::maybevalue::_stream_ids_by_hash                        638411
-model_v1::inputref::_stream_range                                650614
-model_v1::asset::_tail                                           729256
-model_v1::asset::_range                                          806588
-model_v1::asset::_take                                           977536
-model_v1::header::_tail                                         1057921
-model_v1::maybevalue::_tail                                     1092156
-model_v1::header::_range                                        1093709
-model_v1::header::_take                                         1112483
-model_v1::header::_range_by_duration                            1135203
-model_v1::maybevalue::_range                                    1230648
-model_v1::inputref::_tail                                       1399541
-model_v1::header::_range_by_timestamp                           1520034
-model_v1::transaction::_get_inputs                              1608260
-model_v1::inputref::_range                                      1695605
-model_v1::maybevalue::_take                                     1705001
-model_v1::asset::_get_by_name                                   1775442
-model_v1::header::_get_by_duration                              2025768
-model_v1::header::_get_by_prev_hash                             2169103
-model_v1::header::_get_by_timestamp                             2231894
-model_v1::header::_get_by_hash                                  2272727
-model_v1::inputref::_take                                       2420956
-model_v1::asset::_filter                                        2610898
-model_v1::asset::_get                                           2833503
-model_v1::header::_filter                                       2897711
-model_v1::asset::_last                                          3044140
-model_v1::asset::_first                                         3089185
-model_v1::block::_get_header                                    3322259
-model_v1::header::_get                                          3416467
-model_v1::header::_last                                         3439499
-model_v1::header::_first                                        3456022
-model_v1::maybevalue::_get_by_hash                              3684598
-model_v1::asset::_get_ids_by_name                               3823799
-model_v1::utxo::_get_ids_by_address                             3963064
-model_v1::header::_get_heights_by_duration                      4653544
-model_v1::maybevalue::_get_ids_by_hash                          5263435
-model_v1::header::_get_heights_by_prev_hash                     5418586
-model_v1::transaction::_get_ids_by_hash                         5513287
-model_v1::header::_get_heights_by_hash                          5612617
-model_v1::header::_get_heights_by_timestamp                     5653231
-model_v1::maybevalue::_filter                                   7878979
-model_v1::maybevalue::_get                                      8040524
-model_v1::transaction::_get_maybe_value                         8046347
-model_v1::maybevalue::_last                                     8396306
-model_v1::maybevalue::_first                                    8435971
-model_v1::asset::_exists                                       12955046
-model_v1::inputref::_get                                       16342540
-model_v1::inputref::_filter                                    16406891
-model_v1::inputref::_exists                                    16655563
-model_v1::utxo::_exists                                        16672224
-model_v1::transaction::_exists                                 17238407
-model_v1::maybevalue::_exists                                  17611835
-model_v1::inputref::_last                                      23169601
-model_v1::block::_exists                                       23713540
-model_v1::inputref::_first                                     24224806
-model_v1::header::_exists                                      25018764
+model_v1::block::_store_and_commit                                  968
+model_v1::block::_store                                             970
+model_v1::block::_store_many                                       1001
+model_v1::transaction::_store_and_commit                           1340
+model_v1::transaction::_store                                      1500
+model_v1::transaction::_store_many                                 1563
+model_v1::header::_store_many                                      2379
+model_v1::header::_store                                           2380
+model_v1::utxo::_store                                             2411
+model_v1::utxo::_store_many                                        2412
+model_v1::utxo::_store_and_commit                                  2437
+model_v1::header::_store_and_commit                                2447
+model_v1::asset::_store                                            3335
+model_v1::asset::_store_and_commit                                 3850
+model_v1::asset::_store_many                                       3851
+model_v1::maybevalue::_store                                       3860
+model_v1::input::_store                                            3921
+model_v1::maybevalue::_store_many                                  4394
+model_v1::maybevalue::_store_and_commit                            4418
+model_v1::transaction::_pk_range                                   4716
+model_v1::block::_delete_and_commit                                5020
+model_v1::input::_store_many                                       5207
+model_v1::block::_pk_range                                         5234
+model_v1::header::_delete_and_commit                               5257
+model_v1::input::_store_and_commit                                 5694
+model_v1::input::_pk_range                                         6216
+model_v1::asset::_pk_range                                         6352
+model_v1::transaction::_delete_and_commit                          6368
+model_v1::utxo::_pk_range                                          6394
+model_v1::utxo::_delete_and_commit                                 6787
+model_v1::maybevalue::_delete_and_commit                           7274
+model_v1::header::_pk_range                                        7307
+model_v1::maybevalue::_pk_range                                    7507
+model_v1::input::_delete_and_commit                                8039
+model_v1::asset::_delete_and_commit                                8387
+model_v1::block::_tail                                            17847
+model_v1::block::_take                                            18188
+model_v1::block::_get                                             37694
+model_v1::block::_first                                           37719
+model_v1::block::_last                                            37741
+model_v1::block::_get_transactions                                38528
+model_v1::block::_stream_range                                    42157
+model_v1::transaction::_stream_blocks_by_hash                     43935
+model_v1::transaction::_take                                      60442
+model_v1::transaction::_tail                                      60600
+model_v1::transaction::_stream_by_hash                            66180
+model_v1::transaction::_stream_range                              66309
+model_v1::utxo::_stream_transactions_by_address                   68572
+model_v1::transaction::_stream_ids_by_hash                       104100
+model_v1::utxo::_stream_range                                    115304
+model_v1::utxo::_stream_by_address                               119039
+model_v1::transaction::_get_by_hash                              123332
+model_v1::transaction::_first                                    126897
+model_v1::asset::_stream_utxos_by_name                           127939
+model_v1::transaction::_get                                      128142
+model_v1::transaction::_last                                     128461
+model_v1::transaction::_get_utxos                                147163
+model_v1::header::_stream_range_by_duration                      155373
+model_v1::header::_stream_range_by_timestamp                     157270
+model_v1::block::_range                                          163599
+model_v1::utxo::_stream_ids_by_address                           170570
+model_v1::header::_stream_by_hash                                179396
+model_v1::header::_stream_range                                  182271
+model_v1::header::_stream_by_duration                            187038
+model_v1::header::_stream_by_prev_hash                           187303
+model_v1::header::_stream_by_timestamp                           189068
+model_v1::block::_filter                                         189584
+model_v1::header::_stream_heights_by_duration                    218547
+model_v1::transaction::_range                                    219196
+model_v1::utxo::_tail                                            219708
+model_v1::header::_stream_heights_by_hash                        223816
+model_v1::header::_stream_heights_by_prev_hash                   224636
+model_v1::header::_stream_heights_by_timestamp                   225075
+model_v1::utxo::_take                                            230557
+model_v1::asset::_stream_range                                   232675
+model_v1::asset::_stream_by_name                                 268555
+model_v1::transaction::_filter                                   278731
+model_v1::asset::_stream_ids_by_name                             327023
+model_v1::utxo::_range                                           409167
+model_v1::maybevalue::_stream_range                              436828
+model_v1::utxo::_get_by_address                                  450601
+model_v1::maybevalue::_stream_by_hash                            502816
+model_v1::utxo::_first                                           508883
+model_v1::utxo::_get                                             510053
+model_v1::utxo::_last                                            525171
+model_v1::utxo::_get_assets                                      603267
+model_v1::utxo::_filter                                          603438
+model_v1::maybevalue::_stream_ids_by_hash                        609559
+model_v1::input::_stream_range                                   685928
+model_v1::asset::_tail                                           728189
+model_v1::asset::_range                                          815674
+model_v1::asset::_take                                           989903
+model_v1::header::_tail                                         1023992
+model_v1::header::_take                                         1070160
+model_v1::header::_range                                        1093888
+model_v1::header::_range_by_duration                            1158775
+model_v1::maybevalue::_tail                                     1189400
+model_v1::maybevalue::_range                                    1217671
+model_v1::header::_range_by_timestamp                           1505117
+model_v1::input::_tail                                          1519965
+model_v1::transaction::_get_inputs                              1681407
+model_v1::maybevalue::_take                                     1740371
+model_v1::asset::_get_by_name                                   1748924
+model_v1::input::_range                                         1773993
+model_v1::header::_get_by_duration                              2018775
+model_v1::header::_get_by_hash                                  2116940
+model_v1::header::_get_by_prev_hash                             2184837
+model_v1::header::_get_by_timestamp                             2252354
+model_v1::input::_take                                          2438846
+model_v1::asset::_filter                                        2598077
+model_v1::asset::_get                                           2714367
+model_v1::header::_filter                                       2772771
+model_v1::asset::_last                                          2978761
+model_v1::asset::_first                                         2997961
+model_v1::header::_last                                         3366097
+model_v1::header::_first                                        3375413
+model_v1::block::_get_header                                    3389716
+model_v1::asset::_get_ids_by_name                               3432298
+model_v1::header::_get                                          3433123
+model_v1::maybevalue::_get_by_hash                              3642589
+model_v1::utxo::_get_ids_by_address                             3714848
+model_v1::header::_get_heights_by_duration                      4512635
+model_v1::header::_get_heights_by_prev_hash                     5165022
+model_v1::header::_get_heights_by_hash                          5169027
+model_v1::maybevalue::_get_ids_by_hash                          5489981
+model_v1::transaction::_get_ids_by_hash                         5570100
+model_v1::header::_get_heights_by_timestamp                     5700929
+model_v1::maybevalue::_filter                                   7907639
+model_v1::maybevalue::_get                                      8011537
+model_v1::transaction::_get_maybe_value                         8141334
+model_v1::maybevalue::_last                                     8361204
+model_v1::maybevalue::_first                                    8433837
+model_v1::asset::_exists                                       12884938
+model_v1::input::_get                                          15964240
+model_v1::input::_filter                                       16268098
+model_v1::input::_exists                                       16358580
+model_v1::utxo::_exists                                        16772895
+model_v1::transaction::_exists                                 17546938
+model_v1::maybevalue::_exists                                  17639795
+model_v1::input::_last                                         24260068
+model_v1::input::_first                                        25529742
+model_v1::block::_exists                                       27344818
+model_v1::header::_exists                                      27601435
 ```
 <!-- END_BENCH -->
 
