@@ -113,6 +113,7 @@ pub trait IndexedPointer: Copy {
 
 pub trait RootPointer: IndexedPointer + Copy {
     fn is_pointer(&self) -> bool;
+    fn from_many(indexes: &[Self::Index]) -> Vec<Self>;
 }
 
 pub trait ChildPointer: IndexedPointer + Copy {

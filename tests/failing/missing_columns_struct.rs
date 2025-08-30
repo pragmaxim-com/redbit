@@ -1,3 +1,4 @@
+use redbit::*;
 
 #[entity]
 struct MissingColumnsStruct {

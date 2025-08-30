@@ -46,7 +46,7 @@ impl CardanoBlockProvider {
             let (box_weight, outputs) = Self::process_outputs(&tx.outputs(), tx_id);
             block_weight += box_weight;
             block_weight += inputs.len();
-            result_txs.push(Transaction { id: tx_id, hash: TxHash(tx_hash), utxos: outputs, inputs: vec![], transient_inputs: inputs })
+            result_txs.push(Transaction { id: tx_id, hash: TxHash(tx_hash), utxos: outputs, inputs: vec![], temp_input_refs: inputs })
         }
 
         let header = BlockHeader {

@@ -1,40 +1,66 @@
-error: cannot find attribute `entity` in this scope
- --> tests/failing/only_transient_column_struct.rs:1:3
-  |
-1 | #[entity]
-  |   ^^^^^^
-  |
-help: consider importing this attribute macro
-  |
-1 + use redbit::entity;
-  |
-
-error: cannot find attribute `pk` in this scope
- --> tests/failing/only_transient_column_struct.rs:3:7
-  |
-3 |     #[pk]
-  |       ^^
-
-error: cannot find attribute `column` in this scope
- --> tests/failing/only_transient_column_struct.rs:5:7
-  |
-5 |     #[column(transient)]
-  |       ^^^^^^
-  |
-  = note: `column` is in scope, but it is a function-like macro
-help: consider importing this attribute macro
-  |
-1 + use redbit::column;
-  |
-
 error[E0412]: cannot find type `ParentPK` in this scope
- --> tests/failing/only_transient_column_struct.rs:4:9
+ --> tests/failing/only_transient_column_struct.rs:6:9
   |
-4 |     id: ParentPK,
+6 |     id: ParentPK,
   |         ^^^^^^^^ not found in this scope
 
-error[E0601]: `main` function not found in crate `$CRATE`
- --> tests/failing/only_transient_column_struct.rs:7:2
+error[E0412]: cannot find type `ParentPK` in this scope
+ --> tests/failing/only_transient_column_struct.rs:6:9
   |
-7 | }
+6 |     id: ParentPK,
+  |         ^^^^^^^^ not found in this scope
+  |
+help: you might be missing a type parameter
+  |
+4 | struct TransientAnnotationStruct<ParentPK> {
+  |                                 ++++++++++
+
+error[E0412]: cannot find type `ParentPK` in this scope
+ --> tests/failing/only_transient_column_struct.rs:6:9
+  |
+6 |     id: ParentPK,
+  |         ^^^^^^^^ not found in this scope
+  |
+help: you might be missing a type parameter
+  |
+4 | struct TransientAnnotationStruct<ParentPK> {
+  |                                 ++++++++++
+
+warning: unexpected `cfg` condition value: `integration`
+ --> tests/failing/only_transient_column_struct.rs:3:1
+  |
+3 | #[entity]
+  | ^^^^^^^^^
+  |
+  = note: no expected values for `feature`
+  = note: using a cfg inside a derive macro will use the cfgs from the destination crate and not the ones from the defining crate
+  = help: try referring to `Entity` crate for guidance on how handle this unexpected cfg
+  = help: the derive macro `Entity` may come from an old version of the `macros` crate, try updating your dependency with `cargo update -p macros`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+  = note: `#[warn(unexpected_cfgs)]` on by default
+  = note: this warning originates in the derive macro `Entity` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `chain`
+ --> tests/failing/only_transient_column_struct.rs:3:1
+  |
+3 | #[entity]
+  | ^^^^^^^^^
+  |
+  = note: no expected values for `feature`
+  = note: using a cfg inside a derive macro will use the cfgs from the destination crate and not the ones from the defining crate
+  = help: try referring to `Entity` crate for guidance on how handle this unexpected cfg
+  = help: the derive macro `Entity` may come from an old version of the `macros` crate, try updating your dependency with `cargo update -p macros`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+  = note: this warning originates in the derive macro `Entity` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0601]: `main` function not found in crate `$CRATE`
+ --> tests/failing/only_transient_column_struct.rs:9:2
+  |
+9 | }
   |  ^ consider adding a `main` function to `$DIR/tests/failing/only_transient_column_struct.rs`
+
+error[E0433]: failed to resolve: use of undeclared type `ParentPK`
+ --> tests/failing/only_transient_column_struct.rs:6:9
+  |
+6 |     id: ParentPK,
+  |         ^^^^^^^^ use of undeclared type `ParentPK`

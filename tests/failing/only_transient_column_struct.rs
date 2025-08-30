@@ -1,3 +1,5 @@
+use redbit::*;
+
 #[entity]
 struct TransientAnnotationStruct {
     #[pk]

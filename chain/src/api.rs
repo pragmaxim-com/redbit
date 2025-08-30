@@ -44,6 +44,8 @@ impl ChainError {
     }
 }
 pub trait BlockHeaderLike: Send + Sync + Clone {
+    type Hash;
+    fn new_hash(inner: [u8; 32]) -> Self::Hash;
     fn height(&self) -> u32;
     fn hash(&self) -> [u8; 32];
     fn prev_hash(&self) -> [u8; 32];

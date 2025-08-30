@@ -1,7 +1,7 @@
 #[cfg(feature = "chain")]
 
 use crate::field_parser::FieldDef;
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
 use syn::Type;
 
@@ -67,8 +67,21 @@ fn impl_where_bounds(column_path: &TokenStream, wants: &[(&Type, Expected)]) -> 
     Ok(quote!( where #(#clauses,)* ))
 }
 
+fn hash_type_from(fields: &[FieldDef]) -> Result<&Type, syn::Error> {
+    match find_field(fields, "hash") {
+        Some(fd) => Ok(&fd.tpe),
+        None => Err(syn::Error::new(
+            Span::call_site(),
+            "missing required field `hash` (help: add `pub hash: <HeaderType>`)",
+        )),
+    }
+}
+
+
+
 pub fn block_header_like(header_type: Type, field_defs: &[FieldDef]) -> Result<TokenStream, syn::Error> {
     let span = Span::call_site();
+    let hash_type  = hash_type_from(field_defs)?;
 
     let height     = expect_field(span, field_defs, "height",     Expected::Unsigned(32))?;
     let hash       = expect_field(span, field_defs, "hash",       Expected::ArrayU8(32))?;
@@ -87,6 +100,11 @@ pub fn block_header_like(header_type: Type, field_defs: &[FieldDef]) -> Result<T
 
     Ok(quote! {
         impl BlockHeaderLike for #header_type #where_bounds {
+            type Hash = #hash_type;
+            fn new_hash(inner: [u8; 32]) -> Self::Hash {
+                #hash_type(inner)
+            }
+
             fn height(&self) -> u32         { self.height.0 }
             fn hash(&self) -> [u8; 32]      { self.hash.0 }
             fn prev_hash(&self) -> [u8; 32] { self.prev_hash.0 }
@@ -96,7 +114,7 @@ pub fn block_header_like(header_type: Type, field_defs: &[FieldDef]) -> Result<T
     })
 }
 
-pub fn block_like(block_type: Type, field_defs: &[FieldDef]) -> Result<TokenStream, syn::Error> {
+pub fn block_like(block_type: Type, pk_name: &Ident, pk_type: &Type, field_defs: &[FieldDef]) -> Result<TokenStream, syn::Error> {
     let header_type = header_type_from(field_defs)?;
 
     Ok(quote! {
@@ -110,7 +128,7 @@ pub fn block_like(block_type: Type, field_defs: &[FieldDef]) -> Result<TokenStre
         #[async_trait::async_trait]
         impl chain::BlockChainLike<#block_type> for BlockChain {
             fn init(&self) -> Result<(), chain::ChainError> {
-                Ok(Block::init(Arc::clone(&self.storage))?)
+                Ok(#block_type::init(Arc::clone(&self.storage))?)
             }
 
             fn delete(&self) -> Result<(), chain::ChainError> {
@@ -120,9 +138,8 @@ pub fn block_like(block_type: Type, field_defs: &[FieldDef]) -> Result<TokenStre
                     let write_tx = self.storage.db.begin_write()?;
                     {
                         let mut tx_context = #block_type::begin_write_tx(&write_tx)?;
-                        for height in 1..=tip_header.height.0 {
-                            #block_type::delete(&mut tx_context, &Height(height))?;
-                        }
+                        let pks = #pk_type::from_many(&(0..=tip_header.#pk_name.0).collect::<Vec<u32>>());
+                        #block_type::delete_many(&mut tx_context, &pks)?;
                     }
                     write_tx.commit()?;
                 }
@@ -139,7 +156,8 @@ pub fn block_like(block_type: Type, field_defs: &[FieldDef]) -> Result<TokenStre
             fn get_header_by_hash(&self, hash: [u8; 32]) -> Result<Vec<#header_type>, chain::ChainError> {
                 let read_tx = self.storage.db.begin_read()?;
                 let tx_context = #header_type::begin_read_tx(&read_tx)?;
-                let header = #header_type::get_by_hash(&tx_context, &BlockHash(hash))?;
+                let block_hash = <<Block as BlockLike>::Header as BlockHeaderLike>::new_hash(hash);
+                let header = #header_type::get_by_hash(&tx_context, &block_hash)?;
                 Ok(header)
             }
 
@@ -160,7 +178,7 @@ pub fn block_like(block_type: Type, field_defs: &[FieldDef]) -> Result<TokenStre
                 {
                     let mut tx_context = #block_type::begin_write_tx(&write_tx)?;
                     for block in &blocks {
-                        #block_type::delete(&mut tx_context, &block.height)?;
+                        #block_type::delete(&mut tx_context, &block.#pk_name)?;
                     }
                 }
                 write_tx.commit()?;
@@ -168,7 +186,7 @@ pub fn block_like(block_type: Type, field_defs: &[FieldDef]) -> Result<TokenStre
                 Ok(())
             }
 
-            fn populate_inputs(&self, blocks: &mut Vec<Block>) -> Result<(), chain::ChainError> {
+            fn populate_inputs(&self, blocks: &mut Vec<#block_type>) -> Result<(), chain::ChainError> {
                 let read_tx = self.storage.db.begin_read()?;
                 let tx_context = #block_type::begin_read_tx(&read_tx)?; // kept as-is even if unused
                 for block in blocks.iter_mut() {
@@ -183,7 +201,7 @@ pub fn block_like(block_type: Type, field_defs: &[FieldDef]) -> Result<TokenStre
                 let tx_context = #header_type::begin_read_tx(&read_tx)?; // kept as-is even if unused
                 let mut affected_headers: Vec<#header_type> = Vec::new();
                 if let Some(tip_header) = #header_type::last(&tx_context)? {
-                    let mut stream = #header_type::stream_range(tx_context, Height(0), tip_header.height, None)?;
+                    let mut stream = #header_type::stream_range(tx_context, #pk_type(0), tip_header.#pk_name, None)?;
 
                     // get the first header (nothing to validate yet)
                     let mut prev = match stream.next().await {
@@ -201,7 +219,7 @@ pub fn block_like(block_type: Type, field_defs: &[FieldDef]) -> Result<TokenStre
                         if prev.hash != curr.prev_hash {
                            error!(
                              "Chain unlinked, curr {} @ {:?}, prev {} @ {:?}",
-                             hex::encode(curr.prev_hash.0), curr.height, hex::encode(prev.hash.0), prev.height
+                             hex::encode(curr.prev_hash.0), curr.#pk_name, hex::encode(prev.hash.0), prev.#pk_name
                            );
                            affected_headers.push(prev.clone());
                         }

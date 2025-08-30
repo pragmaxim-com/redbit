@@ -93,7 +93,7 @@ impl BtcBlockProvider {
             hash: TxHash(*tx.compute_txid().as_ref()),
             utxos: outputs,
             inputs: vec![],
-            transient_inputs: Self::process_inputs(&tx.input),
+            temp_input_refs: Self::process_inputs(&tx.input),
         }
     }
 }

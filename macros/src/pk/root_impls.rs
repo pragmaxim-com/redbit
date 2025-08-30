@@ -26,6 +26,9 @@ pub fn new(struct_name: &Ident, index_field: Field) -> TokenStream {
         }
         impl RootPointer for #struct_name {
             fn is_pointer(&self) -> bool { false }
+            fn from_many(pks: &[#index_type]) -> Vec<Self> {
+                pks.iter().map(|idx| #struct_name(*idx)).collect()
+            }
         }
 
         impl BinaryCodec for #struct_name {

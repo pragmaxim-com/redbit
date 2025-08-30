@@ -15,7 +15,7 @@ mod expansion;
 
 use crate::pk::PointerType;
 use proc_macro::TokenStream;
-use proc_macro_error::proc_macro_error;
+use proc_macro_error::{abort, proc_macro_error};
 use quote::quote;
 use syn::parse::Parse;
 use syn::spanned::Spanned;
@@ -116,14 +116,10 @@ pub fn pointer_key(attr: TokenStream, item: TokenStream) -> TokenStream {
         Fields::Unnamed(fields) if fields.unnamed.len() == 1 => {
             &fields.unnamed[0].ty
         }
-        _ => {
-            return syn::Error::new_spanned(
-                &s.ident,
+        _ => abort!(
+                s.ident,
                 "#[foreign_key] must be applied to a tuple struct with one field (the parent)"
             )
-                .to_compile_error()
-                .into();
-        }
     };
 
     let stream = quote! {
@@ -147,15 +143,15 @@ pub fn derive_pointer_key(input: TokenStream) -> TokenStream {
         Ok(_) => {
             let (parent_field, index_field) = match field_parser::extract_pointer_key_fields(&ast, &PointerType::Child) {
                 Ok(fields) => fields,
-                Err(e) => return e.to_compile_error().into(),
+                Err(e) => abort!(e.span(), "{}", e),
             };
             match parent_field {
                 Some(parent_field) => pk::pointer_impls::new(struct_ident, parent_field, index_field),
-                None => syn::Error::new(index_field.span(), "Parent field missing").to_compile_error(),
+                None => abort!(index_field.span(), "Parent field missing in {}", struct_ident),
             }
         },
         #[allow(clippy::useless_conversion)]
-        Err(e) => e.to_compile_error().into(),
+        Err(e) => abort!(e.span(), "{}", e),
     };
     expansion::submit_struct_to_stream(stream, "pk", struct_ident, "_derive.rs")
 }
@@ -184,11 +180,11 @@ pub fn derive_root_key(input: TokenStream) -> TokenStream {
         Ok(_) => {
             let (_, index_field) = match field_parser::extract_pointer_key_fields(&ast, &PointerType::Root) {
                 Ok(fields) => fields,
-                Err(e) => return e.to_compile_error().into(),
+                Err(e) => abort!(e.span(), "{}", e),
             };
             pk::root_impls::new(struct_ident, index_field)
         },
-        Err(e) => e.to_compile_error().into(),
+        Err(e) => abort!(e.span(), "{}", e),
     };
     expansion::submit_struct_to_stream(stream, "pk", struct_ident, "_derive.rs")
 }
@@ -215,18 +211,19 @@ pub fn derive_entity(input: TokenStream) -> TokenStream {
     let struct_ident = &item_struct.ident;
     let (key_def, field_defs, s) = match entity::new(&item_struct) {
         Ok(result) => result,
-        Err(e) => return e.to_compile_error().into(),
+        Err(e) => abort!(e.span(), "{}", e),
     };
     let root = key_def.is_root();
+    let field_def = key_def.field_def();
 
     let chain_impl: proc_macro2::TokenStream =
         if struct_ident.to_string().contains("Header") {
             chain::block_header_like(syn::parse_quote!(#struct_ident), &field_defs)
         } else if struct_ident.to_string().contains("Block") {
-            chain::block_like(syn::parse_quote!(#struct_ident), &field_defs)
+            chain::block_like(syn::parse_quote!(#struct_ident), &field_def.name, &field_def.tpe, &field_defs)
         } else {
             Ok(quote! {})
-        }.unwrap_or_else(|e| syn::Error::new_spanned(&item_struct, e).to_compile_error().into());
+        }.unwrap_or_else(|e| abort!(item_struct, "{}", e));
 
     let stream = quote! {
         #s

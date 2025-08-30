@@ -57,7 +57,7 @@ impl ErgoBlockProvider {
             }
             block_weight += box_weight;
             block_weight += tx.inputs.len();
-            result_txs.push(Transaction { id: tx_id, hash: TxHash(tx_hash), utxos: outputs, inputs: Vec::new(), transient_inputs: inputs })
+            result_txs.push(Transaction { id: tx_id, hash: TxHash(tx_hash), utxos: outputs, inputs: Vec::new(), box_ids: inputs })
         }
 
         let header = BlockHeader {

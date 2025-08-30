@@ -1,3 +1,4 @@
+use heck::ToSnakeCase;
 use proc_macro2::Ident;
 use quote::ToTokens;
 use syn::punctuated::Punctuated;
@@ -173,9 +174,12 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                                         .ok_or_else(|| syn::Error::new(field.span(), "Parent field missing"))?
                                         .ident
                                         .clone();
+
+                                    validate_one_to_many_name(&column_name, &inner_type, field.span())?;
+
                                     let type_path = Type::Path(syn::TypePath {
                                         qself: None,
-                                        path: syn::Path::from(inner_type),
+                                        path: syn::Path::from(inner_type.clone()),
                                     });
                                     let field_def = FieldDef {
                                         name: column_name.clone(),
@@ -233,6 +237,27 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
         }
     }
 }
+
+fn validate_one_to_many_name(
+    field_name: &Ident,
+    inner_type: &Ident,
+    span: proc_macro2::Span,
+) -> syn::Result<()> {
+    let expected = format!("{}s", inner_type.to_string().to_snake_case());
+    if field_name.to_string() != expected {
+        Err(syn::Error::new(
+            span,
+            format!(
+                "One2many field must be named like a snake_case plural of the underlying entity name: '{}: Vec<{}>' ",
+                expected,
+                inner_type
+            ),
+        ))
+    } else {
+        Ok(())
+    }
+}
+
 
 pub fn get_field_macros(ast: &ItemStruct) -> syn::Result<(KeyDef, Vec<ColumnDef>)> {
     let mut key_column: Option<KeyDef> = None;
