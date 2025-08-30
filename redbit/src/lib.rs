@@ -63,6 +63,7 @@ pub use serde::Deserializer;
 pub use serde::Serialize;
 pub use serde::Serializer;
 pub use serde_json;
+pub use serde_json::json;
 pub use serde_urlencoded;
 pub use serde_with;
 pub use std::collections::VecDeque;

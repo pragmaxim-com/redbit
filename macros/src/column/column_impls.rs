@@ -15,7 +15,7 @@ pub fn generate_column_impls(
     let kind = crate::macro_utils::classify_inner_type(inner_type);
 
     let binary_encoding = binary_encoding_opt.unwrap_or_else(|| "hex".to_string());
-    let mut schema_example = quote! { vec![Some(serde_json::json!(#struct_ident::default().url_encode()))] };
+    let mut schema_example = quote! { vec![Some(json!(#struct_ident::default().url_encode()))] };
     let mut struct_attr: Option<Attribute> = None;
     let mut extra_derive_impls: Punctuated<Path, Comma> = Punctuated::new();
     let mut schema_type = quote! { SchemaType::Type(Type::String) };
