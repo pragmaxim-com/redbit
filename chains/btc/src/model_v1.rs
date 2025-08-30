@@ -14,6 +14,7 @@ use crate::block_chain::BlockChain;
 #[column("hex")] pub struct MerkleRoot(pub [u8; 32]);
 #[column("hex")] pub struct TxHash(pub [u8; 32]);
 #[column("hex")] pub struct ScriptHash(pub Vec<u8>);
+#[column] pub struct Timestamp(pub u32);
 #[column] pub struct Weight(pub u32);
 
 #[column("crate::codec::BaseOrBech")]
@@ -24,9 +25,6 @@ pub struct TempInputRef {
     pub tx_hash: TxHash,
     pub index: u32,
 }
-
-#[column]
-pub struct BlockTimestamp(pub u32);
 
 #[entity]
 pub struct Block {
@@ -45,7 +43,7 @@ pub struct Header {
     #[column(index)]
     pub prev_hash: BlockHash,
     #[column(range)]
-    pub timestamp: BlockTimestamp,
+    pub timestamp: Timestamp,
     #[column(index)]
     pub merkle_root: MerkleRoot,
     #[column(transient)]

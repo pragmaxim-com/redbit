@@ -55,9 +55,9 @@ impl BlockProvider<Block, Block> for DemoBlockProvider {
         Arc::new(|block| Ok(block.clone()))
     }
 
-    fn get_processed_block(&self, hash: [u8; 32]) -> Result<Option<Block>, ChainError> {
+    fn get_processed_block(&self, hash: BlockHash) -> Result<Option<Block>, ChainError> {
         let block_by_hash = self.block_by_hash.read().unwrap();
-        Ok(block_by_hash.get(&BlockHash(hash)).cloned())
+        Ok(block_by_hash.get(&hash).cloned())
     }
 
     async fn get_chain_tip(&self) -> Result<Header, ChainError> {

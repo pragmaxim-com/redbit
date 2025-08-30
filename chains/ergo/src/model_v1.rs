@@ -17,7 +17,7 @@ use crate::block_chain::BlockChain;
 #[column("hex")] pub struct BlockHash(pub [u8; 32]);
 #[column("hex")] pub struct TxHash(pub [u8; 32]);
 #[column] pub struct Weight(pub u32);
-#[column] pub struct BlockTimestamp(pub u32);
+#[column] pub struct Timestamp(pub u32);
 #[column("crate::codec::Base58")] pub struct Address(pub Vec<u8>);
 
 #[entity]
@@ -37,7 +37,7 @@ pub struct BlockHeader {
     #[column(index)]
     pub prev_hash: BlockHash,
     #[column(range)]
-    pub timestamp: BlockTimestamp,
+    pub timestamp: Timestamp,
     #[column(transient)]
     pub weight: Weight,
 }

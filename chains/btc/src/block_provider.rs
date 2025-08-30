@@ -1,5 +1,5 @@
 use crate::config::BitcoinConfig;
-use crate::model_v1::{Address, Block, BlockHash, BlockPointer, BlockTimestamp, Header, Height, MerkleRoot, ScriptHash, TempInputRef, Transaction, TransactionPointer, TxHash, Utxo, Weight};
+use crate::model_v1::{Address, Block, BlockHash, BlockPointer, Timestamp, Header, Height, MerkleRoot, ScriptHash, TempInputRef, Transaction, TransactionPointer, TxHash, Utxo, Weight};
 use async_trait::async_trait;
 use chain::api::{BlockProvider, ChainError};
 use chain::batcher::SyncMode;
@@ -46,7 +46,7 @@ impl BtcBlockProvider {
         
         let header = Header {
             height: height.clone(),
-            timestamp: BlockTimestamp(block.header.time),
+            timestamp: Timestamp(block.header.time),
             hash: BlockHash(*block.block_hash().as_ref()),
             prev_hash: BlockHash(*block.header.prev_blockhash.as_ref()),
             merkle_root: MerkleRoot(*block.header.merkle_root.as_ref()),
@@ -104,8 +104,8 @@ impl BlockProvider<BtcCBOR, Block> for BtcBlockProvider {
         Arc::new(|raw| Self::process_block_pure(raw))
     }
 
-    fn get_processed_block(&self, hash: [u8; 32]) -> Result<Option<Block>, ChainError> {
-        match self.client.get_block_by_hash_str_sync(BlockHash(hash)) {
+    fn get_processed_block(&self, hash: BlockHash) -> Result<Option<Block>, ChainError> {
+        match self.client.get_block_by_hash_str_sync(hash) {
             Ok(block) => {
                 let processed_block = Self::process_block_pure(&block)?;
                 Ok(Some(processed_block))

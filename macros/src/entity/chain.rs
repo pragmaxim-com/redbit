@@ -45,16 +45,6 @@ fn expect_field<'a>(
         })
 }
 
-fn header_type_from(fields: &[FieldDef]) -> Result<&Type, syn::Error> {
-    match find_field(fields, "header") {
-        Some(fd) => Ok(&fd.tpe),
-        None => Err(syn::Error::new(
-            Span::call_site(),
-            "missing required field `header` (help: add `pub header: <HeaderType>`)",
-        )),
-    }
-}
-
 fn impl_where_bounds(column_path: &TokenStream, wants: &[(&Type, Expected)]) -> Result<TokenStream, syn::Error> {
     let mut clauses = Vec::with_capacity(wants.len());
     for (ty, exp) in wants {
@@ -67,9 +57,9 @@ fn impl_where_bounds(column_path: &TokenStream, wants: &[(&Type, Expected)]) -> 
     Ok(quote!( where #(#clauses,)* ))
 }
 
-fn hash_type_from(fields: &[FieldDef]) -> Result<&Type, syn::Error> {
-    match find_field(fields, "hash") {
-        Some(fd) => Ok(&fd.tpe),
+fn field_type_from(fields: &[FieldDef], field_name: &str) -> Result<Type, syn::Error> {
+    match find_field(fields, &field_name) {
+        Some(fd) => Ok(fd.tpe.clone()),
         None => Err(syn::Error::new(
             Span::call_site(),
             "missing required field `hash` (help: add `pub hash: <HeaderType>`)",
@@ -81,41 +71,40 @@ fn hash_type_from(fields: &[FieldDef]) -> Result<&Type, syn::Error> {
 
 pub fn block_header_like(header_type: Type, field_defs: &[FieldDef]) -> Result<TokenStream, syn::Error> {
     let span = Span::call_site();
-    let hash_type  = hash_type_from(field_defs)?;
 
-    let height     = expect_field(span, field_defs, "height",     Expected::Unsigned(32))?;
-    let hash       = expect_field(span, field_defs, "hash",       Expected::ArrayU8(32))?;
-    let prev_hash  = expect_field(span, field_defs, "prev_hash",  Expected::ArrayU8(32))?;
-    let timestamp  = expect_field(span, field_defs, "timestamp",  Expected::Unsigned(32))?;
-    let weight     = expect_field(span, field_defs, "weight",     Expected::Unsigned(32))?;
+    let hash_type  = field_type_from(field_defs, "hash")?;
+    let timestamp_type  = field_type_from(field_defs, "timestamp")?;
+
+    let height_inner_ty = expect_field(span, field_defs, "height", Expected::Unsigned(32))?;
+    let hash_inner_ty = expect_field(span, field_defs, "hash", Expected::ArrayU8(32))?;
+    let prev_hash_inner_ty = expect_field(span, field_defs, "prev_hash", Expected::ArrayU8(32))?;
+    let timestamp_inner_ty = expect_field(span, field_defs, "timestamp", Expected::Unsigned(32))?;
+    let weight_inner_ty = expect_field(span, field_defs, "weight", Expected::Unsigned(32))?;
 
     let col = quote!(redbit::ColInnerType);
     let where_bounds = impl_where_bounds(&col, &[
-        (height,    Expected::Unsigned(32)),
-        (hash,      Expected::ArrayU8(32)),
-        (prev_hash, Expected::ArrayU8(32)),
-        (timestamp, Expected::Unsigned(32)),
-        (weight,    Expected::Unsigned(32)),
+        (height_inner_ty, Expected::Unsigned(32)),
+        (hash_inner_ty, Expected::ArrayU8(32)),
+        (prev_hash_inner_ty, Expected::ArrayU8(32)),
+        (timestamp_inner_ty, Expected::Unsigned(32)),
+        (weight_inner_ty, Expected::Unsigned(32)),
     ])?;
 
     Ok(quote! {
         impl BlockHeaderLike for #header_type #where_bounds {
             type Hash = #hash_type;
-            fn new_hash(inner: [u8; 32]) -> Self::Hash {
-                #hash_type(inner)
-            }
-
-            fn height(&self) -> u32         { self.height.0 }
-            fn hash(&self) -> [u8; 32]      { self.hash.0 }
-            fn prev_hash(&self) -> [u8; 32] { self.prev_hash.0 }
-            fn timestamp(&self) -> u32      { self.timestamp.0 }
-            fn weight(&self) -> u32         { self.weight.0 }
+            type TS = #timestamp_type;
+            fn height(&self) -> u32                 { self.height.0 }
+            fn hash(&self) -> #hash_type            { self.hash }
+            fn prev_hash(&self) -> #hash_type       { self.prev_hash }
+            fn timestamp(&self) -> #timestamp_type  { self.timestamp }
+            fn weight(&self) -> u32                 { self.weight.0 }
         }
     })
 }
 
 pub fn block_like(block_type: Type, pk_name: &Ident, pk_type: &Type, field_defs: &[FieldDef]) -> Result<TokenStream, syn::Error> {
-    let header_type = header_type_from(field_defs)?;
+    let header_type = field_type_from(field_defs, "header")?;
 
     Ok(quote! {
         impl BlockLike for #block_type {
@@ -153,11 +142,10 @@ pub fn block_like(block_type: Type, pk_name: &Ident, pk_type: &Type, field_defs:
                 Ok(last)
             }
 
-            fn get_header_by_hash(&self, hash: [u8; 32]) -> Result<Vec<#header_type>, chain::ChainError> {
+            fn get_header_by_hash(&self, hash: <<Block as BlockLike>::Header as BlockHeaderLike>::Hash) -> Result<Vec<#header_type>, chain::ChainError> {
                 let read_tx = self.storage.db.begin_read()?;
                 let tx_context = #header_type::begin_read_tx(&read_tx)?;
-                let block_hash = <<Block as BlockLike>::Header as BlockHeaderLike>::new_hash(hash);
-                let header = #header_type::get_by_hash(&tx_context, &block_hash)?;
+                let header = #header_type::get_by_hash(&tx_context, &hash)?;
                 Ok(header)
             }
 

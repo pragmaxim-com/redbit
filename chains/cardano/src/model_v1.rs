@@ -25,8 +25,7 @@ pub struct TempInputRef {
 }
 
 #[column]
-#[derive(Copy, Hash)]
-pub struct BlockTimestamp(pub u32);
+pub struct Timestamp(pub u32);
 
 #[entity]
 pub struct Block {
@@ -47,7 +46,7 @@ pub struct BlockHeader {
     #[column(range)]
     pub slot: Slot,
     #[column(range)]
-    pub timestamp: BlockTimestamp,
+    pub timestamp: Timestamp,
     #[column(transient)]
     pub weight: Weight,
 }

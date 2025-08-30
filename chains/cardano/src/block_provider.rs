@@ -51,7 +51,7 @@ impl CardanoBlockProvider {
 
         let header = BlockHeader {
             height,
-            timestamp: BlockTimestamp(b.wallclock(genesis) as u32),
+            timestamp: Timestamp(b.wallclock(genesis) as u32),
             slot: Slot(b.slot() as u32),
             hash: BlockHash(hash),
             prev_hash: BlockHash(prev_hash),
@@ -143,7 +143,7 @@ impl BlockProvider<CardanoCBOR, Block> for CardanoBlockProvider {
         })
     }
 
-    fn get_processed_block(&self, _h: [u8; 32]) -> Result<Option<Block>, ChainError> {
+    fn get_processed_block(&self, _h: BlockHash) -> Result<Option<Block>, ChainError> {
         Ok(None) // pallas chain sync rolls back, this method is not needed
     }
 

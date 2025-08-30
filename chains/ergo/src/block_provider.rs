@@ -1,7 +1,7 @@
 use crate::config::ErgoConfig;
 use crate::ergo_client::{ErgoCBOR, ErgoClient};
 use crate::{model_v1, AssetType, ExplorerError};
-use crate::model_v1::{Address, Asset, AssetAction, AssetName, Block, BlockHash, BlockHeader, BlockPointer, BlockTimestamp, Height, Transaction, TransactionPointer, TxHash, Utxo, UtxoPointer, Weight};
+use crate::model_v1::{Address, Asset, AssetAction, AssetName, Block, BlockHash, BlockHeader, BlockPointer, Timestamp, Height, Transaction, TransactionPointer, TxHash, Utxo, UtxoPointer, Weight};
 use async_trait::async_trait;
 use chain::api::{BlockProvider, ChainError};
 use chain::batcher::SyncMode;
@@ -62,7 +62,7 @@ impl ErgoBlockProvider {
 
         let header = BlockHeader {
             height,
-            timestamp: BlockTimestamp((b.header.timestamp / 1000) as u32),
+            timestamp: Timestamp((b.header.timestamp / 1000) as u32),
             hash: BlockHash(block_hash),
             prev_hash: BlockHash(prev_block_hash),
             weight: Weight(block_weight as u32)
@@ -138,8 +138,8 @@ impl BlockProvider<ErgoCBOR, Block> for ErgoBlockProvider {
         Arc::new(|raw| ErgoBlockProvider::process_block_pure(raw))
     }
 
-    fn get_processed_block(&self, hash: [u8; 32]) -> Result<Option<Block>, ChainError> {
-        match self.client.get_cbor_by_hash_sync(BlockHash(hash)) {
+    fn get_processed_block(&self, hash: BlockHash) -> Result<Option<Block>, ChainError> {
+        match self.client.get_cbor_by_hash_sync(hash) {
             Ok(block) => {
                 let processed_block = Self::process_block_pure(&block)?;
                 Ok(Some(processed_block))

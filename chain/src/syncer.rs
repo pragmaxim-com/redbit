@@ -128,8 +128,8 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
                                 let lh = last.header();
                                 monitor.log(
                                     lh.height(),
-                                    &lh.timestamp_str(),
-                                    &lh.hash_str(),
+                                    &lh.timestamp().to_string(),
+                                    &lh.hash().to_string(),
                                     out.len(),
                                     out.iter().map(|x| x.header().weight() as usize).sum::<usize>(),
                                     proc_rx.len(),
@@ -184,8 +184,8 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
         let header = block.header();
         let prev_headers = chain.get_header_by_hash(header.prev_hash())?;
         let height = header.height();
-        let hash_str = &header.hash_str()[..12];
-        let prev_hash_str = &header.prev_hash_str()[..12];
+        let hash_str = &header.hash().to_string();
+        let prev_hash_str = &header.prev_hash().to_string();
 
         if height == 1 {
             // Base case: genesis
@@ -212,7 +212,7 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
             if let Some(prev_header) = prev_headers.first() {
                 panic!(
                     "Found prev header {} with different height {} @ {} : {} -> {}",
-                    &prev_header.hash_str()[..12],
+                    &prev_header.hash(),
                     prev_header.height(),
                     height,
                     hash_str,
