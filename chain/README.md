@@ -70,14 +70,12 @@ impl BlockChain {
         Arc::new(BlockChain { storage })
     }
 
-    fn resolve_tx_inputs(&self, tx_context: &TransactionReadTxContext, block: &mut Block) -> Result<(), ChainSyncError> {
-        for tx in &mut block.transactions {
-            for transient_input in tx.transient_inputs.iter_mut() {
-                let tx_pointers = Transaction::get_ids_by_hash(tx_context, &transient_input.tx_hash)?;
-
-                match tx_pointers.first() {
-                    Some(tx_pointer) => tx.inputs.push(InputRef { id: TransactionPointer::from_parent(*tx_pointer, transient_input.index as u16) }),
-                    None => tx.inputs.push(InputRef { id: TransactionPointer::from_parent(BlockPointer::from_parent(Height(0), 0), 0) }),
+    pub(crate) fn resolve_tx_inputs(tx_context: &TransactionWriteTxContext, transactions: &mut [Transaction]) -> Result<(), ChainError> {
+        for tx in transactions {
+            for transient_input in tx.temp_input_refs.iter_mut() {
+                match tx_context.transaction_hash_index.get(&transient_input.tx_hash)?.next() {
+                    Some(Ok(tx_pointer)) => tx.inputs.push(Input { id: TransactionPointer::from_parent(tx_pointer.value(), transient_input.index as u16) }),
+                    _ => tx.inputs.push(Input { id: TransactionPointer::from_parent(BlockPointer::from_parent(Height(0), 0), 0) }),
                 }
             }
         }

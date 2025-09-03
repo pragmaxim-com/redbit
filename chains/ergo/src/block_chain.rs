@@ -27,15 +27,15 @@ impl BlockChain {
         Arc::new(BlockChain { storage })
     }
 
-    pub(crate) fn resolve_tx_inputs(&self, tx_context: &BlockReadTxContext, block: &mut Block) -> Result<(), ChainError> {
-        for tx in &mut block.transactions {
-            for box_id in tx.box_ids.iter_mut() {
-                let utxo_pointers = Utxo::get_ids_by_box_id(&tx_context.transactions.utxos, box_id).expect("Failed to get Utxo by ErgoBox");
-                match utxo_pointers.first() {
-                    Some(utxo_pointer) => {
-                        tx.inputs.push(Input { id: TransactionPointer::from_parent(utxo_pointer.parent, utxo_pointer.index()) })
-                    }
-                    None => tx.inputs.push(Input { id: TransactionPointer::from_parent(BlockPointer::from_parent(Height(0), 0), 0) }),
+    pub(crate) fn resolve_tx_inputs(tx_context: &TransactionWriteTxContext, transactions: &mut [Transaction]) -> Result<(), ChainError> {
+        for tx in transactions {
+            for box_id in tx.box_ids.iter() {
+                match tx_context.utxos.utxo_box_id_index.get(box_id)?.next() {
+                    Some(Ok(utxo_pointer_guard)) => {
+                        let utxo_pointer = utxo_pointer_guard.value();
+                        tx.inputs.push(Input { id: TransactionPointer::from_parent(utxo_pointer.parent, utxo_pointer.index) })
+                    },
+                    _ => tx.inputs.push(Input { id: TransactionPointer::from_parent(BlockPointer::from_parent(Height(0), 0), 0) }),
                 }
             }
         }

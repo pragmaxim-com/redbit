@@ -5,6 +5,7 @@ use hex::FromHexError;
 use redbit::AppError;
 use std::pin::Pin;
 use std::sync::Arc;
+use redb::StorageError;
 use tokio::task::JoinError;
 use crate::batcher::SyncMode;
 
@@ -27,6 +28,9 @@ pub enum ChainError {
 
     #[error("Commit error: {0}")]
     RedbCommit(#[from] redb::CommitError),
+
+    #[error("Storage error: {0}")]
+    StorageError(#[from] StorageError),
 
     #[error("Application error: {0}")]
     App(#[from] AppError),
@@ -70,7 +74,6 @@ pub trait BlockChainLike<B: BlockLike>: Send + Sync {
     fn get_header_by_hash(&self, hash: <B::Header as BlockHeaderLike>::Hash) -> Result<Vec<B::Header>, ChainError>;
     fn store_blocks(&self, blocks: Vec<B>) -> Result<(), ChainError>;
     fn update_blocks(&self, blocks: Vec<B>) -> Result<(), ChainError>;
-    fn populate_inputs(&self, blocks: &mut Vec<B>) -> Result<(), ChainError>;
     async fn validate_chain(&self) -> Result<Vec<B::Header>, ChainError>;
 }
 

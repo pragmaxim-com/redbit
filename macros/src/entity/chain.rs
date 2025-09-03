@@ -153,7 +153,8 @@ pub fn block_like(block_type: Type, pk_name: &Ident, pk_type: &Type, field_defs:
                 let write_tx = self.storage.db.begin_write()?;
                 {
                     let mut tx_context = #block_type::begin_write_tx(&write_tx)?;
-                    for block in blocks.into_iter() {
+                    for mut block in blocks.into_iter() {
+                        Self::resolve_tx_inputs(&tx_context.transactions, &mut block.transactions)?;
                         #block_type::store(&mut tx_context, block)?;
                     }
                 }
@@ -171,15 +172,6 @@ pub fn block_like(block_type: Type, pk_name: &Ident, pk_type: &Type, field_defs:
                 }
                 write_tx.commit()?;
                 self.store_blocks(blocks)?;
-                Ok(())
-            }
-
-            fn populate_inputs(&self, blocks: &mut Vec<#block_type>) -> Result<(), chain::ChainError> {
-                let read_tx = self.storage.db.begin_read()?;
-                let tx_context = #block_type::begin_read_tx(&read_tx)?; // kept as-is even if unused
-                for block in blocks.iter_mut() {
-                    self.resolve_tx_inputs(&tx_context, block)?;
-                }
                 Ok(())
             }
 

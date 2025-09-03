@@ -230,10 +230,8 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
             error!("Received empty block batch, nothing to persist");
             Ok(())
         } else if blocks.last().is_some_and(|b| b.header().height() <= fork_detection_height) {
-            block_chain.populate_inputs(&mut blocks)?;
             block_chain.store_blocks(blocks)
         } else {
-            block_chain.populate_inputs(&mut blocks)?;
             for block in blocks.drain(..) {
                 let chain = Self::chain_link(block, Arc::clone(&block_provider), Arc::clone(&block_chain))?;
                 match chain.len() {
