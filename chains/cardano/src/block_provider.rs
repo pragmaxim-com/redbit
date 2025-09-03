@@ -174,7 +174,12 @@ impl BlockProvider<CardanoCBOR, Block> for CardanoBlockProvider {
                         info !("Cardano roll backward to: {:?} ", new_tip);
                         continue;
                     }
-                    NextResponse::Await => break,
+                    NextResponse::Await => {
+                        if let Err(e) = cs.send_done().await {
+                            error!("chainsync send_done failed (ignoring): {e}");
+                        };
+                        break
+                    },
                 }
             }
         }.boxed()
