@@ -97,7 +97,7 @@ where
             Vec::new()
         } else {
             info!("Validating chain for being linked");
-            chain.validate_chain().await?
+            chain.validate_chain(config.indexer.validation_from_height).await?
         };
     let syncer: Arc<ChainSyncer<FB, TB>> = Arc::new(ChainSyncer::new(Arc::clone(&block_provider), Arc::clone(&chain)));
     let (shutdown_tx, shutdown_rx) = watch::channel(false);

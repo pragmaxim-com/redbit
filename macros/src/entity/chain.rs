@@ -175,13 +175,13 @@ pub fn block_like(block_type: Type, pk_name: &Ident, pk_type: &Type, field_defs:
                 Ok(())
             }
 
-            async fn validate_chain(&self) -> Result<Vec<#header_type>, chain::ChainError> {
+            async fn validate_chain(&self, validation_from_height: u32) -> Result<Vec<#header_type>, chain::ChainError> {
                 use futures::StreamExt;
                 let read_tx = self.storage.db.begin_read()?; // kept as-is even if unused
                 let tx_context = #header_type::begin_read_tx(&read_tx)?; // kept as-is even if unused
                 let mut affected_headers: Vec<#header_type> = Vec::new();
                 if let Some(tip_header) = #header_type::last(&tx_context)? {
-                    let mut stream = #header_type::stream_range(tx_context, #pk_type(0), tip_header.#pk_name, None)?;
+                    let mut stream = #header_type::stream_range(tx_context, #pk_type(validation_from_height), tip_header.#pk_name, None)?;
 
                     // get the first header (nothing to validate yet)
                     let mut prev = match stream.next().await {

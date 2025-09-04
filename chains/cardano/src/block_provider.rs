@@ -28,8 +28,15 @@ impl CardanoBlockProvider {
         Arc::new(CardanoBlockProvider { client, genesis })
     }
 
+    fn is_byron_ebb(b: &MultiEraBlock<'_>) -> bool {
+        matches!(b, MultiEraBlock::EpochBoundary(_))
+    }
+
     pub fn process_block_pure(cbor: &CardanoCBOR, genesis: &GenesisValues) -> Result<Block, ChainError> {
         let b = MultiEraBlock::decode(&cbor.0).map_err(ExplorerError::from)?;
+        if Self::is_byron_ebb(&b) {
+            return Err(ChainError::new(format!("Skipping Byron epoch boundary block {}", b.header().number())));
+        }
         let header = b.header();
         let hash: [u8; 32] = *header.hash();
         let prev_h = header.previous_hash().unwrap_or(pallas::crypto::hash::Hash::new([0u8; 32]));

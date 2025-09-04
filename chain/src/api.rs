@@ -74,7 +74,7 @@ pub trait BlockChainLike<B: BlockLike>: Send + Sync {
     fn get_header_by_hash(&self, hash: <B::Header as BlockHeaderLike>::Hash) -> Result<Vec<B::Header>, ChainError>;
     fn store_blocks(&self, blocks: Vec<B>) -> Result<(), ChainError>;
     fn update_blocks(&self, blocks: Vec<B>) -> Result<(), ChainError>;
-    async fn validate_chain(&self) -> Result<Vec<B::Header>, ChainError>;
+    async fn validate_chain(&self, validation_from_height: u32) -> Result<Vec<B::Header>, ChainError>;
 }
 
 #[async_trait]

@@ -7,6 +7,7 @@ fork_detection_heights = 100    # max 255, how many blocks from tip to check for
 db_cache_size_gb = 8            # 0 means disabled, redb cache size in GigaBytes
 min_batch_size = 1000           # Sum of : inputs + outputs + assets/tokens
 processing_parallelism = "high" # low / mild / high
+validation_from_height = 0
 
 [http]
 enable = true

@@ -72,6 +72,7 @@ pub struct IndexerSettings {
     pub min_batch_size: usize,
     pub db_cache_size_gb: u8,
     pub processing_parallelism: Parallelism,
+    pub validation_from_height: u32,
 }
 
 #[derive(Debug, Deserialize, Clone)]

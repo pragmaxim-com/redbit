@@ -31,12 +31,12 @@ async fn test_chain_sync() {
     assert_eq!(block_headers.len(), target_height as usize); // genesis not stored
     let heights: Vec<u32> = block_headers.iter().map(|h| h.height.0).collect();
     assert_eq!(heights, (1..=target_height).collect::<Vec<u32>>());
-    let result = chain.validate_chain().await.expect("Chain validation returned an error");
+    let result = chain.validate_chain(0).await.expect("Chain validation returned an error");
     assert!(result.is_empty(), "Chain validation failed: {:?}", result);
 
     // sync again
     syncer.sync(&config.indexer, Some(header_near_tip), shutdown_rx).await.expect("Syncing from 40 failed");
-    let result = chain.validate_chain().await.expect("Chain validation returned an error");
+    let result = chain.validate_chain(0).await.expect("Chain validation returned an error");
     assert!(result.is_empty(), "Chain validation failed: {:?}", result);
 }
 
