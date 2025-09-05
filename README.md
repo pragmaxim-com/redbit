@@ -505,10 +505,12 @@ Hand-made criterion benchmarks [deployed](https://pragmaxim-com.github.io/redbit
 Indexing speed in logs is the **average**, for example, the first ~ 100k **bitcoin** blocks with just one Tx have 
 lower in/out indexing throughput because the block is indexed into ~ 24 tables in total.
 
-If node and indexer each uses its own SSD, then the throughput reaches :
+The throughput reaches :
 
  - 2.0GHz & NVMe on PCIe Gen3 : `~ 17 000 Inputs+outputs / s`
  - 3.0GHz & NVMe on PCIe Gen4 : `~ 26 000 Inputs+outputs / s`
  - 4.0GHz & NVMe on PCIe Gen5 : `~ 41 000 Inputs+outputs / s`
 
 In a nutshell, whole bitcoin up to height ~ 0.9M can be indexed in 3-4 days on a PCIe Gen5 SSD with 4.0GHz CPU.
+
+> Note that for indexing whole bitcoin, it is better to have lots of RAM 64B+ for the Linux VM (page cache).

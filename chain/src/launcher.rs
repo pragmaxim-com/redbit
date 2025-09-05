@@ -1,6 +1,6 @@
 use crate::api::{BlockChainLike, BlockLike, BlockProvider, SizeLike};
 use crate::scheduler::Scheduler;
-use crate::settings::{AppConfig, HttpSettings, IndexerSettings};
+use crate::settings::{AppConfig, DbCacheSize, HttpSettings, IndexerSettings};
 use crate::{combine, ChainError};
 use futures::future::ready;
 use redbit::storage::Storage;
@@ -89,7 +89,8 @@ where
     maybe_console_init();
     let db_path: String = format!("{}/{}/{}", config.indexer.db_path, "main", config.indexer.name);
     let full_path = env::home_dir().unwrap().join(&db_path);
-    let (created, storage) = Storage::init(full_path, config.indexer.db_cache_size_gb)?;
+    let db_cache_size_gb: DbCacheSize = config.indexer.db_cache_size_gb.clone().into();
+    let (created, storage) = Storage::init(full_path, db_cache_size_gb.0)?;
     let chain: Arc<dyn BlockChainLike<TB>> = build_chain(Arc::clone(&storage));
     let unlinked_headers: Vec<TB::Header> =
         if created {

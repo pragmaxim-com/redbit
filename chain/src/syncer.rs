@@ -3,7 +3,7 @@ use crate::api::{BlockChainLike, BlockLike};
 use crate::api::{BlockProvider, ChainError};
 use crate::batcher::{Batcher, ReorderBuffer, SyncMode};
 use crate::monitor::ProgressMonitor;
-use crate::settings::IndexerSettings;
+use crate::settings::{IndexerSettings, Parallelism};
 use crate::task;
 use futures::StreamExt;
 use redbit::{error, info, warn};
@@ -33,7 +33,7 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
         let height_to_index_from = last_persisted_header.as_ref().map_or(1, |h| h.height() + 1);
         let heights_to_fetch = chain_tip_height - last_persisted_header.as_ref().map_or(0, |h| h.height());
 
-        let indexing_par: usize = indexer_conf.processing_parallelism.clone().into();
+        let indexing_par: Parallelism = indexer_conf.processing_parallelism.clone().into();
         let fork_detection_height: u32 = chain_tip_height - indexer_conf.fork_detection_heights as u32;
 
         if heights_to_fetch <= 0 {
@@ -48,10 +48,10 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
 
         info!(
             "Going to {} index {} blocks from {} to {}, parallelism : {}, fork_detection @ {}",
-            indexing_how, heights_to_fetch, height_to_index_from, chain_tip_height, indexing_par, fork_detection_height
+            indexing_how, heights_to_fetch, height_to_index_from, chain_tip_height, indexing_par.0, fork_detection_height
         );
         let buffer_size = 1024;
-        let block_byte_size_blocking_limit = 96 * 1024;
+        let block_byte_size_blocking_limit = 128 * 1024;
         let min_batch_size = indexer_conf.min_batch_size;
         let batch_buffer_size = std::cmp::max(128, buffer_size / 4);
         let (fetch_tx, fetch_rx) = mpsc::channel::<FB>(buffer_size);
@@ -78,7 +78,7 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
             let proc_fn = block_provider.block_processor();
             task::spawn_named("process", async move {
                 ReceiverStream::new(fetch_rx)
-                    .for_each_concurrent(indexing_par, move |raw_block| {
+                    .for_each_concurrent(indexing_par.0, move |raw_block| {
                         let tx = proc_tx_stream.clone();
                         let proc_fn = proc_fn.clone();
                         async move {

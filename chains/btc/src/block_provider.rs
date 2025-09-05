@@ -8,6 +8,7 @@ use futures::stream::StreamExt;
 use futures::Stream;
 use redbit::*;
 use std::{pin::Pin, sync::Arc};
+use chain::settings::Parallelism;
 use crate::ExplorerError;
 use crate::rest_client::{BtcCBOR, BtcClient};
 
@@ -19,14 +20,14 @@ pub const SENTINEL: [u8; 25] = [
 
 pub struct BtcBlockProvider {
     pub client: Arc<BtcClient>,
-    pub fetching_par: usize,
+    pub fetching_par: Parallelism,
 }
 
 impl BtcBlockProvider {
     pub fn new() -> Result<Arc<Self>, ExplorerError> {
         let config = BitcoinConfig::new("config/btc").expect("Failed to load Bitcoin configuration");
         let client = Arc::new(BtcClient::new(&config)?);
-        let fetching_par: usize = config.fetching_parallelism.clone().into();
+        let fetching_par: Parallelism = config.fetching_parallelism.clone();
         Ok(Arc::new(BtcBlockProvider { client, fetching_par }))
     }
 
@@ -137,8 +138,8 @@ impl BlockProvider<BtcCBOR, Block> for BtcBlockProvider {
                 }
             });
         match mode {
-            SyncMode::Batching => s.buffer_unordered(self.fetching_par).boxed(),
-            SyncMode::Continuous => s.buffered(self.fetching_par).boxed(),
+            SyncMode::Batching => s.buffer_unordered(self.fetching_par.0).boxed(),
+            SyncMode::Continuous => s.buffered(self.fetching_par.0).boxed(),
         }
     }
 }

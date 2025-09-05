@@ -21,10 +21,11 @@ use futures::Stream;
 use redbit::*;
 use reqwest::Url;
 use std::{pin::Pin, str::FromStr, sync::Arc};
+use chain::settings::Parallelism;
 
 pub struct ErgoBlockProvider {
     pub client: Arc<ErgoClient>,
-    pub fetching_par: usize,
+    pub fetching_par: Parallelism,
 }
 
 impl ErgoBlockProvider {
@@ -172,8 +173,8 @@ impl BlockProvider<ErgoCBOR, Block> for ErgoBlockProvider {
             });
         
         match mode {
-            SyncMode::Batching => s.buffer_unordered(self.fetching_par).boxed(),
-            SyncMode::Continuous => s.buffered(self.fetching_par).boxed(),
+            SyncMode::Batching => s.buffer_unordered(self.fetching_par.0).boxed(),
+            SyncMode::Continuous => s.buffered(self.fetching_par.0).boxed(),
         }
     }
 }
