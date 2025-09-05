@@ -50,10 +50,10 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
             "Going to {} index {} blocks from {} to {}, parallelism : {}, fork_detection @ {}",
             indexing_how, heights_to_fetch, height_to_index_from, chain_tip_height, indexing_par.0, fork_detection_height
         );
-        let buffer_size = 1024;
+        let buffer_size = 512;
         let block_byte_size_blocking_limit = 128 * 1024;
         let min_batch_size = indexer_conf.min_batch_size;
-        let batch_buffer_size = std::cmp::max(128, buffer_size / 4);
+        let batch_buffer_size = buffer_size / 4;
         let (fetch_tx, fetch_rx) = mpsc::channel::<FB>(buffer_size);
         let (proc_tx, mut proc_rx) = mpsc::channel::<TB>(buffer_size);
         let (sort_tx, mut sort_rx) = mpsc::channel::<Vec<TB>>(batch_buffer_size);
