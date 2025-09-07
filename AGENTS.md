@@ -4,10 +4,10 @@
 - progress iteratively towards the specification, step by step, one step per commit, asking me for progressing further with next step if uncertain
 - always start with modelling the problem with types and ideally abstract data types. When we have optimal, correct and meaningful model, we should progress further with functions
 - always ask if not certain about the specification, better stop and ask than coding something wrong
-- document each function with one smart sentence
+- document each function or type with one smart sentence
 - always review the code from performance and memory usage perspective
 - avoid reformatting my code so I can diff it easily
-- keep extra attention to O(?) complexity optimizations and make code comments about it
+- keep extra attention to O(?) complexity optimizations and make code comments about it when it could introduce a bottleneck
 
 ### Rust best practices
 

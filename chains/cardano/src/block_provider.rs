@@ -168,7 +168,6 @@ impl BlockProvider<CardanoCBOR, Block> for CardanoBlockProvider {
         stream! {
             let mut guard = node_client.lock().await;
             let cs: &mut N2CClient = guard.chainsync();
-            // find_intersect mutates the client state
             let (intersected, tip) = cs.find_intersect(vec![last_point]).await.expect("chainsync find_intersect failed");
             info!("Cardano intersection point: {:?} and tip {:?}", intersected, tip);
 
@@ -182,16 +181,10 @@ impl BlockProvider<CardanoCBOR, Block> for CardanoBlockProvider {
                         continue;
                     }
                     Ok(NextResponse::Await) => {
-                        if let Err(e) = cs.send_done().await {
-                            error!("chainsync send_done failed (ignoring): {e}");
-                        };
                         break
                     },
                     Err(e) => {
                         error!("chainsync request_next failed (stopping): {e}");
-                        if let Err(e) = cs.send_done().await {
-                            error!("chainsync send_done failed (ignoring): {e}");
-                        };
                         break
                     }
                 }
