@@ -57,11 +57,14 @@ pub enum IndexingType {
 }
 
 #[derive(Clone)]
+pub struct LoadFromField(pub Ident);
+
+#[derive(Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum ColumnDef {
     Key(KeyDef),
     Plain(FieldDef, IndexingType),
-    Relationship(FieldDef, Multiplicity),
+    Relationship(FieldDef, Option<LoadFromField>, Multiplicity),
     Transient(FieldDef),
 }
 
@@ -185,7 +188,22 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                                         name: column_name.clone(),
                                         tpe: type_path,
                                     };
-                                    return Ok(ColumnDef::Relationship(field_def, Multiplicity::OneToMany));
+
+                                    let load_from_field_name: Option<LoadFromField> =
+                                        field.attrs.iter()
+                                            .find(|attr| attr.path().is_ident("load_from"))
+                                            .and_then(|attr| {
+                                                let mut field_ref_name: Option<LoadFromField> = None;
+                                                let _ = attr.parse_nested_meta(|nested| {
+                                                    if let Some(nested_ident) = nested.path.get_ident() {
+                                                        field_ref_name = Some(LoadFromField(nested_ident.clone()));
+                                                    }
+                                                    Ok(())
+                                                });
+                                                field_ref_name
+                                            });
+
+                                    return Ok(ColumnDef::Relationship(field_def, load_from_field_name, Multiplicity::OneToMany));
                                 }
                             }
                         }
@@ -208,7 +226,7 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                                         name: column_name.clone(),
                                         tpe: type_path,
                                     };
-                                    return Ok(ColumnDef::Relationship(field, Multiplicity::OneToOption));
+                                    return Ok(ColumnDef::Relationship(field, None, Multiplicity::OneToOption));
                                 }
                             }
                         }
@@ -224,7 +242,7 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                                     name: column_name.clone(),
                                     tpe: type_path,
                                 };
-                                return Ok(ColumnDef::Relationship(field, Multiplicity::OneToOne));
+                                return Ok(ColumnDef::Relationship(field, None, Multiplicity::OneToOne));
                             }
                         }
                     }

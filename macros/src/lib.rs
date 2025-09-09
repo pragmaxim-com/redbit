@@ -204,7 +204,7 @@ pub fn entity(_attr: TokenStream, item: TokenStream) -> TokenStream {
     expansion::submit_struct_to_stream(stream, "entity", struct_ident, "_attr.rs")
 }
 
-#[proc_macro_derive(Entity, attributes(pk, fk, column))]
+#[proc_macro_derive(Entity, attributes(pk, fk, column, load_from))]
 #[proc_macro_error]
 pub fn derive_entity(input: TokenStream) -> TokenStream {
     let item_struct = parse_macro_input!(input as ItemStruct);

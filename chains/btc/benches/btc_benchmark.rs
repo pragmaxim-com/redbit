@@ -2,10 +2,9 @@ use chain::api::BlockChainLike;
 use std::{fs, sync::Arc, time::Duration};
 
 use btc::block_provider::BtcBlockProvider;
-use btc::model_v1::{Block, Height};
+use btc::model_v1::{Block, BlockChain, Height};
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
 use serde_json;
-use btc::block_chain::BlockChain;
 use btc::rest_client::BtcCBOR;
 use redbit::{info, Storage};
 

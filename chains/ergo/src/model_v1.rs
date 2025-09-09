@@ -1,6 +1,5 @@
 pub use redbit::*;
 pub use chain::*;
-use crate::block_chain::BlockChain;
 
 #[root_key] pub struct Height(pub u32);
 
@@ -49,9 +48,10 @@ pub struct Transaction {
     #[column(index)]
     pub hash: TxHash,
     pub utxos: Vec<Utxo>,
+    #[load_from(input_refs)]
     pub inputs: Vec<Input>,
     #[column(transient)]
-    pub box_ids: Vec<BoxId>,
+    pub input_refs: Vec<BoxId>,
 }
 
 #[entity]

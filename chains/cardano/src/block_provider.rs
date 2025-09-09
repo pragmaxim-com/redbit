@@ -53,7 +53,7 @@ impl CardanoBlockProvider {
             let (box_weight, outputs) = Self::process_outputs(&tx.outputs(), tx_id);
             block_weight += box_weight;
             block_weight += inputs.len();
-            result_txs.push(Transaction { id: tx_id, hash: TxHash(tx_hash), utxos: outputs, inputs: vec![], temp_input_refs: inputs })
+            result_txs.push(Transaction { id: tx_id, hash: TxHash(tx_hash), utxos: outputs, inputs: vec![], input_refs: inputs })
         }
 
         let header = BlockHeader {
@@ -68,12 +68,12 @@ impl CardanoBlockProvider {
         Ok(Block { height: header.height, header, transactions: result_txs }) // usize
     }
 
-    fn process_inputs(ins: &[MultiEraInput<'_>]) -> Vec<TempInputRef> {
+    fn process_inputs(ins: &[MultiEraInput<'_>]) -> Vec<InputRef> {
         let mut out = Vec::with_capacity(ins.len());
         for input in ins {
             // MultiEraInput::hash returns &Hash<32> (Copy under the hood).
             let tx_hash: [u8; 32] = **input.hash();
-            out.push(TempInputRef { tx_hash: TxHash(tx_hash), index: input.index() as u32 });
+            out.push(InputRef { tx_hash: TxHash(tx_hash), index: input.index() as u32 });
         }
         out
     }

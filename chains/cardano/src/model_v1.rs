@@ -1,6 +1,5 @@
 pub use redbit::*;
 pub use chain::*;
-use crate::block_chain::BlockChain;
 
 #[root_key] pub struct Height(pub u32);
 
@@ -19,7 +18,7 @@ use crate::block_chain::BlockChain;
 #[column] pub struct AssetAction(pub u8);
 
 #[column]
-pub struct TempInputRef {
+pub struct InputRef {
     pub tx_hash: TxHash,
     pub index: u32,
 }
@@ -58,9 +57,10 @@ pub struct Transaction {
     #[column(index)]
     pub hash: TxHash,
     pub utxos: Vec<Utxo>,
+    #[load_from(input_refs)]
     pub inputs: Vec<Input>,
     #[column(transient)]
-    pub temp_input_refs: Vec<TempInputRef>,
+    pub input_refs: Vec<InputRef>,
 }
 
 #[entity]

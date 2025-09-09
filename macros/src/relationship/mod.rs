@@ -29,7 +29,7 @@ pub struct DbRelationshipMacros {
 }
 
 impl DbRelationshipMacros {
-    pub fn new(field_def: FieldDef, multiplicity: Multiplicity, entity_ident: &Ident, pk_name: &Ident, pk_type: &Type) -> DbRelationshipMacros {
+    pub fn new(field_def: FieldDef, multiplicity: Multiplicity, entity_ident: &Ident, pk_name: &Ident, pk_type: &Type, load_from_field: Option<LoadFromField>) -> DbRelationshipMacros {
         let child_name = &field_def.name; // e.g., "transactions"
         let child_type = &field_def.tpe; // e.g., the type `Transaction` from Vec<Transaction>
         let child_stream_query_type = entity::query::stream_query_type(child_type);
@@ -69,6 +69,10 @@ impl DbRelationshipMacros {
                 }
             }
             Multiplicity::OneToMany => {
+                let store_statement = match load_from_field {
+                    Some(load_from_field) => store::one2many_load_and_store_def(child_name, child_type, &load_from_field.0),
+                    None => store::one2many_store_def(child_name, child_type)
+                };
                 DbRelationshipMacros {
                     field_def: field_def.clone(),
                     struct_init: init::one2many_relation_init(child_name, child_type),
@@ -77,8 +81,8 @@ impl DbRelationshipMacros {
                     struct_init_with_query: init::one2many_relation_init_with_query(child_name, child_type),
                     struct_default_init: init::one2many_relation_default_init(child_name, child_type),
                     struct_default_init_with_query: init::one2many_relation_default_init_with_query(child_name, child_type),
-                    store_statement: store::one2many_store_def(child_name, child_type),
-                    store_many_statement: store::one2many_store_many_def(child_name, child_type),
+                    store_statement: store_statement.clone(),
+                    store_many_statement: store_statement,
                     delete_statement: delete::one2many_delete_def(child_name, child_type),
                     delete_many_statement: delete::one2many_delete_many_def(child_name, child_type),
                     function_def: get::one2many_def(entity_ident, child_name, child_type, pk_name, pk_type, &read_child_tx_context_type)

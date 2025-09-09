@@ -5,11 +5,10 @@ use chain::settings::AppConfig;
 use chain::syncer::ChainSyncer;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use demo::block_provider::DemoBlockProvider;
-use demo::model_v1::Block;
+use demo::model_v1::{Block, BlockChain};
 use redbit::{info, Storage};
 use tokio::runtime::Runtime;
 use tokio::sync::watch;
-use demo::block_chain::BlockChain;
 
 fn criterion_benchmark(c: &mut Criterion) {
     let storage = Storage::temp("demo_benchmark", 1, true).expect("Failed to open database");

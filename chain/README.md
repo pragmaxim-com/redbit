@@ -35,53 +35,24 @@ chain = { path = "../../chain" }
 ```
 
 And then all you need to do is defining entities with minimal required fields and how to resolve transaction inputs : 
-```rust
-
-#[entity]
-pub struct Block {
-    #[pk]
-    pub height: Height,
-    pub header: Header,
-    pub transactions: Vec<Transaction>,
-}
-
-#[entity]
-pub struct Header {
-    #[fk(one2one)]
-    pub height: Height,
-    #[column(index)]
-    pub hash: BlockHash,
-    #[column(index)]
-    pub prev_hash: BlockHash,
-    #[column(range)]
-    pub timestamp: Timestamp,
+```
+    #[load_from(input_refs)]
+    pub inputs: Vec<Input>,
     #[column(transient)]
-    pub weight: Weight,
-}
+    pub input_refs: Vec<InputRef>,
+```
 
-use chain::api::*;
-
-pub struct BlockChain {
-    pub storage: Arc<Storage>,
-}
-
-impl BlockChain {
-    pub fn new(storage: Arc<Storage>) -> Arc<dyn BlockChainLike<Block>> {
-        Arc::new(BlockChain { storage })
-    }
-
-    pub(crate) fn resolve_tx_inputs(tx_context: &TransactionWriteTxContext, transactions: &mut [Transaction]) -> Result<(), ChainError> {
-        for tx in transactions {
-            for transient_input in tx.temp_input_refs.iter_mut() {
-                match tx_context.transaction_hash_index.get(&transient_input.tx_hash)?.next() {
-                    Some(Ok(tx_pointer)) => tx.inputs.push(Input { id: TransactionPointer::from_parent(tx_pointer.value(), transient_input.index as u16) }),
-                    _ => tx.inputs.push(Input { id: TransactionPointer::from_parent(BlockPointer::from_parent(Height(0), 0), 0) }),
-                }
+Which expects a custom defined `hook.rs` which lets user turn input refs into redbit standard inputs : 
+```rust 
+    pub(crate) fn load_from_input_refs(tx_context: &TransactionWriteTxContext, transaction: &mut Transaction) -> Result<(), ChainError> {
+        for transient_input in transaction.input_refs.iter_mut() {
+            match tx_context.transaction_hash_index.get(&transient_input.tx_hash)?.next() {
+                Some(Ok(tx_pointer)) => transaction.inputs.push(Input { id: TransactionPointer::from_parent(tx_pointer.value(), transient_input.index as u16) }),
+                _ => transaction.inputs.push(Input { id: TransactionPointer::from_parent(BlockPointer::from_parent(Height(0), 0), 0) }),
             }
         }
         Ok(())
     }
-}
 ```
 
 - [Demo](../chains/btc)

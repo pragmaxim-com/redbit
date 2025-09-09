@@ -114,6 +114,16 @@ pub fn block_like(block_type: Type, pk_name: &Ident, pk_type: &Type, field_defs:
             }
         }
 
+        pub struct BlockChain {
+            pub storage: Arc<Storage>,
+        }
+
+        impl BlockChain {
+            pub fn new(storage: Arc<Storage>) -> Arc<dyn BlockChainLike<#block_type>> {
+                Arc::new(BlockChain { storage })
+            }
+        }
+
         #[async_trait::async_trait]
         impl chain::BlockChainLike<#block_type> for BlockChain {
             fn init(&self) -> Result<(), chain::ChainError> {
@@ -154,7 +164,6 @@ pub fn block_like(block_type: Type, pk_name: &Ident, pk_type: &Type, field_defs:
                 {
                     let mut tx_context = #block_type::begin_write_tx(&write_tx)?;
                     for mut block in blocks.into_iter() {
-                        Self::resolve_tx_inputs(&tx_context.transactions, &mut block.transactions)?;
                         #block_type::store(&mut tx_context, block)?;
                     }
                 }

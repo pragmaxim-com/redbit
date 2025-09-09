@@ -62,8 +62,8 @@ impl FieldMacros {
                         one_to_many_parent_def.clone()
                     ))
             },
-            ColumnDef::Relationship(field, multiplicity) => {
-                FieldMacros::Relationship(DbRelationshipMacros::new(field.clone(), multiplicity.clone(), entity_ident, &field_def.name, &field_def.tpe))
+            ColumnDef::Relationship(field, load_from_field_ref, multiplicity) => {
+                FieldMacros::Relationship(DbRelationshipMacros::new(field.clone(), multiplicity.clone(), entity_ident, &field_def.name, &field_def.tpe, load_from_field_ref.clone()))
             },
             ColumnDef::Transient(field) => {
                 FieldMacros::Transient(TransientMacros::new(field.clone()))

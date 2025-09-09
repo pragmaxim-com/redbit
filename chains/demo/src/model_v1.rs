@@ -1,6 +1,5 @@
 pub use redbit::*;
 pub use chain::*;
-use crate::block_chain::BlockChain;
 
 // feel free to add custom #[derive(Foo, Bar)] attributes to your types, they will get merged with the ones from redbit
 
@@ -22,7 +21,7 @@ use crate::block_chain::BlockChain;
 #[column] pub struct Timestamp(pub u32);
 
 #[column]
-pub struct TempInputRef {
+pub struct InputRef {
     pub tx_hash: TxHash,
     pub index: u32,
 }
@@ -60,10 +59,11 @@ pub struct Transaction {
     #[column(index)]
     pub hash: TxHash,
     pub utxos: Vec<Utxo>,
+    #[load_from(input_refs)]
     pub inputs: Vec<Input>,
     pub maybe_value: Option<MaybeValue>, // just to demonstrate option is possible
     #[column(transient)]
-    pub temp_input_refs: Vec<TempInputRef>,
+    pub input_refs: Vec<InputRef>,
 }
 
 #[entity]

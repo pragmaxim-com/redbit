@@ -1,5 +1,5 @@
 use crate::config::BitcoinConfig;
-use crate::model_v1::{Address, Block, BlockHash, BlockPointer, Timestamp, Header, Height, MerkleRoot, ScriptHash, TempInputRef, Transaction, TransactionPointer, TxHash, Utxo, Weight};
+use crate::model_v1::{Address, Block, BlockHash, BlockPointer, Timestamp, Header, Height, MerkleRoot, ScriptHash, InputRef, Transaction, TransactionPointer, TxHash, Utxo, Weight};
 use async_trait::async_trait;
 use chain::api::{BlockProvider, ChainError};
 use chain::batcher::SyncMode;
@@ -61,11 +61,11 @@ impl BtcBlockProvider {
         })
     }
 
-    fn process_inputs(ins: &[bitcoin::TxIn]) -> Vec<TempInputRef> {
+    fn process_inputs(ins: &[bitcoin::TxIn]) -> Vec<InputRef> {
         ins.iter()
             .map(|input| {
                 let tx_hash = TxHash(*input.previous_output.txid.as_ref());
-                TempInputRef { tx_hash, index: input.previous_output.vout }
+                InputRef { tx_hash, index: input.previous_output.vout }
             })
             .collect()
     }
@@ -94,7 +94,7 @@ impl BtcBlockProvider {
             hash: TxHash(*tx.compute_txid().as_ref()),
             utxos: outputs,
             inputs: vec![],
-            temp_input_refs: Self::process_inputs(&tx.input),
+            input_refs: Self::process_inputs(&tx.input),
         }
     }
 }
