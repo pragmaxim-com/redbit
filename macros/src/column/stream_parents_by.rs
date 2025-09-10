@@ -15,9 +15,7 @@ pub fn by_dict_def(
     dict_table_defs: &DictTableDefs,
     parent_def: &OneToManyParentDef,
 ) -> FunctionDef {
-    let value_to_dict_pk = &dict_table_defs.value_to_dict_pk_table_def.var_name;
-    let dict_index_table = &dict_table_defs.dict_index_table_def.var_name;
-
+    let dict_table = &dict_table_defs.var_name;
     let parent_ident = &parent_def.parent_ident;
     let parent_type = &parent_def.parent_type;
     let stream_parent_query_type = &parent_def.stream_query_ty;
@@ -27,16 +25,19 @@ pub fn by_dict_def(
     let fn_name = format_ident!("stream_{}s_by_{}", parent_ident.to_string().to_lowercase(), column_name);
     let fn_stream = quote! {
         pub fn #fn_name(parent_tx_context: #parent_tx_context_type, val: #column_type, query: Option<#stream_parent_query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#parent_type, AppError>> + Send>>, AppError> {
-            let birth_guard = parent_tx_context.#parent_one2many_field_name.#value_to_dict_pk.get(&val)?;
-            let mut unique_parent_pointers = Vec::new();
-            if let Some(g) = birth_guard {
-                let birth_id = g.value().clone();
-                let mm_value = parent_tx_context.#parent_one2many_field_name.#dict_index_table.get(&birth_id)?;
-                for guard in mm_value {
-                    let pk = guard?.value().clone();
-                    unique_parent_pointers.push(pk.parent);
-                }
-            };
+            let multi_value_opt = parent_tx_context.#parent_one2many_field_name.#dict_table.get_keys(val)?;
+            let mut unique_parent_pointers =
+                match multi_value_opt {
+                    None => Vec::new(),
+                    Some(multi_value) => {
+                        let mut pointers = Vec::new();
+                        for pk_guard in multi_value {
+                            let pk = pk_guard?.value();
+                            pointers.push(pk.parent);
+                        }
+                        pointers
+                    }
+                };
             unique_parent_pointers.dedup();
             let stream = futures::stream::unfold(
                 (unique_parent_pointers.into_iter(), parent_tx_context, query),

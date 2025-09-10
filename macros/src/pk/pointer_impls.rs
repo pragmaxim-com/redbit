@@ -25,7 +25,7 @@ pub fn new(struct_name: &Ident, parent_field: Field, index_field: Field) -> Toke
             type Parent = #parent_type;
             fn is_pointer(&self) -> bool { true }
             fn parent(&self) -> Self::Parent { self.#parent_name }
-            fn from_parent(parent: Self::Parent, index: #index_type) -> Self { #struct_name { #parent_name: parent, #index_name: index } }
+            fn from_parent(#parent_name: Self::Parent, #index_name: #index_type) -> Self { #struct_name { #parent_name, #index_name } }
         }
 
         impl BinaryCodec for #struct_name {

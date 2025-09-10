@@ -16,23 +16,17 @@ pub fn by_dict_def(
     tx_context_ty: &Type,
     dict_table_defs: &DictTableDefs,
 ) -> FunctionDef {
-    let value_to_dict_pk = &dict_table_defs.value_to_dict_pk_table_def.var_name;
-    let dict_index_table = &dict_table_defs.dict_index_table_def.var_name;
-
+    let dict_table = &dict_table_defs.var_name;
     let fn_name = format_ident!("stream_{}s_by_{}", pk_name, column_name);
-
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: #tx_context_ty, val: #column_type) -> Result<impl futures::Stream<Item = Result<#pk_type, AppError>> + Send, AppError> {
-            let birth_guard = tx_context.#value_to_dict_pk.get(val)?;
-
-            // Box the iterator to unify types
-            let iter_box: Box<dyn Iterator<Item = Result<_, _>> + Send> = if let Some(g) = birth_guard {
-                let birth_id = g.value().clone();
-                let it = tx_context.#dict_index_table.get(&birth_id)?;
-                Box::new(it)
-            } else {
-                Box::new(std::iter::empty())
-            };
+            let multi_value = tx_context.#dict_table.get_keys(val)?;
+            let iter_box: Box<dyn Iterator<Item = Result<_, _>> + Send> =
+                if let Some(v) = multi_value {
+                    Box::new(v)
+                } else {
+                    Box::new(std::iter::empty())
+                };
 
             let stream = stream::iter(iter_box)
                 .map(|res| res.map(|e| e.value().clone()).map_err(AppError::from));

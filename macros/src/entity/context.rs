@@ -1,5 +1,5 @@
 use crate::rest::FunctionDef;
-use crate::table::{TableDef, TableType};
+use crate::table::{DictTableDefs, TableDef, TableType};
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use syn::Type;
@@ -55,6 +55,7 @@ pub fn write_tx_context(entity_tx_context_ty: &Type, tx_contexts: &[TxContextIte
         }
     }
 }
+
 pub fn read_tx_context(entity_tx_context_ty: &Type, tx_contexts: &[TxContextItem]) -> TokenStream {
     let definitions: Vec<TokenStream> = tx_contexts.iter().map(|item| item.read_definition.clone()).collect();
     let inits: Vec<TokenStream> = tx_contexts.iter().map(|item| item.read_init.clone()).collect();
@@ -87,19 +88,10 @@ pub fn tx_context_item(def: &TableDef) -> TxContextItem {
     let key_type = &def.key_type;
     let value_type = def.value_type.clone().unwrap_or_else(|| syn::parse_str::<Type>("()").unwrap());
     let table_name = &def.name;
-    let open_method = match def.table_type {
-        TableType::DictIndex | TableType::Index => quote!(open_multimap_table),
-        _ => quote!(open_table),
-    };
-
-    let write_table_type = match def.table_type {
-        TableType::DictIndex | TableType::Index => quote!(MultimapTable),
-        _ => quote!(Table),
-    };
-
-    let read_table_type = match def.table_type {
-        TableType::DictIndex | TableType::Index => quote!(ReadOnlyMultimapTable),
-        _ => quote!(ReadOnlyTable),
+    let (open_method, write_table_type, read_table_type) = match def.table_type {
+        TableType::Index => (quote!(open_multimap_table), quote!(MultimapTable), quote!(ReadOnlyMultimapTable)),
+        TableType::DictIndex | TableType::ValueByDictPk | TableType::ValueToDictPk | TableType::DictPkByPk => panic!("Dict tables cannot be here"),
+        _ => (quote!(open_table), quote!(Table), quote!(ReadOnlyTable))
     };
 
     let write_definition =
@@ -118,6 +110,48 @@ pub fn tx_context_item(def: &TableDef) -> TxContextItem {
         };
 
     TxContextItem { write_definition, write_init: init.clone(), read_definition, read_init: init }
+}
+
+pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
+    let var_name = &defs.var_name;
+    let key_type = &defs.key_type;
+    let value_type = &defs.value_type;
+    let dict_index_table_name = &defs.dict_index_table_def.name;
+    let value_by_dict_pk_table_name = &defs.value_by_dict_pk_table_def.name;
+    let value_to_dict_pk_table_name = &defs.value_to_dict_pk_table_def.name;
+    let dict_pk_by_pk_table_name = &defs.dict_pk_by_pk_table_def.name;
+
+    let write_definition =
+        quote! {
+            pub #var_name: DictTable<'txn, #key_type, #value_type>
+        };
+
+    let read_definition =
+        quote! {
+            pub #var_name: ReadOnlyDictTable<#key_type, #value_type>
+        };
+
+    let write_init =
+        quote! {
+            #var_name: DictTable::new(
+                tx.open_multimap_table(#dict_index_table_name)?,
+                tx.open_table(#value_by_dict_pk_table_name)?,
+                tx.open_table(#value_to_dict_pk_table_name)?,
+                tx.open_table(#dict_pk_by_pk_table_name)?
+            )
+        };
+
+    let read_init =
+        quote! {
+            #var_name: ReadOnlyDictTable::new(
+                tx.open_multimap_table(#dict_index_table_name)?,
+                tx.open_table(#value_by_dict_pk_table_name)?,
+                tx.open_table(#value_to_dict_pk_table_name)?,
+                tx.open_table(#dict_pk_by_pk_table_name)?
+            )
+        };
+
+    TxContextItem { write_definition, write_init, read_definition, read_init }
 }
 
 pub fn tx_context_items(table_defs: &[TableDef]) -> Vec<TxContextItem> {

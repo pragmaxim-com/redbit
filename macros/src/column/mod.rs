@@ -213,18 +213,19 @@ impl DbColumnMacros {
         function_defs.push(get_keys_by::by_dict_def(entity_name, pk_name, pk_type, column_name, column_type, tx_context_ty, &dict_tables));
         function_defs.push(stream_keys_by::by_dict_def(entity_name, pk_name, pk_type, column_name, column_type, tx_context_ty, &dict_tables));
 
+        let store_statement = store::store_dict_def(column_name, pk_name, &dict_tables);
         DbColumnMacros {
             field_def: col_field_def.clone(),
             range_query: None,
             stream_query_init: query::stream_query_init(column_name, column_type),
-            tx_context_items: context::tx_context_items(&table_definitions),
+            tx_context_items: vec![context::tx_context_dict_item(&dict_tables)],
             table_definitions,
             struct_init: init::dict_init(column_name, &dict_tables),
             struct_init_with_query: init::dict_init_with_query(column_name, &dict_tables),
             struct_default_init_with_query: init::default_init_with_query(column_name, column_type),
             struct_default_init: init::default_init(column_name, column_type),
-            store_statement: store::store_dict_def(column_name, pk_name, &dict_tables),
-            store_many_statement: store::store_many_dict_def(column_name, pk_name, &dict_tables),
+            store_statement: store_statement.clone(),
+            store_many_statement: store_statement,
             delete_statement: delete::delete_dict_statement(&dict_tables),
             delete_many_statement: delete::delete_many_dict_statement(&dict_tables),
             function_defs,
@@ -232,11 +233,3 @@ impl DbColumnMacros {
     }
 }
 
-pub(crate) fn open_dict_tables(dict_table_defs: &DictTableDefs) -> (Ident, Ident, Ident, Ident) {
-    (
-        dict_table_defs.dict_pk_by_pk_table_def.var_name.clone(),
-        dict_table_defs.value_to_dict_pk_table_def.var_name.clone(),
-        dict_table_defs.value_by_dict_pk_table_def.var_name.clone(),
-        dict_table_defs.dict_index_table_def.var_name.clone()
-    )
-}

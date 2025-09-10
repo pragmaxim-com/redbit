@@ -1,4 +1,3 @@
-use crate::column::open_dict_tables;
 use crate::table::DictTableDefs;
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
@@ -28,60 +27,12 @@ pub fn store_many_index_def(column_name: &Ident, pk_name: &Ident, table_var: &Id
     }
 }
 
-fn store_dict_stmnt(column_name: &Ident, pk_name: &Ident, cache: Option<Ident>, dict_pk_by_pk_var: Ident, value_to_dict_pk_var: Ident, value_by_dict_pk_var: Ident, dict_index_var: Ident) -> TokenStream {
-    match cache {
-        Some(cache_name) => quote! {
-            let (birth_id, newly_created) =
-                tx.cache_get_or_put(&#cache_name, &instance.#column_name, || {
-                    if let Some(guard) = tx_context.#value_to_dict_pk_var.get(&instance.#column_name)? {
-                        Ok((guard.value(), false))
-                    } else {
-                        Ok((instance.#pk_name, true))
-                    }
-                })?;
-
-            if newly_created {
-                tx_context.#value_to_dict_pk_var.insert(&instance.#column_name, &birth_id)?;
-                tx_context.#value_by_dict_pk_var.insert(&birth_id, &instance.#column_name)?;
-            }
-
-            tx_context.#dict_pk_by_pk_var.insert(&instance.#pk_name, &birth_id)?;
-            tx_context.#dict_index_var.insert(&birth_id, &instance.#pk_name)?;
-        },
-        None => quote! {
-            let (birth_id, newly_created) = {
-                if let Some(guard) = tx_context.#value_to_dict_pk_var.get(&instance.#column_name)? {
-                    (guard.value(), false)
-                } else {
-                    let new_birth = instance.#pk_name;
-                    (new_birth, true)
-                }
-            };
-
-            if newly_created {
-                tx_context.#value_to_dict_pk_var.insert(&instance.#column_name, &birth_id)?;
-                tx_context.#value_by_dict_pk_var.insert(&birth_id, &instance.#column_name)?;
-            }
-
-            tx_context.#dict_pk_by_pk_var.insert(&instance.#pk_name, &birth_id)?;
-            tx_context.#dict_index_var.insert(&birth_id, &instance.#pk_name)?;
-        }
-    }
+fn store_dict_stmnt(column_name: &Ident, pk_name: &Ident, dict_var: &Ident) -> TokenStream {
+    quote! { tx_context.#dict_var.insert(instance.#pk_name, instance.#column_name)?; }
 }
 
 pub fn store_dict_def(column_name: &Ident, pk_name: &Ident, dict_table_defs: &DictTableDefs) -> TokenStream {
-    let (dict_pk_by_pk_var, value_to_dict_pk_var, value_by_dict_pk_var, dict_index_var) =
-        open_dict_tables(dict_table_defs);
-    let store_dict = store_dict_stmnt(column_name, pk_name, dict_table_defs.value_to_dict_pk_cache.clone(), dict_pk_by_pk_var, value_to_dict_pk_var, value_by_dict_pk_var, dict_index_var);
-    quote! {
-        #store_dict
-    }
-}
-
-pub fn store_many_dict_def(column_name: &Ident, pk_name: &Ident, dict_table_defs: &DictTableDefs) -> TokenStream {
-    let (dict_pk_by_pk_var, value_to_dict_pk_var, value_by_dict_pk_var, dict_index_var) =
-        open_dict_tables(dict_table_defs);
-    let store_dict = store_dict_stmnt(column_name, pk_name, dict_table_defs.value_to_dict_pk_cache.clone(), dict_pk_by_pk_var, value_to_dict_pk_var, value_by_dict_pk_var, dict_index_var);
+    let store_dict = store_dict_stmnt(column_name, pk_name, &dict_table_defs.var_name);
     quote! {
         #store_dict
     }

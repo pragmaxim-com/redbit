@@ -16,20 +16,17 @@ pub fn by_dict_def(
     dict_table_defs: &DictTableDefs,
     stream_query_type: &Type
 ) -> FunctionDef {
-    let value_to_dict_pk = &dict_table_defs.value_to_dict_pk_table_def.var_name;
-    let dict_index_table = &dict_table_defs.dict_index_table_def.var_name;
-
+    let dict_table = &dict_table_defs.var_name;
     let fn_name = format_ident!("stream_by_{}", column_name);
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: #tx_context_ty, val: #column_type, query: Option<#stream_query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#entity_type, AppError>> + Send>>, AppError> {
-            let birth_guard = tx_context.#value_to_dict_pk.get(&val)?;
-
-            let iter_box: Box<dyn Iterator<Item = Result<_, redb::StorageError>> + Send> = if let Some(g) = birth_guard {
-                let birth_id = g.value().clone();
-                Box::new(tx_context.#dict_index_table.get(&birth_id)?)
-            } else {
-                Box::new(std::iter::empty())
-            };
+            let multi_value = tx_context.#dict_table.get_keys(val)?;
+            let iter_box: Box<dyn Iterator<Item = Result<_, _>> + Send> =
+                if let Some(v) = multi_value {
+                    Box::new(v)
+                } else {
+                    Box::new(std::iter::empty())
+                };
 
             let stream = futures::stream::unfold(
                 (iter_box, tx_context, query),

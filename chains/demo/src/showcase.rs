@@ -76,8 +76,8 @@ async fn main() -> Result<()> {
     let first_utxo = Utxo::first(&utxo_tx)?.unwrap();
     let last_utxo = Utxo::last(&utxo_tx)?.unwrap();
 
-    Utxo::get_by_address(&utxo_tx, &first_utxo.address)?;
-    Utxo::get_ids_by_address(&utxo_tx, &first_utxo.address)?;
+    Utxo::get_by_address(&utxo_tx, first_utxo.address.clone())?;
+    Utxo::get_ids_by_address(&utxo_tx, first_utxo.address.clone())?;
     Utxo::take(&utxo_tx, 100)?;
     Utxo::get(&utxo_tx, &first_utxo.id)?;
     Utxo::range(&utxo_tx, &first_utxo.id, &last_utxo.id, None)?;
@@ -93,7 +93,7 @@ async fn main() -> Result<()> {
     let first_asset = Asset::first(&asset_tx)?.unwrap();
     let last_asset = Asset::last(&asset_tx)?.unwrap();
 
-    Asset::get_by_name(&asset_tx, &first_asset.name)?;
+    Asset::get_by_name(&asset_tx, first_asset.name.clone())?;
     Asset::take(&asset_tx, 100)?;
     Asset::get(&asset_tx, &first_asset.id)?;
     Asset::range(&asset_tx, &first_asset.id, &last_asset.id, None)?;

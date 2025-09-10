@@ -15,6 +15,10 @@ pub enum TableType {
 
 #[derive(Clone)]
 pub struct DictTableDefs {
+    pub(crate) var_name: Ident,
+    pub(crate) key_type: Type,
+    pub(crate) value_type: Type,
+    #[allow(dead_code)]
     pub(crate) value_to_dict_pk_cache: Option<Ident>,
     pub(crate) dict_index_table_def: TableDef,
     pub(crate) value_by_dict_pk_table_def: TableDef,
@@ -25,7 +29,13 @@ pub struct DictTableDefs {
 impl DictTableDefs {
     pub fn new(entity_name: &Ident, column_name: &Ident, column_type: &Type, pk_name: &Ident, pk_type: &Type, cache_size: Option<usize>) -> DictTableDefs {
         let value_to_dict_pk_table_def = TableDef::value_to_dict_pk_table_def(entity_name, column_name, column_type, pk_type, cache_size);
+        let name = format_ident!("{}_{}_DICT", entity_name.to_string().to_uppercase(), column_name.to_string().to_uppercase());
+        let var_name = Ident::new(&format!("{}", name).to_lowercase(), name.span());
+
         DictTableDefs {
+            var_name,
+            key_type: pk_type.clone(),
+            value_type: column_type.clone(),
             value_to_dict_pk_cache: value_to_dict_pk_table_def.cache.clone().map(|c|c.0),
             dict_index_table_def: TableDef::dict_index_table_def(entity_name, column_name, pk_type),
             value_by_dict_pk_table_def: TableDef::value_by_dict_pk_table_def(entity_name, column_name, column_type, pk_type),

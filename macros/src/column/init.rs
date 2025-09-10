@@ -97,21 +97,15 @@ pub fn index_init(column_name: &Ident, table: &Ident) -> TokenStream {
     }
 }
 
-pub fn dict_init_expr(table_dict_pk_by_pk: &Ident, table_value_by_dict_pk: &Ident) -> TokenStream {
+pub fn dict_init_expr(dict_table_defs: &DictTableDefs) -> TokenStream {
+    let dict_table = &dict_table_defs.var_name;
     quote! {
         {
-            let birth_guard = tx_context.#table_dict_pk_by_pk.get(pk)?;
-            let birth_id = birth_guard.ok_or_else(|| AppError::NotFound(format!(
-                    "table_dict_pk_by_pk_ident `{}`: no row for primary key {:?}",
-                    stringify!(#table_dict_pk_by_pk),
+            let value_guard_opt = tx_context.#dict_table.get_value(*pk)?;
+            value_guard_opt.ok_or_else(|| AppError::NotFound(format!(
+                    "dict_table `{}`: no row for primary key {:?}",
+                    stringify!(#dict_table),
                     pk
-                ))
-            )?.value();
-            let val_guard = tx_context.#table_value_by_dict_pk.get(&birth_id)?;
-            val_guard.ok_or_else(|| AppError::NotFound(format!(
-                    "table_value_by_dict_pk `{}`: no row for birth id {:?}",
-                    stringify!(#table_value_by_dict_pk),
-                    birth_id
                 ))
             )?.value()
         }
@@ -119,14 +113,14 @@ pub fn dict_init_expr(table_dict_pk_by_pk: &Ident, table_value_by_dict_pk: &Iden
 }
 
 pub fn dict_init(column_name: &Ident, dict_table_defs: &DictTableDefs,) -> TokenStream {
-    let init_expr = dict_init_expr(&dict_table_defs.dict_pk_by_pk_table_def.var_name, &dict_table_defs.value_by_dict_pk_table_def.var_name);
+    let init_expr = dict_init_expr(dict_table_defs);
     quote! {
         #column_name: #init_expr
     }
 }
 
 pub fn dict_init_with_query(column_name: &Ident, dict_table_defs: &DictTableDefs) -> TokenStream {
-    let init_expr = dict_init_expr(&dict_table_defs.dict_pk_by_pk_table_def.var_name, &dict_table_defs.value_by_dict_pk_table_def.var_name);
+    let init_expr = dict_init_expr(dict_table_defs);
     quote! {
         let #column_name = #init_expr;
         if let Some(filter_op) = stream_query.#column_name.clone() {

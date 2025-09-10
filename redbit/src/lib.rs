@@ -14,6 +14,7 @@ pub mod cache;
 pub mod storage;
 pub mod retry;
 pub mod logger;
+pub mod table;
 
 pub use axum;
 pub use axum::body::Body;
@@ -82,6 +83,8 @@ pub use utoipa_swagger_ui;
 pub use storage::Storage;
 pub use storage::ReadTxContext;
 pub use storage::WriteTxContext;
+pub use table::DictTable;
+pub use table::ReadOnlyDictTable;
 pub use bincode::{Encode, Decode, decode_from_slice, encode_to_vec};
 pub use std::any::type_name;
 pub use std::cmp::Ordering;
