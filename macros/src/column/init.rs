@@ -98,13 +98,13 @@ pub fn index_init(column_name: &Ident, table: &Ident) -> TokenStream {
 }
 
 pub fn dict_init_expr(dict_table_defs: &DictTableDefs) -> TokenStream {
-    let dict_table = &dict_table_defs.var_name;
+    let dict_table_var = &dict_table_defs.var_name;
     quote! {
         {
-            let value_guard_opt = tx_context.#dict_table.get_value(*pk)?;
+            let value_guard_opt = tx_context.#dict_table_var.get_value(*pk)?;
             value_guard_opt.ok_or_else(|| AppError::NotFound(format!(
                     "dict_table `{}`: no row for primary key {:?}",
-                    stringify!(#dict_table),
+                    stringify!(#dict_table_var),
                     pk
                 ))
             )?.value()

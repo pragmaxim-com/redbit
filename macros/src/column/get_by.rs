@@ -12,11 +12,11 @@ pub fn get_by_dict_def(
     tx_context_ty: &Type,
     dict_table_defs: &DictTableDefs,
 ) -> FunctionDef {
-    let dict_table = &dict_table_defs.var_name;
+    let dict_table_var = &dict_table_defs.var_name;
     let fn_name = format_ident!("get_by_{}", column_name);
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: &#tx_context_ty, val: #column_type) -> Result<Vec<#entity_type>, AppError> {
-            let iter_opt = tx_context.#dict_table.get_keys(val)?;
+            let iter_opt = tx_context.#dict_table_var.get_keys(val)?;
             match iter_opt {
                 None => Ok(Vec::new()),
                 Some(mut iter) => {

@@ -16,11 +16,11 @@ pub fn by_dict_def(
     tx_context_ty: &Type,
     dict_table_defs: &DictTableDefs,
 ) -> FunctionDef {
-    let dict_table = &dict_table_defs.var_name;
+    let dict_table_var = &dict_table_defs.var_name;
     let fn_name = format_ident!("stream_{}s_by_{}", pk_name, column_name);
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: #tx_context_ty, val: #column_type) -> Result<impl futures::Stream<Item = Result<#pk_type, AppError>> + Send, AppError> {
-            let multi_value = tx_context.#dict_table.get_keys(val)?;
+            let multi_value = tx_context.#dict_table_var.get_keys(val)?;
             let iter_box: Box<dyn Iterator<Item = Result<_, _>> + Send> =
                 if let Some(v) = multi_value {
                     Box::new(v)

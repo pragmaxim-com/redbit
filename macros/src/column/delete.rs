@@ -48,18 +48,18 @@ pub fn delete_many_index_statement(table_var: &Ident, index_table_var: &Ident) -
 }
 
 pub fn delete_dict_statement(dict_table_defs: &DictTableDefs) -> TokenStream {
-    let dict_table = &dict_table_defs.var_name;
+    let dict_table_var = &dict_table_defs.var_name;
     quote! {
-        let deleted = tx_context.#dict_table.delete(*pk)?;
+        let deleted = tx_context.#dict_table_var.dict_delete(*pk)?;
         removed.push(deleted);
     }
 }
 
 pub fn delete_many_dict_statement(dict_table_defs: &DictTableDefs) -> TokenStream {
-    let dict_table = &dict_table_defs.var_name;
+    let dict_table_var = &dict_table_defs.var_name;
     quote! {
         for pk in pks.iter() {
-            let deleted = tx_context.#dict_table.delete(*pk)?;
+            let deleted = tx_context.#dict_table_var.dict_delete(*pk)?;
             removed.push(deleted);
         }
     }

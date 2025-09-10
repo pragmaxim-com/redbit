@@ -13,11 +13,11 @@ pub fn by_dict_def(
     tx_context_ty: &Type,
     dict_table_defs: &DictTableDefs,
 ) -> FunctionDef {
-    let dict_table = &dict_table_defs.var_name;
+    let dict_table_var = &dict_table_defs.var_name;
     let fn_name = format_ident!("get_{}s_by_{}", pk_name, column_name);
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: &#tx_context_ty, val: #column_type) -> Result<Vec<#pk_type>, AppError> {
-            let iter_opt = tx_context.#dict_table.get_keys(val)?;
+            let iter_opt = tx_context.#dict_table_var.get_keys(val)?;
             let results =
                 match iter_opt {
                     None => Vec::new(),

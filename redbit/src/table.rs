@@ -52,7 +52,7 @@ impl<'txn, K: Key + 'static, V: Key + 'static> DictTable<'txn, K, V> {
         Self { dict_index, by_dict_pk, to_dict_pk, dict_pk_by_id }
     }
 
-    pub fn insert(&mut self, key: K::SelfType<'_>, value: V::SelfType<'_>) -> Result<()>  {
+    pub fn dict_insert(&mut self, key: K::SelfType<'_>, value: V::SelfType<'_>) -> Result<()>  {
         if let Some(birth_id_guard) = self.to_dict_pk.get(&value)? {
             let birth_id = birth_id_guard.value();
             self.dict_pk_by_id.insert(&key, &birth_id)?;
@@ -66,7 +66,7 @@ impl<'txn, K: Key + 'static, V: Key + 'static> DictTable<'txn, K, V> {
         Ok(())
     }
 
-    pub fn delete(&mut self, key: K::SelfType<'_>) -> Result<bool>  {
+    pub fn dict_delete(&mut self, key: K::SelfType<'_>) -> Result<bool>  {
         if let Some(birth_guard) = self.dict_pk_by_id.remove(&key)? {
             let birth_id = birth_guard.value();
             let was_removed = self.dict_index.remove(&birth_id, key)?;
