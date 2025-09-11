@@ -5,7 +5,7 @@ enable = true
 sync_interval_s = 1              # 0 means only chatching up but no periodic sync
 fork_detection_heights = 100     # max 255, how many blocks from tip to check for forks
 db_cache_size_gb = "high"        # off / tiny / low / mild / high / ultra
-min_batch_size = 10000           # Sum of : inputs + outputs
+min_batch_size = 15000           # Sum of : inputs + outputs
 processing_parallelism = "high"  # off / tiny / low / mild / high / ultra
 validation_from_height = 0
 
