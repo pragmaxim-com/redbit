@@ -235,6 +235,7 @@ pub fn derive_entity(input: TokenStream) -> TokenStream {
                 name: stringify!(#struct_ident),
                 root: #root,
                 routes_fn: #struct_ident::routes,
+                db_names: #struct_ident::db_names
             }
         }
     };

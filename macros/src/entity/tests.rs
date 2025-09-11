@@ -18,17 +18,28 @@ pub fn test_suite(entity_name: &Ident, parent_def: Option<OneToManyParentDef>, f
             None => (3usize, entity_name.clone()),
         };
 
-    let db_init = quote!{
+    let db_init = quote! {
         fn random_storage() -> Arc<Storage> {
-            create_random_storage(#entity_literal)
+            tokio::runtime::Runtime::new()
+                .expect("tokio runtime")
+                .block_on(Storage::temp(#entity_literal, 0, true))
+                .expect("Failed to create temporary storage")
         }
 
-        static STORAGE: Lazy<Arc<Storage>> = Lazy::new(|| {
-            let storage = random_storage();
+        async fn random_storage_async() -> Arc<Storage> {
+           Storage::temp(#entity_literal, 0, true).await.expect("Failed to create temporary storage")
+        }
+
+        fn initialize_storage(storage: Arc<Storage>) {
             let entities = #sample_entity::sample_many(#sample_count);
             for entity in entities {
                 #sample_entity::store_and_commit(Arc::clone(&storage), entity).expect("Failed to persist entity");
             }
+        }
+
+        static STORAGE: Lazy<Arc<Storage>> = Lazy::new(|| {
+            let storage = random_storage();
+            initialize_storage(Arc::clone(&storage));
             Arc::clone(&storage)
         });
     };
@@ -60,8 +71,9 @@ pub fn test_suite(entity_name: &Ident, parent_def: Option<OneToManyParentDef>, f
 
             async fn get_test_server() -> Arc<axum_test::TestServer> {
                 SERVER.get_or_init(|| async {
-                    let storage = STORAGE.clone();
-                    let router = build_router(RequestState { storage }, None, None).await;
+                    let storage = random_storage_async().await;
+                    initialize_storage(Arc::clone(&storage));
+                    let router = build_router(RequestState { storage }, None, None);
                     Arc::new(axum_test::TestServer::new(router).unwrap())
                 }).await.clone()
             }

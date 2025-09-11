@@ -41,8 +41,7 @@ pub fn by_dict_def(
         async fn #fn_name() {
             let storage = STORAGE.clone();
             let val = #column_type::default();
-            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
-            let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
+            let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
             let pk_stream = #entity_name::#fn_name(tx_context, val).expect("Stream creation failed");
             let pks = pk_stream.try_collect::<Vec<#pk_type>>().await.expect("Failed to collect stream");
             assert_eq!(vec![#pk_type::default()], pks);
@@ -53,13 +52,13 @@ pub fn by_dict_def(
     let bench_stream = Some(quote! {
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
-            let rt = Runtime::new().unwrap();
             let storage = STORAGE.clone();
+            let rt = Runtime::new().unwrap();
             b.iter(|| {
                 rt.block_on(async {
-                    let read_tx = storage.db.begin_read().unwrap();
-                    let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
-                    let pk_stream = #entity_name::#fn_name(tx_context, #column_type::default()).expect("Stream creation failed");
+                    let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
+                    let val = #column_type::default();
+                    let pk_stream = #entity_name::#fn_name(tx_context, val).expect("Stream creation failed");
                     pk_stream.try_collect::<Vec<#pk_type>>().await.expect("Failed to collect stream");
                 })
             });
@@ -83,9 +82,7 @@ pub fn by_dict_def(
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                impl IntoResponse {
-                   match state.storage.db.begin_read()
-                        .map_err(AppError::from)
-                        .and_then(|tx| #entity_name::begin_read_tx(&tx).map_err(AppError::from))
+                   match #entity_name::begin_read_tx(&state.storage)
                         .and_then(|tx_context| #entity_name::#fn_name(tx_context, #column_name)) {
                             Ok(stream) => axum_streams::StreamBodyAs::json_nl_with_errors(stream).header("Content-Type", HeaderValue::from_str("application/x-ndjson").unwrap()).into_response(),
                             Err(err)   => err.into_response(),
@@ -134,8 +131,7 @@ pub fn by_index_def(
         async fn #fn_name() {
             let storage = STORAGE.clone();
             let val = #column_type::default();
-            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
-            let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
+            let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
             let pk_stream = #entity_name::#fn_name(tx_context, val).expect("Stream creation failed");
             let pks = pk_stream.try_collect::<Vec<#pk_type>>().await.expect("Failed to collect stream");
             assert_eq!(vec![#pk_type::default()], pks);
@@ -146,13 +142,13 @@ pub fn by_index_def(
     let bench_stream = Some(quote! {
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
-            let rt = Runtime::new().unwrap();
             let storage = STORAGE.clone();
+            let rt = Runtime::new().unwrap();
             b.iter(|| {
                 rt.block_on(async {
-                    let read_tx = storage.db.begin_read().unwrap();
-                    let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
-                    let pk_stream = #entity_name::#fn_name(tx_context, #column_type::default()).expect("Stream creation failed");
+                    let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
+                    let val = #column_type::default();
+                    let pk_stream = #entity_name::#fn_name(tx_context, val).expect("Stream creation failed");
                     pk_stream.try_collect::<Vec<#pk_type>>().await.expect("Failed to collect stream");
                 })
             });
@@ -176,9 +172,7 @@ pub fn by_index_def(
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                impl IntoResponse {
-                   match state.storage.db.begin_read()
-                        .map_err(AppError::from)
-                        .and_then(|tx| #entity_name::begin_read_tx(&tx).map_err(AppError::from))
+                   match #entity_name::begin_read_tx(&state.storage)
                         .and_then(|tx_context| #entity_name::#fn_name(tx_context, #column_name)) {
                             Ok(stream) => axum_streams::StreamBodyAs::json_nl_with_errors(stream).header("Content-Type", HeaderValue::from_str("application/x-ndjson").unwrap()).into_response(),
                             Err(err)   => err.into_response(),

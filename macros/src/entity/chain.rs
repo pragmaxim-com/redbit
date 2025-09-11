@@ -131,14 +131,14 @@ pub fn block_like(block_type: Type, pk_name: &Ident, pk_type: &Type, field_defs:
             }
 
             fn delete(&self) -> Result<(), chain::ChainError> {
-                let read_tx = self.storage.db.begin_read()?;
-                let tx_context = #header_type::begin_read_tx(&read_tx)?;
+                let tx_context = #header_type::begin_read_tx(&self.storage)?;
                 if let Some(tip_header) = #header_type::last(&tx_context)? {
-                    let write_tx = self.storage.db.begin_write()?;
+                    let write_tx = self.storage.plain_db.begin_write()?;
                     {
-                        let mut tx_context = #block_type::begin_write_tx(&write_tx)?;
+                        let mut tx_context = #block_type::begin_write_tx(&write_tx, &self.storage.index_dbs)?;
                         let pks = #pk_type::from_many(&(0..=tip_header.#pk_name.0).collect::<Vec<u32>>());
                         #block_type::delete_many(&mut tx_context, &pks)?;
+                        tx_context.flush()?;
                     }
                     write_tx.commit()?;
                 }
@@ -146,38 +146,38 @@ pub fn block_like(block_type: Type, pk_name: &Ident, pk_type: &Type, field_defs:
             }
 
             fn get_last_header(&self) -> Result<Option<#header_type>, chain::ChainError> {
-                let read_tx = self.storage.db.begin_read()?;
-                let tx_context = #header_type::begin_read_tx(&read_tx)?;
+                let tx_context = #header_type::begin_read_tx(&self.storage)?;
                 let last = #header_type::last(&tx_context)?;
                 Ok(last)
             }
 
             fn get_header_by_hash(&self, hash: <<Block as BlockLike>::Header as BlockHeaderLike>::Hash) -> Result<Vec<#header_type>, chain::ChainError> {
-                let read_tx = self.storage.db.begin_read()?;
-                let tx_context = #header_type::begin_read_tx(&read_tx)?;
+                let tx_context = #header_type::begin_read_tx(&self.storage)?;
                 let header = #header_type::get_by_hash(&tx_context, &hash)?;
                 Ok(header)
             }
 
             fn store_blocks(&self, blocks: Vec<#block_type>) -> Result<(), chain::ChainError> {
-                let write_tx = self.storage.db.begin_write()?;
+                let write_tx = self.storage.plain_db.begin_write()?;
                 {
-                    let mut tx_context = #block_type::begin_write_tx(&write_tx)?;
+                    let mut tx_context = #block_type::begin_write_tx(&write_tx, &self.storage.index_dbs)?;
                     for mut block in blocks.into_iter() {
                         #block_type::store(&mut tx_context, block)?;
                     }
+                    tx_context.flush()?;
                 }
                 write_tx.commit()?;
                 Ok(())
             }
 
             fn update_blocks(&self, blocks: Vec<#block_type>) -> Result<(), chain::ChainError> {
-                let write_tx = self.storage.db.begin_write()?;
+                let write_tx = self.storage.plain_db.begin_write()?;
                 {
-                    let mut tx_context = #block_type::begin_write_tx(&write_tx)?;
+                    let mut tx_context = #block_type::begin_write_tx(&write_tx, &self.storage.index_dbs)?;
                     for block in &blocks {
                         #block_type::delete(&mut tx_context, &block.#pk_name)?;
                     }
+                    tx_context.flush()?;
                 }
                 write_tx.commit()?;
                 self.store_blocks(blocks)?;
@@ -186,8 +186,7 @@ pub fn block_like(block_type: Type, pk_name: &Ident, pk_type: &Type, field_defs:
 
             async fn validate_chain(&self, validation_from_height: u32) -> Result<Vec<#header_type>, chain::ChainError> {
                 use futures::StreamExt;
-                let read_tx = self.storage.db.begin_read()?; // kept as-is even if unused
-                let tx_context = #header_type::begin_read_tx(&read_tx)?; // kept as-is even if unused
+                let tx_context = #header_type::begin_read_tx(&self.storage)?; // kept as-is even if unused
                 let mut affected_headers: Vec<#header_type> = Vec::new();
                 if let Some(tip_header) = #header_type::last(&tx_context)? {
                     let mut stream = #header_type::stream_range(tx_context, #pk_type(validation_from_height), tip_header.#pk_name, None)?;

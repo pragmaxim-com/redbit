@@ -25,10 +25,12 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
             let entity_count: usize = 3;
             let from_value = #pk_type::default();
             let until_value = #pk_type::default().next_index().next_index().next_index();
-            let write_tx = storage.db.begin_write().unwrap();
+            let write_tx = storage.plain_db.begin_write().unwrap();
             let pks = {
-                let mut tx_context = #entity_name::begin_write_tx(&write_tx).unwrap();
-                #entity_name::#fn_name(&mut tx_context, &from_value, &until_value).expect("Failed to get PKs in range")
+                let mut tx_context = #entity_name::begin_write_tx(&write_tx, &storage.index_dbs).unwrap();
+                let pks = #entity_name::#fn_name(&mut tx_context, &from_value, &until_value).expect("Failed to get PKs in range");
+                tx_context.flush().expect("Failed to flush transaction context");
+                pks
             };
             write_tx.commit().expect("Failed to commit transaction");
             let test_pks: Vec<#pk_type> = #entity_type::sample_many(entity_count).iter().map(|e| e.#pk_name).collect();
@@ -44,10 +46,11 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
             let from_value = #pk_type::default();
             let until_value = #pk_type::default().next_index().next_index().next_index();
             b.iter(|| {
-                let write_tx = storage.db.begin_write().unwrap();
+                let write_tx = storage.plain_db.begin_write().unwrap();
                 {
-                    let mut tx_context = #entity_name::begin_write_tx(&write_tx).unwrap();
+                    let mut tx_context = #entity_name::begin_write_tx(&write_tx, &storage.index_dbs).unwrap();
                     #entity_name::#fn_name(&mut tx_context, &from_value, &until_value).expect("Failed to get PKs in range");
+                    tx_context.flush().expect("Failed to flush transaction context");
                 }
                 write_tx.commit().expect("Failed to commit transaction");
             });

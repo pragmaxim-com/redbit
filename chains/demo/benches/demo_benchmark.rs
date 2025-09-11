@@ -11,7 +11,8 @@ use tokio::runtime::Runtime;
 use tokio::sync::watch;
 
 fn criterion_benchmark(c: &mut Criterion) {
-    let storage = Storage::temp("demo_benchmark", 1, true).expect("Failed to open database");
+    let rt = Runtime::new().unwrap();
+    let storage = rt.block_on(Storage::temp("demo_benchmark", 1, true)).unwrap();
 
     let block_provider: Arc<dyn BlockProvider<Block, Block>> = DemoBlockProvider::new(10).expect("Failed to create block provider");
     let chain: Arc<dyn BlockChainLike<Block>> = BlockChain::new(Arc::clone(&storage));
@@ -27,7 +28,6 @@ fn criterion_benchmark(c: &mut Criterion) {
     group.measurement_time(Duration::from_millis(300));
     group.sample_size(10);
 
-    let rt = Runtime::new().unwrap();
     let (_, shutdown_rx) = watch::channel(false);
     group.bench_function(BenchmarkId::from_parameter("syncing"), |bencher| {
         bencher.to_async(&rt).iter(|| async {

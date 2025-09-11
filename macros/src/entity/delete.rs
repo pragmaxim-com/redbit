@@ -40,10 +40,11 @@ pub fn delete_and_commit_def(
     let fn_stream = quote! {
         pub fn #fn_name(storage: Arc<Storage>, pk: &#pk_type) -> Result<bool, AppError> {
            let mut removed: Vec<bool> = Vec::new();
-           let write_tx = storage.db.begin_write()?;
+           let write_tx = storage.plain_db.begin_write()?;
            {
-             let mut tx_context = #entity_name::begin_write_tx(&write_tx)?;
-              #(#delete_statements)*
+             let mut tx_context = #entity_name::begin_write_tx(&write_tx, &storage.index_dbs)?;
+             #(#delete_statements)*
+             tx_context.flush()?;
            }
            write_tx.commit()?;
            Ok(!removed.contains(&false))
@@ -59,8 +60,7 @@ pub fn delete_and_commit_def(
                 let pk = test_entity.#pk_name;
                 #entity_name::store_and_commit(Arc::clone(&storage), test_entity).expect("Failed to store and commit instance");
                 let removed = #entity_name::#fn_name(Arc::clone(&storage), &pk).expect("Failed to delete and commit instance");
-                let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
-                let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
+                let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
                 let is_empty = #entity_name::get(&tx_context, &pk).expect("Failed to get instance").is_none();
                 assert!(removed, "Instance should be deleted");
                 assert!(is_empty, "Instance should be deleted");

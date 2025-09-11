@@ -9,6 +9,7 @@ Redbit reads struct annotations and derives code necessary for persisting and qu
 
 ### Major Out-of-the-Box Features
 
+✅ parallel persistence (no blocking, minimal context switching) \
 ✅ Querying and ranging by secondary index \
 ✅ Optional dictionaries for low cardinality fields + first level cache for building them without overhead \
 ✅ `One-to-One` / `One-to-Option` / `One-to-Many` entities with cascade read/write/delete \
@@ -492,25 +493,4 @@ model_v1::block::_exists                                       28192839
 
 ## Chain
 
-[chain](./chain) syncs blockchains with nodes :
-- [demo](chains/demo)
-- [btc](chains/btc)
-- [cardano](chains/cardano)
-- [ergo](chains/ergo)
-
-### ⏱️ Syncing performance Summary
-
-Hand-made criterion benchmarks [deployed](https://pragmaxim-com.github.io/redbit/report/index.html).
-
-Indexing speed in logs is the **average**, for example, the first ~ 100k **bitcoin** blocks with just one Tx have 
-lower in/out indexing throughput because the block is indexed into ~ 24 tables in total.
-
-The throughput reaches :
-
- - 2.0GHz & NVMe on PCIe Gen3 : `~ 17 000 Inputs+outputs / s`
- - 3.0GHz & NVMe on PCIe Gen4 : `~ 26 000 Inputs+outputs / s`
- - 4.0GHz & NVMe on PCIe Gen5 : `~ 41 000 Inputs+outputs / s`
-
-In a nutshell, whole bitcoin up to height ~ 0.9M can be indexed in 3-4 days on a PCIe Gen5 SSD with 4.0GHz CPU.
-
-> Note that for indexing whole bitcoin, it is better to have lots of RAM 64B+ for the Linux VM (page cache).
+See [chain](./chain)

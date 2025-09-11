@@ -57,6 +57,7 @@ pub use redb::TableDefinition;
 pub use redb::Table;
 pub use redb::Database;
 pub use redb::WriteTransaction;
+pub use redb::TableStats;
 pub use redb::{Key, TypeName, Value};
 pub use serde;
 pub use serde::Deserialize;
@@ -83,12 +84,15 @@ pub use utoipa_swagger_ui;
 pub use storage::Storage;
 pub use storage::ReadTxContext;
 pub use storage::WriteTxContext;
+pub use table::DictTableWriter;
 pub use table::DictTable;
 pub use table::ReadOnlyDictTable;
 pub use bincode::{Encode, Decode, decode_from_slice, encode_to_vec};
 pub use std::any::type_name;
+pub use std::collections::HashMap;
 pub use std::cmp::Ordering;
 pub use std::fmt::Debug;
+pub use std::thread;
 
 use crate::axum::extract::rejection::JsonRejection;
 use crate::axum::extract::FromRequest;
@@ -100,9 +104,11 @@ use axum::extract::Request;
 use serde::de::DeserializeOwned;
 use std::net::SocketAddr;
 use std::ops::Add;
+use std::sync::mpsc::RecvError;
 use thiserror::Error;
 use tokio::net::TcpListener;
 use tokio::sync::watch;
+use tokio::task::JoinError;
 use tower_http::cors::CorsLayer;
 
 pub trait ColInnerType { type Repr; }
@@ -240,6 +246,12 @@ pub enum AppError {
     #[error("Json rejection: {0}")]
     JsonRejection(#[from] JsonRejection),
 
+    #[error("Join: {0}")]
+    JoinError(#[from] JoinError),
+
+    #[error("Recv: {0}")]
+    RecvError(#[from] RecvError),
+
     #[error("Not Found: {0}")]
     NotFound(String),
 
@@ -248,6 +260,9 @@ pub enum AppError {
 
     #[error("Internal error: {0}")]
     Internal(#[source] Box<dyn std::error::Error + Send + Sync>),
+
+    #[error("Custom error: {0}")]
+    Custom(String),
 }
 
 impl AppError {
@@ -350,6 +365,7 @@ pub struct StructInfo {
     pub name: &'static str,
     pub root: bool,
     pub routes_fn: fn() -> OpenApiRouter<RequestState>,
+    pub db_names: fn() -> Vec<String>,
 }
 
 inventory::collect!(StructInfo);
@@ -382,16 +398,7 @@ impl<T: PartialOrd + PartialEq> FilterOp<T> {
     }
 }
 
-pub fn create_random_storage(entity_name: &str) -> Arc<Storage> {
-    let dir = std::env::temp_dir().join("redbit").join("test");
-    if !dir.exists() {
-        std::fs::create_dir_all(dir.clone()).unwrap();
-    }
-    let db = Database::create(dir.join(format!("{}_{}.redb", entity_name, rand::random::<u64>()))).expect("Failed to create test database");
-    Arc::new(Storage::new(Arc::new(db)))
-}
-
-pub async fn build_router(state: RequestState, extras: Option<OpenApiRouter<RequestState>>, cors: Option<CorsLayer>) -> Router<()> {
+pub fn build_router(state: RequestState, extras: Option<OpenApiRouter<RequestState>>, cors: Option<CorsLayer>) -> Router<()> {
     let mut router: OpenApiRouter<RequestState> = OpenApiRouter::with_openapi(ApiDoc::openapi());
     for info in inventory::iter::<StructInfo> {
         router = router.merge((info.routes_fn)());
@@ -419,7 +426,7 @@ pub async fn serve(
     cors: Option<CorsLayer>,
     shutdown: watch::Receiver<bool>,
 ) {
-    let router: Router<()> = build_router(state, extras, cors).await;
+    let router: Router<()> = build_router(state, extras, cors);
     let tcp = TcpListener::bind(socket_addr).await.unwrap();
 
     // spawn shutdown watcher future

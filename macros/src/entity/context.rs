@@ -1,6 +1,6 @@
 use crate::rest::FunctionDef;
 use crate::table::{DictTableDefs, TableDef, TableType};
-use proc_macro2::{Ident, TokenStream};
+use proc_macro2::{Ident, Literal, TokenStream};
 use quote::{format_ident, quote};
 use syn::Type;
 
@@ -34,6 +34,7 @@ pub fn entity_tx_context_type(entity_type: &Type, tx_type: TxType) -> Type {
 pub struct TxContextItem {
     pub write_definition: TokenStream,
     pub write_init: TokenStream,
+    pub write_flush: Option<TokenStream>,
     pub read_definition: TokenStream,
     pub read_init: TokenStream,
 }
@@ -41,17 +42,22 @@ pub struct TxContextItem {
 pub fn write_tx_context(entity_tx_context_ty: &Type, tx_contexts: &[TxContextItem]) -> TokenStream {
     let definitions: Vec<TokenStream> = tx_contexts.iter().map(|item| item.write_definition.clone()).collect();
     let inits: Vec<TokenStream> = tx_contexts.iter().map(|item| item.write_init.clone()).collect();
-    let tx_context_name = tx_context_name(TxType::Write);
+    let flushes: Vec<TokenStream> = tx_contexts.iter().flat_map(|item| item.write_flush.clone()).collect();
+    let write_tx_context_name = tx_context_name(TxType::Write);
     quote! {
         pub struct #entity_tx_context_ty<'txn> {
             #(#definitions),*
         }
-        impl<'txn> #tx_context_name<'txn> for #entity_tx_context_ty<'txn> {
-           fn begin_write_tx(tx: &'txn WriteTransaction) -> Result<Self, TableError> {
+        impl<'txn> #write_tx_context_name<'txn> for #entity_tx_context_ty<'txn> {
+           fn begin_write_tx(plain_tx: &'txn WriteTransaction, index_dbs: &HashMap<String, Arc<Database>>) -> Result<Self, AppError> {
                 Ok(Self {
                     #(#inits),*
                 })
             }
+           fn flush(self) -> Result<(), AppError> {
+                #(#flushes);*;
+                Ok(())
+           }
         }
     }
 }
@@ -59,13 +65,14 @@ pub fn write_tx_context(entity_tx_context_ty: &Type, tx_contexts: &[TxContextIte
 pub fn read_tx_context(entity_tx_context_ty: &Type, tx_contexts: &[TxContextItem]) -> TokenStream {
     let definitions: Vec<TokenStream> = tx_contexts.iter().map(|item| item.read_definition.clone()).collect();
     let inits: Vec<TokenStream> = tx_contexts.iter().map(|item| item.read_init.clone()).collect();
-    let tx_context_name = tx_context_name(TxType::Read);
+    let read_tx_context_name = tx_context_name(TxType::Read);
     quote! {
         pub struct #entity_tx_context_ty {
             #(#definitions),*
         }
-        impl #tx_context_name for #entity_tx_context_ty {
-           fn begin_read_tx(tx: &ReadTransaction) -> Result<Self, TableError> {
+        impl #read_tx_context_name for #entity_tx_context_ty {
+           fn begin_read_tx(storage: &Arc<Storage>) -> Result<Self, AppError> {
+                let plain_tx = storage.plain_db.begin_read()?;
                 Ok(Self {
                     #(#inits),*
                 })
@@ -106,14 +113,15 @@ pub fn tx_context_item(def: &TableDef) -> TxContextItem {
 
     let init =
         quote! {
-            #field_name: tx.#open_method(#table_name)?
+            #field_name: plain_tx.#open_method(#table_name)?
         };
 
-    TxContextItem { write_definition, write_init: init.clone(), read_definition, read_init: init }
+    TxContextItem { write_definition, write_init: init.clone(), write_flush: None, read_definition, read_init: init }
 }
 
 pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
     let var_name = &defs.var_name;
+    let var_name_literal = Literal::string(&var_name.to_string());
     let key_type = &defs.key_type;
     let value_type = &defs.value_type;
     let dict_index_table_name = &defs.dict_index_table_def.name;
@@ -123,7 +131,7 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
 
     let write_definition =
         quote! {
-            pub #var_name: DictTable<'txn, #key_type, #value_type>
+            pub #var_name: DictTableWriter<#key_type, #value_type>
         };
 
     let read_definition =
@@ -133,25 +141,34 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
 
     let write_init =
         quote! {
-            #var_name: DictTable::new(
-                tx.open_multimap_table(#dict_index_table_name)?,
-                tx.open_table(#value_by_dict_pk_table_name)?,
-                tx.open_table(#value_to_dict_pk_table_name)?,
-                tx.open_table(#dict_pk_by_pk_table_name)?
-            )
+            #var_name: DictTableWriter::new(
+                index_dbs.get(#var_name_literal).cloned().ok_or_else(|| TableError::TableDoesNotExist(format!("Dict table '{}' not found", #var_name_literal)))?,
+                |dict_tx| DictTable::new(
+                    dict_tx,
+                    #dict_index_table_name,
+                    #value_by_dict_pk_table_name,
+                    #value_to_dict_pk_table_name,
+                    #dict_pk_by_pk_table_name
+                ),
+            )?
         };
+
+    let write_flush = Some(quote! {
+        self.#var_name.flush()?;
+    });
 
     let read_init =
         quote! {
             #var_name: ReadOnlyDictTable::new(
-                tx.open_multimap_table(#dict_index_table_name)?,
-                tx.open_table(#value_by_dict_pk_table_name)?,
-                tx.open_table(#value_to_dict_pk_table_name)?,
-                tx.open_table(#dict_pk_by_pk_table_name)?
-            )
+                storage.index_dbs.get(#var_name_literal).cloned().ok_or_else(|| TableError::TableDoesNotExist(format!("Dict table '{}' not found", #var_name_literal)))?,
+                #dict_index_table_name,
+                #value_by_dict_pk_table_name,
+                #value_to_dict_pk_table_name,
+                #dict_pk_by_pk_table_name
+            )?
         };
 
-    TxContextItem { write_definition, write_init, read_definition, read_init }
+    TxContextItem { write_definition, write_init, write_flush, read_definition, read_init }
 }
 
 pub fn tx_context_items(table_defs: &[TableDef]) -> Vec<TxContextItem> {
@@ -164,8 +181,8 @@ pub fn tx_context_items(table_defs: &[TableDef]) -> Vec<TxContextItem> {
 pub fn begin_write_fn_def(tx_context_ty: &Type) -> FunctionDef {
     let fn_name = format_ident!("begin_write_tx");
     let fn_stream = quote! {
-        pub fn #fn_name<'txn>(write_tx: &'txn WriteTransaction) -> Result<#tx_context_ty<'txn>, TableError> {
-            #tx_context_ty::begin_write_tx(write_tx)
+        pub fn #fn_name<'txn>(write_tx: &'txn WriteTransaction, index_dbs: &HashMap<String, Arc<Database>>) -> Result<#tx_context_ty<'txn>, AppError> {
+            #tx_context_ty::begin_write_tx(write_tx, index_dbs)
         }
     };
 
@@ -181,8 +198,8 @@ pub fn begin_write_fn_def(tx_context_ty: &Type) -> FunctionDef {
 pub fn begin_read_fn_def(tx_context_ty: &Type) -> FunctionDef {
     let fn_name = format_ident!("begin_read_tx");
     let fn_stream = quote! {
-        pub fn #fn_name(read_tx: &ReadTransaction) -> Result<#tx_context_ty, TableError> {
-            #tx_context_ty::begin_read_tx(read_tx)
+        pub fn #fn_name(storage: &Arc<Storage>) -> Result<#tx_context_ty, AppError> {
+            #tx_context_ty::begin_read_tx(storage)
         }
     };
 

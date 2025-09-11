@@ -13,7 +13,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &Type, tab
             let mut results = Vec::new();
             let mut count: usize = 0;
             if n > 100 {
-                return Err(AppError::Internal("Cannot take more than 100 entities at once".into()));
+                Err(AppError::Internal("Cannot take more than 100 entities at once".into()))
             } else {
                 while let Some(entry_res) = iter.next() {
                     if count >= n {
@@ -33,8 +33,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &Type, tab
         fn #fn_name() {
             let storage = STORAGE.clone();
             let n: usize = 2;
-            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
-            let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
+            let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
             let entities = #entity_name::#fn_name(&tx_context, n).expect("Failed to take entities");
             let expected_entities = #entity_type::sample_many(n);
             assert_eq!(entities, expected_entities, "Expected to take 2 entities");
@@ -47,8 +46,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &Type, tab
         fn #bench_fn_name(b: &mut Bencher) {
             let storage = STORAGE.clone();
             let n: usize = 2;
-            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
-            let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
+            let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
             b.iter(|| {
                 #entity_name::#fn_name(&tx_context, n).expect("Failed to take entities");
             });
@@ -72,8 +70,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &Type, tab
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                Result<AppJson<Vec<#entity_type>>, AppError> {
-                    let read_tx = state.storage.db.begin_read()?;
-                    let tx_context = #entity_name::begin_read_tx(&read_tx)?;
+                    let tx_context = #entity_name::begin_read_tx(&state.storage)?;
                     let result = #entity_name::#fn_name(&tx_context, query.take)?;
                     Ok(AppJson(result))
                 }

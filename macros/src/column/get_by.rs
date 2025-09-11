@@ -15,7 +15,7 @@ pub fn get_by_dict_def(
     let dict_table_var = &dict_table_defs.var_name;
     let fn_name = format_ident!("get_by_{}", column_name);
     let fn_stream = quote! {
-        pub fn #fn_name(tx_context: &#tx_context_ty, val: #column_type) -> Result<Vec<#entity_type>, AppError> {
+        pub fn #fn_name(tx_context: &#tx_context_ty, val: &#column_type) -> Result<Vec<#entity_type>, AppError> {
             let iter_opt = tx_context.#dict_table_var.get_keys(val)?;
             match iter_opt {
                 None => Ok(Vec::new()),
@@ -43,9 +43,8 @@ pub fn get_by_dict_def(
         fn #fn_name() {
             let storage = STORAGE.clone();
             let val = #column_type::default();
-            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
-            let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
-            let entities = #entity_name::#fn_name(&tx_context, val).expect("Failed to get entities by dictionary index");
+            let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
+            let entities = #entity_name::#fn_name(&tx_context, &val).expect("Failed to get entities by dictionary index");
             let expected_entities = vec![#entity_type::sample()];
             assert_eq!(expected_entities, entities, "Expected entities to be returned for the given dictionary index");
         }
@@ -56,11 +55,10 @@ pub fn get_by_dict_def(
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
             let storage = STORAGE.clone();
-            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
-            let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
+            let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
             let val = #column_type::default();
             b.iter(|| {
-                #entity_name::#fn_name(&tx_context, val.clone()).expect("Failed to get entities by dictionary index");
+                #entity_name::#fn_name(&tx_context, &val).expect("Failed to get entities by dictionary index");
             });
         }
     });
@@ -99,8 +97,7 @@ pub fn get_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &I
         fn #fn_name() {
             let storage = STORAGE.clone();
             let val = #column_type::default();
-            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
-            let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
+            let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
             let entities = #entity_name::#fn_name(&tx_context, &val).expect("Failed to get entities by index");
             let expected_entities = vec![#entity_type::sample()];
             assert_eq!(expected_entities, entities, "Expected entities to be returned for the given index");
@@ -113,8 +110,7 @@ pub fn get_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &I
         fn #bench_fn_name(b: &mut Bencher) {
             let storage = STORAGE.clone();
             let val = #column_type::default();
-            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
-            let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
+            let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
             b.iter(|| {
                 #entity_name::#fn_name(&tx_context, &val).expect("Failed to get entities by index");
             });

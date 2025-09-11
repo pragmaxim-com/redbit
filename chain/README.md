@@ -60,11 +60,25 @@ Which expects a custom defined `hook.rs` which lets user turn input refs into re
 - [Cardano](../chains/cardano)
 - [Ergo](../chains/ergo)
 
-### Troubleshooting 
+### ⏱️ Syncing performance Summary
 
-If throughput does not reach your expectations, check that `buffer` is high enough : 
+If throughput does not reach your expectations, check that `buffer` is high enough.
 ```
-[2025-08-11 04:45:57] INFO 3 Blocks @ 566011 at 18621.8 ins+outs+asset/s, total 1870059548, buffer: 255
+[2025-08-11 04:45:57] INFO 3 Blocks @ 566011 at 18621.8 ins+outs+asset/s, total 1870059548, buffer: 0
 ```
 
-if it is close to 0, it means your block fetching or processing is too slow and persistence task is idling.
+1. If it is close to `0`, it means your block fetching or processing is too slow and persistence tasks are idling.
+2. If Indexing is under 17 000 inputs+outputs/s with full `buffer`, it means you need more RAM or better SSD.
+
+Hand-made criterion benchmarks [deployed](https://pragmaxim-com.github.io/redbit/report/index.html).
+
+Indexing speed in logs is the **average**, for example, the first ~ 50k **bitcoin** blocks with few Txs have lower in/out indexing throughput
+and higher blocks/s throughput.
+
+My throughput results after indexing whole bitcoin :
+
+- `2.0GHz` & `NVMe PCIe Gen3` & `DDR4 2933MHz 2Rx4` : `~ 17 000 Inputs+outputs / s`
+- `3.0GHz` & `NVMe PCIe Gen4` & `DDR4 3200MHz 4Rx4` : `~ 30 000 Inputs+outputs / s`
+- `3.5GHz` & `NVMe PCIe Gen5` & `DDR5 4800MHz 4RX8` : `~ 58 000 Inputs+outputs / s`
+
+In a nutshell, whole bitcoin up to height ~ 0.9M can be indexed in a day with enough RAM for the Linux VM (page cache).

@@ -25,7 +25,8 @@ use syn::Type;
 pub struct DbColumnMacros {
     pub field_def: FieldDef,
     pub range_query: Option<RangeQuery>,
-    pub table_definitions: Vec<TableDef>,
+    pub table_plain_definitions: Vec<TableDef>,
+    pub table_dict_definition: Option<DictTableDefs>,
     pub struct_init: TokenStream,
     pub stream_query_init: StreamQueryItem,
     pub tx_context_items: Vec<TxContextItem>,
@@ -82,7 +83,8 @@ impl DbColumnMacros {
             range_query: None,
             stream_query_init: query::stream_query_init(column_name, column_type),
             tx_context_items: context::tx_context_items(&table_definitions),
-            table_definitions,
+            table_plain_definitions: table_definitions,
+            table_dict_definition: None,
             struct_init: init::plain_init(column_name, &table_def.var_name),
             struct_init_with_query: init::plain_init_with_query(column_name, &table_def.var_name),
             struct_default_init: init::default_init(column_name, column_type),
@@ -169,7 +171,8 @@ impl DbColumnMacros {
             range_query,
             stream_query_init: query::stream_query_init(column_name, column_type),
             tx_context_items: context::tx_context_items(&table_definitions),
-            table_definitions,
+            table_plain_definitions: table_definitions,
+            table_dict_definition: None,
             struct_init: init::index_init(column_name, &plain_table_def.var_name),
             struct_init_with_query: init::index_init_with_query(column_name, &plain_table_def.var_name),
             struct_default_init: init::default_init(column_name, column_type),
@@ -198,7 +201,6 @@ impl DbColumnMacros {
         let pk_type = &pk_field_def.tpe;
 
         let dict_tables = DictTableDefs::new(entity_name, column_name, column_type, pk_name, pk_type, cache_size);
-        let table_definitions = dict_tables.all_table_defs();
 
         let mut function_defs: Vec<FunctionDef> = Vec::new();
 
@@ -219,7 +221,8 @@ impl DbColumnMacros {
             range_query: None,
             stream_query_init: query::stream_query_init(column_name, column_type),
             tx_context_items: vec![context::tx_context_dict_item(&dict_tables)],
-            table_definitions,
+            table_plain_definitions: Vec::new(),
+            table_dict_definition: Some(dict_tables.clone()),
             struct_init: init::dict_init(column_name, &dict_tables),
             struct_init_with_query: init::dict_init_with_query(column_name, &dict_tables),
             struct_default_init_with_query: init::default_init_with_query(column_name, column_type),

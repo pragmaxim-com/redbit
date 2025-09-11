@@ -53,8 +53,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_field_def: &FieldDef, 
                 let from_value = #pk_type::default();
                 let until_value = #pk_type::default().next_index().next_index().next_index();
                 let query = #stream_query_type::sample();
-                let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
-                let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
+                let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
                 let entity_stream = #entity_name::#fn_name(tx_context, from_value, until_value, Some(query.clone())).expect("Failed to range entities by pk");
                 let entities = entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
                 let expected_entity = #entity_type::sample_with_query(&pk, 0, &query).expect("Failed to create sample entity with query");
@@ -70,8 +69,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_field_def: &FieldDef, 
             let storage = STORAGE.clone();
             let from_value = #pk_type::default();
             let until_value = #pk_type::default().next_index().next_index();
-            let read_tx = storage.db.begin_read().expect("Failed to begin read transaction");
-            let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
+            let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
             let entity_stream = #entity_name::#fn_name(tx_context, from_value, until_value, None).expect("Failed to range entities by pk");
             let entities = entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
             let expected_entities = #entity_type::sample_many(2);
@@ -84,15 +82,14 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_field_def: &FieldDef, 
     let bench_stream = Some(quote! {
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
-            let rt = Runtime::new().unwrap();
             let storage = STORAGE.clone();
             let query = #stream_query_type::sample();
+            let rt = Runtime::new().unwrap();
             b.iter(|| {
                 rt.block_on(async {
                     let from_value = #pk_type::default();
                     let until_value = #pk_type::default().next_index().next_index().next_index();
-                    let read_tx = storage.db.begin_read().unwrap();
-                    let tx_context = #entity_name::begin_read_tx(&read_tx).expect("Failed to begin read transaction context");
+                    let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
                     let entity_stream = #entity_name::#fn_name(tx_context, from_value, until_value, Some(query.clone())).expect("Failed to range entities by pk");
                     entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
                 })
@@ -122,9 +119,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_field_def: &FieldDef, 
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                impl IntoResponse {
-                   match state.storage.db.begin_read()
-                        .map_err(AppError::from)
-                        .and_then(|tx| #entity_name::begin_read_tx(&tx).map_err(AppError::from) )
+                   match #entity_name::begin_read_tx(&state.storage)
                         .and_then(|tx_context| #entity_name::#fn_name(tx_context, query.from, query.until, body)) {
                             Ok(stream) => axum_streams::StreamBodyAs::json_nl_with_errors(stream).header("Content-Type", HeaderValue::from_str("application/x-ndjson").unwrap()).into_response(),
                             Err(err)   => err.into_response(),

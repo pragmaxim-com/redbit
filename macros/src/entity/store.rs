@@ -20,10 +20,11 @@ pub fn store_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &Type, 
             let storage = random_storage();
             let entity_count: usize = 3;
             for test_entity in #entity_type::sample_many(entity_count) {
-                let write_tx = storage.db.begin_write().unwrap();
+                let write_tx = storage.plain_db.begin_write().unwrap();
                 {
-                    let mut tx_context = #entity_name::begin_write_tx(&write_tx).unwrap();
+                    let mut tx_context = #entity_name::begin_write_tx(&write_tx, &storage.index_dbs).unwrap();
                     let pk = #entity_name::#fn_name(&mut tx_context, test_entity).expect("Failed to store and commit instance");
+                    tx_context.flush().expect("Failed to flush transaction context");
                 }
                 write_tx.commit().expect("Failed to commit transaction");
             }
@@ -37,10 +38,11 @@ pub fn store_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &Type, 
             let storage = random_storage();
             let test_entity = #entity_type::sample();
             b.iter(|| {
-                let write_tx = storage.db.begin_write().unwrap();
+                let write_tx = storage.plain_db.begin_write().unwrap();
                 {
-                    let mut tx_context = #entity_name::begin_write_tx(&write_tx).unwrap();
+                    let mut tx_context = #entity_name::begin_write_tx(&write_tx, &storage.index_dbs).unwrap();
                     #entity_name::#fn_name(&mut tx_context, test_entity.clone()).expect("Failed to store and commit instance");
+                    tx_context.flush().expect("Failed to flush transaction context");
                 }
                 write_tx.commit().expect("Failed to commit transaction");
             });
@@ -72,10 +74,11 @@ pub fn store_many_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &T
             let storage = random_storage();
             let entity_count: usize = 3;
             let test_entities = #entity_type::sample_many(entity_count);
-            let write_tx = storage.db.begin_write().unwrap();
+            let write_tx = storage.plain_db.begin_write().unwrap();
             {
-                let mut tx_context = #entity_name::begin_write_tx(&write_tx).unwrap();
+                let mut tx_context = #entity_name::begin_write_tx(&write_tx, &storage.index_dbs).unwrap();
                 let pk = #entity_name::#fn_name(&mut tx_context, test_entities).expect("Failed to store and commit instance");
+                tx_context.flush().expect("Failed to flush transaction context");
             }
             write_tx.commit().expect("Failed to commit transaction");
         }
@@ -89,10 +92,11 @@ pub fn store_many_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &T
             let entity_count = 3;
             let test_entities = #entity_type::sample_many(entity_count);
             b.iter(|| {
-                let write_tx = storage.db.begin_write().unwrap();
+                let write_tx = storage.plain_db.begin_write().unwrap();
                 {
-                    let mut tx_context = #entity_name::begin_write_tx(&write_tx).unwrap();
+                    let mut tx_context = #entity_name::begin_write_tx(&write_tx, &storage.index_dbs).unwrap();
                     #entity_name::#fn_name(&mut tx_context, test_entities.clone()).expect("Failed to store and commit instance");
+                    tx_context.flush().expect("Failed to flush transaction context");
                 }
                 write_tx.commit().expect("Failed to commit transaction");
             });
@@ -113,10 +117,11 @@ pub fn store_and_commit_def(entity_name: &Ident, entity_type: &Type, pk_name: &I
     let fn_stream = quote! {
         pub fn #fn_name(storage: Arc<Storage>, instance: #entity_type) -> Result<#pk_type, AppError> {
            let pk = instance.#pk_name;
-           let write_tx = storage.db.begin_write()?;
+           let write_tx = storage.plain_db.begin_write()?;
            {
-             let mut tx_context = #entity_name::begin_write_tx(&write_tx)?;
+             let mut tx_context = #entity_name::begin_write_tx(&write_tx, &storage.index_dbs)?;
              #(#store_statements)*
+             tx_context.flush()?;
            }
            write_tx.commit()?;
            Ok(pk)
