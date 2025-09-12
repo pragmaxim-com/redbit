@@ -81,6 +81,12 @@ pub fn new(struct_name: &Ident, parent_field: Field, index_field: Field) -> Toke
             }
         }
 
+        impl IterableColumn for #struct_name {
+            fn next_value(&self) -> Self {
+                self.next_index()
+            }
+        }
+
         impl PartialSchema for #struct_name {
             fn schema() -> openapi::RefOr<openapi::schema::Schema> {
                 use openapi::schema::*;

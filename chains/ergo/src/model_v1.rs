@@ -87,4 +87,6 @@ pub struct Asset {
 pub struct Input {
     #[fk(one2many)]
     pub id: TransactionPointer,
+    #[column]
+    pub utxo_ref: TransactionPointer,
 }

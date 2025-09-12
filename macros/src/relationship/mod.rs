@@ -70,7 +70,7 @@ impl DbRelationshipMacros {
             }
             Multiplicity::OneToMany => {
                 let store_statement = match load_from_field {
-                    Some(load_from_field) => store::one2many_load_and_store_def(child_name, child_type, &load_from_field.0),
+                    Some(load_from_field) => store::one2many_load_and_store_def(child_name, child_type, pk_name, &load_from_field.0),
                     None => store::one2many_store_def(child_name, child_type)
                 };
                 DbRelationshipMacros {
