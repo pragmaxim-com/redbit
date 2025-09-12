@@ -28,6 +28,7 @@ harness = false
 [dev-dependencies]
 criterion = { version = "0.7.0", features = ["async_tokio", "html_reports"] }
 axum-test = "17.3.0"
+pretty_assertions = "1"
 
 [dependencies]
 redbit = { path = "../../redbit" }
