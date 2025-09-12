@@ -16,7 +16,8 @@ fn block_from_file(size: &str, tx_count: usize) -> bitcoin::Block {
 }
 
 fn criterion_benchmark(c: &mut Criterion) {
-    let storage = Storage::temp("btc_benchmark", 1, true).expect("Failed to open database");
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let storage = rt.block_on(Storage::temp("btc_benchmark", 1, true)).expect("Failed to create temporary storage");
 
     let chain: Arc<dyn BlockChainLike<Block>> = BlockChain::new(Arc::clone(&storage));
 

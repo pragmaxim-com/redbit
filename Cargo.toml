@@ -3,6 +3,10 @@ name = "root"
 version = "1.0.4"
 edition = "2024"
 
+[features]
+ci = []
+integration = []
+
 [workspace.package]
 version = "1.0.4"
 

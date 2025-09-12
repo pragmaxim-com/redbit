@@ -15,7 +15,8 @@ fn block_from_file(size: &str, tx_count: usize) -> ErgoCBOR {
 }
 
 fn criterion_benchmark(c: &mut Criterion) {
-    let storage = Storage::temp("ergo_benchmark", 1, true).expect("Failed to open database");
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let storage = rt.block_on(Storage::temp("ergo_benchmark", 1, true)).expect("Failed to open database");
     let chain: Arc<dyn BlockChainLike<Block>> = BlockChain::new(Arc::clone(&storage));
 
     let small_block: ErgoCBOR = block_from_file("small", 8);
