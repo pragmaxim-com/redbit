@@ -14,7 +14,9 @@ pub mod cache;
 pub mod storage;
 pub mod retry;
 pub mod logger;
-pub mod table;
+pub mod table_dict_w;
+pub mod table_dict_read;
+pub mod table_writer;
 
 pub use axum;
 pub use axum::body::Body;
@@ -84,9 +86,10 @@ pub use utoipa_swagger_ui;
 pub use storage::Storage;
 pub use storage::ReadTxContext;
 pub use storage::WriteTxContext;
-pub use table::DictTableWriter;
-pub use table::DictTable;
-pub use table::ReadOnlyDictTable;
+pub use table_writer::TableWriter;
+pub use table_dict_w::DictFactory;
+pub use table_dict_w::DictTable;
+pub use table_dict_read::ReadOnlyDictTable;
 pub use bincode::{Encode, Decode, decode_from_slice, encode_to_vec};
 pub use std::any::type_name;
 pub use std::collections::HashMap;
@@ -361,11 +364,13 @@ impl RequestState {
     }
 }
 
+pub struct DbDef { pub name: String, pub cache: usize }
+
 pub struct StructInfo {
     pub name: &'static str,
     pub root: bool,
     pub routes_fn: fn() -> OpenApiRouter<RequestState>,
-    pub db_names: fn() -> Vec<String>,
+    pub db_defs: fn() -> Vec<DbDef>,
 }
 
 inventory::collect!(StructInfo);

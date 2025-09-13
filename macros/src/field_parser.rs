@@ -53,7 +53,7 @@ impl KeyDef {
 #[derive(Clone)]
 pub enum IndexingType {
     Off,
-    On { dictionary: bool, range: bool, cache_size: Option<usize> },
+    On { dictionary: bool, range: bool, cache_size: usize },
 }
 
 #[derive(Clone)]
@@ -161,21 +161,21 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                             });
                             indexing = ColumnDef::Transient(field.clone(), read_from);
                         } else if nested.path.is_ident("index") {
-                            indexing = ColumnDef::Plain(field.clone(), IndexingType::On { dictionary: false, range: false, cache_size: None });
+                            indexing = ColumnDef::Plain(field.clone(), IndexingType::On { dictionary: false, range: false, cache_size: 0 });
                         } else if nested.path.is_ident("dictionary") {
-                            let mut cache_size = None;
+                            let mut cache_size = 0;
                             if nested.input.peek(syn::token::Paren) {
                                 nested.parse_nested_meta(|inner_nested| {
                                     if inner_nested.path.is_ident("cache") {
                                         let lit: syn::LitInt = inner_nested.value()?.parse()?;
-                                        cache_size = Some(lit.base10_parse::<usize>()?);
+                                        cache_size = lit.base10_parse::<usize>()?;
                                     }
                                     Ok(())
                                 })?;
                             }
                             indexing = ColumnDef::Plain(field.clone(), IndexingType::On { dictionary: true, range: false, cache_size });
                         } else if nested.path.is_ident("range") {
-                            indexing = ColumnDef::Plain(field.clone(), IndexingType::On { dictionary: false, range: true, cache_size: None });
+                            indexing = ColumnDef::Plain(field.clone(), IndexingType::On { dictionary: false, range: true, cache_size: 0 });
                         }
                         Ok(())
                     });

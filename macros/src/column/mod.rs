@@ -193,7 +193,7 @@ impl DbColumnMacros {
         tx_context_ty: &Type,
         stream_query_type: &Type,
         parent_def_opt: Option<OneToManyParentDef>,
-        cache_size: Option<usize>,
+        cache_size: usize,
     ) -> DbColumnMacros {
         let column_name = &col_field_def.name.clone();
         let column_type = &col_field_def.tpe.clone();

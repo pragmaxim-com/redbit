@@ -4,8 +4,10 @@ use crate::rest::Rest;
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::{parse_quote, ItemStruct, Type};
+use crate::storage;
 use crate::entity::context::TxType;
-use crate::table::DictTableDefs;
+use crate::storage::StorageDef;
+use crate::table::{DictTableDefs, TableDef};
 
 pub mod query;
 mod store;
@@ -28,7 +30,7 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
         FieldMacros::new(item_struct, entity_ident, &entity_type, &read_tx_context_type, &stream_query_type)?;
     let key = key_def.field_def();
     let mut field_defs = Vec::new();
-    let mut table_defs = Vec::new();
+    let mut plain_table_defs: Vec<TableDef> = Vec::new();
     let mut dict_table_defs: Vec<DictTableDefs> = Vec::new();
     let mut range_queries = Vec::new();
     let mut stream_queries = Vec::new();
@@ -45,7 +47,7 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
 
     for field_macro in field_macros.iter() {
         field_defs.push(field_macro.field_def().clone());
-        table_defs.extend(field_macro.table_definitions());
+        plain_table_defs.extend(field_macro.table_definitions());
         dict_table_defs.extend(field_macro.dict_table_definitions());
         range_queries.extend(field_macro.range_queries());
         stream_queries.extend(field_macro.stream_queries());
@@ -73,7 +75,7 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
     function_defs.push(delete::delete_and_commit_def(entity_ident, &entity_type, &key.name, &key.tpe, &delete_statements));
     function_defs.push(delete::delete_def(&key.tpe, &write_tx_context_type, &delete_statements));
     function_defs.push(delete::delete_many_def(&key.tpe, &write_tx_context_type, &delete_many_statements));
-    function_defs.push(info::table_info_fn(entity_ident, &table_defs, &dict_table_defs));
+    function_defs.push(info::table_info_fn(entity_ident, &plain_table_defs, &dict_table_defs));
     function_defs.push(compose::compose_token_stream(entity_ident, &entity_type, &key.tpe, &read_tx_context_type, &field_names, &struct_inits));
     function_defs.push(compose::compose_with_filter_token_stream(&entity_type, &key.tpe, &read_tx_context_type, &stream_query_type, &field_names, &struct_inits_with_query));
     function_defs.extend(sample::sample_token_fns(entity_ident, &entity_type, &key.tpe, &stream_query_type, &struct_default_inits, &struct_default_inits_with_query, &field_names));
@@ -83,12 +85,9 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
     let tx_context_structs = context::tx_context(&write_tx_context_type, &read_tx_context_type, &tx_context_items);
     let range_query_structs = range_queries.into_iter().map(|rq| rq.stream).collect::<Vec<_>>();
 
-    let plain_table_stmnt: Vec<TokenStream> = table_defs.iter().map(|table_def| table_def.definition.clone()).collect();
     let api_functions: Vec<TokenStream> = function_defs.iter().map(|f| f.fn_stream.clone()).collect::<Vec<_>>();
 
-    let dict_table_stmnt: Vec<TokenStream> = dict_table_defs.iter().flat_map(|dict_table_defs| dict_table_defs.all_table_defs().into_iter().map(|def| def.definition)).collect();
-    let dict_db_names: Vec<String> = dict_table_defs.iter().map(|dict_table_defs| dict_table_defs.var_name.to_string()).collect();
-
+    let StorageDef { db_defs, plain_table_stmnt, dict_table_stmnt } = storage::get_db_defs(&plain_table_defs, &dict_table_defs);
     let Rest { endpoint_handlers, routes: api_routes } = Rest::new(&function_defs);
 
     let test_suite = tests::test_suite(entity_ident, one_to_many_parent_def.clone(), &function_defs);
@@ -112,10 +111,8 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
                 #(#api_functions)*
                 // axum routes
                 #api_routes
-                // dictionary has its own db
-                pub fn db_names() -> Vec<String> {
-                    vec![#(#dict_db_names.to_string()),*]
-                }
+                // entity fields have their own dbs
+                #db_defs
             }
             // unit tests and rest api tests
             #test_suite

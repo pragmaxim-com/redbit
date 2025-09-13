@@ -7,7 +7,7 @@ use quote::{format_ident, quote};
 
 pub fn table_info_fn(entity_name: &Ident, table_defs: &[TableDef], dict_table_defs: &[DictTableDefs]) -> FunctionDef {
     let plain_stats_getters = table_defs.iter().map(|td| {
-        let table_name = td.name.to_string();
+        let table_var = td.var_name.to_string();
         let table_ident = &td.name;
         let table_type = format!("{:?}", &td.table_type);
         let open_method = match td.table_type {
@@ -20,7 +20,7 @@ pub fn table_info_fn(entity_name: &Ident, table_defs: &[TableDef], dict_table_de
                 let tx = plain_db.begin_read()?;
                 let table = tx.#open_method(#table_ident)?;
                 let stats = table.stats()?;
-                tables.push(stats_for_table(#table_name, #table_type, stats)?);
+                tables.push(stats_for_table(#table_var, #table_type, stats)?);
             }
         }
     });

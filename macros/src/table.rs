@@ -19,7 +19,7 @@ pub struct DictTableDefs {
     pub(crate) key_type: Type,
     pub(crate) value_type: Type,
     #[allow(dead_code)]
-    pub(crate) value_to_dict_pk_cache: Option<Ident>,
+    pub(crate) db_cache: usize,
     pub(crate) dict_index_table_def: TableDef,
     pub(crate) value_by_dict_pk_table_def: TableDef,
     pub(crate) value_to_dict_pk_table_def: TableDef,
@@ -27,8 +27,7 @@ pub struct DictTableDefs {
 }
 
 impl DictTableDefs {
-    pub fn new(entity_name: &Ident, column_name: &Ident, column_type: &Type, pk_name: &Ident, pk_type: &Type, cache_size: Option<usize>) -> DictTableDefs {
-        let value_to_dict_pk_table_def = TableDef::value_to_dict_pk_table_def(entity_name, column_name, column_type, pk_type, cache_size);
+    pub fn new(entity_name: &Ident, column_name: &Ident, column_type: &Type, pk_name: &Ident, pk_type: &Type, cache_size: usize) -> DictTableDefs {
         let name = format_ident!("{}_{}_DICT", entity_name.to_string().to_uppercase(), column_name.to_string().to_uppercase());
         let var_name = Ident::new(&format!("{}", name).to_lowercase(), name.span());
 
@@ -36,10 +35,10 @@ impl DictTableDefs {
             var_name,
             key_type: pk_type.clone(),
             value_type: column_type.clone(),
-            value_to_dict_pk_cache: value_to_dict_pk_table_def.cache.clone().map(|c|c.0),
+            db_cache: cache_size,
             dict_index_table_def: TableDef::dict_index_table_def(entity_name, column_name, pk_type),
             value_by_dict_pk_table_def: TableDef::value_by_dict_pk_table_def(entity_name, column_name, column_type, pk_type),
-            value_to_dict_pk_table_def,
+            value_to_dict_pk_table_def: TableDef::value_to_dict_pk_table_def(entity_name, column_name, column_type, pk_type),
             dict_pk_by_pk_table_def: TableDef::dict_pk_by_pk_table_def(entity_name, column_name, pk_name, pk_type),
         }
     }
@@ -59,7 +58,7 @@ pub struct TableDef {
     pub var_name: Ident,
     pub key_type: Type,
     pub value_type: Option<Type>,
-    pub cache: Option<(Ident, TokenStream)>,
+    pub db_cache: usize,
     pub table_type: TableType,
     pub definition: TokenStream,
 }
@@ -76,7 +75,7 @@ impl TableDef {
         TableDef {
             name,
             var_name,
-            cache: None,
+            db_cache: 0,
             key_type: pk_type.clone(),
             value_type: None,
             table_type: TableType::Pk,
@@ -101,7 +100,7 @@ impl TableDef {
             var_name,
             key_type: pk_type.clone(),
             value_type: Some(column_type.clone()),
-            cache: None,
+            db_cache: 0,
             table_type: TableType::Plain,
             definition
         }
@@ -119,7 +118,7 @@ impl TableDef {
             var_name,
             key_type: column_type.clone(),
             value_type: Some(pk_type.clone()),
-            cache: None,
+            db_cache: 0,
             table_type: TableType::Index,
             definition
         }
@@ -138,7 +137,7 @@ impl TableDef {
             var_name,
             key_type: pk_type.clone(),
             value_type: Some(pk_type.clone()),
-            cache: None,
+            db_cache: 0,
             table_type: TableType::DictIndex,
             definition
         }
@@ -157,13 +156,13 @@ impl TableDef {
             var_name,
             key_type: pk_type.clone(),
             value_type: Some(column_type.clone()),
-            cache: None,
+            db_cache: 0,
             table_type: TableType::ValueByDictPk,
             definition
         }
     }
 
-    pub fn value_to_dict_pk_table_def(entity_name: &Ident, column_name: &Ident, column_type: &Type, pk_type: &Type, cache_size_opt: Option<usize>) -> TableDef {
+    pub fn value_to_dict_pk_table_def(entity_name: &Ident, column_name: &Ident, column_type: &Type, pk_type: &Type) -> TableDef {
         let name = format_ident!("{}_{}_TO_DICT_PK", entity_name.to_string().to_uppercase(), column_name.to_string().to_uppercase());
         let var_name = Ident::new(&format!("{}", name).to_lowercase(), name.span());
         let name_str = &name.to_string();
@@ -171,22 +170,12 @@ impl TableDef {
             pub const #name: TableDefinition<'static, #column_type, #pk_type> = TableDefinition::new(#name_str);
         };
 
-        let cache = cache_size_opt.map(|cache_size| {
-            let cache_name = format_ident!("{}_CACHE", name);
-            let cache_name_str = &cache_name.to_string();
-            let cache_definition = quote! {
-                pub static #cache_name: CacheDef<#column_type, #pk_type> =
-                        CacheDef::new(#cache_name_str, std::num::NonZeroUsize::new(#cache_size).expect("cache size must be > 0"));
-            };
-            (cache_name, cache_definition)
-        });
-
         TableDef {
             name,
             var_name,
             key_type: column_type.clone(),
             value_type: Some(pk_type.clone()),
-            cache,
+            db_cache: 0,
             table_type: TableType::ValueToDictPk,
             definition,
         }
@@ -209,7 +198,7 @@ impl TableDef {
             var_name,
             key_type: pk_type.clone(),
             value_type: Some(pk_type.clone()),
-            cache: None,
+            db_cache: 0,
             table_type: TableType::DictPkByPk,
             definition
         }

@@ -131,7 +131,7 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
 
     let write_definition =
         quote! {
-            pub #var_name: DictTableWriter<#key_type, #value_type>
+            pub #var_name: TableWriter<#key_type, #value_type, DictFactory<#key_type, #value_type>>
         };
 
     let read_definition =
@@ -141,10 +141,9 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
 
     let write_init =
         quote! {
-            #var_name: DictTableWriter::new(
+            #var_name: TableWriter::new(
                 index_dbs.get(#var_name_literal).cloned().ok_or_else(|| TableError::TableDoesNotExist(format!("Dict table '{}' not found", #var_name_literal)))?,
-                |dict_tx| DictTable::new(
-                    dict_tx,
+                DictFactory::new(
                     #dict_index_table_name,
                     #value_by_dict_pk_table_name,
                     #value_to_dict_pk_table_name,

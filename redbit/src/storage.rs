@@ -18,11 +18,11 @@ impl Storage {
     }
 
     pub async fn build_storage(db_dir: PathBuf, db_cache_size_gb: u8) -> redb::Result<(bool, Arc<Storage>), AppError> {
-        let mut db_names: Vec<String> = Vec::new();
+        let mut db_defs: Vec<DbDef> = Vec::new();
         for info in inventory::iter::<StructInfo> {
-            db_names.extend((info.db_names)())
+            db_defs.extend((info.db_defs)())
         }
-        Self::init(db_dir, db_names, db_cache_size_gb).await
+        Self::init(db_dir, db_defs, db_cache_size_gb).await
     }
 
 
@@ -36,26 +36,24 @@ impl Storage {
         if random && db_path.exists() {
             fs::remove_dir_all(&db_path)?;
         }
-        let mut db_names = Vec::new();
+        let mut db_defs = Vec::new();
         for info in inventory::iter::<StructInfo> {
-            db_names.extend((info.db_names)())
+            db_defs.extend((info.db_defs)())
         }
-        let (_, storage) = Storage::init(db_path, db_names, db_cache_size_gb).await?;
+        let (_, storage) = Storage::init(db_path, db_defs, db_cache_size_gb).await?;
         Ok(storage)
     }
 
-    pub async fn init(db_dir: PathBuf, db_names: Vec<String>, db_cache_size_gb: u8) -> redb::Result<(bool, Arc<Storage>), AppError> {
-        let total_dbs = db_names.len() + 1;
-        let per_db_cache_size_gb = if db_cache_size_gb == 0 { 1 } else { db_cache_size_gb / (total_dbs as u8) };
+    pub async fn init(db_dir: PathBuf, db_defs: Vec<DbDef>, db_cache_size_gb: u8) -> redb::Result<(bool, Arc<Storage>), AppError> {
         let db_path = db_dir.join("plain.db");
         if !db_dir.exists() {
             fs::create_dir_all(db_dir.clone())?;
-            let plain_db = Database::builder().set_cache_size(per_db_cache_size_gb as usize * 1024 * 1024 * 1024).create(db_path)?;
+            let plain_db = Database::builder().set_cache_size(db_cache_size_gb as usize * 1024 * 1024 * 1024).create(db_path)?;
             let mut index_dbs = HashMap::new();
-            for db_name in db_names {
-                let index_db_path = db_dir.join(format!("{}_index.db", db_name));
-                let index_db = Database::builder().set_cache_size(per_db_cache_size_gb as usize * 1024 * 1024 * 1024).create(index_db_path)?;
-                index_dbs.insert(db_name.to_string(), Arc::new(index_db));
+            for db_def in db_defs {
+                let index_db_path = db_dir.join(format!("{}_index.db", db_def.name));
+                let index_db = Database::builder().set_cache_size(db_def.cache * 1024 * 1024).create(index_db_path)?;
+                index_dbs.insert(db_def.name, Arc::new(index_db));
             }
             Ok((true, Arc::new(Storage::new(Arc::new(plain_db), index_dbs))))
         } else {
@@ -65,12 +63,11 @@ impl Storage {
                 tokio::task::spawn_blocking(move || -> redb::Result<Database, DatabaseError> { Database::open(path) })
             };
 
-            let index_tasks = db_names.into_iter().map(|db_name| {
-                let name = db_name.to_string();
-                let path = db_dir.join(format!("{}_index.db", db_name));
+            let index_tasks = db_defs.into_iter().map(|db_def| {
+                let path = db_dir.join(format!("{}_index.db", db_def.name));
                 tokio::task::spawn_blocking(move || -> redb::Result<(String, Arc<Database>), DatabaseError> {
                     let db = Database::open(path)?;
-                    Ok((name, Arc::new(db)))
+                    Ok((db_def.name, Arc::new(db)))
                 })
             });
 

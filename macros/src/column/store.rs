@@ -28,7 +28,7 @@ pub fn store_many_index_def(column_name: &Ident, pk_name: &Ident, table_var: &Id
 }
 
 fn store_dict_stmnt(column_name: &Ident, pk_name: &Ident, dict_table_var: &Ident) -> TokenStream {
-    quote! { tx_context.#dict_table_var.dict_insert(instance.#pk_name, instance.#column_name); }
+    quote! { tx_context.#dict_table_var.insert_kv(instance.#pk_name, instance.#column_name); }
 }
 
 pub fn store_dict_def(column_name: &Ident, pk_name: &Ident, dict_table_defs: &DictTableDefs) -> TokenStream {
