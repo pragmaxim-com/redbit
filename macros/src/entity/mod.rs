@@ -74,7 +74,7 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
     function_defs.push(delete::delete_def(&key.tpe, &write_tx_context_type, &delete_statements));
     function_defs.push(delete::delete_many_def(&key.tpe, &write_tx_context_type, &delete_many_statements));
     function_defs.push(info::table_info_fn(entity_ident, &table_defs, &dict_table_defs));
-    function_defs.push(compose::compose_token_stream(entity_ident, &entity_type, &key.tpe, &read_tx_context_type, &struct_inits));
+    function_defs.push(compose::compose_token_stream(entity_ident, &entity_type, &key.tpe, &read_tx_context_type, &field_names, &struct_inits));
     function_defs.push(compose::compose_with_filter_token_stream(&entity_type, &key.tpe, &read_tx_context_type, &stream_query_type, &field_names, &struct_inits_with_query));
     function_defs.extend(sample::sample_token_fns(entity_ident, &entity_type, &key.tpe, &stream_query_type, &struct_default_inits, &struct_default_inits_with_query, &field_names));
     function_defs.extend(init::init(entity_ident, &key_def));

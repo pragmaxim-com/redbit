@@ -15,7 +15,7 @@ pub fn default_init_expr(column_type: &Type) -> TokenStream {
 pub fn default_init(column_name: &Ident, column_type: &Type) -> TokenStream {
     let default_expr = default_init_expr(column_type);
     quote! {
-        #column_name: #default_expr
+        let #column_name = #default_expr;
     }
 }
 
@@ -48,7 +48,7 @@ pub fn plain_init_expr(table: &Ident) -> TokenStream {
 pub fn plain_init(column_name: &Ident, table: &Ident) -> TokenStream {
     let init_expr = plain_init_expr(table);
     quote! {
-        #column_name: #init_expr
+        let #column_name = #init_expr;
     }
 }
 
@@ -93,7 +93,7 @@ pub fn index_init_with_query(column_name: &Ident, table: &Ident) -> TokenStream 
 pub fn index_init(column_name: &Ident, table: &Ident) -> TokenStream {
     let init_expr = index_init_expr(table);
     quote! {
-        #column_name: #init_expr
+        let #column_name = #init_expr;
     }
 }
 
@@ -115,7 +115,7 @@ pub fn dict_init_expr(dict_table_defs: &DictTableDefs) -> TokenStream {
 pub fn dict_init(column_name: &Ident, dict_table_defs: &DictTableDefs,) -> TokenStream {
     let init_expr = dict_init_expr(dict_table_defs);
     quote! {
-        #column_name: #init_expr
+        let #column_name = #init_expr;
     }
 }
 

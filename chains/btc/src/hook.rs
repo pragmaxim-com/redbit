@@ -1,20 +1,18 @@
 use crate::model_v1::*;
 
-pub(crate) fn load_from_input_refs(tx_context: &TransactionWriteTxContext, parent: BlockPointer, input_refs: Vec<InputRef>) -> Result<Vec<Input>, AppError> {
-    let mut inputs = Vec::with_capacity(input_refs.len());
-    for (index, transient_input) in input_refs.iter().enumerate() {
-        match tx_context.transaction_hash_index.get(&transient_input.tx_hash)?.next() {
+pub(crate) fn write_from_input_refs(tx_context: &TransactionWriteTxContext, parent: BlockPointer, input_index: usize, input_ref: &InputRef) -> Result<Input, AppError> {
+    let input =
+        match tx_context.transaction_hash_index.get(input_ref.tx_hash)?.next() {
             Some(Ok(tx_pointer)) => {
-                let id = TransactionPointer::from_parent(parent, index as u16);
-                let utxo_ref = TransactionPointer::from_parent(tx_pointer.value(), transient_input.index as u16);
-                inputs.push(Input { id, utxo_ref })
+                let id = TransactionPointer::from_parent(parent, input_index as u16);
+                let utxo_pointer = TransactionPointer::from_parent(tx_pointer.value(), input_ref.index as u16);
+                Input { id, utxo_pointer }
             },
             _ => {
-                let id = TransactionPointer::from_parent(parent, index as u16);
-                let utxo_ref = TransactionPointer::from_parent(BlockPointer::from_parent(Height(0), 0), 0); // genesis of unknown index
-                inputs.push(Input { id, utxo_ref })
+                let id = TransactionPointer::from_parent(parent, input_index as u16);
+                let utxo_pointer = TransactionPointer::from_parent(BlockPointer::from_parent(Height(0), 0), 0); // genesis of unknown index
+                Input { id, utxo_pointer }
             },
-        }
-    }
-    Ok(inputs)
+        };
+    Ok(input)
 }

@@ -1,6 +1,7 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::Type;
+use crate::field_parser::WriteFrom;
 
 pub fn one2one_store_def(child_name: &Ident, child_type: &Type) -> TokenStream {
     quote! {
@@ -30,20 +31,23 @@ pub fn one2opt_store_many_def(child_name: &Ident, child_type: &Type) -> TokenStr
     }
 }
 
-pub fn one2many_store_def(child_name: &Ident, child_type: &Type) -> TokenStream {
-    quote! {
-        #child_type::store_many(&mut tx_context.#child_name, instance.#child_name)?;
-    }
-}
-
-pub fn one2many_load_and_store_def(child_name: &Ident, child_type: &Type, pk_name: &Ident, load_from_field: &Ident) -> TokenStream {
-    let hook_method_name = Ident::new(&format!("load_from_{}", load_from_field), child_name.span());
-    quote! {
-        if (instance.#child_name.is_empty()) {
-            let loaded_fields: Vec<#child_type> = crate::hook::#hook_method_name(&tx_context, instance.#pk_name, instance.#load_from_field)?;
-            #child_type::store_many(&mut tx_context.#child_name, loaded_fields)?;
-        } else {
-            #child_type::store_many(&mut tx_context.#child_name, instance.#child_name)?;
-        }
+pub fn one2many_store_def(child_name: &Ident, child_type: &Type, pk_name: &Ident, write_from: Option<WriteFrom>) -> TokenStream {
+    let non_empty_children = quote! { #child_type::store_many(&mut tx_context.#child_name, instance.#child_name)?; };
+    match write_from {
+        Some(WriteFrom(write_from_field)) => {
+            let hook_method_name = Ident::new(&format!("write_from_{}", write_from_field), child_name.span());
+            quote! {
+                if instance.#child_name.is_empty() {
+                    let mut loaded_fields = Vec::with_capacity(instance.#write_from_field.len());
+                    for (index, child_value) in instance.#write_from_field.iter().enumerate() {
+                        loaded_fields.push(crate::hook::#hook_method_name(&tx_context, instance.#pk_name, index, child_value)?)
+                    }
+                    #child_type::store_many(&mut tx_context.#child_name, loaded_fields)?;
+                } else {
+                    #non_empty_children
+                }
+            }
+        },
+        None => non_empty_children
     }
 }

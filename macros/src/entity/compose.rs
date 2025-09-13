@@ -3,12 +3,13 @@ use quote::quote;
 use syn::Type;
 use crate::rest::FunctionDef;
 
-pub fn compose_token_stream(entity_name: &Ident, entity_type: &Type, pk_type: &Type, tx_context_ty: &Type, struct_inits: &[TokenStream]) -> FunctionDef {
+pub fn compose_token_stream(entity_name: &Ident, entity_type: &Type, pk_type: &Type, tx_context_ty: &Type, field_names: &[Ident], struct_inits: &[TokenStream]) -> FunctionDef {
     FunctionDef {
         fn_stream: quote! {
             fn compose(tx_context: &#tx_context_ty, pk: &#pk_type) -> Result<#entity_type, AppError> {
-                Ok(#entity_name {
-                    #(#struct_inits),*
+                #(#struct_inits)*
+                Ok(#entity_type {
+                    #(#field_names,)*
                 })
             }
         },

@@ -29,7 +29,7 @@ pub struct DbRelationshipMacros {
 }
 
 impl DbRelationshipMacros {
-    pub fn new(field_def: FieldDef, multiplicity: Multiplicity, entity_ident: &Ident, pk_name: &Ident, pk_type: &Type, load_from_field: Option<LoadFromField>) -> DbRelationshipMacros {
+    pub fn new(field_def: FieldDef, multiplicity: Multiplicity, entity_ident: &Ident, pk_name: &Ident, pk_type: &Type, write_from: Option<WriteFrom>) -> DbRelationshipMacros {
         let child_name = &field_def.name; // e.g., "transactions"
         let child_type = &field_def.tpe; // e.g., the type `Transaction` from Vec<Transaction>
         let child_stream_query_type = entity::query::stream_query_type(child_type);
@@ -69,10 +69,7 @@ impl DbRelationshipMacros {
                 }
             }
             Multiplicity::OneToMany => {
-                let store_statement = match load_from_field {
-                    Some(load_from_field) => store::one2many_load_and_store_def(child_name, child_type, pk_name, &load_from_field.0),
-                    None => store::one2many_store_def(child_name, child_type)
-                };
+                let store_statement = store::one2many_store_def(child_name, child_type, pk_name, write_from.clone());
                 DbRelationshipMacros {
                     field_def: field_def.clone(),
                     struct_init: init::one2many_relation_init(child_name, child_type),

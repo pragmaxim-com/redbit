@@ -21,7 +21,6 @@ harness = false
 criterion = { version = "0.7.0", features = ["async_tokio", "html_reports"] }
 bitcoincore-rpc = {git = "https://github.com/clarkmoody/rust-bitcoincore-rpc", branch = "support-core-22-and-23"}
 axum-test = "17.3.0"
-pretty_assertions = "1"
 
 [dependencies]
 redbit = { path = "../../redbit" }

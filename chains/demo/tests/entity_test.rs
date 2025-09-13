@@ -100,7 +100,7 @@ mod entity_tests {
         let transaction = blocks.first().unwrap().transactions.first().unwrap();
 
         let found_by_hash = Transaction::stream_by_hash(transaction_tx, transaction.hash.clone(), None).unwrap().try_collect::<Vec<Transaction>>().await.unwrap();
-        assert_eq!(found_by_hash.len(), 1);
+        assert_eq!(found_by_hash.len(), 3);
         assert!(found_by_hash.iter().any(|tx| tx.id == transaction.id));
         assert!(found_by_hash.iter().any(|tx| tx.id == transaction.id));
     }
@@ -113,7 +113,7 @@ mod entity_tests {
         let utxo = blocks.first().unwrap().transactions.first().unwrap().utxos.first().unwrap();
 
         let found_by_address = Utxo::stream_by_address(utxo_tx, utxo.address.clone(), None).unwrap().try_collect::<Vec<Utxo>>().await.unwrap();
-        assert_eq!(found_by_address.len(), 1);
+        assert_eq!(found_by_address.len(), 9);
         assert!(found_by_address.iter().any(|tx| tx.id == utxo.id));
         assert!(found_by_address.iter().any(|tx| tx.id == utxo.id));
     }
@@ -155,7 +155,7 @@ mod entity_tests {
         let transaction = blocks.first().unwrap().transactions.first().unwrap();
 
         let found_by_hash = Transaction::get_by_hash(&transaction_tx, &transaction.hash).expect("Failed to query by hash");
-        assert_eq!(found_by_hash.len(), 1);
+        assert_eq!(found_by_hash.len(), 3);
         assert!(found_by_hash.iter().any(|tx| tx.id == transaction.id));
         assert!(found_by_hash.iter().any(|tx| tx.id == transaction.id));
     }
@@ -168,7 +168,7 @@ mod entity_tests {
         let utxo = blocks.first().unwrap().transactions.first().unwrap().utxos.first().unwrap();
 
         let found_by_address = Utxo::get_by_address(&utxo_tx, &utxo.address).expect("Failed to query by address");
-        assert_eq!(found_by_address.len(), 1);
+        assert_eq!(found_by_address.len(), 9);
         assert!(found_by_address.iter().any(|tx| tx.id == utxo.id));
         assert!(found_by_address.iter().any(|tx| tx.id == utxo.id));
     }

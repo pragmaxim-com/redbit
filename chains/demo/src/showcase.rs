@@ -17,7 +17,7 @@ async fn main() -> Result<()> {
     let transaction_tx = &block_tx.transactions;
     let header_tx = &block_tx.header;
     let utxo_tx = &transaction_tx.utxos;
-    let maybe_value_tx = &transaction_tx.maybe_value;
+    let maybe_value_tx = &transaction_tx.maybe;
     let asset_tx = &utxo_tx.assets;
 
     let first_block = Block::first(&block_tx)?.unwrap();
@@ -63,7 +63,7 @@ async fn main() -> Result<()> {
     Transaction::get(&transaction_tx, &first_transaction.id)?;
     Transaction::range(&transaction_tx, &first_transaction.id, &last_transaction.id, None)?;
     Transaction::get_utxos(&utxo_tx, &first_transaction.id)?;
-    Transaction::get_maybe_value(&maybe_value_tx, &first_transaction.id)?;
+    Transaction::get_maybe(&maybe_value_tx, &first_transaction.id)?;
     Transaction::parent_key(&first_transaction.id)?;
 
     let transaction_infos = Transaction::table_info(&storage)?;

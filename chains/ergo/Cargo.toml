@@ -21,7 +21,6 @@ doctest = false
 serde_json = "1.0.142"
 criterion = { version = "0.7.0", features = ["async_tokio", "html_reports"] }
 axum-test = "17.3.0"
-pretty_assertions = "1"
 
 [dependencies]
 redbit = { path = "../../redbit" }

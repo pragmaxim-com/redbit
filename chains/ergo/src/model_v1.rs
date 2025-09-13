@@ -48,10 +48,12 @@ pub struct Transaction {
     #[column(index)]
     pub hash: TxHash,
     pub utxos: Vec<Utxo>,
-    #[load_from(input_refs)]
+    #[write_from(input_refs)]
     pub inputs: Vec<Input>,
     #[column(transient)]
     pub input_refs: Vec<BoxId>,
+    #[column(transient(read_from(inputs::utxo_pointer)))]
+    pub input_utxos: Vec<Utxo>,
 }
 
 #[entity]
@@ -88,5 +90,5 @@ pub struct Input {
     #[fk(one2many)]
     pub id: TransactionPointer,
     #[column]
-    pub utxo_ref: TransactionPointer,
+    pub utxo_pointer: TransactionPointer,
 }

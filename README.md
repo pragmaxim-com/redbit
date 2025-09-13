@@ -9,7 +9,7 @@ Redbit reads struct annotations and derives code necessary for persisting and qu
 
 ### Major Out-of-the-Box Features
 
-✅ parallel persistence (no blocking, minimal context switching) \
+✅ parallel persistence, there is a long-running write thread spawn for each entity field (no blocking, minimal context switching) \
 ✅ Querying and ranging by secondary index \
 ✅ Optional dictionaries for low cardinality fields + first level cache for building them without overhead \
 ✅ `One-to-One` / `One-to-Option` / `One-to-Many` entities with cascade read/write/delete \
@@ -130,7 +130,7 @@ Let's say we want to persist and query blockchain data using Redbit, declare ann
         #[column(index)]
         pub hash: TxHash,
         pub utxos: Vec<Utxo>,
-        #[load_from(input_refs)]
+        #[write_from(input_refs)]
         pub inputs: Vec<Input>,
         pub maybe_value: Option<MaybeValue>, // just to demonstrate option is possible
         #[column(transient)]

@@ -1,11 +1,11 @@
-use heck::ToSnakeCase;
+use crate::macro_utils;
+use crate::pk::PointerType;
 use proc_macro2::Ident;
 use quote::ToTokens;
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::Comma;
 use syn::{Data, DeriveInput, Field, Fields, GenericArgument, ItemStruct, PathArguments, Type};
-use crate::pk::PointerType;
 
 #[derive(Clone)]
 #[allow(clippy::enum_variant_names)]
@@ -57,15 +57,20 @@ pub enum IndexingType {
 }
 
 #[derive(Clone)]
-pub struct LoadFromField(pub Ident);
+pub struct WriteFrom(pub Ident);
+#[derive(Clone)]
+pub struct ReadFrom {
+    pub outer: Ident,
+    pub inner: Ident
+}
 
 #[derive(Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum ColumnDef {
     Key(KeyDef),
     Plain(FieldDef, IndexingType),
-    Relationship(FieldDef, Option<LoadFromField>, Multiplicity),
-    Transient(FieldDef),
+    Relationship(FieldDef, Option<WriteFrom>, Multiplicity),
+    Transient(FieldDef, Option<ReadFrom>),
 }
 
 pub fn get_named_fields(ast: &ItemStruct) -> syn::Result<Punctuated<Field, Comma>> {
@@ -105,7 +110,6 @@ pub fn extract_base_type_from_pointer(field: &Field) -> syn::Result<Type> {
     }
 }
 
-
 fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
     match &field.ident {
         None => Err(syn::Error::new(field.span(), "Unnamed fields not supported")),
@@ -140,7 +144,22 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                     let mut indexing = ColumnDef::Plain(field.clone(), IndexingType::Off);
                     let _ = attr.parse_nested_meta(|nested| {
                         if nested.path.is_ident("transient") {
-                            indexing = ColumnDef::Transient(field.clone());
+                            let mut read_from: Option<ReadFrom> = None;
+                            let _ = nested.parse_nested_meta(|inner| {
+                                if inner.path.is_ident("read_from") {
+                                    let _ = inner.parse_nested_meta(|leaf| {
+                                        let p = leaf.path.clone();
+                                        if let [outer_ident, inner_ident] = p.segments.iter().map(|s| s.ident.clone()).collect::<Vec<Ident>>().as_slice() {
+                                            read_from = Some(ReadFrom { outer: outer_ident.clone(), inner: inner_ident.clone() });
+                                        } else {
+                                            return Err(syn::Error::new(attr.span(), "read_from must be a path of format 'one_to_many_entity_field::pointer_ref'"))
+                                        }
+                                        Ok(())
+                                    });
+                                }
+                                Ok(())
+                            });
+                            indexing = ColumnDef::Transient(field.clone(), read_from);
                         } else if nested.path.is_ident("index") {
                             indexing = ColumnDef::Plain(field.clone(), IndexingType::On { dictionary: false, range: false, cache_size: None });
                         } else if nested.path.is_ident("dictionary") {
@@ -189,21 +208,21 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                                         tpe: type_path,
                                     };
 
-                                    let load_from_field_name: Option<LoadFromField> =
+                                    let write_from: Option<WriteFrom> =
                                         field.attrs.iter()
-                                            .find(|attr| attr.path().is_ident("load_from"))
+                                            .find(|attr| attr.path().is_ident("write_from"))
                                             .and_then(|attr| {
-                                                let mut field_ref_name: Option<LoadFromField> = None;
+                                                let mut field_ref_name: Option<WriteFrom> = None;
                                                 let _ = attr.parse_nested_meta(|nested| {
                                                     if let Some(nested_ident) = nested.path.get_ident() {
-                                                        field_ref_name = Some(LoadFromField(nested_ident.clone()));
+                                                        field_ref_name = Some(WriteFrom(nested_ident.clone()));
                                                     }
                                                     Ok(())
                                                 });
                                                 field_ref_name
                                             });
 
-                                    return Ok(ColumnDef::Relationship(field_def, load_from_field_name, Multiplicity::OneToMany));
+                                    return Ok(ColumnDef::Relationship(field_def, write_from, Multiplicity::OneToMany));
                                 }
                             }
                         }
@@ -261,8 +280,8 @@ fn validate_one_to_many_name(
     inner_type: &Ident,
     span: proc_macro2::Span,
 ) -> syn::Result<()> {
-    let expected = format!("{}s", inner_type.to_string().to_snake_case());
-    if field_name.to_string() != expected {
+    let expected = macro_utils::one_to_many_field_name_from_ident(inner_type);
+    if field_name.to_string() != expected.to_string() {
         Err(syn::Error::new(
             span,
             format!(

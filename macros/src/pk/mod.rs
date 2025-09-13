@@ -72,13 +72,14 @@ impl DbPkMacros {
             function_defs.push(parent_key::fn_def(entity_name, &pk_name, &pk_type));
         }
 
+        let pk_init = init::pk_init(&pk_name);
         DbPkMacros {
             field_def: pk_field_def.clone(),
             table_def: table_def.clone(),
-            struct_init: init::pk_init(&pk_name),
-            struct_init_with_query: init::pk_init_with_query(&pk_name),
-            struct_default_init: init::pk_default_init(&pk_name),
-            struct_default_init_with_query: init::pk_init_with_query(&pk_name),
+            struct_init: pk_init.clone(),
+            struct_init_with_query: pk_init.clone(),
+            struct_default_init: pk_init.clone(),
+            struct_default_init_with_query: pk_init.clone(),
             tx_context_item: context::tx_context_item(&table_def),
             range_query,
             store_statement: store::store_statement(&pk_name, &table_def.var_name),

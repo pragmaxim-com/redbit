@@ -161,7 +161,7 @@ pub fn block_like(block_type: Type, pk_name: &Ident, pk_type: &Type, field_defs:
                 let write_tx = self.storage.plain_db.begin_write()?;
                 {
                     let mut tx_context = #block_type::begin_write_tx(&write_tx, &self.storage.index_dbs)?;
-                    for mut block in blocks.into_iter() {
+                    for block in blocks.into_iter() {
                         #block_type::store(&mut tx_context, block)?;
                     }
                     tx_context.flush()?;

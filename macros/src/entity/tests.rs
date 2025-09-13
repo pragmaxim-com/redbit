@@ -51,7 +51,6 @@ pub fn test_suite(entity_name: &Ident, parent_def: Option<OneToManyParentDef>, f
             use once_cell::sync::Lazy;
             use test::Bencher;
             use tokio::runtime::Runtime;
-            use pretty_assertions::assert_eq;
 
             #db_init
 
@@ -65,7 +64,6 @@ pub fn test_suite(entity_name: &Ident, parent_def: Option<OneToManyParentDef>, f
             use super::*;
             use once_cell::sync::Lazy;
             use tokio::sync::OnceCell;
-            use pretty_assertions::assert_eq;
 
             #db_init
 

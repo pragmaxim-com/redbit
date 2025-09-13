@@ -1,4 +1,6 @@
-use quote::quote;
+use heck::ToSnakeCase;
+use proc_macro2::Ident;
+use quote::{format_ident, quote};
 use syn::punctuated::Punctuated;
 use syn::token::Comma;
 use syn::{Attribute, ItemStruct, Path, Type};
@@ -14,6 +16,33 @@ fn extract_derives(attr: &Attribute) -> syn::Result<Vec<syn::Path>> {
         }
     })?;
     Ok(derives)
+}
+
+pub(crate) fn one_to_many_field_name_from_type(inner_type: &Type) -> Ident {
+    let inner_type_str = quote!(#inner_type).to_string(); // e.g. "Utxo"
+    format_ident!("{}s", inner_type_str.to_snake_case())
+}
+
+pub(crate) fn one_to_many_field_name_from_ident(inner_type: &Ident) -> Ident {
+    format_ident!("{}s", inner_type.to_string().to_snake_case())
+}
+
+pub(crate) fn unwrap_vec_type(ty: &Type) -> Option<&Type> {
+    if let Type::Path(type_path) = ty {
+        if type_path.qself.is_none()
+            && type_path.path.segments.len() == 1
+            && type_path.path.segments[0].ident == "Vec"
+        {
+            if let syn::PathArguments::AngleBracketed(args) =
+                &type_path.path.segments[0].arguments
+            {
+                if let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
+                    return Some(inner_ty);
+                }
+            }
+        }
+    }
+    None
 }
 
 pub fn merge_struct_derives(input: &mut ItemStruct, extra_derives: Punctuated<Path, Comma>) {

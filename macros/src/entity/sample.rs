@@ -56,8 +56,9 @@ pub fn sample_token_fns(
         FunctionDef {
             fn_stream: quote! {
                 pub fn sample_with(pk: &#pk_type, sample_index: usize) -> Self {
-                    #entity_name {
-                        #(#struct_default_inits),*
+                    #(#struct_default_inits)*
+                    #entity_type {
+                        #(#field_names,)*
                     }
                 }
             },

@@ -95,6 +95,7 @@ impl BtcBlockProvider {
             utxos: outputs,
             inputs: vec![],
             input_refs: Self::process_inputs(&tx.input),
+            input_utxos: vec![],
         }
     }
 }

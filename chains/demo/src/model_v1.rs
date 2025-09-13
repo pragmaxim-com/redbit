@@ -59,11 +59,13 @@ pub struct Transaction {
     #[column(index)]
     pub hash: TxHash,
     pub utxos: Vec<Utxo>,
-    #[load_from(input_refs)]
+    #[write_from(input_refs)] // implement custom write_from function, see hook.rs
     pub inputs: Vec<Input>,
-    pub maybe_value: Option<MaybeValue>, // just to demonstrate option is possible
+    pub maybe: Option<MaybeValue>, // just to demonstrate option is possible
     #[column(transient)]
     pub input_refs: Vec<InputRef>,
+    #[column(transient(read_from(inputs::utxo_pointer)))] // this field is loaded when read from inputs.utxo_pointer
+    pub input_utxos: Vec<Utxo>,
 }
 
 #[entity]
@@ -82,7 +84,7 @@ pub struct Input {
     #[fk(one2many)]
     pub id: TransactionPointer,
     #[column]
-    pub utxo_ref: TransactionPointer,
+    pub utxo_pointer: TransactionPointer,
 }
 
 #[entity]
