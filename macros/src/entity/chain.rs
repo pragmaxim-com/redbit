@@ -175,7 +175,7 @@ pub fn block_like(block_type: Type, pk_name: &Ident, pk_type: &Type, field_defs:
                 {
                     let mut tx_context = #block_type::begin_write_tx(&write_tx, &self.storage.index_dbs)?;
                     for block in &blocks {
-                        #block_type::delete(&mut tx_context, &block.#pk_name)?;
+                        #block_type::delete(&mut tx_context, block.#pk_name)?;
                     }
                     tx_context.flush()?;
                 }

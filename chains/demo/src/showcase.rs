@@ -124,7 +124,7 @@ async fn main() -> Result<()> {
     Asset::stream_utxos_by_name(Utxo::begin_read_tx(&storage)?, first_asset.name, None)?.try_collect::<Vec<Utxo>>().await?;
 
     println!("\nDeleting blocks:");
-    for height in block_heights.iter() {
+    for height in block_heights.into_iter() {
         Block::delete_and_commit(Arc::clone(&storage), height)?;
     }
     Ok(())

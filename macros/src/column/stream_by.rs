@@ -1,10 +1,9 @@
+use crate::endpoint::EndpointDef;
 use crate::rest::HttpParams::{Body, Path};
-use crate::rest::{FunctionDef, HttpMethod, PathExpr, BodyExpr, EndpointTag};
+use crate::rest::{BodyExpr, EndpointTag, FunctionDef, HttpMethod, PathExpr};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
-use crate::endpoint::EndpointDef;
-use crate::table::DictTableDefs;
 
 pub fn by_dict_def(
     entity_name: &Ident,
@@ -13,10 +12,9 @@ pub fn by_dict_def(
     column_type: &Type,
     pk_type: &Type,
     tx_context_ty: &Type,
-    dict_table_defs: &DictTableDefs,
+    dict_table_var: &Ident,
     stream_query_type: &Type
 ) -> FunctionDef {
-    let dict_table_var = &dict_table_defs.var_name;
     let fn_name = format_ident!("stream_by_{}", column_name);
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: #tx_context_ty, val: #column_type, query: Option<#stream_query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#entity_type, AppError>> + Send>>, AppError> {
@@ -143,11 +141,11 @@ pub fn by_dict_def(
     }
 }
 
-pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident, column_type: &Type, pk_type: &Type, tx_context_ty: &Type, table: &Ident, stream_query_type: &Type) -> FunctionDef {
+pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident, column_type: &Type, pk_type: &Type, tx_context_ty: &Type, index_table: &Ident, stream_query_type: &Type) -> FunctionDef {
     let fn_name = format_ident!("stream_by_{}", column_name);
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: #tx_context_ty, val: #column_type, query: Option<#stream_query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#entity_type, AppError>> + Send>>, AppError> {
-            let iter = tx_context.#table.get(val)?;
+            let iter = tx_context.#index_table.get_keys(val)?;
 
             let stream = futures::stream::unfold((iter, tx_context, query), |(mut iter, tx_context, query)| async move {
                 match iter.next() {

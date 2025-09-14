@@ -8,7 +8,7 @@ use syn::Type;
 pub fn delete_def(pk_type: &Type, tx_context_ty: &Type, delete_statements: &[TokenStream]) -> FunctionDef {
     let fn_name = format_ident!("delete");
     let fn_stream = quote! {
-        pub fn #fn_name(tx_context: &mut #tx_context_ty, pk: &#pk_type) -> Result<bool, AppError> {
+        pub fn #fn_name(tx_context: &mut #tx_context_ty, pk: #pk_type) -> Result<bool, AppError> {
             let mut removed: Vec<bool> = Vec::new();
             #(#delete_statements)*
             Ok(!removed.contains(&false))
@@ -38,7 +38,7 @@ pub fn delete_and_commit_def(
 ) -> FunctionDef {
     let fn_name = format_ident!("delete_and_commit");
     let fn_stream = quote! {
-        pub fn #fn_name(storage: Arc<Storage>, pk: &#pk_type) -> Result<bool, AppError> {
+        pub fn #fn_name(storage: Arc<Storage>, pk: #pk_type) -> Result<bool, AppError> {
            let mut removed: Vec<bool> = Vec::new();
            let write_tx = storage.plain_db.begin_write()?;
            {
@@ -59,7 +59,7 @@ pub fn delete_and_commit_def(
             for test_entity in #entity_type::sample_many(entity_count) {
                 let pk = test_entity.#pk_name;
                 #entity_name::store_and_commit(Arc::clone(&storage), test_entity).expect("Failed to store and commit instance");
-                let removed = #entity_name::#fn_name(Arc::clone(&storage), &pk).expect("Failed to delete and commit instance");
+                let removed = #entity_name::#fn_name(Arc::clone(&storage), pk).expect("Failed to delete and commit instance");
                 let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
                 let is_empty = #entity_name::get(&tx_context, &pk).expect("Failed to get instance").is_none();
                 assert!(removed, "Instance should be deleted");
@@ -77,7 +77,7 @@ pub fn delete_and_commit_def(
             let pk = test_entity.#pk_name;
             #entity_name::store_and_commit(Arc::clone(&storage), test_entity).expect("Failed to store and commit instance");
             b.iter(|| {
-                #entity_name::#fn_name(Arc::clone(&storage), &pk).expect("Failed to delete and commit instance");
+                #entity_name::#fn_name(Arc::clone(&storage), pk).expect("Failed to delete and commit instance");
             });
         }
     });
@@ -106,7 +106,7 @@ pub fn delete_and_commit_def(
             },
             handler_impl_stream: quote! {
                 impl IntoResponse {
-                    match #entity_name::#fn_name(Arc::clone(&state.storage), &#pk_name) {
+                    match #entity_name::#fn_name(Arc::clone(&state.storage), #pk_name) {
                         Ok(true) => {
                             Response::builder().status(StatusCode::OK).body(Body::empty()).unwrap().into_response()
                         },

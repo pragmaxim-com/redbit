@@ -1,10 +1,9 @@
+use crate::endpoint::EndpointDef;
 use crate::rest::HttpParams::Path;
 use crate::rest::{EndpointTag, FunctionDef, HttpMethod, PathExpr};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
-use crate::endpoint::EndpointDef;
-use crate::table::DictTableDefs;
 
 /// Generates a streaming SSE endpoint definition for querying primary keys by a dictionary index.
 pub fn by_dict_def(
@@ -14,9 +13,8 @@ pub fn by_dict_def(
     column_name: &Ident,
     column_type: &Type,
     tx_context_ty: &Type,
-    dict_table_defs: &DictTableDefs,
+    dict_table_var: &Ident,
 ) -> FunctionDef {
-    let dict_table_var = &dict_table_defs.var_name;
     let fn_name = format_ident!("stream_{}s_by_{}", pk_name, column_name);
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: #tx_context_ty, val: #column_type) -> Result<impl futures::Stream<Item = Result<#pk_type, AppError>> + Send, AppError> {
@@ -112,14 +110,14 @@ pub fn by_index_def(
     column_name: &Ident,
     column_type: &Type,
     tx_context_ty: &Type,
-    table: &Ident,
+    index_table: &Ident,
 ) -> FunctionDef {
     let fn_name = format_ident!("stream_{}s_by_{}", pk_name, column_name);
 
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: #tx_context_ty, val: #column_type) -> Result<impl futures::Stream<Item = Result<#pk_type, AppError>> + Send, AppError> {
-            let it = tx_context.#table.get(val)?;
-            let iter_box: Box<dyn Iterator<Item = Result<_, _>> + Send> = Box::new(it);
+            let iter = tx_context.#index_table.get_keys(&val)?;
+            let iter_box: Box<dyn Iterator<Item = Result<_, _>> + Send> = Box::new(iter);
             let stream = stream::iter(iter_box).map(|res| res.map(|e| e.value().clone()).map_err(AppError::from));
             Ok(stream)
         }

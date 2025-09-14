@@ -3,7 +3,7 @@ use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
 
-pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident, column_type: &Type, tx_context_ty: &Type, table: &Ident) -> FunctionDef {
+pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident, column_type: &Type, tx_context_ty: &Type, index_table: &Ident) -> FunctionDef {
     let fn_name = format_ident!("range_by_{}", column_name);
     let fn_stream = quote! {
         pub fn #fn_name(
@@ -11,7 +11,7 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
             from: &#column_type,
             until: &#column_type
         ) -> Result<Vec<#entity_type>, AppError> {
-            let range_iter = tx_context.#table.range::<#column_type>(from..until)?;
+            let range_iter = tx_context.#index_table.range_keys::<#column_type>(from..until)?;
             let mut results = Vec::new();
             for entry_res in range_iter {
                 let (_, mut multi_iter) = entry_res?;

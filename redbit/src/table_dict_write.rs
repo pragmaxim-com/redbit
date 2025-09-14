@@ -4,13 +4,6 @@ use redb::*;
 use redb::{Key, Table, WriteTransaction};
 use std::borrow::Borrow;
 
-pub struct DictTable<'txn, K: Key + 'static, V: Key + 'static> {
-    dict_index: MultimapTable<'txn, K, K>,
-    by_dict_pk: Table<'txn, K, V>,
-    to_dict_pk: Table<'txn, V, K>,
-    dict_pk_by_id: Table<'txn, K, K>,
-}
-
 pub struct DictFactory<K: Key + 'static, V: Key + 'static> {
     pub dict_index_def: MultimapTableDefinition<'static, K, K>,
     pub by_dict_pk_def: TableDefinition<'static, K, V>,
@@ -43,6 +36,13 @@ impl<K: Key + 'static, V: Key + 'static> TableFactory<K, V> for DictFactory<K, V
     }
 }
 
+pub struct DictTable<'txn, K: Key + 'static, V: Key + 'static> {
+    dict_index: MultimapTable<'txn, K, K>,
+    by_dict_pk: Table<'txn, K, V>,
+    to_dict_pk: Table<'txn, V, K>,
+    dict_pk_by_id: Table<'txn, K, K>,
+}
+
 impl<'txn, K: Key + 'static, V: Key + 'static> DictTable<'txn, K, V> {
     pub fn new(write_tx: &'txn WriteTransaction, dict_index_def: MultimapTableDefinition<K, K>, by_dict_pk_def: TableDefinition<K, V>, to_dict_pk_def: TableDefinition<V, K>, dict_pk_by_id_def: TableDefinition<K, K>) -> Result<Self, AppError> {
         Ok(Self {
@@ -53,6 +53,7 @@ impl<'txn, K: Key + 'static, V: Key + 'static> DictTable<'txn, K, V> {
         })
     }
 }
+
 impl<'txn, K: Key + 'static, V: Key + 'static> WriteTableLike<K, V> for DictTable<'txn, K, V> {
     fn insert_kv<'k, 'v>(&mut self, key: impl Borrow<K::SelfType<'k>>, value: impl Borrow<V::SelfType<'v>>) -> Result<(), AppError>  {
         let key_ref: &K::SelfType<'k> = key.borrow();
@@ -86,5 +87,9 @@ impl<'txn, K: Key + 'static, V: Key + 'static> WriteTableLike<K, V> for DictTabl
         } else {
             Ok(false)
         }
+    }
+
+    fn get_by_index<'v>(&self, _value: impl Borrow<V::SelfType<'v>>) -> Result<MultimapValue<'_, K>> {
+        unimplemented!()
     }
 }

@@ -1,11 +1,11 @@
 use crate::endpoint::EndpointDef;
 use crate::rest::{EndpointTag, FunctionDef, HttpMethod};
-use crate::table::{DictTableDefs, TableDef};
+use crate::table::{DictTableDefs, IndexTableDefs, TableDef};
 use crate::table::TableType;
 use proc_macro2::{Ident, Literal};
 use quote::{format_ident, quote};
 
-pub fn table_info_fn(entity_name: &Ident, table_defs: &[TableDef], dict_table_defs: &[DictTableDefs]) -> FunctionDef {
+pub fn table_info_fn(entity_name: &Ident, table_defs: &[TableDef], dict_table_defs: &[DictTableDefs], index_table_defs: &[IndexTableDefs]) -> FunctionDef {
     let plain_stats_getters = table_defs.iter().map(|td| {
         let table_var = td.var_name.to_string();
         let table_ident = &td.name;
@@ -22,6 +22,20 @@ pub fn table_info_fn(entity_name: &Ident, table_defs: &[TableDef], dict_table_de
                 let stats = table.stats()?;
                 tables.push(stats_for_table(#table_var, #table_type, stats)?);
             }
+        }
+    });
+    let index_stats_getters = index_table_defs.iter().map(|defs| {
+        let db_name = defs.var_name.clone();
+        let db_name_literal = Literal::string(&db_name.to_string());
+        let pk_by_index_table_name = &defs.pk_by_index.name;
+        let index_by_pk_table_name = &defs.index_by_pk.name;
+
+        quote! {
+            let db = index_dbs.get(#db_name_literal).cloned().unwrap();
+            let dict_table = ReadOnlyIndexTable::new(db, #pk_by_index_table_name, #index_by_pk_table_name)?;
+            dict_table.stats()?.into_iter().for_each(|(table_type, stats)| {
+                tables.push(stats_for_table(#db_name_literal, &table_type, stats).unwrap());
+            });
         }
     });
     let dict_stats_getters = dict_table_defs.iter().map(|defs| {
@@ -59,6 +73,7 @@ pub fn table_info_fn(entity_name: &Ident, table_defs: &[TableDef], dict_table_de
             }
             let mut tables = Vec::new();
             #(#plain_stats_getters)*
+            #(#index_stats_getters)*
             #(#dict_stats_getters)*
             Ok(tables)
         }

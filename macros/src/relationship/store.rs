@@ -38,10 +38,7 @@ pub fn one2many_store_def(child_name: &Ident, child_type: &Type, pk_name: &Ident
             let hook_method_name = Ident::new(&format!("write_from_{}", write_from_field), child_name.span());
             quote! {
                 if instance.#child_name.is_empty() {
-                    let mut loaded_fields = Vec::with_capacity(instance.#write_from_field.len());
-                    for (index, child_value) in instance.#write_from_field.iter().enumerate() {
-                        loaded_fields.push(crate::hook::#hook_method_name(&tx_context, instance.#pk_name, index, child_value)?)
-                    }
+                    let loaded_fields: Vec<#child_type> = crate::hook::#hook_method_name(&tx_context, instance.#pk_name, instance.#write_from_field)?;
                     #child_type::store_many(&mut tx_context.#child_name, loaded_fields)?;
                 } else {
                     #non_empty_children

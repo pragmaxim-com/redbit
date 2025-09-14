@@ -1,21 +1,19 @@
+use crate::endpoint::EndpointDef;
+use crate::field_parser::OneToManyParentDef;
 use crate::rest::HttpParams::{Body, Path};
-use crate::rest::{FunctionDef, HttpMethod, PathExpr, BodyExpr, EndpointTag};
+use crate::rest::{BodyExpr, EndpointTag, FunctionDef, HttpMethod, PathExpr};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
-use crate::endpoint::EndpointDef;
-use crate::field_parser::OneToManyParentDef;
-use crate::table::DictTableDefs;
 
 pub fn by_dict_def(
     entity_name: &Ident,
     column_name: &Ident,
     column_type: &Type,
     pk_type: &Type,
-    dict_table_defs: &DictTableDefs,
+    dict_table_var: &Ident,
     parent_def: &OneToManyParentDef,
 ) -> FunctionDef {
-    let dict_table_var = &dict_table_defs.var_name;
     let parent_ident = &parent_def.parent_ident;
     let parent_type = &parent_def.parent_type;
     let stream_parent_query_type = &parent_def.stream_query_ty;
@@ -157,7 +155,7 @@ pub fn by_index_def(
     column_name: &Ident,
     column_type: &Type,
     pk_type: &Type,
-    table: &Ident,
+    index_table: &Ident,
     parent_def: &OneToManyParentDef,
 ) -> FunctionDef {
     let parent_ident = &parent_def.parent_ident;
@@ -169,7 +167,7 @@ pub fn by_index_def(
     let fn_name = format_ident!("stream_{}s_by_{}", parent_ident.to_string().to_lowercase(), column_name);
     let fn_stream = quote! {
         pub fn #fn_name(parent_tx_context: #parent_tx_context_type, val: #column_type, query: Option<#stream_parent_query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#parent_type, AppError>> + Send>>, AppError> {
-            let iter = parent_tx_context.#parent_one2many_field_name.#table.get(&val)?;
+            let iter = parent_tx_context.#parent_one2many_field_name.#index_table.get_keys(&val)?;
             let mut unique_parent_pointers = Vec::new();
             for guard in iter {
                 let pk = guard?.value().clone();

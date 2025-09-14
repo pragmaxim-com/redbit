@@ -7,7 +7,7 @@ use crate::field_parser::{ColumnDef, FieldDef, KeyDef, Multiplicity, OneToManyPa
 use crate::pk::DbPkMacros;
 use crate::relationship::DbRelationshipMacros;
 use crate::rest::FunctionDef;
-use crate::table::{DictTableDefs, TableDef};
+use crate::table::{DictTableDefs, IndexTableDefs, TableDef};
 use crate::transient::TransientMacros;
 use proc_macro2::{Ident, TokenStream};
 use syn::{ItemStruct, Type};
@@ -122,6 +122,13 @@ impl FieldMacros {
             FieldMacros::Pk(pk) => vec![pk.table_def.clone()],
             FieldMacros::Plain(column) => column.table_plain_definitions.clone(),
             _ => vec![],
+        }
+    }
+
+    pub fn index_table_definitions(&self) -> Option<IndexTableDefs> {
+        match self {
+            FieldMacros::Plain(column) => column.table_index_definition.clone(),
+            _ => None,
         }
     }
 

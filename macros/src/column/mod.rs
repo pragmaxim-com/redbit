@@ -18,7 +18,7 @@ use crate::entity::context::TxContextItem;
 use crate::entity::query::{RangeQuery, StreamQueryItem};
 use crate::field_parser::{FieldDef, IndexingType, OneToManyParentDef};
 use crate::rest::*;
-use crate::table::{DictTableDefs, TableDef};
+use crate::table::{DictTableDefs, IndexTableDefs, TableDef};
 use proc_macro2::{Ident, TokenStream};
 use syn::Type;
 
@@ -26,6 +26,7 @@ pub struct DbColumnMacros {
     pub field_def: FieldDef,
     pub range_query: Option<RangeQuery>,
     pub table_plain_definitions: Vec<TableDef>,
+    pub table_index_definition: Option<IndexTableDefs>,
     pub table_dict_definition: Option<DictTableDefs>,
     pub struct_init: TokenStream,
     pub stream_query_init: StreamQueryItem,
@@ -56,8 +57,8 @@ impl DbColumnMacros {
         let pk_type = &pk_field_def.tpe;
         match indexing_type {
             IndexingType::Off => DbColumnMacros::plain(col_field_def, entity_name, pk_name, pk_type),
-            IndexingType::On { dictionary: false, range, cache_size: _ } => {
-                DbColumnMacros::index(col_field_def, entity_name, entity_type, pk_field_def, read_tx_context_ty, stream_query_ty, parent_def, range)
+            IndexingType::On { dictionary: false, range, cache_size } => {
+                DbColumnMacros::index(col_field_def, entity_name, entity_type, pk_field_def, read_tx_context_ty, stream_query_ty, parent_def, range, cache_size)
             }
             IndexingType::On { dictionary: true, range: false, cache_size } => {
                 DbColumnMacros::dictionary(col_field_def, entity_name, entity_type, pk_field_def, read_tx_context_ty, stream_query_ty, parent_def, cache_size)
@@ -84,13 +85,14 @@ impl DbColumnMacros {
             stream_query_init: query::stream_query_init(column_name, column_type),
             tx_context_items: context::tx_context_items(&table_definitions),
             table_plain_definitions: table_definitions,
+            table_index_definition: None,
             table_dict_definition: None,
             struct_init: init::plain_init(column_name, &table_def.var_name),
             struct_init_with_query: init::plain_init_with_query(column_name, &table_def.var_name),
             struct_default_init: init::default_init(column_name, column_type),
             struct_default_init_with_query: init::default_init_with_query(column_name, column_type),
             store_statement: store::store_statement(pk_name, column_name, &table_def.var_name),
-            store_many_statement: store::store_many_statement(pk_name, column_name, &table_def.var_name),
+            store_many_statement: store::store_statement(pk_name, column_name, &table_def.var_name),
             delete_statement: delete::delete_statement(&table_def.var_name),
             delete_many_statement: delete::delete_many_statement(&table_def.var_name),
             function_defs: vec![],
@@ -106,22 +108,20 @@ impl DbColumnMacros {
         stream_query_type: &Type,
         parent_def_opt: Option<OneToManyParentDef>,
         range: bool,
+        cache_size: usize,
     ) -> DbColumnMacros {
         let column_name = &col_field_def.name.clone();
         let column_type = &col_field_def.tpe.clone();
         let pk_name = &pk_field_def.name;
         let pk_type = &pk_field_def.tpe;
 
-        let plain_table_def = TableDef::plain_table_def(entity_name, column_name, column_type, pk_name, pk_type);
-        let index_table_def = TableDef::index_table_def(entity_name, column_name, column_type, pk_type);
-
-        let table_definitions = vec![plain_table_def.clone(), index_table_def.clone()];
+        let index_tables = IndexTableDefs::new(entity_name, column_name, column_type, pk_name, pk_type, cache_size);
 
         let mut function_defs: Vec<FunctionDef> = Vec::new();
-        function_defs.push(get_by::get_by_index_def(entity_name, entity_type, column_name, column_type, tx_context_ty, &index_table_def.var_name));
-        function_defs.push(stream_by::by_index_def(entity_name, entity_type, column_name, column_type, pk_type, tx_context_ty, &index_table_def.var_name, stream_query_type));
+        function_defs.push(get_by::get_by_index_def(entity_name, entity_type, column_name, column_type, tx_context_ty, &index_tables.var_name));
+        function_defs.push(stream_by::by_index_def(entity_name, entity_type, column_name, column_type, pk_type, tx_context_ty, &index_tables.var_name, stream_query_type));
         if let Some(parent_def) = parent_def_opt {
-            function_defs.push(stream_parents_by::by_index_def(entity_name, column_name, column_type, pk_type, &index_table_def.var_name, &parent_def));
+            function_defs.push(stream_parents_by::by_index_def(entity_name, column_name, column_type, pk_type, &index_tables.var_name, &parent_def));
         }
         function_defs.push(get_keys_by::by_index_def(
             entity_name,
@@ -130,7 +130,7 @@ impl DbColumnMacros {
             column_name,
             column_type,
             tx_context_ty,
-            &index_table_def.var_name,
+            &index_tables.var_name,
         ));
         function_defs.push(stream_keys_by::by_index_def(
             entity_name,
@@ -139,7 +139,7 @@ impl DbColumnMacros {
             column_name,
             column_type,
             tx_context_ty,
-            &index_table_def.var_name,
+            &index_tables.var_name,
         ));
         let mut range_query = None;
 
@@ -151,7 +151,7 @@ impl DbColumnMacros {
                 col_field_def,
                 pk_type,
                 tx_context_ty,
-                &index_table_def.var_name,
+                &index_tables.var_name,
                 &rq.ty,
                 stream_query_type
             ));
@@ -161,7 +161,7 @@ impl DbColumnMacros {
                 column_name,
                 column_type,
                 tx_context_ty,
-                &index_table_def.var_name,
+                &index_tables.var_name,
             ));
             range_query = Some(rq);
         };
@@ -170,17 +170,18 @@ impl DbColumnMacros {
             field_def: col_field_def.clone(),
             range_query,
             stream_query_init: query::stream_query_init(column_name, column_type),
-            tx_context_items: context::tx_context_items(&table_definitions),
-            table_plain_definitions: table_definitions,
+            tx_context_items: vec![context::tx_context_index_item(&index_tables)],
+            table_plain_definitions: vec![],
+            table_index_definition: Some(index_tables.clone()),
             table_dict_definition: None,
-            struct_init: init::index_init(column_name, &plain_table_def.var_name),
-            struct_init_with_query: init::index_init_with_query(column_name, &plain_table_def.var_name),
+            struct_init: init::index_init(column_name, &index_tables.var_name),
+            struct_init_with_query: init::index_init_with_query(column_name, &index_tables.var_name),
             struct_default_init: init::default_init(column_name, column_type),
             struct_default_init_with_query: init::default_init_with_query(column_name, column_type),
-            store_statement: store::store_index_def(column_name, pk_name, &plain_table_def.var_name, &index_table_def.var_name),
-            store_many_statement: store::store_many_index_def(column_name, pk_name, &plain_table_def.var_name, &index_table_def.var_name),
-            delete_statement: delete::delete_index_statement(&plain_table_def.var_name, &index_table_def.var_name),
-            delete_many_statement: delete::delete_many_index_statement(&plain_table_def.var_name, &index_table_def.var_name),
+            store_statement: store::store_index_def(column_name, pk_name, &index_tables.var_name),
+            store_many_statement: store::store_index_def(column_name, pk_name, &index_tables.var_name),
+            delete_statement: delete::delete_index_statement(&index_tables.var_name),
+            delete_many_statement: delete::delete_many_index_statement(&index_tables.var_name),
             function_defs,
         }
     }
@@ -204,33 +205,34 @@ impl DbColumnMacros {
 
         let mut function_defs: Vec<FunctionDef> = Vec::new();
 
-        function_defs.push(get_by::get_by_dict_def(entity_name, entity_type, column_name, column_type, tx_context_ty, &dict_tables));
-        function_defs.push(stream_by::by_dict_def(entity_name, entity_type, column_name, column_type, pk_type, tx_context_ty, &dict_tables, stream_query_type));
+        function_defs.push(get_by::get_by_dict_def(entity_name, entity_type, column_name, column_type, tx_context_ty, &dict_tables.var_name));
+        function_defs.push(stream_by::by_dict_def(entity_name, entity_type, column_name, column_type, pk_type, tx_context_ty, &dict_tables.var_name, stream_query_type));
         if let Some(parent_def) = parent_def_opt {
             function_defs.push(
-                stream_parents_by::by_dict_def(entity_name, column_name, column_type, pk_type, &dict_tables, &parent_def)
+                stream_parents_by::by_dict_def(entity_name, column_name, column_type, pk_type, &dict_tables.var_name, &parent_def)
             );
         }
 
-        function_defs.push(get_keys_by::by_dict_def(entity_name, pk_name, pk_type, column_name, column_type, tx_context_ty, &dict_tables));
-        function_defs.push(stream_keys_by::by_dict_def(entity_name, pk_name, pk_type, column_name, column_type, tx_context_ty, &dict_tables));
+        function_defs.push(get_keys_by::by_dict_def(entity_name, pk_name, pk_type, column_name, column_type, tx_context_ty, &dict_tables.var_name));
+        function_defs.push(stream_keys_by::by_dict_def(entity_name, pk_name, pk_type, column_name, column_type, tx_context_ty, &dict_tables.var_name));
 
-        let store_statement = store::store_dict_def(column_name, pk_name, &dict_tables);
+        let store_statement = store::store_dict_def(column_name, pk_name, &dict_tables.var_name);
         DbColumnMacros {
             field_def: col_field_def.clone(),
             range_query: None,
             stream_query_init: query::stream_query_init(column_name, column_type),
             tx_context_items: vec![context::tx_context_dict_item(&dict_tables)],
             table_plain_definitions: Vec::new(),
+            table_index_definition: None,
             table_dict_definition: Some(dict_tables.clone()),
-            struct_init: init::dict_init(column_name, &dict_tables),
-            struct_init_with_query: init::dict_init_with_query(column_name, &dict_tables),
+            struct_init: init::dict_init(column_name, &dict_tables.var_name),
+            struct_init_with_query: init::dict_init_with_query(column_name, &dict_tables.var_name),
             struct_default_init_with_query: init::default_init_with_query(column_name, column_type),
             struct_default_init: init::default_init(column_name, column_type),
             store_statement: store_statement.clone(),
             store_many_statement: store_statement,
-            delete_statement: delete::delete_dict_statement(&dict_tables),
-            delete_many_statement: delete::delete_many_dict_statement(&dict_tables),
+            delete_statement: delete::delete_dict_statement(&dict_tables.var_name),
+            delete_many_statement: delete::delete_many_dict_statement(&dict_tables.var_name),
             function_defs,
         }
     }

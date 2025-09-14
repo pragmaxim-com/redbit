@@ -13,7 +13,7 @@ pub fn init(root_entity_ident: &Ident, key_def: &KeyDef) -> Vec<FunctionDef> {
                         let sample_block = #root_entity_ident::sample();
                         let pk = sample_block.#key_ident;
                         #root_entity_ident::store_and_commit(Arc::clone(&storage), sample_block)?;
-                        #root_entity_ident::delete_and_commit(Arc::clone(&storage), &pk)?;
+                        #root_entity_ident::delete_and_commit(Arc::clone(&storage), pk)?;
                         Ok(())
                     }
                 },

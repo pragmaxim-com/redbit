@@ -14,6 +14,39 @@ pub enum TableType {
 }
 
 #[derive(Clone)]
+pub struct IndexTableDefs {
+    pub(crate) var_name: Ident,
+    pub(crate) key_type: Type,
+    pub(crate) value_type: Type,
+    #[allow(dead_code)]
+    pub(crate) db_cache: usize,
+    pub(crate) pk_by_index: TableDef,
+    pub(crate) index_by_pk: TableDef,
+}
+
+impl IndexTableDefs {
+    pub fn new(entity_name: &Ident, column_name: &Ident, column_type: &Type, pk_name: &Ident, pk_type: &Type, cache_size: usize) -> IndexTableDefs {
+        let name = format_ident!("{}_{}_INDEX", entity_name.to_string().to_uppercase(), column_name.to_string().to_uppercase());
+        let var_name = Ident::new(&format!("{}", name).to_lowercase(), name.span());
+
+        IndexTableDefs {
+            var_name,
+            key_type: pk_type.clone(),
+            value_type: column_type.clone(),
+            db_cache: cache_size,
+            pk_by_index: TableDef::index_table_def(entity_name, column_name, column_type, pk_type),
+            index_by_pk: TableDef::plain_table_def(entity_name, column_name, column_type, pk_name, pk_type),
+        }
+    }
+    pub fn all_table_defs(&self) -> Vec<TableDef> {
+        vec![
+            self.pk_by_index.clone(),
+            self.index_by_pk.clone(),
+        ]
+    }
+}
+
+#[derive(Clone)]
 pub struct DictTableDefs {
     pub(crate) var_name: Ident,
     pub(crate) key_type: Type,
@@ -51,6 +84,8 @@ impl DictTableDefs {
         ]
     }
 }
+
+
 
 #[derive(Clone)]
 pub struct TableDef {

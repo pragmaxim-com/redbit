@@ -1,5 +1,5 @@
 use crate::rest::FunctionDef;
-use crate::table::{DictTableDefs, TableDef, TableType};
+use crate::table::{DictTableDefs, IndexTableDefs, TableDef, TableType};
 use proc_macro2::{Ident, Literal, TokenStream};
 use quote::{format_ident, quote};
 use syn::Type;
@@ -117,6 +117,52 @@ pub fn tx_context_item(def: &TableDef) -> TxContextItem {
         };
 
     TxContextItem { write_definition, write_init: init.clone(), write_flush: None, read_definition, read_init: init }
+}
+
+
+pub fn tx_context_index_item(defs: &IndexTableDefs) -> TxContextItem {
+    let var_name = &defs.var_name;
+    let var_name_literal = Literal::string(&var_name.to_string());
+    let key_type = &defs.key_type;
+    let value_type = &defs.value_type;
+    let index_by_pk_table_name = &defs.index_by_pk.name;
+    let pk_by_index_table_name = &defs.pk_by_index.name;
+
+    let write_definition =
+        quote! {
+            pub #var_name: TableWriter<#key_type, #value_type, IndexFactory<#key_type, #value_type>>
+        };
+
+    let read_definition =
+        quote! {
+            pub #var_name: ReadOnlyIndexTable<#key_type, #value_type>
+        };
+
+    let write_init =
+        quote! {
+            #var_name: TableWriter::new(
+                index_dbs.get(#var_name_literal).cloned().ok_or_else(|| TableError::TableDoesNotExist(format!("Index table '{}' not found", #var_name_literal)))?,
+                IndexFactory::new(
+                    #pk_by_index_table_name,
+                    #index_by_pk_table_name,
+                ),
+            )?
+        };
+
+    let write_flush = Some(quote! {
+        self.#var_name.flush()?;
+    });
+
+    let read_init =
+        quote! {
+            #var_name: ReadOnlyIndexTable::new(
+                storage.index_dbs.get(#var_name_literal).cloned().ok_or_else(|| TableError::TableDoesNotExist(format!("Index table '{}' not found", #var_name_literal)))?,
+                #pk_by_index_table_name,
+                #index_by_pk_table_name,
+            )?
+        };
+
+    TxContextItem { write_definition, write_init, write_flush, read_definition, read_init }
 }
 
 pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {

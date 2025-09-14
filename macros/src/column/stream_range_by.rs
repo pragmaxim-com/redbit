@@ -6,7 +6,7 @@ use syn::Type;
 use crate::endpoint::EndpointDef;
 use crate::field_parser::FieldDef;
 
-pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, col_field_def: &FieldDef, pk_type: &Type, tx_context_ty: &Type, table: &Ident, range_query_ty: &Type, stream_query_type: &Type) -> FunctionDef {
+pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, col_field_def: &FieldDef, pk_type: &Type, tx_context_ty: &Type, index_table: &Ident, range_query_ty: &Type, stream_query_type: &Type) -> FunctionDef {
     let column_name = &col_field_def.name.clone();
     let column_type = &col_field_def.tpe.clone();
 
@@ -18,7 +18,7 @@ pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, col_fi
             until: #column_type,
             query: Option<#stream_query_type>
         ) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#entity_type, AppError>> + Send>>, AppError> {
-            let outer_iter = tx_context.#table.range::<#column_type>(from..until)?;
+            let outer_iter = tx_context.#index_table.range_keys::<#column_type>(from..until)?;
             let outer_stream = futures::stream::iter(outer_iter).map_err(AppError::from);
             let pk_stream = outer_stream.map_ok(|(_key, value_iter)| {
                 futures::stream::iter(value_iter).map(|res| {

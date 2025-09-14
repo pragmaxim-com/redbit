@@ -7,7 +7,7 @@ use syn::{parse_quote, ItemStruct, Type};
 use crate::storage;
 use crate::entity::context::TxType;
 use crate::storage::StorageDef;
-use crate::table::{DictTableDefs, TableDef};
+use crate::table::{DictTableDefs, IndexTableDefs, TableDef};
 
 pub mod query;
 mod store;
@@ -31,6 +31,7 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
     let key = key_def.field_def();
     let mut field_defs = Vec::new();
     let mut plain_table_defs: Vec<TableDef> = Vec::new();
+    let mut index_table_defs: Vec<IndexTableDefs> = Vec::new();
     let mut dict_table_defs: Vec<DictTableDefs> = Vec::new();
     let mut range_queries = Vec::new();
     let mut stream_queries = Vec::new();
@@ -48,6 +49,7 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
     for field_macro in field_macros.iter() {
         field_defs.push(field_macro.field_def().clone());
         plain_table_defs.extend(field_macro.table_definitions());
+        index_table_defs.extend(field_macro.index_table_definitions());
         dict_table_defs.extend(field_macro.dict_table_definitions());
         range_queries.extend(field_macro.range_queries());
         stream_queries.extend(field_macro.stream_queries());
@@ -75,7 +77,7 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
     function_defs.push(delete::delete_and_commit_def(entity_ident, &entity_type, &key.name, &key.tpe, &delete_statements));
     function_defs.push(delete::delete_def(&key.tpe, &write_tx_context_type, &delete_statements));
     function_defs.push(delete::delete_many_def(&key.tpe, &write_tx_context_type, &delete_many_statements));
-    function_defs.push(info::table_info_fn(entity_ident, &plain_table_defs, &dict_table_defs));
+    function_defs.push(info::table_info_fn(entity_ident, &plain_table_defs, &dict_table_defs, &index_table_defs));
     function_defs.push(compose::compose_token_stream(entity_ident, &entity_type, &key.tpe, &read_tx_context_type, &field_names, &struct_inits));
     function_defs.push(compose::compose_with_filter_token_stream(&entity_type, &key.tpe, &read_tx_context_type, &stream_query_type, &field_names, &struct_inits_with_query));
     function_defs.extend(sample::sample_token_fns(entity_ident, &entity_type, &key.tpe, &stream_query_type, &struct_default_inits, &struct_default_inits_with_query, &field_names));
@@ -87,8 +89,10 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
 
     let api_functions: Vec<TokenStream> = function_defs.iter().map(|f| f.fn_stream.clone()).collect::<Vec<_>>();
 
-    let StorageDef { db_defs, plain_table_stmnt, dict_table_stmnt } = storage::get_db_defs(&plain_table_defs, &dict_table_defs);
-    let Rest { endpoint_handlers, routes: api_routes } = Rest::new(&function_defs);
+    let StorageDef { db_defs, table_defs } = storage::get_db_defs(&plain_table_defs, &dict_table_defs, &index_table_defs);
+
+    let Rest { endpoint_handlers, routes: api_routes } =
+        Rest::new(&function_defs);
 
     let test_suite = tests::test_suite(entity_ident, one_to_many_parent_def.clone(), &function_defs);
 
@@ -101,8 +105,7 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
             // Query structs to map query params into
             #(#range_query_structs)*
             // table definitions are not in the impl object because they are accessed globally with semantic meaning
-            #(#plain_table_stmnt)*
-            #(#dict_table_stmnt)*
+            #(#table_defs)*
             // axum endpoints cannot be in the impl object https://docs.rs/axum/latest/axum/attr.debug_handler.html#limitations
             #(#endpoint_handlers)*
 

@@ -1,6 +1,5 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
-use crate::table::DictTableDefs;
 
 pub fn delete_statement(table_var: &Ident) -> TokenStream {
     quote! {
@@ -18,45 +17,28 @@ pub fn delete_many_statement(table_var: &Ident) -> TokenStream {
     }
 }
 
-pub fn delete_index_statement(table_var: &Ident, index_table_var: &Ident) -> TokenStream {
+pub fn delete_index_statement(index_table: &Ident) -> TokenStream {
     quote! {
-        let maybe_value = {
-            if let Some(value_guard) = tx_context.#table_var.remove(pk)? {
-                Some(value_guard.value())
-            } else {
-                removed.push(false);
-                None
-            }
-        };
-        if let Some(value) = maybe_value {
-            removed.push(tx_context.#index_table_var.remove(&value, pk)?);
-        }
+        removed.push(tx_context.#index_table.delete_kv(pk)?);
     }
 }
 
-pub fn delete_many_index_statement(table_var: &Ident, index_table_var: &Ident) -> TokenStream {
+pub fn delete_many_index_statement(index_table: &Ident) -> TokenStream {
     quote! {
         for pk in pks.iter() {
-            if let Some(value_guard) = tx_context.#table_var.remove(pk)? {
-                let value = value_guard.value();
-                removed.push(tx_context.#index_table_var.remove(&value, pk)?);
-            } else {
-                removed.push(false);
-            }
+            removed.push(tx_context.#index_table.delete_kv(*pk)?);
         }
     }
 }
 
-pub fn delete_dict_statement(dict_table_defs: &DictTableDefs) -> TokenStream {
-    let dict_table_var = &dict_table_defs.var_name;
+pub fn delete_dict_statement(dict_table_var: &Ident) -> TokenStream {
     quote! {
-        let deleted = tx_context.#dict_table_var.delete_kv(*pk)?;
+        let deleted = tx_context.#dict_table_var.delete_kv(pk)?;
         removed.push(deleted);
     }
 }
 
-pub fn delete_many_dict_statement(dict_table_defs: &DictTableDefs) -> TokenStream {
-    let dict_table_var = &dict_table_defs.var_name;
+pub fn delete_many_dict_statement(dict_table_var: &Ident) -> TokenStream {
     quote! {
         for pk in pks.iter() {
             let deleted = tx_context.#dict_table_var.delete_kv(*pk)?;

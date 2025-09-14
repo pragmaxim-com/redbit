@@ -73,7 +73,7 @@ mod entity_tests {
         let found_by_id = Block::get(&block_tx, &block.height).expect("Failed to query by ID").unwrap();
         assert_eq!(found_by_id.height, block.height);
 
-        Block::delete_and_commit(Arc::clone(&storage), &block.height).expect("Failed to delete by ID");
+        Block::delete_and_commit(Arc::clone(&storage), block.height).expect("Failed to delete by ID");
 
         let block_tx = Block::begin_read_tx(&storage).unwrap();
 

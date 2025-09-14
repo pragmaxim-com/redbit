@@ -2,7 +2,6 @@ use crate::rest::FunctionDef;
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
-use crate::table::DictTableDefs;
 
 pub fn by_dict_def(
     entity_name: &Ident,
@@ -11,9 +10,8 @@ pub fn by_dict_def(
     column_name: &Ident,
     column_type: &Type,
     tx_context_ty: &Type,
-    dict_table_defs: &DictTableDefs,
+    dict_table_var: &Ident,
 ) -> FunctionDef {
-    let dict_table_var = &dict_table_defs.var_name;
     let fn_name = format_ident!("get_{}s_by_{}", pk_name, column_name);
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: &#tx_context_ty, val: &#column_type) -> Result<Vec<#pk_type>, AppError> {
@@ -67,14 +65,14 @@ pub fn by_dict_def(
     }
 }
 
-pub fn by_index_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, column_name: &Ident, column_type: &Type, tx_context_ty: &Type, table: &Ident) -> FunctionDef {
+pub fn by_index_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, column_name: &Ident, column_type: &Type, tx_context_ty: &Type, index_table: &Ident) -> FunctionDef {
     let fn_name = format_ident!("get_{}s_by_{}", pk_name, column_name);
     let fn_stream = quote! {
         pub fn #fn_name(
             tx_context: &#tx_context_ty,
             val: &#column_type
         ) -> Result<Vec<#pk_type>, AppError> {
-            let mut iter = tx_context.#table.get(val)?;
+            let mut iter = tx_context.#index_table.get_keys(val)?;
             let mut results = Vec::new();
             while let Some(x) = iter.next() {
                 let pk = x?.value();

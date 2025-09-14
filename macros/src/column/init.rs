@@ -1,7 +1,6 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::Type;
-use crate::table::DictTableDefs;
 
 pub fn default_init_expr(column_type: &Type) -> TokenStream {
     quote! {
@@ -67,7 +66,7 @@ pub fn plain_init_with_query(column_name: &Ident, table: &Ident) -> TokenStream 
 pub fn index_init_expr(table: &Ident) -> TokenStream {
     quote! {
         {
-            let guard = tx_context.#table.get(pk)?;
+            let guard = tx_context.#table.get_value(*pk)?;
             guard.ok_or_else(|| AppError::NotFound(format!(
                     "table `{}`: no row for primary key {:?}",
                     stringify!(#table),
@@ -97,8 +96,7 @@ pub fn index_init(column_name: &Ident, table: &Ident) -> TokenStream {
     }
 }
 
-pub fn dict_init_expr(dict_table_defs: &DictTableDefs) -> TokenStream {
-    let dict_table_var = &dict_table_defs.var_name;
+pub fn dict_init_expr(dict_table_var: &Ident) -> TokenStream {
     quote! {
         {
             let value_guard_opt = tx_context.#dict_table_var.get_value(*pk)?;
@@ -112,15 +110,15 @@ pub fn dict_init_expr(dict_table_defs: &DictTableDefs) -> TokenStream {
     }
 }
 
-pub fn dict_init(column_name: &Ident, dict_table_defs: &DictTableDefs,) -> TokenStream {
-    let init_expr = dict_init_expr(dict_table_defs);
+pub fn dict_init(column_name: &Ident, dict_table_var: &Ident) -> TokenStream {
+    let init_expr = dict_init_expr(dict_table_var);
     quote! {
         let #column_name = #init_expr;
     }
 }
 
-pub fn dict_init_with_query(column_name: &Ident, dict_table_defs: &DictTableDefs) -> TokenStream {
-    let init_expr = dict_init_expr(dict_table_defs);
+pub fn dict_init_with_query(column_name: &Ident, dict_table_var: &Ident) -> TokenStream {
+    let init_expr = dict_init_expr(dict_table_var);
     quote! {
         let #column_name = #init_expr;
         if let Some(filter_op) = stream_query.#column_name.clone() {
