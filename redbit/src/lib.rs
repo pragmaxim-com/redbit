@@ -89,6 +89,7 @@ pub use storage::Storage;
 pub use storage::ReadTxContext;
 pub use storage::WriteTxContext;
 pub use table_writer::TableWriter;
+pub use table_writer::FlushFuture;
 pub use table_index_write::IndexFactory;
 pub use table_dict_write::DictFactory;
 pub use table_index_write::IndexTable;

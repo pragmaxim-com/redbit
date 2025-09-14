@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::{env, fs};
+use crate::table_writer::FlushFuture;
 
 #[derive(Clone)]
 pub struct Storage {
@@ -88,7 +89,10 @@ pub trait WriteTxContext<'txn> {
     fn begin_write_tx(plain_tx: &'txn WriteTransaction, index_dbs: &HashMap<String, Arc<Database>>) -> redb::Result<Self, AppError>
     where
         Self: Sized;
-    fn flush(self) -> Result<(), AppError>;
+    fn flush_async(self) -> Result<Vec<FlushFuture>, AppError> where Self: Sized;
+    fn flush(self) -> Result<Vec<()>, AppError> where Self: Sized {
+        self.flush_async()?.into_iter().map(|f| f.wait()).collect::<Result<Vec<_>, _>>()
+    }
 }
 
 pub trait ReadTxContext {

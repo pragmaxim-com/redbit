@@ -54,9 +54,10 @@ pub fn write_tx_context(entity_tx_context_ty: &Type, tx_contexts: &[TxContextIte
                     #(#inits),*
                 })
             }
-           fn flush(self) -> Result<(), AppError> {
+           fn flush_async(self) -> Result<Vec<FlushFuture>, AppError> {
+                let mut futures = Vec::new();
                 #(#flushes);*;
-                Ok(())
+                Ok(futures)
            }
         }
     }
@@ -150,7 +151,7 @@ pub fn tx_context_index_item(defs: &IndexTableDefs) -> TxContextItem {
         };
 
     let write_flush = Some(quote! {
-        self.#var_name.flush()?;
+        futures.push(self.#var_name.flush_async()?)
     });
 
     let read_init =
@@ -199,7 +200,7 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
         };
 
     let write_flush = Some(quote! {
-        self.#var_name.flush()?;
+        futures.push(self.#var_name.flush_async()?)
     });
 
     let read_init =

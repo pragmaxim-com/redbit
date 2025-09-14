@@ -43,7 +43,7 @@ mod entity_tests {
         {
             let mut tx_context = Block::begin_write_tx(&write_tx, &single_tx_db.index_dbs).unwrap();
             blocks.into_iter().for_each(|block| Block::store(&mut tx_context, block).expect("Failed to persist blocks"));
-            tx_context.flush().unwrap()
+            tx_context.flush().unwrap();
         }
         write_tx.commit().unwrap();
 

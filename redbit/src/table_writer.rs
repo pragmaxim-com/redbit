@@ -7,6 +7,19 @@ use std::sync::Arc;
 use std::thread;
 use std::thread::JoinHandle;
 
+pub struct FlushFuture {
+    ack_rx: std::sync::mpsc::Receiver<redb::Result<(), AppError>>,
+    handle: JoinHandle<()>,
+}
+
+impl FlushFuture {
+    pub fn wait(self) -> redb::Result<(), AppError> {
+        let res = self.ack_rx.recv()??;
+        self.handle.join().map_err(|_| AppError::Custom("Write table join failed".to_string()))?;
+        Ok(res)
+    }
+}
+
 pub struct ValueBuf<V: Value> {
     buf: Vec<u8>,
     _pd: PhantomData<V>,
@@ -34,7 +47,7 @@ pub enum WriterCommand<K: Key + Send + 'static, V: Key + Send + 'static> {
     Insert(K, V),
     Remove(K, Sender<redb::Result<bool, AppError>>),
     GetKeysForValues(Vec<V>, Sender<redb::Result<Vec<Option<ValueBuf<K>>>, AppError>>),
-    Flush,
+    Flush(Sender<redb::Result<(), AppError>>),
 }
 
 pub struct TableWriter<K: Key + Send + 'static, V: Key + Send + 'static, F> {
@@ -66,6 +79,7 @@ where
                     return;
                 }
             };
+            let mut flush_ack: Option<Sender<redb::Result<(), AppError>>> = None;
 
             match factory.open(&tx) {
                 Ok(mut table) => {
@@ -92,7 +106,11 @@ where
                                 }
                                 let _ = ack.send(Ok(result));
                             }
-                            Ok(WriterCommand::Flush) | Err(_) => break,
+                            Ok(WriterCommand::Flush(ack)) => {
+                                flush_ack = Some(ack);
+                                break;
+                            }
+                            Err(_) => break,
                         }
                     }
                 }
@@ -100,7 +118,10 @@ where
                     let _ = ready_tx.send(Err(e));
                 }
             }
-            tx.commit().expect("commit worker tx");
+            let commit_res = tx.commit().map_err(AppError::from);
+            if let Some(ack) = flush_ack {
+                let _ = ack.send(commit_res);
+            }
         });
 
         // wait until the worker tells us it opened the table successfully
@@ -127,8 +148,15 @@ where
     }
 
     pub fn flush(self) -> redb::Result<(), AppError> {
-        self.topic.send(WriterCommand::Flush).unwrap();
-        self.handle.join().map_err(|_| AppError::Custom("Write table join failed".to_string()))
+        let (ack_tx, ack_rx) = channel::<redb::Result<(), AppError>>();
+        self.topic.send(WriterCommand::Flush(ack_tx)).unwrap();
+        FlushFuture { ack_rx, handle: self.handle }.wait()
+    }
+
+    pub fn flush_async(self) -> redb::Result<FlushFuture, AppError> {
+        let (ack_tx, ack_rx) = channel::<redb::Result<(), AppError>>();
+        self.topic.send(WriterCommand::Flush(ack_tx)).unwrap();
+        Ok(FlushFuture { ack_rx, handle: self.handle })
     }
 }
 
