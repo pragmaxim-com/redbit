@@ -1,8 +1,9 @@
-use crate::table_writer::{TableFactory, WriteTableLike};
+use crate::table_writer::{TableFactory, ValueBuf, WriteTableLike};
 use crate::AppError;
 use redb::*;
 use redb::{Key, Table, WriteTransaction};
 use std::borrow::Borrow;
+use std::ops::RangeBounds;
 
 pub struct DictFactory<K: Key + 'static, V: Key + 'static> {
     pub dict_index_def: MultimapTableDefinition<'static, K, K>,
@@ -54,7 +55,7 @@ impl<'txn, K: Key + 'static, V: Key + 'static> DictTable<'txn, K, V> {
     }
 }
 
-impl<'txn, K: Key + 'static, V: Key + 'static> WriteTableLike<K, V> for DictTable<'txn, K, V> {
+impl<'txn, K: Key + 'static, V: Key + 'static> WriteTableLike<'txn, K, V> for DictTable<'txn, K, V> {
     fn insert_kv<'k, 'v>(&mut self, key: impl Borrow<K::SelfType<'k>>, value: impl Borrow<V::SelfType<'v>>) -> Result<(), AppError>  {
         let key_ref: &K::SelfType<'k> = key.borrow();
         let val_ref: &V::SelfType<'v> = value.borrow();
@@ -89,7 +90,11 @@ impl<'txn, K: Key + 'static, V: Key + 'static> WriteTableLike<K, V> for DictTabl
         }
     }
 
-    fn get_by_index<'v>(&self, _value: impl Borrow<V::SelfType<'v>>) -> Result<MultimapValue<'_, K>> {
+    fn get_head_by_index<'v>(&self, _value: impl Borrow<V::SelfType<'v>>) -> Result<Option<ValueBuf<K>>>  {
+        unimplemented!()
+    }
+
+    fn range<'a, KR: Borrow<K::SelfType<'a>> + 'a>(&self, _range: impl RangeBounds<KR> + 'a) -> Result<Vec<(ValueBuf<K>, ValueBuf<V>)>> {
         unimplemented!()
     }
 }

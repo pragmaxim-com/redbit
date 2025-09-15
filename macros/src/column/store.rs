@@ -3,7 +3,7 @@ use quote::quote;
 
 pub fn store_statement(pk_name: &Ident, column_name: &Ident, table_var: &Ident) -> TokenStream {
     quote! {
-        tx_context.#table_var.insert(&instance.#pk_name, &instance.#column_name)?;
+        tx_context.#table_var.insert_kv(instance.#pk_name, instance.#column_name);
     }
 }
 

@@ -57,13 +57,13 @@ impl DbColumnMacros {
         let pk_type = &pk_field_def.tpe;
         match indexing_type {
             IndexingType::Off => DbColumnMacros::plain(col_field_def, entity_name, pk_name, pk_type),
-            IndexingType::On { dictionary: false, range, cache_size } => {
-                DbColumnMacros::index(col_field_def, entity_name, entity_type, pk_field_def, read_tx_context_ty, stream_query_ty, parent_def, range, cache_size)
+            IndexingType::On { dictionary: false, range, cache_weight } => {
+                DbColumnMacros::index(col_field_def, entity_name, entity_type, pk_field_def, read_tx_context_ty, stream_query_ty, parent_def, range, cache_weight)
             }
-            IndexingType::On { dictionary: true, range: false, cache_size } => {
-                DbColumnMacros::dictionary(col_field_def, entity_name, entity_type, pk_field_def, read_tx_context_ty, stream_query_ty, parent_def, cache_size)
+            IndexingType::On { dictionary: true, range: false, cache_weight } => {
+                DbColumnMacros::dictionary(col_field_def, entity_name, entity_type, pk_field_def, read_tx_context_ty, stream_query_ty, parent_def, cache_weight)
             }
-            IndexingType::On { dictionary: true, range: true, cache_size: _ } => {
+            IndexingType::On { dictionary: true, range: true, cache_weight: _ } => {
                 panic!("Range indexing on dictionary columns is not supported")
             }
         }
@@ -108,14 +108,14 @@ impl DbColumnMacros {
         stream_query_type: &Type,
         parent_def_opt: Option<OneToManyParentDef>,
         range: bool,
-        cache_size: usize,
+        cache_weight: usize,
     ) -> DbColumnMacros {
         let column_name = &col_field_def.name.clone();
         let column_type = &col_field_def.tpe.clone();
         let pk_name = &pk_field_def.name;
         let pk_type = &pk_field_def.tpe;
 
-        let index_tables = IndexTableDefs::new(entity_name, column_name, column_type, pk_name, pk_type, cache_size);
+        let index_tables = IndexTableDefs::new(entity_name, column_name, column_type, pk_name, pk_type, cache_weight);
 
         let mut function_defs: Vec<FunctionDef> = Vec::new();
         function_defs.push(get_by::get_by_index_def(entity_name, entity_type, column_name, column_type, tx_context_ty, &index_tables.var_name));
@@ -194,14 +194,14 @@ impl DbColumnMacros {
         tx_context_ty: &Type,
         stream_query_type: &Type,
         parent_def_opt: Option<OneToManyParentDef>,
-        cache_size: usize,
+        cache_weight: usize,
     ) -> DbColumnMacros {
         let column_name = &col_field_def.name.clone();
         let column_type = &col_field_def.tpe.clone();
         let pk_name = &pk_field_def.name;
         let pk_type = &pk_field_def.tpe;
 
-        let dict_tables = DictTableDefs::new(entity_name, column_name, column_type, pk_name, pk_type, cache_size);
+        let dict_tables = DictTableDefs::new(entity_name, column_name, column_type, pk_name, pk_type, cache_weight);
 
         let mut function_defs: Vec<FunctionDef> = Vec::new();
 

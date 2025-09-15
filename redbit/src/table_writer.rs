@@ -1,7 +1,8 @@
 use crate::AppError;
-use redb::{AccessGuard, Database, Key, MultimapValue, Value, WriteTransaction};
+use redb::{AccessGuard, Database, Key, Value, WriteTransaction};
 use std::borrow::Borrow;
 use std::marker::PhantomData;
+use std::ops::RangeBounds;
 use std::sync::mpsc::{channel, Sender};
 use std::sync::Arc;
 use std::thread;
@@ -31,14 +32,23 @@ impl<V: Value> ValueBuf<V> {
     pub fn as_bytes(&self) -> &[u8] { &self.buf }
 }
 
-pub trait WriteTableLike<K: Key + 'static, V: Key + 'static> {
+pub trait WriteTableLike<'txn, K: Key + 'static, V: Key + 'static> {
     fn insert_kv<'k, 'v>(&mut self, key: impl Borrow<K::SelfType<'k>>, value: impl Borrow<V::SelfType<'v>>) -> redb::Result<(), AppError>;
     fn delete_kv<'k>(&mut self, key: impl Borrow<K::SelfType<'k>>) -> redb::Result<bool, AppError>;
-    fn get_by_index<'v>(&self, value: impl Borrow<V::SelfType<'v>>) -> redb::Result<MultimapValue<'_, K>>;
+    fn get_head_by_index<'v>(&self, value: impl Borrow<V::SelfType<'v>>) -> redb::Result<Option<ValueBuf<K>>>;
+    fn range<'a, KR: Borrow<K::SelfType<'a>> + 'a>(&self, range: impl RangeBounds<KR> + 'a) -> redb::Result<Vec<(ValueBuf<K>, ValueBuf<V>)>>;
+
+    fn key_buf(g: AccessGuard<'_, K>) -> ValueBuf<K> {
+        ValueBuf::<K>::new(K::as_bytes(&g.value()).as_ref().to_vec())
+    }
+    fn value_buf(g: AccessGuard<'_, V>) -> ValueBuf<V> {
+        ValueBuf::<V>::new(V::as_bytes(&g.value()).as_ref().to_vec())
+    }
+
 }
 
 pub trait TableFactory<K: Key + 'static, V: Key + 'static> {
-    type Table<'txn>: WriteTableLike<K, V> + 'txn;
+    type Table<'txn>: WriteTableLike<'txn, K, V>;
 
     fn open<'txn>(&self, tx: &'txn WriteTransaction) -> redb::Result<Self::Table<'txn>, AppError>;
 }
@@ -46,7 +56,8 @@ pub trait TableFactory<K: Key + 'static, V: Key + 'static> {
 pub enum WriterCommand<K: Key + Send + 'static, V: Key + Send + 'static> {
     Insert(K, V),
     Remove(K, Sender<redb::Result<bool, AppError>>),
-    GetKeysForValues(Vec<V>, Sender<redb::Result<Vec<Option<ValueBuf<K>>>, AppError>>),
+    HeadByIndex(Vec<V>, Sender<redb::Result<Vec<Option<ValueBuf<K>>>, AppError>>),
+    Range(K, K, Sender<redb::Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>>),
     Flush(Sender<redb::Result<(), AppError>>),
 }
 
@@ -63,10 +74,6 @@ where
     F: TableFactory<K, V> + Send + 'static,
     F::Table<'static>: Send,
 {
-    pub fn guard_to_value_buf(g: AccessGuard<'_, K>) -> ValueBuf<K> {
-        ValueBuf::<K>::new(K::as_bytes(&g.value()).as_ref().to_vec())
-    }
-
     pub fn new(dict_db: Arc<Database>, factory: F) -> redb::Result<Self, AppError> {
         let (topic, receiver) = channel::<WriterCommand<K, V>>();
         let (ready_tx, ready_rx) = channel::<redb::Result<(), AppError>>();
@@ -93,17 +100,15 @@ where
                                 let result = table.delete_kv(k);
                                 let _ = ack.send(result);
                             }
-                            Ok(WriterCommand::GetKeysForValues(values, ack)) => {
+                            Ok(WriterCommand::HeadByIndex(values, ack)) => {
                                 let mut result: Vec<Option<ValueBuf<K>>> = Vec::with_capacity(values.len());
                                 for value in values {
-                                    let mm = table.get_by_index(value);
-                                    if let Some(guard) = mm.unwrap().next() {
-                                        let vbuf = Self::guard_to_value_buf(guard.unwrap());
-                                        result.push(Some(vbuf));
-                                    } else {
-                                        result.push(None);
-                                    }
+                                result.push(table.get_head_by_index(value).unwrap());
                                 }
+                                let _ = ack.send(Ok(result));
+                            }
+                            Ok(WriterCommand::Range(from, until, ack)) => {
+                                let result = table.range(from..until).unwrap();
                                 let _ = ack.send(Ok(result));
                             }
                             Ok(WriterCommand::Flush(ack)) => {
@@ -133,9 +138,18 @@ where
         self.topic.send(WriterCommand::Insert(key, value)).unwrap();
     }
 
-    pub fn get_keys_for_values(&self, values: Vec<V>) -> redb::Result<Vec<Option<ValueBuf<K>>>, AppError> {
+    // hack, we need to read from the writer thread
+    pub fn get_head_for_index(&self, values: Vec<V>) -> redb::Result<Vec<Option<ValueBuf<K>>>, AppError> {
         let (ack_tx, ack_rx) = channel::<redb::Result<Vec<Option<ValueBuf<K>>>, AppError>>();
-        self.topic.send(WriterCommand::GetKeysForValues(values, ack_tx)).unwrap();
+        self.topic.send(WriterCommand::HeadByIndex(values, ack_tx)).unwrap();
+        let result = ack_rx.recv()??;
+        Ok(result)
+    }
+
+    // hack, we need to read from the writer thread
+    pub fn range(&self, from: K, until: K) -> redb::Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError> {
+        let (ack_tx, ack_rx) = channel::<redb::Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>>();
+        self.topic.send(WriterCommand::Range(from, until, ack_tx)).unwrap();
         let result = ack_rx.recv()??;
         Ok(result)
     }

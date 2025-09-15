@@ -9,7 +9,7 @@ Redbit reads struct annotations and derives code necessary for persisting and qu
 
 ### Major Out-of-the-Box Features
 
-✅ parallel persistence, there is a long-running write thread spawn for each entity field (no blocking, minimal context switching) \
+✅ parallel persistence, there is a long-running write thread spawn for each entity field (no blocking) \
 ✅ Querying and ranging by secondary index \
 ✅ Optional dictionaries for low cardinality fields + first level cache for building them without overhead \
 ✅ `One-to-One` / `One-to-Option` / `One-to-Many` entities with cascade read/write/delete \
@@ -323,15 +323,11 @@ Deleting blocks:");
 
 The same api is accessible through http endpoints at http://127.0.0.1:3033/swagger-ui/.
 
-### Flamegraphs
-
-Performance wise, check 🔥[flamegraph](https://rawcdn.githack.com/pragmaxim-com/redbit/refs/heads/master/flamegraph.svg).
-The demo example persists data into 30 tables to allow for rich querying.
-```
-cargo flamegraph --bin target/release/demo --release
-```
-
 ### ⏱ Redbit benchmarks (results from github servers)
+
+The demo example persists data into 30 tables to allow for rich querying. Each `index` is backed by 2 tables and `dictionary` by 4 tables.
+Each simple column, index or dictionary is backed by its own redb DB and a long-running indexing thread. If you have 20 of these, you are still 
+fine on Raspberry Pi, consider stronger machine for deeply nested entities with many indexes and dictionaries.
 
 The slowest `block::_store_many` operation in this context persists 3 blocks of 3 transactions of 1 input and 3 utxos of 3 assets, ie.
 the operations writes :

@@ -53,7 +53,7 @@ impl KeyDef {
 #[derive(Clone)]
 pub enum IndexingType {
     Off,
-    On { dictionary: bool, range: bool, cache_size: usize },
+    On { dictionary: bool, range: bool, cache_weight: usize },
 }
 
 #[derive(Clone)]
@@ -161,21 +161,21 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                             });
                             indexing = ColumnDef::Transient(field.clone(), read_from);
                         } else if nested.path.is_ident("index") {
-                            indexing = ColumnDef::Plain(field.clone(), IndexingType::On { dictionary: false, range: false, cache_size: 0 });
+                            indexing = ColumnDef::Plain(field.clone(), IndexingType::On { dictionary: false, range: false, cache_weight: 0 });
                         } else if nested.path.is_ident("dictionary") {
-                            let mut cache_size = 0;
+                            let mut cache_weight = 0;
                             if nested.input.peek(syn::token::Paren) {
                                 nested.parse_nested_meta(|inner_nested| {
                                     if inner_nested.path.is_ident("cache") {
                                         let lit: syn::LitInt = inner_nested.value()?.parse()?;
-                                        cache_size = lit.base10_parse::<usize>()?;
+                                        cache_weight = lit.base10_parse::<usize>()?;
                                     }
                                     Ok(())
                                 })?;
                             }
-                            indexing = ColumnDef::Plain(field.clone(), IndexingType::On { dictionary: true, range: false, cache_size });
+                            indexing = ColumnDef::Plain(field.clone(), IndexingType::On { dictionary: true, range: false, cache_weight });
                         } else if nested.path.is_ident("range") {
-                            indexing = ColumnDef::Plain(field.clone(), IndexingType::On { dictionary: false, range: true, cache_size: 0 });
+                            indexing = ColumnDef::Plain(field.clone(), IndexingType::On { dictionary: false, range: true, cache_weight: 0 });
                         }
                         Ok(())
                     });
@@ -295,7 +295,6 @@ fn validate_one_to_many_name(
     }
 }
 
-
 pub fn get_field_macros(ast: &ItemStruct) -> syn::Result<(KeyDef, Vec<ColumnDef>)> {
     let mut key_column: Option<KeyDef> = None;
     let mut columns: Vec<ColumnDef> = Vec::new();
@@ -308,15 +307,14 @@ pub fn get_field_macros(ast: &ItemStruct) -> syn::Result<(KeyDef, Vec<ColumnDef>
                 if key_column.is_some() {
                     return Err(syn::Error::new(field.span(), "Multiple `#[pk]` columns found; only one is allowed"));
                 }
-                key_column = Some(key_def.clone());
-                columns.push(ColumnDef::Key(key_def));
+                key_column = Some(key_def);
             }
             column => columns.push(column),
         }
     }
 
     let key = key_column.ok_or_else(|| syn::Error::new(ast.span(), "`#[pk]` or `#[fk] attribute not found on any column."))?;
-
+    columns.insert(0, ColumnDef::Key(key.clone()));
     Ok((key, columns))
 }
 

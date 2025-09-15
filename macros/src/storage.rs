@@ -15,12 +15,20 @@ pub fn get_db_defs(plain_table_defs: &[TableDef], dict_table_defs: &[DictTableDe
         .chain(dict_table_defs.iter().flat_map(|defs| defs.all_table_defs().into_iter().map(|def| def.definition)))
         .collect();
 
-    let idents: Vec<Ident> = index_table_defs.iter().map(|d| d.var_name.clone()).chain(dict_table_defs.iter().map(|d| d.var_name.clone())).collect();
-    let caches: Vec<usize> = index_table_defs.iter().map(|d| d.db_cache).chain(dict_table_defs.iter().map(|d| d.db_cache)).collect();
+    let idents: Vec<Ident> =
+        plain_table_defs.iter().map(|d| d.var_name.clone())
+            .chain(index_table_defs.iter().map(|d| d.var_name.clone()))
+            .chain(dict_table_defs.iter().map(|d| d.var_name.clone()))
+            .collect();
+    let caches: Vec<usize> =
+        plain_table_defs.iter().map(|d| d.db_cache)
+            .chain(index_table_defs.iter().map(|d| d.cache_weight))
+            .chain(dict_table_defs.iter().map(|d| d.cache_weight))
+            .collect();
 
     let db_defs = quote! {
         pub fn db_defs() -> Vec<DbDef> {
-            vec![#( DbDef { name: String::from(stringify!(#idents)), cache: #caches } ),*]
+            vec![#( DbDef { name: String::from(stringify!(#idents)), cache_weight_or_zero: #caches } ),*]
         }
     };
     StorageDef { db_defs, table_defs }

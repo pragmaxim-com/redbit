@@ -64,11 +64,11 @@ pub struct Utxo {
     pub amount: u64,
     #[column(index)]
     pub box_id: BoxId,
-    #[column(dictionary)]
+    #[column(dictionary(cache = 10))]
     pub address: Address,
-    #[column(dictionary)]
+    #[column(dictionary(cache = 10))]
     pub tree: Tree,
-    #[column(dictionary)]
+    #[column(dictionary(cache = 2))]
     pub tree_template: TreeTemplate,
     pub assets: Vec<Asset>,
 }

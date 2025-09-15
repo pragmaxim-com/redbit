@@ -39,13 +39,9 @@ mod entity_tests {
         let (blocks, multi_tx_storage) = init_temp_storage("db_test", 0).await;
 
         let single_tx_db = Storage::temp("db_test_2", 0, true).await.unwrap();
-        let write_tx = single_tx_db.plain_db.begin_write().unwrap();
-        {
-            let mut tx_context = Block::begin_write_tx(&write_tx, &single_tx_db.index_dbs).unwrap();
-            blocks.into_iter().for_each(|block| Block::store(&mut tx_context, block).expect("Failed to persist blocks"));
-            tx_context.flush().unwrap();
-        }
-        write_tx.commit().unwrap();
+        let mut tx_context = Block::begin_write_tx(&single_tx_db).unwrap();
+        blocks.into_iter().for_each(|block| Block::store(&mut tx_context, block).expect("Failed to persist blocks"));
+        tx_context.commit_all().unwrap();
 
         let block_tx = Block::begin_read_tx(&multi_tx_storage).unwrap();
         let multi_tx_blocks = Block::take(&block_tx, 100).unwrap();
@@ -122,11 +118,9 @@ mod entity_tests {
     async fn store_many_utxos() {
         let (blocks, storage) = init_temp_storage("db_test", 0).await;
         let all_utxos = blocks.iter().flat_map(|b| b.transactions.iter().flat_map(|t| t.utxos.clone())).collect::<Vec<Utxo>>();
-        let write_tx = storage.plain_db.begin_write().unwrap();
-        {
-            let mut tx_context = Utxo::begin_write_tx(&write_tx, &storage.index_dbs).unwrap();
-            Utxo::store_many(&mut tx_context, all_utxos).expect("Failed to store UTXO");
-        }
+        let mut tx_context = Utxo::begin_write_tx(&storage).unwrap();
+        Utxo::store_many(&mut tx_context, all_utxos).expect("Failed to store UTXO");
+        tx_context.commit_all().expect("Failed to flush transaction context");
     }
 
     #[tokio::test]

@@ -1,27 +1,22 @@
 use crate::endpoint::EndpointDef;
 use crate::rest::{EndpointTag, FunctionDef, HttpMethod};
 use crate::table::{DictTableDefs, IndexTableDefs, TableDef};
-use crate::table::TableType;
 use proc_macro2::{Ident, Literal};
 use quote::{format_ident, quote};
 
 pub fn table_info_fn(entity_name: &Ident, table_defs: &[TableDef], dict_table_defs: &[DictTableDefs], index_table_defs: &[IndexTableDefs]) -> FunctionDef {
     let plain_stats_getters = table_defs.iter().map(|td| {
-        let table_var = td.var_name.to_string();
-        let table_ident = &td.name;
+        let db_name = td.var_name.to_string();
+        let db_name_literal = Literal::string(&db_name.to_string());
+        let table_name = &td.name;
         let table_type = format!("{:?}", &td.table_type);
-        let open_method = match td.table_type {
-            TableType::DictIndex | TableType::Index => quote!(open_multimap_table),
-            _ => quote!(open_table),
-        };
 
         quote! {
-            {
-                let tx = plain_db.begin_read()?;
-                let table = tx.#open_method(#table_ident)?;
-                let stats = table.stats()?;
-                tables.push(stats_for_table(#table_var, #table_type, stats)?);
-            }
+            let db = index_dbs.get(#db_name_literal).cloned().unwrap();
+            let tx = db.begin_read()?;
+            let table = tx.open_table(#table_name)?;
+            let stats = table.stats()?;
+            tables.push(stats_for_table(#db_name_literal, #table_type, stats)?);
         }
     });
     let index_stats_getters = index_table_defs.iter().map(|defs| {
@@ -57,7 +52,6 @@ pub fn table_info_fn(entity_name: &Ident, table_defs: &[TableDef], dict_table_de
     let fn_name = format_ident!("table_info");
     let fn_stream = quote! {
         pub fn #fn_name(storage: &Arc<Storage>) -> Result<Vec<TableInfo>, AppError> {
-            let plain_db = &storage.plain_db;
             let index_dbs = &storage.index_dbs;
             fn stats_for_table(table_name: &str, table_type: &str, stats: TableStats) -> Result<TableInfo, AppError> {
                 Ok(TableInfo {

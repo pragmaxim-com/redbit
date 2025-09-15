@@ -19,6 +19,7 @@ pub mod table_dict_read;
 pub mod table_writer;
 pub mod table_index_read;
 pub mod table_index_write;
+pub mod table_plain_write;
 
 pub use axum;
 pub use axum::body::Body;
@@ -95,6 +96,7 @@ pub use table_dict_write::DictFactory;
 pub use table_index_write::IndexTable;
 pub use table_index_read::ReadOnlyIndexTable;
 pub use table_dict_write::DictTable;
+pub use table_plain_write::PlainFactory;
 pub use table_dict_read::ReadOnlyDictTable;
 pub use bincode::{Encode, Decode, decode_from_slice, encode_to_vec};
 pub use std::any::type_name;
@@ -370,7 +372,10 @@ impl RequestState {
     }
 }
 
-pub struct DbDef { pub name: String, pub cache: usize }
+#[derive(Clone, Debug)]
+pub struct DbDef { pub name: String, pub cache_weight_or_zero: usize }
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DbDefWithCache { pub name: String, pub cache_in_mb: usize }
 
 pub struct StructInfo {
     pub name: &'static str,

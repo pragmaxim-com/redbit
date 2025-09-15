@@ -69,13 +69,13 @@ pub(crate) fn write_from_input_refs(tx_context: &TransactionWriteTxContext, pare
 
 ### ⏱️ Syncing performance Summary
 
-If throughput does not reach your expectations, check that `buffer` is high enough. This is when indexing from remote bitcoin node :
+If throughput does not reach your expectations, check that `buffer` is high enough. This is log from indexing from remote bitcoin node on very poor connection :
 ```
 [2025-08-11 04:45:57] INFO 3 Blocks @ 566011 at 18621.8 ins+outs+asset/s, total 1870059548, buffer: 0
 ```
 
 1. If it is close to `0`, it means your block fetching or processing is too slow and persistence tasks are idling.
-2. If Indexing is under 20 000 inputs+outputs/s with full `buffer`, it means you need more RAM or better SSD.
+2. If Indexing is under 50 000 inputs+outputs/s with full `buffer`, it means you need more RAM or better SSD.
 
 Hand-made criterion benchmarks [deployed](https://pragmaxim-com.github.io/redbit/report/index.html).
 
@@ -84,8 +84,8 @@ and higher blocks/s throughput.
 
 My throughput results after indexing whole bitcoin :
 
-- `2.0GHz` & `NVMe PCIe Gen3` & `DDR4 2933MHz 2Rx4` : `~ 50 000 Inputs+outputs / s`
-- `3.0GHz` & `NVMe PCIe Gen4` & `DDR4 3200MHz 4Rx4` : `~ 100 000 Inputs+outputs / s`
-- `3.5GHz` & `NVMe PCIe Gen5` & `DDR5 4800MHz 4RX8` : `~ 200 000 Inputs+outputs / s`
+- `2.0GHz` & `NVMe PCIe Gen3` & `DDR4 2933MHz 2Rx4` : `~ 60 000 Inputs+outputs / s`
+- `3.0GHz` & `NVMe PCIe Gen4` & `DDR4 3200MHz 4Rx4` : `~ 120 000 Inputs+outputs / s`
+- `3.5GHz` & `NVMe PCIe Gen5` & `DDR5 4800MHz 4RX8` : `~ 240 000 Inputs+outputs / s`
 
-In a nutshell, whole bitcoin up to height ~ 0.9M can be indexed in a day with enough RAM for the Linux VM (page cache).
+In a nutshell, whole bitcoin up to height ~ 0.9M can be indexed in one afternoon with enough RAM for the Linux VM (page cache).

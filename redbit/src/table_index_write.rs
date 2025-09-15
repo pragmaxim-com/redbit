@@ -1,8 +1,9 @@
-use crate::table_writer::{TableFactory, WriteTableLike};
+use crate::table_writer::{TableFactory, ValueBuf, WriteTableLike};
 use crate::AppError;
 use redb::*;
 use redb::{Key, Table, WriteTransaction};
 use std::borrow::Borrow;
+use std::ops::RangeBounds;
 
 pub struct IndexFactory<K: Key + 'static, V: Key + 'static> {
     pub pk_by_index_def: MultimapTableDefinition<'static, V, K>,
@@ -41,7 +42,7 @@ impl<K: Key + 'static, V: Key + 'static> TableFactory<K, V> for IndexFactory<K, 
 }
 
 
-impl<'txn, K: Key + 'static, V: Key + 'static> WriteTableLike<K, V> for IndexTable<'txn, K, V> {
+impl<'txn, K: Key + 'static, V: Key + 'static> WriteTableLike<'txn, K, V> for IndexTable<'txn, K, V> {
     fn insert_kv<'k, 'v>(&mut self, key: impl Borrow<K::SelfType<'k>>, value: impl Borrow<V::SelfType<'v>>) -> Result<(), AppError>  {
         let key_ref: &K::SelfType<'k> = key.borrow();
         let val_ref: &V::SelfType<'v> = value.borrow();
@@ -61,9 +62,16 @@ impl<'txn, K: Key + 'static, V: Key + 'static> WriteTableLike<K, V> for IndexTab
         }
     }
 
-    fn get_by_index<'v>(&self, value: impl Borrow<V::SelfType<'v>>) -> Result<MultimapValue<'_, K>> {
-        let result = self.pk_by_index.get(value)?;
-        Ok(result)
+    fn get_head_by_index<'v>(&self, value: impl Borrow<V::SelfType<'v>>) -> Result<Option<ValueBuf<K>>> {
+        let mut result = self.pk_by_index.get(value)?;
+        if let Some(guard) = result.next() {
+            Ok(Some(Self::key_buf(guard?)))
+        } else {
+            Ok(None)
+        }
     }
 
+    fn range<'a, KR: Borrow<K::SelfType<'a>> + 'a>(&self, _range: impl RangeBounds<KR> + 'a) -> Result<Vec<(ValueBuf<K>, ValueBuf<V>)>> {
+        unimplemented!()
+    }
 }

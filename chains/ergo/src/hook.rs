@@ -2,7 +2,7 @@ use crate::model_v1::*;
 
 pub(crate) fn write_from_input_refs(tx_context: &TransactionWriteTxContext, parent: BlockPointer, input_refs: Vec<BoxId>) -> Result<Vec<Input>, AppError> {
     let mut inputs = Vec::with_capacity(input_refs.len());
-    let tx_pointer_buffers = tx_context.utxos.utxo_box_id_index.get_keys_for_values(input_refs)?;
+    let tx_pointer_buffers = tx_context.utxos.utxo_box_id_index.get_head_for_index(input_refs)?;
     for (index, tx_pointer_buf_opt) in tx_pointer_buffers.iter().enumerate() {
         match tx_pointer_buf_opt {
             Some(tx_pointer_buf) => {

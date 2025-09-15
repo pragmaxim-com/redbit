@@ -133,14 +133,10 @@ pub fn block_like(block_type: Type, pk_name: &Ident, pk_type: &Type, field_defs:
             fn delete(&self) -> Result<(), chain::ChainError> {
                 let tx_context = #header_type::begin_read_tx(&self.storage)?;
                 if let Some(tip_header) = #header_type::last(&tx_context)? {
-                    let write_tx = self.storage.plain_db.begin_write()?;
-                    {
-                        let mut tx_context = #block_type::begin_write_tx(&write_tx, &self.storage.index_dbs)?;
-                        let pks = #pk_type::from_many(&(0..=tip_header.#pk_name.0).collect::<Vec<u32>>());
-                        #block_type::delete_many(&mut tx_context, &pks)?;
-                        tx_context.flush()?;
-                    }
-                    write_tx.commit()?;
+                    let mut tx_context = #block_type::begin_write_tx(&self.storage)?;
+                    let pks = #pk_type::from_many(&(0..=tip_header.#pk_name.0).collect::<Vec<u32>>());
+                    #block_type::delete_many(&mut tx_context, &pks)?;
+                    tx_context.commit_all()?;
                 }
                 Ok(())
             }
@@ -158,28 +154,20 @@ pub fn block_like(block_type: Type, pk_name: &Ident, pk_type: &Type, field_defs:
             }
 
             fn store_blocks(&self, blocks: Vec<#block_type>) -> Result<(), chain::ChainError> {
-                let write_tx = self.storage.plain_db.begin_write()?;
-                {
-                    let mut tx_context = #block_type::begin_write_tx(&write_tx, &self.storage.index_dbs)?;
-                    for block in blocks.into_iter() {
-                        #block_type::store(&mut tx_context, block)?;
-                    }
-                    tx_context.flush()?;
+                let mut tx_context = #block_type::begin_write_tx(&self.storage)?;
+                for block in blocks.into_iter() {
+                    #block_type::store(&mut tx_context, block)?;
                 }
-                write_tx.commit()?;
+                tx_context.two_phase_commit()?;
                 Ok(())
             }
 
             fn update_blocks(&self, blocks: Vec<#block_type>) -> Result<(), chain::ChainError> {
-                let write_tx = self.storage.plain_db.begin_write()?;
-                {
-                    let mut tx_context = #block_type::begin_write_tx(&write_tx, &self.storage.index_dbs)?;
-                    for block in &blocks {
-                        #block_type::delete(&mut tx_context, block.#pk_name)?;
-                    }
-                    tx_context.flush()?;
+                let mut tx_context = #block_type::begin_write_tx(&self.storage)?;
+                for block in &blocks {
+                    #block_type::delete(&mut tx_context, block.#pk_name)?;
                 }
-                write_tx.commit()?;
+                tx_context.commit_all()?;
                 self.store_blocks(blocks)?;
                 Ok(())
             }

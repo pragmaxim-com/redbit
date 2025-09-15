@@ -19,13 +19,13 @@ pub struct IndexTableDefs {
     pub(crate) key_type: Type,
     pub(crate) value_type: Type,
     #[allow(dead_code)]
-    pub(crate) db_cache: usize,
+    pub(crate) cache_weight: usize,
     pub(crate) pk_by_index: TableDef,
     pub(crate) index_by_pk: TableDef,
 }
 
 impl IndexTableDefs {
-    pub fn new(entity_name: &Ident, column_name: &Ident, column_type: &Type, pk_name: &Ident, pk_type: &Type, cache_size: usize) -> IndexTableDefs {
+    pub fn new(entity_name: &Ident, column_name: &Ident, column_type: &Type, pk_name: &Ident, pk_type: &Type, cache_weight: usize) -> IndexTableDefs {
         let name = format_ident!("{}_{}_INDEX", entity_name.to_string().to_uppercase(), column_name.to_string().to_uppercase());
         let var_name = Ident::new(&format!("{}", name).to_lowercase(), name.span());
 
@@ -33,7 +33,7 @@ impl IndexTableDefs {
             var_name,
             key_type: pk_type.clone(),
             value_type: column_type.clone(),
-            db_cache: cache_size,
+            cache_weight,
             pk_by_index: TableDef::index_table_def(entity_name, column_name, column_type, pk_type),
             index_by_pk: TableDef::plain_table_def(entity_name, column_name, column_type, pk_name, pk_type),
         }
@@ -52,7 +52,7 @@ pub struct DictTableDefs {
     pub(crate) key_type: Type,
     pub(crate) value_type: Type,
     #[allow(dead_code)]
-    pub(crate) db_cache: usize,
+    pub(crate) cache_weight: usize,
     pub(crate) dict_index_table_def: TableDef,
     pub(crate) value_by_dict_pk_table_def: TableDef,
     pub(crate) value_to_dict_pk_table_def: TableDef,
@@ -60,7 +60,7 @@ pub struct DictTableDefs {
 }
 
 impl DictTableDefs {
-    pub fn new(entity_name: &Ident, column_name: &Ident, column_type: &Type, pk_name: &Ident, pk_type: &Type, cache_size: usize) -> DictTableDefs {
+    pub fn new(entity_name: &Ident, column_name: &Ident, column_type: &Type, pk_name: &Ident, pk_type: &Type, cache_weight: usize) -> DictTableDefs {
         let name = format_ident!("{}_{}_DICT", entity_name.to_string().to_uppercase(), column_name.to_string().to_uppercase());
         let var_name = Ident::new(&format!("{}", name).to_lowercase(), name.span());
 
@@ -68,7 +68,7 @@ impl DictTableDefs {
             var_name,
             key_type: pk_type.clone(),
             value_type: column_type.clone(),
-            db_cache: cache_size,
+            cache_weight,
             dict_index_table_def: TableDef::dict_index_table_def(entity_name, column_name, pk_type),
             value_by_dict_pk_table_def: TableDef::value_by_dict_pk_table_def(entity_name, column_name, column_type, pk_type),
             value_to_dict_pk_table_def: TableDef::value_to_dict_pk_table_def(entity_name, column_name, column_type, pk_type),

@@ -40,13 +40,9 @@ pub fn delete_and_commit_def(
     let fn_stream = quote! {
         pub fn #fn_name(storage: Arc<Storage>, pk: #pk_type) -> Result<bool, AppError> {
            let mut removed: Vec<bool> = Vec::new();
-           let write_tx = storage.plain_db.begin_write()?;
-           {
-             let mut tx_context = #entity_name::begin_write_tx(&write_tx, &storage.index_dbs)?;
-             #(#delete_statements)*
-             tx_context.flush()?;
-           }
-           write_tx.commit()?;
+           let mut tx_context = #entity_name::begin_write_tx(&storage)?;
+           #(#delete_statements)*
+           tx_context.commit_all()?;
            Ok(!removed.contains(&false))
        }
     };

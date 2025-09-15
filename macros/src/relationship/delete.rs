@@ -31,7 +31,7 @@ pub fn one2opt_delete_many_def(child_name: &Ident, child_type: &Type) -> TokenSt
 pub fn one2many_delete_def(child_name: &Ident, child_type: &Type) -> TokenStream {
     quote! {
         let (from, to) = pk.fk_range();
-        let child_pks = #child_type::pk_range(&mut tx_context.#child_name, &from, &to)?;
+        let child_pks = #child_type::pk_range(&mut tx_context.#child_name, from, to)?;
         removed.push(#child_type::delete_many(&mut tx_context.#child_name, &child_pks)?);
     }
 }
@@ -41,7 +41,7 @@ pub fn one2many_delete_many_def(child_name: &Ident, child_type: &Type) -> TokenS
         let mut children = Vec::new();
         for pk in pks.iter() {
             let (from, to) = pk.fk_range();
-            let child_pks = #child_type::pk_range(&mut tx_context.#child_name, &from, &to)?;
+            let child_pks = #child_type::pk_range(&mut tx_context.#child_name, from, to)?;
             children.extend_from_slice(&child_pks);
         }
         removed.push(#child_type::delete_many(&mut tx_context.#child_name, &children)?);
