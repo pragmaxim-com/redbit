@@ -69,6 +69,13 @@ pub fn test_suite(entity_name: &Ident, parent_def: Option<OneToManyParentDef>, f
 
             static SERVER: OnceCell<Arc<axum_test::TestServer>> = OnceCell::const_new();
 
+            async fn get_delete_server() -> Arc<axum_test::TestServer> {
+                let storage = random_storage_async().await;
+                initialize_storage(Arc::clone(&storage));
+                let router = build_router(RequestState { storage }, None, None);
+                Arc::new(axum_test::TestServer::new(router).unwrap())
+            }
+
             async fn get_test_server() -> Arc<axum_test::TestServer> {
                 SERVER.get_or_init(|| async {
                     let storage = random_storage_async().await;

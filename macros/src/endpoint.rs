@@ -47,7 +47,7 @@ impl EndpointDef {
             HttpMethod::GET => (quote! { get_test_server() }, quote! { http::Method::GET }),
             HttpMethod::POST => (quote! { get_test_server() }, quote! { http::Method::POST }),
             HttpMethod::HEAD => (quote! { get_test_server() }, quote! { http::Method::HEAD }),
-            HttpMethod::DELETE => (quote! { get_test_server() }, quote! { http::Method::DELETE }),
+            HttpMethod::DELETE => (quote! { get_delete_server() }, quote! { http::Method::DELETE }),
         };
 
         fn generate_path_expr(endpoint_path: &str, exprs: &[PathExpr]) -> TokenStream {
