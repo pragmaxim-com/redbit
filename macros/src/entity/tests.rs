@@ -32,9 +32,9 @@ pub fn test_suite(entity_name: &Ident, parent_def: Option<OneToManyParentDef>, f
 
         fn initialize_storage(storage: Arc<Storage>) {
             let entities = #sample_entity::sample_many(#sample_count);
-            for entity in entities {
-                #sample_entity::store_and_commit(Arc::clone(&storage), entity).expect("Failed to persist entity");
-            }
+            let mut tx_context = #sample_entity::begin_write_tx(&storage).expect("Failed to begin write transaction");
+            #sample_entity::store_many(&mut tx_context, entities).expect("Failed to store sample entities");
+            tx_context.commit_all().expect("Failed to commit all");
         }
 
         static STORAGE: Lazy<Arc<Storage>> = Lazy::new(|| {

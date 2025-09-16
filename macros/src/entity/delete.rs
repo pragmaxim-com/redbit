@@ -52,9 +52,13 @@ pub fn delete_and_commit_def(
         fn #fn_name() {
             let storage = random_storage();
             let entity_count: usize = 3;
-            for test_entity in #entity_type::sample_many(entity_count) {
+            let entities = #entity_type::sample_many(entity_count);
+            let mut tx_context = #entity_name::begin_write_tx(&storage).expect("Failed to begin write transaction context");
+            #entity_name::store_many(&mut tx_context, entities.clone()).expect("Failed to store many instances");
+            tx_context.commit_all().expect("Failed to commit transaction context");
+
+            for test_entity in entities {
                 let pk = test_entity.#pk_name;
-                #entity_name::store_and_commit(Arc::clone(&storage), test_entity).expect("Failed to store and commit instance");
                 let removed = #entity_name::#fn_name(Arc::clone(&storage), pk).expect("Failed to delete and commit instance");
                 let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
                 let is_empty = #entity_name::get(&tx_context, &pk).expect("Failed to get instance").is_none();

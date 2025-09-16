@@ -6,9 +6,9 @@ mod entity_tests {
     async fn init_temp_storage(name: &str, db_cache_size_gb: u8) -> (Vec<Block>, Arc<Storage>) {
         let storage = Storage::temp(name, db_cache_size_gb, true).await.unwrap();
         let blocks = Block::sample_many(3);
-        for block in blocks.iter() {
-            Block::store_and_commit(Arc::clone(&storage), block.clone()).expect("Failed to persist blocks");
-        }
+        let mut tx_context = Block::begin_write_tx(&storage).unwrap();
+        Block::store_many(&mut tx_context, blocks.clone()).expect("Failed to persist blocks");
+        tx_context.commit_all().unwrap();
         (blocks, storage)
     }
 

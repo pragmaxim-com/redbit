@@ -29,6 +29,7 @@ jobs:
           cargo test --workspace --features ci
 
   integration:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -47,7 +48,7 @@ jobs:
           cargo test --workspace --features ci,integration
 
   bench:
-    needs: test
+    needs: integration
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
