@@ -1,4 +1,4 @@
-use crate::table_writer::FlushFuture;
+use table_writer::FlushFuture;
 use crate::*;
 use futures_util::future::try_join_all;
 use redb::{Database, DatabaseError};
@@ -6,6 +6,14 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::{env, fs};
+
+pub mod table_dict_read;
+pub mod table_dict_write;
+pub mod table_index_read;
+pub mod table_index_write;
+pub mod table_plain_write;
+pub mod table_writer;
+pub mod cache;
 
 #[derive(Clone)]
 pub struct Storage {

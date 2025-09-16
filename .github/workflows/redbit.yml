@@ -28,9 +28,28 @@ jobs:
       - name: Run tests
         run: |
           cargo test --workspace --features ci
-          cargo test --workspace --features integration,ci
+
+  integration:
+    name: Run Cargo Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: rust-cache-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Run tests
+        run: |
+          cargo test --workspace --features ci,integration
 
   bench:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -120,6 +139,7 @@ jobs:
           git diff --quiet || (git add README.md && git commit -m "Auto-update README with example code" && git push)
 
   criterion:
+    needs: bench
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
