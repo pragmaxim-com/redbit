@@ -54,7 +54,7 @@ pub struct BlockHeader {
 pub struct Transaction {
     #[fk(one2many)]
     pub id: BlockPointer,
-    #[column(index)]
+    #[column(index(cache = 4))]
     pub hash: TxHash,
     pub utxos: Vec<Utxo>,
     #[write_from(input_refs)]

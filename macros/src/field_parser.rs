@@ -143,6 +143,29 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                     let field = FieldDef { name: column_name.clone(), tpe: column_type.clone() };
                     let mut indexing = ColumnDef::Plain(field.clone(), IndexingType::Off);
                     let _ = attr.parse_nested_meta(|nested| {
+                        let mut cache_weight = 0;
+                        let ident = nested.path.get_ident().map(|i| i.to_string()).unwrap_or_default();
+                        if ident == "cache" {
+                            let lit: syn::LitInt = nested.value()?.parse()?;
+                            cache_weight = lit.base10_parse::<usize>()?;
+                        } else if ["dictionary", "range", "index"].contains(&ident.as_str()) {
+                            if nested.input.peek(syn::token::Paren) {
+                                nested.parse_nested_meta(|inner| {
+                                    if inner.path.is_ident("cache") {
+                                        let lit: syn::LitInt = inner.value()?.parse()?;
+                                        cache_weight = lit.base10_parse::<usize>()?;
+                                    }
+                                    Ok(())
+                                })?;
+                            }
+                        } else if ident == "transient" {
+                            // valid, nothing to do
+                        } else {
+                            return Err(syn::Error::new(
+                                nested.path.span(),
+                                "Cache must be used like this `column(cache = 10)`, `column(dictionary(cache = 10))`, `column(range(cache = 10))`, `column(index(cache = 10))`",
+                            ));
+                        }
                         if nested.path.is_ident("transient") {
                             let mut read_from: Option<ReadFrom> = None;
                             let _ = nested.parse_nested_meta(|inner| {
@@ -161,21 +184,11 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                             });
                             indexing = ColumnDef::Transient(field.clone(), read_from);
                         } else if nested.path.is_ident("index") {
-                            indexing = ColumnDef::Plain(field.clone(), IndexingType::On { dictionary: false, range: false, cache_weight: 0 });
+                            indexing = ColumnDef::Plain(field.clone(), IndexingType::On { dictionary: false, range: false, cache_weight });
                         } else if nested.path.is_ident("dictionary") {
-                            let mut cache_weight = 0;
-                            if nested.input.peek(syn::token::Paren) {
-                                nested.parse_nested_meta(|inner_nested| {
-                                    if inner_nested.path.is_ident("cache") {
-                                        let lit: syn::LitInt = inner_nested.value()?.parse()?;
-                                        cache_weight = lit.base10_parse::<usize>()?;
-                                    }
-                                    Ok(())
-                                })?;
-                            }
                             indexing = ColumnDef::Plain(field.clone(), IndexingType::On { dictionary: true, range: false, cache_weight });
                         } else if nested.path.is_ident("range") {
-                            indexing = ColumnDef::Plain(field.clone(), IndexingType::On { dictionary: false, range: true, cache_weight: 0 });
+                            indexing = ColumnDef::Plain(field.clone(), IndexingType::On { dictionary: false, range: true, cache_weight });
                         }
                         Ok(())
                     });

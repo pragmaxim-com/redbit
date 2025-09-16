@@ -62,7 +62,7 @@ pub struct Utxo {
     pub id: TransactionPointer,
     #[column]
     pub amount: u64,
-    #[column(index)]
+    #[column(index(cache = 4))]
     pub box_id: BoxId,
     #[column(dictionary(cache = 10))]
     pub address: Address,

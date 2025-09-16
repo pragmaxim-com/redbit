@@ -11,7 +11,14 @@ Redbit reads struct annotations and derives code necessary for persisting and qu
 
 ✅ parallel persistence, there is a long-running write thread spawn for each entity field (no blocking) \
 ✅ Querying and ranging by secondary index \
-✅ Optional dictionaries for low cardinality fields + first level cache for building them without overhead \
+✅ Optional dictionaries for low cardinality fields \
+✅ First level cache (total cache is split proportionally by weights in the entity definition) :
+  ```rust
+  #[column(cache = 4)]
+  #[column(index(cache = 10))]
+  #[column(range(cache = 10))]
+  #[column(dictionary(cache = 10))]
+  ```
 ✅ `One-to-One` / `One-to-Option` / `One-to-Many` entities with cascade read/write/delete \
 ✅ All goodies including intuitive data ordering without writing custom codecs \
 ✅ All keys and all newType column types with fixed-sized value implement `Copy` => minimal cloning \
