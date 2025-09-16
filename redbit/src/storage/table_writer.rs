@@ -183,14 +183,14 @@ where
         Ok(Self { topic, handle, _marker: PhantomData  })
     }
 
-    pub fn insert_kv(&self, key: K, value: V) {
-        self.topic.send(WriterCommand::Insert(key, value)).unwrap();
+    pub fn insert_kv(&self, key: K, value: V) -> Result<(), AppError> {
+        self.topic.send(WriterCommand::Insert(key, value)).map_err(|err| AppError::Custom(err.to_string()))
     }
 
     // hack, we need to read from the writer thread
     pub fn get_head_for_index(&self, values: Vec<V>) -> redb::Result<Vec<Option<ValueBuf<K>>>, AppError> {
         let (ack_tx, ack_rx) = unbounded::<redb::Result<Vec<Option<ValueBuf<K>>>, AppError>>();
-        self.topic.send(WriterCommand::HeadByIndex(values, ack_tx)).unwrap();
+        self.topic.send(WriterCommand::HeadByIndex(values, ack_tx)).map_err(|err| AppError::Custom(err.to_string()))?;
         let result = ack_rx.recv()? ?;
         Ok(result)
     }
@@ -198,27 +198,27 @@ where
     // hack, we need to read from the writer thread
     pub fn range(&self, from: K, until: K) -> redb::Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError> {
         let (ack_tx, ack_rx) = unbounded::<redb::Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>>();
-        self.topic.send(WriterCommand::Range(from, until, ack_tx)).unwrap();
+        self.topic.send(WriterCommand::Range(from, until, ack_tx)).map_err(|err| AppError::Custom(err.to_string()))?;
         let result = ack_rx.recv()??;
         Ok(result)
     }
 
     pub fn delete_kv(&self, key: K) -> redb::Result<bool, AppError> {
         let (ack_tx, ack_rx) = unbounded::<redb::Result<bool, AppError>>();
-        self.topic.send(WriterCommand::Remove(key, ack_tx)).unwrap();
+        self.topic.send(WriterCommand::Remove(key, ack_tx)).map_err(|err| AppError::Custom(err.to_string()))?;
         let result = ack_rx.recv()?;
         result
     }
 
     pub fn flush(self) -> redb::Result<(), AppError> {
         let (ack_tx, ack_rx) = unbounded::<redb::Result<(), AppError>>();
-        self.topic.send(WriterCommand::Flush(ack_tx)).unwrap();
+        self.topic.send(WriterCommand::Flush(ack_tx)).map_err(|err| AppError::Custom(err.to_string()))?;
         FlushFuture { ack_rx, handle: self.handle }.wait()
     }
 
     pub fn flush_async(self) -> redb::Result<FlushFuture, AppError> {
         let (ack_tx, ack_rx) = unbounded::<redb::Result<(), AppError>>();
-        self.topic.send(WriterCommand::Flush(ack_tx)).unwrap();
+        self.topic.send(WriterCommand::Flush(ack_tx)).map_err(|err| AppError::Custom(err.to_string()))?;
         Ok(FlushFuture { ack_rx, handle: self.handle })
     }
 }
