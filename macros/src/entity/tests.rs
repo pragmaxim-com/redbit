@@ -36,12 +36,6 @@ pub fn test_suite(entity_name: &Ident, parent_def: Option<OneToManyParentDef>, f
             #sample_entity::store_many(&mut tx_context, entities).expect("Failed to store sample entities");
             tx_context.commit_all().expect("Failed to commit all");
         }
-
-        static STORAGE: Lazy<Arc<Storage>> = Lazy::new(|| {
-            let storage = random_storage();
-            initialize_storage(Arc::clone(&storage));
-            Arc::clone(&storage)
-        });
     };
 
     quote!{
@@ -53,6 +47,12 @@ pub fn test_suite(entity_name: &Ident, parent_def: Option<OneToManyParentDef>, f
             use tokio::runtime::Runtime;
 
             #db_init
+            
+            static STORAGE: Lazy<Arc<Storage>> = Lazy::new(|| {
+                let storage = random_storage();
+                initialize_storage(Arc::clone(&storage));
+                Arc::clone(&storage)
+            });
 
             #(#unit_tests)*
 
