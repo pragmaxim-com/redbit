@@ -1,15 +1,15 @@
-use crate::AppError;
+use crate::{error, AppError};
 use redb::{AccessGuard, Database, Key, Value, WriteTransaction};
 use std::borrow::Borrow;
 use std::marker::PhantomData;
 use std::ops::RangeBounds;
-use std::sync::mpsc::{channel, Sender};
 use std::sync::Arc;
 use std::thread;
 use std::thread::JoinHandle;
+use crossbeam::channel::{bounded, unbounded, Receiver, Sender, TryRecvError};
 
 pub struct FlushFuture {
-    ack_rx: std::sync::mpsc::Receiver<redb::Result<(), AppError>>,
+    ack_rx: Receiver<redb::Result<(), AppError>>,
     handle: JoinHandle<()>,
 }
 
@@ -74,9 +74,42 @@ where
     F: TableFactory<K, V> + Send + 'static,
     F::Table<'static>: Send,
 {
+    fn handle_cmd<'txn, T>(table: &mut T, cmd: WriterCommand<K, V>) -> Result<Option<Sender<redb::Result<(), AppError>>>, AppError>
+    where
+        T: WriteTableLike<'txn, K, V>,
+    {
+        match cmd {
+            WriterCommand::Insert(k, v) => {
+                table.insert_kv(k, v)?;
+                Ok(None)
+            }
+            WriterCommand::Remove(k, ack) => {
+                let res = table.delete_kv(k)?;
+                let _ = ack.send(Ok(res));
+                Ok(None)
+            }
+            WriterCommand::HeadByIndex(values, ack) => {
+                let mut result = Vec::with_capacity(values.len());
+                for value in values {
+                    result.push(table.get_head_by_index(value)?);
+                }
+                let _ = ack.send(Ok(result));
+                Ok(None)
+            }
+            WriterCommand::Range(from, until, ack) => {
+                let result = table.range(from..until)?;
+                let _ = ack.send(Ok(result));
+                Ok(None)
+            }
+            WriterCommand::Flush(ack) => {
+                Ok(Some(ack))
+            }
+        }
+    }
+
     pub fn new(dict_db: Arc<Database>, factory: F) -> redb::Result<Self, AppError> {
-        let (topic, receiver) = channel::<WriterCommand<K, V>>();
-        let (ready_tx, ready_rx) = channel::<redb::Result<(), AppError>>();
+        let (topic, receiver): (Sender<WriterCommand<K, V>>, Receiver<WriterCommand<K, V>>) = crossbeam::channel::unbounded();
+        let (ready_tx, ready_rx) = bounded::<redb::Result<(), AppError>>(1);
 
         let handle = thread::spawn(move || {
             let tx = match dict_db.begin_write() {
@@ -87,35 +120,49 @@ where
                 }
             };
             let mut flush_ack: Option<Sender<redb::Result<(), AppError>>> = None;
+            let mut write_error: Option<Result<(), AppError>> = None;
 
             match factory.open(&tx) {
                 Ok(mut table) => {
                     let _ = ready_tx.send(Ok(()));
-                    loop {
-                        match receiver.recv() {
-                            Ok(WriterCommand::Insert(k, v)) => {
-                                let _ = table.insert_kv(k, v);
+                    'outer: loop {
+                        let cmd = match receiver.recv() {
+                            Ok(c) => c,
+                            Err(recv_error) => {
+                                error!("Writer thread receiver error: {:?}", recv_error);
+                                break
+                            },
+                        };
+
+                        match Self::handle_cmd(&mut table, cmd) {
+                            Err(err) => if write_error.is_none() {
+                                write_error = Some(Err(err));
                             }
-                            Ok(WriterCommand::Remove(k, ack)) => {
-                                let result = table.delete_kv(k);
-                                let _ = ack.send(result);
-                            }
-                            Ok(WriterCommand::HeadByIndex(values, ack)) => {
-                                let mut result: Vec<Option<ValueBuf<K>>> = Vec::with_capacity(values.len());
-                                for value in values {
-                                result.push(table.get_head_by_index(value).unwrap());
+                            Ok(Some(flush)) => {
+                                flush_ack = Some(flush);
+                                break
+                            },
+                            Ok(None) => { /* continue */ }
+                        }
+
+                        // opportunistically drain more without sleeping (reduces per-item sync)
+                        loop {
+                            match receiver.try_recv() {
+                                Ok(c) => {
+                                    match Self::handle_cmd(&mut table, c) {
+                                        Err(err) => if write_error.is_none() {
+                                            write_error = Some(Err(err));
+                                        }
+                                        Ok(Some(flush)) => {
+                                            flush_ack = Some(flush);
+                                            break 'outer
+                                        },
+                                        Ok(None) => { /* continue */ }
+                                    }
                                 }
-                                let _ = ack.send(Ok(result));
+                                Err(TryRecvError::Empty) => break,
+                                Err(TryRecvError::Disconnected) => break,
                             }
-                            Ok(WriterCommand::Range(from, until, ack)) => {
-                                let result = table.range(from..until).unwrap();
-                                let _ = ack.send(Ok(result));
-                            }
-                            Ok(WriterCommand::Flush(ack)) => {
-                                flush_ack = Some(ack);
-                                break;
-                            }
-                            Err(_) => break,
                         }
                     }
                 }
@@ -123,9 +170,11 @@ where
                     let _ = ready_tx.send(Err(e));
                 }
             }
-            let commit_res = tx.commit().map_err(AppError::from);
             if let Some(ack) = flush_ack {
-                let _ = ack.send(commit_res);
+                let _ = match write_error {
+                    Some(Err(e)) => ack.send(Err(e)),
+                    _ => ack.send(tx.commit().map_err(AppError::from))
+                };
             }
         });
 
@@ -140,37 +189,36 @@ where
 
     // hack, we need to read from the writer thread
     pub fn get_head_for_index(&self, values: Vec<V>) -> redb::Result<Vec<Option<ValueBuf<K>>>, AppError> {
-        let (ack_tx, ack_rx) = channel::<redb::Result<Vec<Option<ValueBuf<K>>>, AppError>>();
+        let (ack_tx, ack_rx) = unbounded::<redb::Result<Vec<Option<ValueBuf<K>>>, AppError>>();
         self.topic.send(WriterCommand::HeadByIndex(values, ack_tx)).unwrap();
-        let result = ack_rx.recv()??;
+        let result = ack_rx.recv()? ?;
         Ok(result)
     }
 
     // hack, we need to read from the writer thread
     pub fn range(&self, from: K, until: K) -> redb::Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError> {
-        let (ack_tx, ack_rx) = channel::<redb::Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>>();
+        let (ack_tx, ack_rx) = unbounded::<redb::Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>>();
         self.topic.send(WriterCommand::Range(from, until, ack_tx)).unwrap();
         let result = ack_rx.recv()??;
         Ok(result)
     }
 
     pub fn delete_kv(&self, key: K) -> redb::Result<bool, AppError> {
-        let (ack_tx, ack_rx) = channel::<redb::Result<bool, AppError>>();
+        let (ack_tx, ack_rx) = unbounded::<redb::Result<bool, AppError>>();
         self.topic.send(WriterCommand::Remove(key, ack_tx)).unwrap();
         let result = ack_rx.recv()?;
         result
     }
 
     pub fn flush(self) -> redb::Result<(), AppError> {
-        let (ack_tx, ack_rx) = channel::<redb::Result<(), AppError>>();
+        let (ack_tx, ack_rx) = unbounded::<redb::Result<(), AppError>>();
         self.topic.send(WriterCommand::Flush(ack_tx)).unwrap();
         FlushFuture { ack_rx, handle: self.handle }.wait()
     }
 
     pub fn flush_async(self) -> redb::Result<FlushFuture, AppError> {
-        let (ack_tx, ack_rx) = channel::<redb::Result<(), AppError>>();
+        let (ack_tx, ack_rx) = unbounded::<redb::Result<(), AppError>>();
         self.topic.send(WriterCommand::Flush(ack_tx)).unwrap();
         Ok(FlushFuture { ack_rx, handle: self.handle })
     }
 }
-

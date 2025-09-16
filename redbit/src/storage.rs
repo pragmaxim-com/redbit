@@ -10,12 +10,11 @@ use std::{env, fs};
 #[derive(Clone)]
 pub struct Storage {
     pub index_dbs: HashMap<String, Arc<Database>>,
-    pub total_cache_size_gb: u8
 }
 
 impl Storage {
-    pub fn new(index_dbs: HashMap<String, Arc<Database>>, total_cache_size_gb: u8) -> Self {
-        Self { index_dbs, total_cache_size_gb }
+    pub fn new(index_dbs: HashMap<String, Arc<Database>>) -> Self {
+        Self { index_dbs }
     }
 
     pub async fn build_storage(db_dir: PathBuf, db_cache_size_gb: u8) -> redb::Result<(bool, Arc<Storage>), AppError> {
@@ -48,17 +47,29 @@ impl Storage {
         if !db_dir.exists() {
             fs::create_dir_all(db_dir.clone())?;
             let mut index_dbs = HashMap::new();
-            let total_cache_bytes: u64 = (total_cache_size_gb as u64) * 1024 * 1024 * 1024;
-            let db_defs_with_cache: Vec<DbDefWithCache> = cache::allocate_cache_mb(&db_defs, total_cache_bytes);
+            let db_defs_with_cache: Vec<DbDefWithCache> = cache::allocate_cache_mb(&db_defs, (total_cache_size_gb as u64) * 1024);
 
+            let width = db_defs_with_cache.iter().map(|d| d.name.len()).max().unwrap_or(0);
+
+            let db_name_with_cache_list = db_defs_with_cache
+                .iter()
+                .map(|d| format!("{:<width$} {} MB", d.name, d.cache_in_mb, width = width))
+                .collect::<Vec<_>>()
+                .join("\n");
+
+            info!(
+                "Creating databases at {:?} with total cache size {} GB:\n{}",
+                db_dir,
+                total_cache_size_gb,
+                db_name_with_cache_list
+            );
             for dbc in db_defs_with_cache {
                 let index_db_path = db_dir.join(format!("{}.db", dbc.name));
-                info!("Creating db at {:?} with cache size {} MB", index_db_path, dbc.cache_in_mb);
                 let index_db = Database::builder().set_cache_size(dbc.cache_in_mb).create(index_db_path)?;
                 index_dbs.insert(dbc.name, Arc::new(index_db));
             }
 
-            Ok((true, Arc::new(Storage::new(index_dbs, total_cache_size_gb))))
+            Ok((true, Arc::new(Storage::new(index_dbs))))
         } else {
             info!("Opening existing dbs at {:?}, it might take a while in case previous process was killed", db_dir);
             let index_tasks = db_defs.into_iter().map(|db_def| {
@@ -74,7 +85,7 @@ impl Storage {
                 .into_iter()
                 .collect::<redb::Result<HashMap<String, Arc<Database>>, DatabaseError>>()?;
 
-            Ok((false, Arc::new(Storage::new(index_dbs, total_cache_size_gb))))
+            Ok((false, Arc::new(Storage::new(index_dbs))))
         }
     }
 }

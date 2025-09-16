@@ -115,7 +115,7 @@ use axum::extract::Request;
 use serde::de::DeserializeOwned;
 use std::net::SocketAddr;
 use std::ops::Add;
-use std::sync::mpsc::RecvError;
+use crossbeam::channel::RecvError;
 use thiserror::Error;
 use tokio::net::TcpListener;
 use tokio::sync::watch;

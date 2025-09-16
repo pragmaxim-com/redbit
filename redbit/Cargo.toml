@@ -40,3 +40,4 @@ tower-http = { version = "0.6.6", features = ["cors"] }
 lru = "0.16.0"
 anyhow = "1.0.99"
 log = "0.4.27"
+crossbeam = "0.8.4"
