@@ -52,25 +52,18 @@ impl Storage {
     }
 
     pub async fn init(db_dir: PathBuf, db_defs: Vec<DbDef>, total_cache_size_gb: u8) -> redb::Result<(bool, Arc<Storage>), AppError> {
+        let db_defs_with_cache: Vec<DbDefWithCache> = cache::allocate_cache_mb(&db_defs, (total_cache_size_gb as u64) * 1024);
+        let width = db_defs_with_cache.iter().map(|d| d.name.len()).max().unwrap_or(0);
+        let db_name_with_cache_list = db_defs_with_cache
+            .iter()
+            .map(|d| format!("{:<width$} {} MB", d.name, d.cache_in_mb, width = width))
+            .collect::<Vec<_>>()
+            .join("\n");
+
         if !db_dir.exists() {
             fs::create_dir_all(db_dir.clone())?;
             let mut index_dbs = HashMap::new();
-            let db_defs_with_cache: Vec<DbDefWithCache> = cache::allocate_cache_mb(&db_defs, (total_cache_size_gb as u64) * 1024);
-
-            let width = db_defs_with_cache.iter().map(|d| d.name.len()).max().unwrap_or(0);
-
-            let db_name_with_cache_list = db_defs_with_cache
-                .iter()
-                .map(|d| format!("{:<width$} {} MB", d.name, d.cache_in_mb, width = width))
-                .collect::<Vec<_>>()
-                .join("\n");
-
-            info!(
-                "Creating databases at {:?} with total cache size {} GB:\n{}",
-                db_dir,
-                total_cache_size_gb,
-                db_name_with_cache_list
-            );
+            info!("Creating dbs at {:?} with total cache size {} GB:\n{}", db_dir, total_cache_size_gb, db_name_with_cache_list);
             for dbc in db_defs_with_cache {
                 let index_db_path = db_dir.join(format!("{}.db", dbc.name));
                 let index_db = Database::builder().set_cache_size(dbc.cache_in_mb).create(index_db_path)?;
@@ -79,7 +72,12 @@ impl Storage {
 
             Ok((true, Arc::new(Storage::new(index_dbs))))
         } else {
-            info!("Opening existing dbs at {:?}, it might take a while in case previous process was killed", db_dir);
+            info!(
+                "Opening existing dbs at {:?} with total cache size {} GB:\n{}, it might take a while in case previous process was killed",
+                db_dir,
+                total_cache_size_gb,
+                db_name_with_cache_list
+            );
             let index_tasks = db_defs.into_iter().map(|db_def| {
                 let path = db_dir.join(format!("{}.db", db_def.name));
                 tokio::task::spawn_blocking(move || -> redb::Result<(String, Arc<Database>), DatabaseError> {

@@ -6,7 +6,7 @@ use std::ops::RangeBounds;
 use std::sync::Arc;
 use std::thread;
 use std::thread::JoinHandle;
-use crossbeam::channel::{bounded, unbounded, Receiver, Sender, TryRecvError};
+use crossbeam::channel::{bounded, unbounded, Receiver, Sender, TryRecvError, TrySendError};
 
 pub struct FlushFuture {
     ack_rx: Receiver<redb::Result<(), AppError>>,
@@ -108,7 +108,7 @@ where
     }
 
     pub fn new(dict_db: Arc<Database>, factory: F) -> redb::Result<Self, AppError> {
-        let (topic, receiver): (Sender<WriterCommand<K, V>>, Receiver<WriterCommand<K, V>>) = crossbeam::channel::unbounded();
+        let (topic, receiver): (Sender<WriterCommand<K, V>>, Receiver<WriterCommand<K, V>>) = unbounded();
         let (ready_tx, ready_rx) = bounded::<redb::Result<(), AppError>>(1);
 
         let handle = thread::spawn(move || {
@@ -183,42 +183,51 @@ where
         Ok(Self { topic, handle, _marker: PhantomData  })
     }
 
+    #[inline]
+    fn fast_send(tx: &Sender<WriterCommand<K, V>>, msg: WriterCommand<K, V>) -> Result<(), AppError> {
+        match tx.try_send(msg) {
+            Ok(()) => Ok(()),
+            Err(TrySendError::Full(v)) => { tx.send(v).map_err(|err| AppError::Custom(err.to_string())) }
+            Err(err) => Err(AppError::Custom(err.to_string())),
+        }
+    }
+
     pub fn insert_kv(&self, key: K, value: V) -> Result<(), AppError> {
-        self.topic.send(WriterCommand::Insert(key, value)).map_err(|err| AppError::Custom(err.to_string()))
+        Self::fast_send(&self.topic, WriterCommand::Insert(key, value))
     }
 
     // hack, we need to read from the writer thread
     pub fn get_head_for_index(&self, values: Vec<V>) -> redb::Result<Vec<Option<ValueBuf<K>>>, AppError> {
-        let (ack_tx, ack_rx) = unbounded::<redb::Result<Vec<Option<ValueBuf<K>>>, AppError>>();
-        self.topic.send(WriterCommand::HeadByIndex(values, ack_tx)).map_err(|err| AppError::Custom(err.to_string()))?;
-        let result = ack_rx.recv()? ?;
+        let (ack_tx, ack_rx) = bounded::<redb::Result<Vec<Option<ValueBuf<K>>>, AppError>>(1);
+        Self::fast_send(&self.topic, WriterCommand::HeadByIndex(values, ack_tx))?;
+        let result = ack_rx.recv()??;
         Ok(result)
     }
 
     // hack, we need to read from the writer thread
     pub fn range(&self, from: K, until: K) -> redb::Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError> {
-        let (ack_tx, ack_rx) = unbounded::<redb::Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>>();
-        self.topic.send(WriterCommand::Range(from, until, ack_tx)).map_err(|err| AppError::Custom(err.to_string()))?;
+        let (ack_tx, ack_rx) = bounded::<redb::Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>>(1);
+        Self::fast_send(&self.topic, WriterCommand::Range(from, until, ack_tx))?;
         let result = ack_rx.recv()??;
         Ok(result)
     }
 
     pub fn delete_kv(&self, key: K) -> redb::Result<bool, AppError> {
-        let (ack_tx, ack_rx) = unbounded::<redb::Result<bool, AppError>>();
-        self.topic.send(WriterCommand::Remove(key, ack_tx)).map_err(|err| AppError::Custom(err.to_string()))?;
+        let (ack_tx, ack_rx) = bounded::<redb::Result<bool, AppError>>(1);
+        Self::fast_send(&self.topic, WriterCommand::Remove(key, ack_tx))?;
         let result = ack_rx.recv()?;
         result
     }
 
     pub fn flush(self) -> redb::Result<(), AppError> {
-        let (ack_tx, ack_rx) = unbounded::<redb::Result<(), AppError>>();
-        self.topic.send(WriterCommand::Flush(ack_tx)).map_err(|err| AppError::Custom(err.to_string()))?;
+        let (ack_tx, ack_rx) = bounded::<redb::Result<(), AppError>>(1);
+        Self::fast_send(&self.topic, WriterCommand::Flush(ack_tx))?;
         FlushFuture { ack_rx, handle: self.handle }.wait()
     }
 
     pub fn flush_async(self) -> redb::Result<FlushFuture, AppError> {
-        let (ack_tx, ack_rx) = unbounded::<redb::Result<(), AppError>>();
-        self.topic.send(WriterCommand::Flush(ack_tx)).map_err(|err| AppError::Custom(err.to_string()))?;
+        let (ack_tx, ack_rx) = bounded::<redb::Result<(), AppError>>(1);
+        Self::fast_send(&self.topic, WriterCommand::Flush(ack_tx))?;
         Ok(FlushFuture { ack_rx, handle: self.handle })
     }
 }
