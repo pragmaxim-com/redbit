@@ -1,4 +1,3 @@
-use table_writer::FlushFuture;
 use crate::*;
 use futures_util::future::try_join_all;
 use redb::{Database, DatabaseError};
@@ -6,6 +5,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::{env, fs};
+use table_writer::FlushFuture;
 
 pub mod table_dict_read;
 pub mod table_dict_write;

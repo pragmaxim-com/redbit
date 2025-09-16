@@ -2,11 +2,6 @@
 
 Bitcoin explorer on top of [redbit](../../redbit) and [chain](../../chain)
 
-It uses tiny `block_height/tx_index/utxo_index/[asset_index]` dictionary pointers to big hashes, ie. not a single hash is duplicated,
-which allows for much better space efficiency and syncing speed with local node and an SSD.
-
-Chain tip is "eventually consistent" through fork competition, ie. forks get settled eventually and superseded forks are deleted from DB.
-
 ### Installation (Debian/Ubuntu)
 
 ```

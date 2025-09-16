@@ -93,13 +93,13 @@ pub struct TableDef {
     pub var_name: Ident,
     pub key_type: Type,
     pub value_type: Option<Type>,
-    pub db_cache: usize,
+    pub cache_weight: usize,
     pub table_type: TableType,
     pub definition: TokenStream,
 }
 
 impl TableDef {
-    pub fn pk(entity_name: &Ident, pk_name: &Ident, pk_type: &Type) -> TableDef {
+    pub fn pk(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, cache_weight: usize) -> TableDef {
         let name = format_ident!("{}_{}", entity_name.to_string().to_uppercase(), pk_name.to_string().to_uppercase());
         let name_str = name.to_string();
         let var_name = Ident::new(&format!("{}", name).to_lowercase(), name.span());
@@ -110,7 +110,7 @@ impl TableDef {
         TableDef {
             name,
             var_name,
-            db_cache: 0,
+            cache_weight,
             key_type: pk_type.clone(),
             value_type: None,
             table_type: TableType::Pk,
@@ -135,7 +135,7 @@ impl TableDef {
             var_name,
             key_type: pk_type.clone(),
             value_type: Some(column_type.clone()),
-            db_cache: 0,
+            cache_weight: 0,
             table_type: TableType::Plain,
             definition
         }
@@ -153,7 +153,7 @@ impl TableDef {
             var_name,
             key_type: column_type.clone(),
             value_type: Some(pk_type.clone()),
-            db_cache: 0,
+            cache_weight: 0,
             table_type: TableType::Index,
             definition
         }
@@ -172,7 +172,7 @@ impl TableDef {
             var_name,
             key_type: pk_type.clone(),
             value_type: Some(pk_type.clone()),
-            db_cache: 0,
+            cache_weight: 0,
             table_type: TableType::DictIndex,
             definition
         }
@@ -191,7 +191,7 @@ impl TableDef {
             var_name,
             key_type: pk_type.clone(),
             value_type: Some(column_type.clone()),
-            db_cache: 0,
+            cache_weight: 0,
             table_type: TableType::ValueByDictPk,
             definition
         }
@@ -210,7 +210,7 @@ impl TableDef {
             var_name,
             key_type: column_type.clone(),
             value_type: Some(pk_type.clone()),
-            db_cache: 0,
+            cache_weight: 0,
             table_type: TableType::ValueToDictPk,
             definition,
         }
@@ -233,7 +233,7 @@ impl TableDef {
             var_name,
             key_type: pk_type.clone(),
             value_type: Some(pk_type.clone()),
-            db_cache: 0,
+            cache_weight: 0,
             table_type: TableType::DictPkByPk,
             definition
         }

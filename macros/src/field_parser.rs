@@ -6,6 +6,7 @@ use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::Comma;
 use syn::{Data, DeriveInput, Field, Fields, GenericArgument, ItemStruct, PathArguments, Type};
+use syn::meta::ParseNestedMeta;
 
 #[derive(Clone)]
 #[allow(clippy::enum_variant_names)]
@@ -32,19 +33,19 @@ pub struct FieldDef {
 #[derive(Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum KeyDef {
-    Pk(FieldDef),
-    Fk { field_def: FieldDef, multiplicity: Multiplicity, parent_type: Option<Type> },
+    Pk { field_def: FieldDef, cache_weight: usize },
+    Fk { field_def: FieldDef, multiplicity: Multiplicity, parent_type: Option<Type>, cache_weight: usize },
 }
 impl KeyDef {
     pub fn is_root(&self) -> bool {
         match self {
-            KeyDef::Pk(_) => true,
+            KeyDef::Pk { .. } => true,
             KeyDef::Fk { .. } => false,
         }
     }
     pub fn field_def(&self) -> FieldDef {
         match self {
-            KeyDef::Pk(field_def) => field_def.clone(),
+            KeyDef::Pk{ field_def, .. } => field_def.clone(),
             KeyDef::Fk { field_def, .. } => field_def.clone(),
         }
     }
@@ -110,6 +111,25 @@ pub fn extract_base_type_from_pointer(field: &Field) -> syn::Result<Type> {
     }
 }
 
+fn get_column_cache_weight(nested: &ParseNestedMeta) -> Result<Option<usize>, syn::Error> {
+    let ident = nested.path.get_ident().map(|i| i.to_string()).unwrap_or_default();
+    match ident.as_str() {
+        "cache" => {
+            let lit: syn::LitInt = nested.value()?.parse()?;
+            Ok(Some(lit.base10_parse::<usize>()?))
+        }
+        "dictionary" | "range" | "index" | "transient" => {
+            Ok(None)
+        }
+        _ => {
+            Err(syn::Error::new(
+                nested.path.span(),
+                "Unsupported form. Use `cache = 10`, `dictionary`, `range`, `index`, or `transient`",
+            ))
+        }
+    }
+}
+
 fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
     match &field.ident {
         None => Err(syn::Error::new(field.span(), "Unnamed fields not supported")),
@@ -117,25 +137,46 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
             let column_type = field.ty.clone();
             for attr in &field.attrs {
                 if attr.path().is_ident("pk") {
-                    let key_def = KeyDef::Pk(FieldDef { name: column_name.clone(), tpe: column_type.clone() });
+                    let mut cache_weight = 0;
+                    let _ = attr.parse_nested_meta(|nested| {
+                        cache_weight = get_column_cache_weight(&nested)?.unwrap_or(0);
+                        Ok(())
+                    });
+                    let key_def = KeyDef::Pk { field_def: FieldDef { name: column_name.clone(), tpe: column_type.clone() }, cache_weight };
                     return Ok(ColumnDef::Key(key_def));
                 } else if attr.path().is_ident("fk") {
                     let mut multiplicity = None;
                     let mut parent_type = None;
+                    let mut cache_weight = 0;
                     let _ = attr.parse_nested_meta(|nested| {
-                        if nested.path.is_ident("one2many") {
-                            multiplicity = Some(Multiplicity::OneToMany);
-                            parent_type = Some(extract_base_type_from_pointer(field)?);
-                        } else if nested.path.is_ident("one2one") {
-                            multiplicity = Some(Multiplicity::OneToOne);
-                        } else if nested.path.is_ident("one2opt") {
-                            multiplicity = Some(Multiplicity::OneToOption);
+                        let ident = nested.path.get_ident().map(|i| i.to_string()).unwrap_or_default();
+                        match ident.as_str() {
+                            "cache" => {
+                                let lit: syn::LitInt = nested.value()?.parse()?;
+                                cache_weight = lit.base10_parse::<usize>()?;
+                            }
+                            "one2many" => {
+                                multiplicity = Some(Multiplicity::OneToMany);
+                                parent_type = Some(extract_base_type_from_pointer(field)?);
+                            }
+                            "one2one" => {
+                                multiplicity = Some(Multiplicity::OneToOne);
+                            }
+                            "one2opt" => {
+                                multiplicity = Some(Multiplicity::OneToOption);
+                            }
+                            _ => {
+                                return Err(syn::Error::new(
+                                    nested.path.span(),
+                                    "Unsupported form. Use `fk(one2many/one2one/one2opt, cache = 10)` or `fk(one2many/one2one/one2opt)`",
+                                ));
+                            }
                         }
                         Ok(())
                     });
                     return if let Some(m) = multiplicity {
                         let field = FieldDef { name: column_name.clone(), tpe: column_type.clone() };
-                        Ok(ColumnDef::Key(KeyDef::Fk { field_def: field.clone(), multiplicity: m, parent_type }))
+                        Ok(ColumnDef::Key(KeyDef::Fk { field_def: field.clone(), multiplicity: m, parent_type, cache_weight }))
                     } else {
                         Err(syn::Error::new(attr.span(), "Foreign key must specify either `one2many` or `one2one`"))
                     }
@@ -143,29 +184,7 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                     let field = FieldDef { name: column_name.clone(), tpe: column_type.clone() };
                     let mut indexing = ColumnDef::Plain(field.clone(), IndexingType::Off);
                     let _ = attr.parse_nested_meta(|nested| {
-                        let mut cache_weight = 0;
-                        let ident = nested.path.get_ident().map(|i| i.to_string()).unwrap_or_default();
-                        if ident == "cache" {
-                            let lit: syn::LitInt = nested.value()?.parse()?;
-                            cache_weight = lit.base10_parse::<usize>()?;
-                        } else if ["dictionary", "range", "index"].contains(&ident.as_str()) {
-                            if nested.input.peek(syn::token::Paren) {
-                                nested.parse_nested_meta(|inner| {
-                                    if inner.path.is_ident("cache") {
-                                        let lit: syn::LitInt = inner.value()?.parse()?;
-                                        cache_weight = lit.base10_parse::<usize>()?;
-                                    }
-                                    Ok(())
-                                })?;
-                            }
-                        } else if ident == "transient" {
-                            // valid, nothing to do
-                        } else {
-                            return Err(syn::Error::new(
-                                nested.path.span(),
-                                "Cache must be used like this `column(cache = 10)`, `column(dictionary(cache = 10))`, `column(range(cache = 10))`, `column(index(cache = 10))`",
-                            ));
-                        }
+                        let cache_weight = get_column_cache_weight(&nested)?.unwrap_or(0);
                         if nested.path.is_ident("transient") {
                             let mut read_from: Option<ReadFrom> = None;
                             let _ = nested.parse_nested_meta(|inner| {

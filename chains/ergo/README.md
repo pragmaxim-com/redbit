@@ -2,11 +2,6 @@
 
 Ergo explorer on top of [redbit](../../redbit) and [chain](../../chain)
 
-It uses tiny `block_height/tx_index/utxo_index/[asset_index]` dictionary pointers to big hashes, ie. not a single hash is duplicated,
-which allows for much better space efficiency and syncing speed with local node and an SSD.
-
-Chain tip is "eventually consistent" through fork competition, ie. forks get settled eventually and superseded forks are deleted from DB.
-
 ### Installation (Debian/Ubuntu)
 
 ```
@@ -34,11 +29,3 @@ or when indexing is disabled `indexer.enable = false` and we only run http serve
 ### UI
 
 See [redbit-ui](https://github.com/pragmaxim-com/redbit-ui) 
-
-### Performance
-
-Performance on PCIe gen3 NVMe SSD and remote Ergo node is ~ `10395.0` ins+outs+assets/s. 
-Expect up to `35 000` ins+outs+assets/s on PCIe gen5 and local Ergo node.
-```
-[2025-08-15 08:38:51] INFO v 0b44bb8d4a8f @ 407058 from 2021-01-16 18:13:15 at 10395.0 ins+outs+assets/s, buffer 11
-```

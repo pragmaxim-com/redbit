@@ -5,8 +5,8 @@ use quote::quote;
 
 pub fn init(root_entity_ident: &Ident, key_def: &KeyDef) -> Vec<FunctionDef> {
     match &key_def {
-        KeyDef::Pk(f) => {
-            let key_ident = &f.name;
+        KeyDef::Pk { field_def, cache_weight: _ } => {
+            let key_ident = &field_def.name;
             vec![FunctionDef {
                 fn_stream: quote! {
                     pub fn init(storage: Arc<Storage>) -> redb::Result<(), AppError> {

@@ -21,7 +21,7 @@ pub fn get_db_defs(plain_table_defs: &[TableDef], dict_table_defs: &[DictTableDe
             .chain(dict_table_defs.iter().map(|d| d.var_name.clone()))
             .collect();
     let caches: Vec<usize> =
-        plain_table_defs.iter().map(|d| d.db_cache)
+        plain_table_defs.iter().map(|d| d.cache_weight)
             .chain(index_table_defs.iter().map(|d| d.cache_weight))
             .chain(dict_table_defs.iter().map(|d| d.cache_weight))
             .collect();
