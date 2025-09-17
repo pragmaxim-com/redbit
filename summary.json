@@ -112,7 +112,7 @@
     "ops_per_ms": 2
   },
   {
-    "function": "Block__store_and_commit",
+    "function": "Block__persist",
     "ops_per_ms": 1
   }
 ]

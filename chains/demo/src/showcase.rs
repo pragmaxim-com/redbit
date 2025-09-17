@@ -10,7 +10,7 @@ async fn main() -> Result<()> {
     let block_heights: Vec<Height> = blocks.iter().map(|b|b.height).collect();
     println!("Persisting blocks:");
     for block in blocks {
-        Block::store_and_commit(Arc::clone(&storage), block)?;
+        Block::persist(Arc::clone(&storage), block)?;
     }
 
     let block_tx = Block::begin_read_ctx(&storage)?;
@@ -125,7 +125,7 @@ async fn main() -> Result<()> {
 
     println!("\nDeleting blocks:");
     for height in block_heights.into_iter() {
-        Block::delete_and_commit(Arc::clone(&storage), height)?;
+        Block::remove(Arc::clone(&storage), height)?;
     }
     Ok(())
 }

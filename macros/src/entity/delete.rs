@@ -29,14 +29,14 @@ pub fn delete_many_def(pk_type: &Type, tx_context_ty: &Type, delete_many_stateme
     FunctionDef { fn_stream, endpoint: None, test_stream: None, bench_stream: None }
 }
 
-pub fn delete_and_commit_def(
+pub fn remove_def(
     entity_name: &Ident,
     entity_type: &Type,
     pk_name: &Ident,
     pk_type: &Type,
     delete_statements: &[TokenStream],
 ) -> FunctionDef {
-    let fn_name = format_ident!("delete_and_commit");
+    let fn_name = format_ident!("remove");
     let fn_stream = quote! {
         pub fn #fn_name(storage: Arc<Storage>, pk: #pk_type) -> Result<bool, AppError> {
            let mut removed: Vec<bool> = Vec::new();
@@ -75,7 +75,7 @@ pub fn delete_and_commit_def(
             let storage = random_storage();
             let test_entity = #entity_type::sample();
             let pk = test_entity.#pk_name;
-            #entity_name::store_and_commit(Arc::clone(&storage), test_entity).expect("Failed to store and commit instance");
+            #entity_name::persist(Arc::clone(&storage), test_entity).expect("Failed to store and commit instance");
             b.iter(|| {
                 #entity_name::#fn_name(Arc::clone(&storage), pk).expect("Failed to delete and commit instance");
             });

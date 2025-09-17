@@ -54,9 +54,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         bencher.iter_batched_ref(
             || vec![processed_small_block.clone()], // setup once
             |blocks| {
-                let _ = indexing_context.begin_writing().expect("Failed to begin writing");
-                chain.store_blocks(&indexing_context, std::mem::take(blocks)).expect("Failed to persist huge_block");
-                let _ = indexing_context.two_phase_commit().expect("Failed to commit");
+                chain.store_blocks(&indexing_context, std::mem::take(blocks)).expect("Failed to persist block");
             },
             BatchSize::LargeInput,
         );
@@ -66,9 +64,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         bencher.iter_batched_ref(
             || vec![processed_avg_block.clone()], // setup once
             |blocks| {
-                let _ = indexing_context.begin_writing().expect("Failed to begin writing");
-                chain.store_blocks(&indexing_context, std::mem::take(blocks)).expect("Failed to persist huge_block");
-                let _ = indexing_context.two_phase_commit().expect("Failed to commit");
+                chain.store_blocks(&indexing_context, std::mem::take(blocks)).expect("Failed to persist block");
             },
             BatchSize::LargeInput,
         );
@@ -78,9 +74,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         bencher.iter_batched_ref(
             || vec![processed_huge_block.clone()], // setup once
             |blocks| {
-                let _ = indexing_context.begin_writing().expect("Failed to begin writing");
-                chain.store_blocks(&indexing_context, std::mem::take(blocks)).expect("Failed to persist huge_block");
-                let _ = indexing_context.two_phase_commit().expect("Failed to commit");
+                chain.store_blocks(&indexing_context, std::mem::take(blocks)).expect("Failed to persist block");
             },
             BatchSize::LargeInput,
         );

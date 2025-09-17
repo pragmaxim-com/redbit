@@ -100,8 +100,8 @@ pub fn store_many_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &T
     }
 }
 
-pub fn store_and_commit_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type: &Type, store_statements: &[TokenStream]) -> FunctionDef {
-    let fn_name = format_ident!("store_and_commit");
+pub fn persist_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type: &Type, store_statements: &[TokenStream]) -> FunctionDef {
+    let fn_name = format_ident!("persist");
     let fn_stream = quote! {
         pub fn #fn_name(storage: Arc<Storage>, instance: #entity_type) -> Result<#pk_type, AppError> {
            let pk = instance.#pk_name;
