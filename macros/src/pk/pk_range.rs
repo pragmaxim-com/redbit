@@ -42,11 +42,13 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
             let storage = STORAGE.clone();
             let from_value = #pk_type::default();
             let until_value = #pk_type::default().next_index().next_index().next_index();
+            let tx_context = #entity_name::new_write_ctx(&storage).unwrap();
             b.iter(|| {
-                let tx_context = #entity_name::begin_write_ctx(&storage).unwrap();
+                let _ = tx_context.begin_writing().expect("Failed to begin writing");
                 #entity_name::#fn_name(&tx_context, from_value, until_value).expect("Failed to get PKs in range");
-                tx_context.commit_and_close_ctx().expect("Failed to flush transaction context");
+                let _ = tx_context.two_phase_commit().expect("Failed to commit");
             });
+            tx_context.stop_writing().unwrap();
         }
     });
 

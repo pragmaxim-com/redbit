@@ -73,7 +73,7 @@ impl Storage {
             Ok((true, Arc::new(Storage::new(index_dbs))))
         } else {
             info!(
-                "Opening existing dbs at {:?} with total cache size {} GB:\n{}, it might take a while in case previous process was killed",
+                "Opening existing dbs at {:?} with total cache size {} GB, it might take a while in case previous process was killed\n{}",
                 db_dir,
                 total_cache_size_gb,
                 db_name_with_cache_list

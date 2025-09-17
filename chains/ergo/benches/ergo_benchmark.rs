@@ -51,9 +51,9 @@ fn criterion_benchmark(c: &mut Criterion) {
         bencher.iter_batched_ref(
             || vec![processed_small_block.clone()], // setup once
             |blocks| {
-                chain
-                    .store_blocks(&indexing_context, std::mem::take(blocks))
-                    .expect("Failed to persist small_block");
+                let _ = indexing_context.begin_writing().expect("Failed to begin writing");
+                chain.store_blocks(&indexing_context, std::mem::take(blocks)).expect("Failed to persist huge_block");
+                let _ = indexing_context.two_phase_commit().expect("Failed to commit");
             },
             BatchSize::LargeInput,
         );
@@ -63,9 +63,9 @@ fn criterion_benchmark(c: &mut Criterion) {
         bencher.iter_batched_ref(
             || vec![processed_avg_block.clone()], // setup once
             |blocks| {
-                chain
-                    .store_blocks(&indexing_context, std::mem::take(blocks))
-                    .expect("Failed to persist avg_block");
+                let _ = indexing_context.begin_writing().expect("Failed to begin writing");
+                chain.store_blocks(&indexing_context, std::mem::take(blocks)).expect("Failed to persist huge_block");
+                let _ = indexing_context.two_phase_commit().expect("Failed to commit");
             },
             BatchSize::LargeInput,
         );
@@ -75,9 +75,9 @@ fn criterion_benchmark(c: &mut Criterion) {
         bencher.iter_batched_ref(
             || vec![processed_huge_block.clone()], // setup once
             |blocks| {
-                chain
-                    .store_blocks(&indexing_context, std::mem::take(blocks))
-                    .expect("Failed to persist huge_block");
+                let _ = indexing_context.begin_writing().expect("Failed to begin writing");
+                chain.store_blocks(&indexing_context, std::mem::take(blocks)).expect("Failed to persist huge_block");
+                let _ = indexing_context.two_phase_commit().expect("Failed to commit");
             },
             BatchSize::LargeInput,
         );

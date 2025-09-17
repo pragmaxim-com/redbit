@@ -33,11 +33,13 @@ pub fn store_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &Type, 
         fn #bench_fn_name(b: &mut Bencher) {
             let storage = random_storage();
             let test_entity = #entity_type::sample();
+            let tx_context = #entity_name::new_write_ctx(&storage).unwrap();
             b.iter(|| {
-                let tx_context = #entity_name::begin_write_ctx(&storage).unwrap();
+                let _ = tx_context.begin_writing().expect("Failed to begin writing");
                 #entity_name::#fn_name(&tx_context, test_entity.clone()).expect("Failed to store and commit instance");
-                tx_context.commit_and_close_ctx().expect("Failed to flush transaction context");
+                let _ = tx_context.two_phase_commit().expect("Failed to commit");
             });
+            tx_context.stop_writing().unwrap();
         }
     });
 
@@ -79,11 +81,13 @@ pub fn store_many_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &T
             let storage = random_storage();
             let entity_count = 3;
             let test_entities = #entity_type::sample_many(entity_count);
+            let tx_context = #entity_name::new_write_ctx(&storage).unwrap();
             b.iter(|| {
-                let tx_context = #entity_name::begin_write_ctx(&storage).unwrap();
+                let _ = tx_context.begin_writing().expect("Failed to begin writing");
                 #entity_name::#fn_name(&tx_context, test_entities.clone()).expect("Failed to store and commit instance");
-                tx_context.commit_and_close_ctx().expect("Failed to flush transaction context");
+                let _ = tx_context.two_phase_commit().expect("Failed to commit");
             });
+            tx_context.stop_writing().unwrap();
         }
     });
 
