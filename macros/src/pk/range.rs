@@ -41,7 +41,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, tx_contex
                 let from_value = #pk_type::default();
                 let until_value = #pk_type::default().next_index().next_index().next_index();
                 let query = #stream_query_type::sample();
-                let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
+                let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
                 let entities = #entity_name::#fn_name(&tx_context, &from_value, &until_value, Some(query.clone())).expect("Failed to get entities by range");
                 let expected_entity = #entity_type::sample_with_query(&pk, 0, &query).expect("Failed to create sample entity with query");
                 assert_eq!(entities.len(), 1, "Expected only one entity to be returned for the given range with filter");
@@ -56,7 +56,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, tx_contex
             let storage = STORAGE.clone();
             let from_value = #pk_type::default();
             let until_value = #pk_type::default().next_index().next_index();
-            let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
+            let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             let entities = #entity_name::#fn_name(&tx_context, &from_value, &until_value, None).expect("Failed to get entities by range");
             let expected_entities = #entity_type::sample_many(2);
             assert_eq!(entities, expected_entities, "Expected entities to be returned for the given range");
@@ -72,7 +72,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, tx_contex
             let from_value = #pk_type::default();
             let until_value = #pk_type::default().next_index().next_index().next_index();
             let query = #stream_query_type::sample();
-            let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
+            let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             b.iter(|| {
                 #entity_name::#fn_name(&tx_context, &from_value, &until_value, Some(query.clone())).expect("Failed to get entities by range");
             });

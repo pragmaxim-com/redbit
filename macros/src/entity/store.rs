@@ -8,7 +8,7 @@ use syn::Type;
 pub fn store_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &Type, store_statements: &[TokenStream]) -> FunctionDef {
     let fn_name = format_ident!("store");
     let fn_stream = quote! {
-        pub fn #fn_name(tx_context: &mut #tx_context_ty, instance: #entity_type) -> Result<(), AppError> {
+        pub fn #fn_name(tx_context: &#tx_context_ty, instance: #entity_type) -> Result<(), AppError> {
             #(#store_statements)*
             Ok(())
         }
@@ -19,11 +19,11 @@ pub fn store_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &Type, 
         fn #fn_name() {
             let storage = random_storage();
             let entity_count: usize = 3;
-            let mut tx_context = #entity_name::begin_write_tx(&storage).unwrap();
+            let tx_context = #entity_name::begin_write_ctx(&storage).unwrap();
             for test_entity in #entity_type::sample_many(entity_count) {
-                let pk = #entity_name::#fn_name(&mut tx_context, test_entity).expect("Failed to store and commit instance");
+                let pk = #entity_name::#fn_name(&tx_context, test_entity).expect("Failed to store and commit instance");
             }
-            tx_context.commit_all().expect("Failed to flush transaction context");
+            tx_context.commit_and_close_ctx().expect("Failed to flush transaction context");
         }
     });
 
@@ -34,9 +34,9 @@ pub fn store_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &Type, 
             let storage = random_storage();
             let test_entity = #entity_type::sample();
             b.iter(|| {
-                let mut tx_context = #entity_name::begin_write_tx(&storage).unwrap();
-                #entity_name::#fn_name(&mut tx_context, test_entity.clone()).expect("Failed to store and commit instance");
-                tx_context.commit_all().expect("Failed to flush transaction context");
+                let tx_context = #entity_name::begin_write_ctx(&storage).unwrap();
+                #entity_name::#fn_name(&tx_context, test_entity.clone()).expect("Failed to store and commit instance");
+                tx_context.commit_and_close_ctx().expect("Failed to flush transaction context");
             });
         }
     });
@@ -52,7 +52,7 @@ pub fn store_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &Type, 
 pub fn store_many_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &Type, store_many_statements: &[TokenStream]) -> FunctionDef {
     let fn_name = format_ident!("store_many");
     let fn_stream = quote! {
-        pub fn #fn_name(tx_context: &mut #tx_context_ty, instances: Vec<#entity_type>) -> Result<(), AppError> {
+        pub fn #fn_name(tx_context: &#tx_context_ty, instances: Vec<#entity_type>) -> Result<(), AppError> {
             for instance in instances {
                 #(#store_many_statements)*
             }
@@ -66,9 +66,9 @@ pub fn store_many_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &T
             let storage = random_storage();
             let entity_count: usize = 3;
             let test_entities = #entity_type::sample_many(entity_count);
-            let mut tx_context = #entity_name::begin_write_tx(&storage).unwrap();
-            let pk = #entity_name::#fn_name(&mut tx_context, test_entities).expect("Failed to store and commit instance");
-            tx_context.commit_all().expect("Failed to flush transaction context");
+            let tx_context = #entity_name::begin_write_ctx(&storage).unwrap();
+            let pk = #entity_name::#fn_name(&tx_context, test_entities).expect("Failed to store and commit instance");
+            tx_context.commit_and_close_ctx().expect("Failed to flush transaction context");
         }
     });
 
@@ -80,9 +80,9 @@ pub fn store_many_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &T
             let entity_count = 3;
             let test_entities = #entity_type::sample_many(entity_count);
             b.iter(|| {
-                let mut tx_context = #entity_name::begin_write_tx(&storage).unwrap();
-                #entity_name::#fn_name(&mut tx_context, test_entities.clone()).expect("Failed to store and commit instance");
-                tx_context.commit_all().expect("Failed to flush transaction context");
+                let tx_context = #entity_name::begin_write_ctx(&storage).unwrap();
+                #entity_name::#fn_name(&tx_context, test_entities.clone()).expect("Failed to store and commit instance");
+                tx_context.commit_and_close_ctx().expect("Failed to flush transaction context");
             });
         }
     });
@@ -101,9 +101,9 @@ pub fn store_and_commit_def(entity_name: &Ident, entity_type: &Type, pk_name: &I
     let fn_stream = quote! {
         pub fn #fn_name(storage: Arc<Storage>, instance: #entity_type) -> Result<#pk_type, AppError> {
            let pk = instance.#pk_name;
-           let mut tx_context = #entity_name::begin_write_tx(&storage)?;
+           let tx_context = #entity_name::begin_write_ctx(&storage)?;
            #(#store_statements)*
-           tx_context.two_phase_commit()?;
+           tx_context.two_phase_commit_and_close()?;
            Ok(pk)
        }
     };

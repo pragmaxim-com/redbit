@@ -22,7 +22,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
         fn #fn_name() {
             let storage = STORAGE.clone();
             let pk_value = #pk_type::default();
-            let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
+            let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             let entity = #entity_name::#fn_name(&tx_context, &pk_value).expect("Failed to get entity by PK").expect("Expected entity to exist");
             let expected_enity = #entity_type::sample();
             assert_eq!(entity, expected_enity, "Entity PK does not match the requested PK");
@@ -35,7 +35,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
         fn #bench_fn_name(b: &mut Bencher) {
             let storage = STORAGE.clone();
             let pk_value = #pk_type::default();
-            let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
+            let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             b.iter(|| {
                 #entity_name::#fn_name(&tx_context, &pk_value).expect("Failed to get entity by PK").expect("Expected entity to exist");
             });
@@ -60,7 +60,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
               impl IntoResponse {
-                 match #entity_name::begin_read_tx(&state.storage)
+                 match #entity_name::begin_read_ctx(&state.storage)
                    .and_then(|tx_context| #entity_name::#fn_name(&tx_context, &#pk_name) ) {
                        Ok(Some(entity)) => {
                            (StatusCode::OK, AppJson(entity)).into_response()

@@ -1,6 +1,6 @@
 #[cfg(all(test, feature = "integration"))]
 mod chain_tests {
-    use chain::api::{BlockChainLike, BlockProvider};
+    use chain::api::BlockProvider;
     use chain::settings::AppConfig;
     use chain::syncer::ChainSyncer;
     use demo::block_provider::DemoBlockProvider;
@@ -12,7 +12,7 @@ mod chain_tests {
     async fn test_chain_sync() {
         let target_height = 200u32;
         let storage = Storage::temp("chain_sync_test", 1, true).await.expect("Failed to open database");
-        let chain: Arc<dyn BlockChainLike<Block>> = BlockChain::new(Arc::clone(&storage));
+        let chain = BlockChain::new(Arc::clone(&storage));
         chain.init().expect("Failed to initialize chain");
         let config = AppConfig::new("config/settings").expect("Failed to load app config");
         let block_provider: Arc<dyn BlockProvider<Block, Block>> = DemoBlockProvider::new(target_height).expect("Failed to create block provider");
@@ -25,7 +25,7 @@ mod chain_tests {
         println!("Demo chain sync took {:.1}s", secs);
         let last_header = chain.get_last_header().unwrap().expect("Last header must be present");
         assert_eq!(last_header.height, Height(target_height));
-        let tx_context = Header::begin_read_tx(&storage).expect("Failed to begin read transaction context");
+        let tx_context = Header::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
         let block_headers = Header::range(&tx_context, &Height(0), &Height(target_height + 1), None).unwrap();
         let header_near_tip = block_headers.get(target_height as usize - 11).cloned().unwrap();
         assert_eq!(block_headers.len(), target_height as usize); // genesis not stored

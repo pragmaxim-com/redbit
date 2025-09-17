@@ -2,7 +2,7 @@ use std::fmt::Display;
 use async_trait::async_trait;
 use futures::Stream;
 use hex::FromHexError;
-use redbit::AppError;
+use redbit::{AppError, WriteTxContext};
 use std::pin::Pin;
 use std::sync::Arc;
 use redb::StorageError;
@@ -67,13 +67,14 @@ pub trait SizeLike: Send + Sync {
 }
 
 #[async_trait]
-pub trait BlockChainLike<B: BlockLike>: Send + Sync {
+pub trait BlockChainLike<B: BlockLike, CTX: WriteTxContext>: Send + Sync {
+    fn new_indexing_ctx(&self) -> Result<CTX, ChainError>;
     fn init(&self) -> Result<(), ChainError>;
     fn delete(&self) -> Result<(), ChainError>;
     fn get_last_header(&self) -> Result<Option<B::Header>, ChainError>;
     fn get_header_by_hash(&self, hash: <B::Header as BlockHeaderLike>::Hash) -> Result<Vec<B::Header>, ChainError>;
-    fn store_blocks(&self, blocks: Vec<B>) -> Result<(), ChainError>;
-    fn update_blocks(&self, blocks: Vec<B>) -> Result<(), ChainError>;
+    fn store_blocks(&self, indexing_context: &CTX, blocks: Vec<B>) -> Result<(), ChainError>;
+    fn update_blocks(&self, indexing_context: &CTX, blocks: Vec<B>) -> Result<(), ChainError>;
     async fn validate_chain(&self, validation_from_height: u32) -> Result<Vec<B::Header>, ChainError>;
 }
 

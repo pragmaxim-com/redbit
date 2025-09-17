@@ -72,6 +72,7 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
     function_defs.push(store::store_def(entity_ident, &entity_type, &write_tx_context_type, &store_statements));
     function_defs.push(store::store_many_def(entity_ident, &entity_type, &write_tx_context_type, &store_many_statements));
     function_defs.push(context::begin_write_fn_def(&write_tx_context_type));
+    function_defs.push(context::new_write_fn_def(&write_tx_context_type));
     function_defs.push(context::begin_read_fn_def(&read_tx_context_type));
     function_defs.extend(column_function_defs.clone());
     function_defs.push(delete::delete_and_commit_def(entity_ident, &entity_type, &key.name, &key.tpe, &delete_statements));

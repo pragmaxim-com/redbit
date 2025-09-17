@@ -57,7 +57,7 @@ pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, col_fi
             let storage = STORAGE.clone();
             let from_value = #column_type::default();
             let until_value = #column_type::default().nth_value(2);
-            let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
+            let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             let entity_stream = #entity_name::#fn_name(tx_context, from_value, until_value, None).expect("Failed to range entities by index");
             let entities = entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
             let expected_entities = #entity_type::sample_many(2);
@@ -70,7 +70,7 @@ pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, col_fi
             let from_value = #column_type::default();
             let until_value = #column_type::default().nth_value(3);
             let query = #stream_query_type::sample();
-            let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
+            let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             let entity_stream = #entity_name::#fn_name(tx_context, from_value, until_value, Some(query.clone())).expect("Failed to range entities by index");
             let entities = entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
             let expected_entity = #entity_type::sample_with_query(&pk, 0, &query).expect("Failed to create sample entity with query");
@@ -90,7 +90,7 @@ pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, col_fi
                 rt.block_on(async {
                     let from_value = #column_type::default();
                     let until_value = #column_type::default().nth_value(3);
-                    let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
+                    let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
                     let entity_stream = #entity_name::#fn_name(tx_context, from_value, until_value, Some(query.clone())).expect("Failed to range entities by index");
                     entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
                 })
@@ -120,7 +120,7 @@ pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, col_fi
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                impl IntoResponse {
-                   match #entity_name::begin_read_tx(&state.storage)
+                   match #entity_name::begin_read_ctx(&state.storage)
                         .and_then(|tx_context| #entity_name::#fn_name(tx_context, query.from, query.until, body)) {
                             Ok(stream) => axum_streams::StreamBodyAs::json_nl_with_errors(stream).header("Content-Type", HeaderValue::from_str("application/x-ndjson").unwrap()).into_response(),
                             Err(err)   => err.into_response(),

@@ -26,15 +26,11 @@ pub fn test_suite(entity_name: &Ident, parent_def: Option<OneToManyParentDef>, f
                 .expect("Failed to create temporary storage")
         }
 
-        async fn random_storage_async() -> Arc<Storage> {
-           Storage::temp(#entity_literal, 0, true).await.expect("Failed to create temporary storage")
-        }
-
         fn initialize_storage(storage: Arc<Storage>) {
             let entities = #sample_entity::sample_many(#sample_count);
-            let mut tx_context = #sample_entity::begin_write_tx(&storage).expect("Failed to begin write transaction");
-            #sample_entity::store_many(&mut tx_context, entities).expect("Failed to store sample entities");
-            tx_context.commit_all().expect("Failed to commit all");
+            let tx_context = #sample_entity::begin_write_ctx(&storage).expect("Failed to begin write transaction");
+            #sample_entity::store_many(&tx_context, entities).expect("Failed to store sample entities");
+            tx_context.commit_and_close_ctx().expect("Failed to commit all");
         }
     };
 
@@ -68,6 +64,10 @@ pub fn test_suite(entity_name: &Ident, parent_def: Option<OneToManyParentDef>, f
             #db_init
 
             static SERVER: OnceCell<Arc<axum_test::TestServer>> = OnceCell::const_new();
+
+            async fn random_storage_async() -> Arc<Storage> {
+               Storage::temp(#entity_literal, 0, true).await.expect("Failed to create temporary storage")
+            }
 
             async fn get_delete_server() -> Arc<axum_test::TestServer> {
                 let storage = random_storage_async().await;

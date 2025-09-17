@@ -13,7 +13,7 @@ pub fn one2one_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
         fn #fn_name() {
             let storage = STORAGE.clone();
             let pk_value = #pk_type::default();
-            let tx_context = #child_type::begin_read_tx(&storage).expect("Failed to begin read transaction context");
+            let tx_context = #child_type::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             let child = #entity_name::#fn_name(&tx_context, &pk_value).expect("Failed to get child by PK");
             assert_eq!(child.#pk_name, pk_value, "Child PK does not match the requested PK");
         }
@@ -25,7 +25,7 @@ pub fn one2one_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
         fn #bench_fn_name(b: &mut Bencher) {
             let storage = STORAGE.clone();
             let pk_value = #pk_type::default();
-            let tx_context = #child_type::begin_read_tx(&storage).expect("Failed to begin read transaction context");
+            let tx_context = #child_type::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             b.iter(|| {
                 #entity_name::#fn_name(&tx_context, &pk_value).expect("Failed to get child by PK");
             });
@@ -56,7 +56,7 @@ pub fn one2one_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                Result<AppJson<#child_type>, AppError> {
-                    let tx_context = #child_type::begin_read_tx(&state.storage)?;
+                    let tx_context = #child_type::begin_read_ctx(&state.storage)?;
                     let result = #entity_name::#fn_name(&tx_context, &#pk_name)?;
                     Ok(AppJson(result))
                 }
@@ -82,7 +82,7 @@ pub fn one2opt_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
         fn #fn_name() {
             let storage = STORAGE.clone();
             let pk_value = #pk_type::default();
-            let tx_context = #child_type::begin_read_tx(&storage).expect("Failed to begin read transaction context");
+            let tx_context = #child_type::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             let maybe_child = #entity_name::#fn_name(&tx_context, &pk_value).expect("Failed to get child by PK");
             assert!(maybe_child.is_none() || maybe_child.unwrap().#pk_name == pk_value, "Unexpected child PK");
         }
@@ -94,7 +94,7 @@ pub fn one2opt_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
         fn #bench_fn_name(b: &mut Bencher) {
             let storage = STORAGE.clone();
             let pk_value = #pk_type::default();
-            let tx_context = #child_type::begin_read_tx(&storage).expect("Failed to begin read transaction context");
+            let tx_context = #child_type::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             b.iter(|| {
                 #entity_name::#fn_name(&tx_context, &pk_value).expect("Failed to get child by PK");
             });
@@ -123,7 +123,7 @@ pub fn one2opt_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                Result<AppJson<#child_type>, AppError> {
-                 #child_type::begin_read_tx(&state.storage)
+                 #child_type::begin_read_ctx(&state.storage)
                     .and_then(|tx_context| #entity_name::#fn_name(&tx_context, &#pk_name)
                         .and_then(|opt| {
                             opt.ok_or_else(|| AppError::NotFound(format!("No {} found", stringify!(#child_name)))) }) )
@@ -151,7 +151,7 @@ pub fn one2many_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, 
         fn #fn_name() {
             let storage = STORAGE.clone();
             let pk_value = #pk_type::default();
-            let tx_context = #child_type::begin_read_tx(&storage).expect("Failed to begin read transaction context");
+            let tx_context = #child_type::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             let children = #entity_name::#fn_name(&tx_context, &pk_value).expect("Failed to get children by PK");
             assert!(children.len() == 3, "Expected 3 children for the given PK");
         }
@@ -163,7 +163,7 @@ pub fn one2many_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, 
         fn #bench_fn_name(b: &mut Bencher) {
             let storage = STORAGE.clone();
             let pk_value = #pk_type::default();
-            let tx_context = #child_type::begin_read_tx(&storage).expect("Failed to begin read transaction context");
+            let tx_context = #child_type::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             b.iter(|| {
                 #entity_name::#fn_name(&tx_context, &pk_value).expect("Failed to get children by PK");
             });
@@ -199,7 +199,7 @@ pub fn one2many_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, 
             },
             handler_impl_stream: quote! {
                Result<AppJson<Vec<#child_type>>, AppError> {
-                    let tx_context = #child_type::begin_read_tx(&state.storage)?;
+                    let tx_context = #child_type::begin_read_ctx(&state.storage)?;
                     let result = #entity_name::#fn_name(&tx_context, &#pk_name)?;
                     Ok(AppJson(result))
                 }

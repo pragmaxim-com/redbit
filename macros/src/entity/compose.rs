@@ -22,7 +22,7 @@ pub fn compose_token_stream(entity_name: &Ident, entity_type: &Type, pk_type: &T
                 let sample_entity = #entity_name::sample();
                 let write_result = #entity_name::store_and_commit(Arc::clone(&storage), sample_entity);
                 assert!(write_result.is_ok());
-                let tx_context = #entity_name::begin_read_tx(&storage).unwrap();
+                let tx_context = #entity_name::begin_read_ctx(&storage).unwrap();
                 let entity = #entity_name::compose(&tx_context, &pk).unwrap();
                 let loaded_entity = #entity_name::get(&tx_context, &pk).expect("Failed to load entity").expect("Entity not found");
                 let serialization_result = serde_json::to_string(&loaded_entity);
@@ -53,7 +53,7 @@ pub fn compose_with_filter_token_stream(entity_type: &Type, pk_type: &Type, tx_c
                 let sample_entity = #entity_type::sample();
                 let write_result = #entity_type::store_and_commit(Arc::clone(&storage), sample_entity);
                 let query = #stream_query_type::default();
-                let tx_context = #entity_type::begin_read_tx(&storage).unwrap();
+                let tx_context = #entity_type::begin_read_ctx(&storage).unwrap();
                 let entity = #entity_type::compose_with_filter(&tx_context, &pk, &query).expect("Failed to compose entity").expect("Entity does not match");
                 assert!(write_result.is_ok());
                 let loaded_entity = #entity_type::get(&tx_context, &pk).expect("Failed to load entity").expect("Entity not found");

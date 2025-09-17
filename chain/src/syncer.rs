@@ -6,19 +6,19 @@ use crate::monitor::ProgressMonitor;
 use crate::settings::{IndexerSettings, Parallelism};
 use crate::task;
 use futures::StreamExt;
-use redbit::{error, info, warn};
+use redbit::{error, info, warn, WriteTxContext};
 use std::sync::Arc;
 use tokio::sync::{mpsc, watch};
 use tokio_stream::wrappers::ReceiverStream;
 
-pub struct ChainSyncer<FB: SizeLike + 'static, TB: BlockLike + 'static> {
+pub struct ChainSyncer<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext> {
     pub block_provider: Arc<dyn BlockProvider<FB, TB>>,
-    pub chain: Arc<dyn BlockChainLike<TB>>,
+    pub chain: Arc<dyn BlockChainLike<TB, CTX>>,
     pub monitor: Arc<ProgressMonitor>,
 }
 
-impl<FB: SizeLike + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
-    pub fn new(block_provider: Arc<dyn BlockProvider<FB, TB>>, chain: Arc<dyn BlockChainLike<TB>>) -> Self {
+impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'static> ChainSyncer<FB, TB, CTX> {
+    pub fn new(block_provider: Arc<dyn BlockProvider<FB, TB>>, chain: Arc<dyn BlockChainLike<TB, CTX>>) -> Self {
         Self { block_provider, chain, monitor: Arc::new(ProgressMonitor::new(1000)) }
     }
 
@@ -152,26 +152,32 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
             let chain = Arc::clone(&chain);
             let shutdown = shutdown.clone();
             task::spawn_blocking_named("persist", move || {
-                loop {
-                    if *shutdown.borrow() {
-                        info!("persist: shutdown signal received");
-                        break;
-                    } else {
-                        match sort_rx.blocking_recv() {
-                            Some(batch) => {
-                                if let Err(e) = Self::persist_or_link(
-                                    batch,
-                                    fork_detection_height,
-                                    Arc::clone(&block_provider),
-                                    Arc::clone(&chain),
-                                ) {
-                                    error!("persist: persist_blocks returned error {e}");
-                                    return;
+                if let Ok(index_context) = chain.new_indexing_ctx() {
+                    loop {
+                        if *shutdown.borrow() {
+                            info!("persist: shutdown signal received");
+                            break;
+                        } else {
+                            match sort_rx.blocking_recv() {
+                                Some(batch) => {
+                                    if let Err(e) = Self::persist_or_link(
+                                        &index_context,
+                                        batch,
+                                        fork_detection_height,
+                                        Arc::clone(&block_provider),
+                                        Arc::clone(&chain),
+                                    ) {
+                                        error!("persist: persist_blocks returned error {e}");
+                                        return;
+                                    }
                                 }
+                                None => break,
                             }
-                            None => break,
                         }
                     }
+                    index_context.stop_writing().unwrap();
+                } else {
+                    panic!("persist: cannot create indexing context");
                 }
             })
         };
@@ -180,7 +186,7 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
         Ok(())
     }
 
-    fn chain_link(block: TB, block_provider: Arc<dyn BlockProvider<FB, TB>>, chain: Arc<dyn BlockChainLike<TB>>) -> Result<Vec<TB>, ChainError> {
+    fn chain_link(block: TB, block_provider: Arc<dyn BlockProvider<FB, TB>>, chain: Arc<dyn BlockChainLike<TB, CTX>>) -> Result<Vec<TB>, ChainError> {
         let header = block.header();
         let prev_headers = chain.get_header_by_hash(header.prev_hash())?;
         let height = header.height();
@@ -225,19 +231,19 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static> ChainSyncer<FB, TB> {
 
     }
 
-    pub fn persist_or_link(mut blocks: Vec<TB>, fork_detection_height: u32, block_provider: Arc<dyn BlockProvider<FB, TB>>, block_chain: Arc<dyn BlockChainLike<TB>>) -> Result<(), ChainError> {
+    pub fn persist_or_link(indexing_context: &CTX, mut blocks: Vec<TB>, fork_detection_height: u32, block_provider: Arc<dyn BlockProvider<FB, TB>>, block_chain: Arc<dyn BlockChainLike<TB, CTX>>) -> Result<(), ChainError> {
         if blocks.is_empty() {
             error!("Received empty block batch, nothing to persist");
             Ok(())
         } else if blocks.last().is_some_and(|b| b.header().height() <= fork_detection_height) {
-            block_chain.store_blocks(blocks)
+            block_chain.store_blocks(indexing_context, blocks)
         } else {
             for block in blocks.drain(..) {
                 let chain = Self::chain_link(block, Arc::clone(&block_provider), Arc::clone(&block_chain))?;
                 match chain.len() {
                     0 => (),
-                    1 => block_chain.store_blocks(chain)?,
-                    _ => block_chain.update_blocks(chain)?,
+                    1 => block_chain.store_blocks(indexing_context, chain)?,
+                    _ => block_chain.update_blocks(indexing_context, chain)?,
                 }
             }
             Ok(())

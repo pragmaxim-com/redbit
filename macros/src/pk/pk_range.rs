@@ -6,8 +6,8 @@ use syn::Type;
 pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type: &Type, table_var: &Ident, tx_context_ty: &Type) -> FunctionDef {
     let fn_name = format_ident!("pk_range");
     let fn_stream = quote! {
-        fn #fn_name(tx_context: &mut #tx_context_ty, from: #pk_type, until: #pk_type) -> Result<Vec<#pk_type>, AppError> {
-            let mut entries = tx_context.#table_var.range(from, until)?;
+        fn #fn_name(tx_context: &#tx_context_ty, from: #pk_type, until: #pk_type) -> Result<Vec<#pk_type>, AppError> {
+            let entries = tx_context.#table_var.range(from, until)?;
             let mut results = Vec::new();
             for (key, _) in entries {
                 let pointer: #pk_type = key.as_value();
@@ -25,9 +25,9 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
             let from_value = #pk_type::default();
             let until_value = #pk_type::default().next_index().next_index().next_index();
             let pks = {
-                let mut tx_context = #entity_name::begin_write_tx(&storage).unwrap();
-                let pks = #entity_name::#fn_name(&mut tx_context, from_value, until_value).expect("Failed to get PKs in range");
-                tx_context.commit_all().expect("Failed to flush transaction context");
+                let tx_context = #entity_name::begin_write_ctx(&storage).unwrap();
+                let pks = #entity_name::#fn_name(&tx_context, from_value, until_value).expect("Failed to get PKs in range");
+                tx_context.commit_and_close_ctx().expect("Failed to flush transaction context");
                 pks
             };
             let test_pks: Vec<#pk_type> = #entity_type::sample_many(entity_count).iter().map(|e| e.#pk_name).collect();
@@ -43,9 +43,9 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
             let from_value = #pk_type::default();
             let until_value = #pk_type::default().next_index().next_index().next_index();
             b.iter(|| {
-                let mut tx_context = #entity_name::begin_write_tx(&storage).unwrap();
-                #entity_name::#fn_name(&mut tx_context, from_value, until_value).expect("Failed to get PKs in range");
-                tx_context.commit_all().expect("Failed to flush transaction context");
+                let tx_context = #entity_name::begin_write_ctx(&storage).unwrap();
+                #entity_name::#fn_name(&tx_context, from_value, until_value).expect("Failed to get PKs in range");
+                tx_context.commit_and_close_ctx().expect("Failed to flush transaction context");
             });
         }
     });

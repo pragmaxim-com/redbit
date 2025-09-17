@@ -37,7 +37,7 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
             let storage = STORAGE.clone();
             let from_value = #column_type::default();
             let until_value = #column_type::default().next_value();
-            let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
+            let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             let entities = #entity_name::#fn_name(&tx_context, &from_value, &until_value).expect("Failed to get entities by range");
             let expected_entities = vec![#entity_type::sample()];
             assert_eq!(expected_entities, entities, "Expected entities to be returned for the given range by index");
@@ -51,7 +51,7 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
             let storage = STORAGE.clone();
             let from_value = #column_type::default();
             let until_value = #column_type::default().next_value();
-            let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
+            let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             b.iter(|| {
                 #entity_name::#fn_name(&tx_context, &from_value, &until_value).expect("Failed to get entities by range");
             });

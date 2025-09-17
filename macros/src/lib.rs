@@ -24,7 +24,8 @@ use syn::{parse_macro_input, parse_quote, parse_str, DeriveInput, Fields, ItemSt
 use syn::punctuated::Punctuated;
 use syn::token::Comma;
 use crate::column::column_codec;
-use crate::entity::chain;
+use crate::entity::{chain, context};
+use crate::entity::context::TxType;
 
 #[proc_macro_attribute]
 #[proc_macro_error]
@@ -221,7 +222,9 @@ pub fn derive_entity(input: TokenStream) -> TokenStream {
         if struct_ident.to_string().contains("Header") {
             chain::block_header_like(syn::parse_quote!(#struct_ident), &field_defs)
         } else if struct_ident.to_string().contains("Block") {
-            chain::block_like(syn::parse_quote!(#struct_ident), &field_def.name, &field_def.tpe, &field_defs)
+            let block_type = syn::parse_quote!(#struct_ident);
+            let write_tx_context = context::entity_tx_context_type(&block_type, TxType::Write);
+            chain::block_like(block_type, &field_def.name, &field_def.tpe, &field_defs, &write_tx_context)
         } else {
             Ok(quote! {})
         }.unwrap_or_else(|e| abort!(item_struct, "{}", e));

@@ -25,7 +25,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, tx_contex
                 let storage = STORAGE.clone();
                 let query = #stream_query_type::sample();
                 let pk_default_next = #pk_type::default().next_index();
-                let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
+                let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
                 let entity_opt = #entity_name::#fn_name(&tx_context, &pk_default_next, &query).expect("Failed to get entity by PK");
                 assert_eq!(entity_opt, None, "Filter is set for default value {:?}", query);
             }
@@ -38,7 +38,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, tx_contex
             let storage = STORAGE.clone();
             let query = #stream_query_type::sample();
             let pk_default = #pk_type::default();
-            let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
+            let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             let entity = #entity_name::#fn_name(&tx_context, &pk_default, &query).expect("Failed to get entity by PK").expect("Expected entity to exist");
             let expected_entity = #entity_type::sample_with_query(&pk_default, 0, &query).expect("Failed to create sample entity with query");
             assert_eq!(entity, expected_entity, "Entity PK does not match the requested PK");
@@ -53,7 +53,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, tx_contex
             let storage = STORAGE.clone();
             let query = #stream_query_type::sample();
             let pk_default = #pk_type::default();
-            let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
+            let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             b.iter(|| {
                 #entity_name::#fn_name(&tx_context, &pk_default, &query).expect("Failed to get entity by PK").expect("Expected entity to exist");
             });

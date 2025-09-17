@@ -19,7 +19,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &Type, tab
         #[test]
         fn #fn_name() {
             let storage = STORAGE.clone();
-            let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
+            let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             let entity = #entity_name::first(&tx_context).expect("Failed to get first entity by PK").expect("Expected first entity to exist");
             let expected_enity = #entity_type::sample();
             assert_eq!(entity, expected_enity, "First entity does not match expected");
@@ -31,7 +31,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &Type, tab
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
             let storage = STORAGE.clone();
-            let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
+            let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             b.iter(|| {
                 #entity_name::first(&tx_context).expect("Failed to get first entity by PK").expect("Expected first entity to exist");
             });
@@ -51,7 +51,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &Type, tab
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                Result<AppJson<Vec<#entity_type>>, AppError> {
-                    let tx_context = #entity_name::begin_read_tx(&state.storage)?;
+                    let tx_context = #entity_name::begin_read_ctx(&state.storage)?;
                     let result: Vec<#entity_type> = #entity_name::#fn_name(&tx_context).map(|r| r.into_iter().collect())?;
                     Ok(AppJson(result))
                 }

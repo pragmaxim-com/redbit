@@ -97,18 +97,29 @@ impl Storage {
 }
 
 pub trait WriteTxContext {
-    fn begin_write_tx(storage: &Arc<Storage>) -> redb::Result<Self, AppError>
-    where
-        Self: Sized;
-    fn commit_all_async(self) -> Result<Vec<FlushFuture>, AppError> where Self: Sized;
-    fn commit_all(self) -> Result<Vec<()>, AppError> where Self: Sized {
-        self.commit_all_async()?.into_iter().map(|f| f.wait()).collect::<Result<Vec<_>, _>>()
+    fn new_write_ctx(storage: &Arc<Storage>) -> redb::Result<Self, AppError> where Self: Sized;
+    fn begin_writing(&self) -> redb::Result<(), AppError>;
+    fn stop_writing(self) -> redb::Result<(), AppError> where Self: Sized;
+    fn commit_ctx_async(&self) -> Result<Vec<FlushFuture>, AppError>;
+    fn two_phase_commit(&self) -> Result<(), AppError>;
+
+    fn begin_write_ctx(storage: &Arc<Storage>) -> redb::Result<Self, AppError> where Self: Sized {
+        let ctx = Self::new_write_ctx(storage)?;
+        let _ = ctx.begin_writing()?;
+        Ok(ctx)
     }
-    fn two_phase_commit(self) -> Result<(), AppError>;
+    fn commit_and_close_ctx(self) -> Result<(), AppError> where Self: Sized {
+        let _ = self.commit_ctx_async()?.into_iter().map(|f| f.wait()).collect::<Result<Vec<_>, _>>();
+        self.stop_writing()
+    }
+    fn two_phase_commit_and_close(self) -> Result<(), AppError> where Self: Sized {
+        self.two_phase_commit()?;
+        self.stop_writing()
+    }
 }
 
 pub trait ReadTxContext {
-    fn begin_read_tx(storage: &Arc<Storage>) -> redb::Result<Self, AppError>
+    fn begin_read_ctx(storage: &Arc<Storage>) -> redb::Result<Self, AppError>
     where
         Self: Sized;
 }

@@ -8,7 +8,7 @@ use syn::Type;
 pub fn delete_def(pk_type: &Type, tx_context_ty: &Type, delete_statements: &[TokenStream]) -> FunctionDef {
     let fn_name = format_ident!("delete");
     let fn_stream = quote! {
-        pub fn #fn_name(tx_context: &mut #tx_context_ty, pk: #pk_type) -> Result<bool, AppError> {
+        pub fn #fn_name(tx_context: &#tx_context_ty, pk: #pk_type) -> Result<bool, AppError> {
             let mut removed: Vec<bool> = Vec::new();
             #(#delete_statements)*
             Ok(!removed.contains(&false))
@@ -20,7 +20,7 @@ pub fn delete_def(pk_type: &Type, tx_context_ty: &Type, delete_statements: &[Tok
 pub fn delete_many_def(pk_type: &Type, tx_context_ty: &Type, delete_many_statements: &[TokenStream]) -> FunctionDef {
     let fn_name = format_ident!("delete_many");
     let fn_stream = quote! {
-        pub fn #fn_name(tx_context: &mut #tx_context_ty, pks: &[#pk_type]) -> Result<bool, AppError> {
+        pub fn #fn_name(tx_context: &#tx_context_ty, pks: &[#pk_type]) -> Result<bool, AppError> {
             let mut removed: Vec<bool> = Vec::new();
             #(#delete_many_statements)*
             Ok(!removed.contains(&false))
@@ -40,9 +40,9 @@ pub fn delete_and_commit_def(
     let fn_stream = quote! {
         pub fn #fn_name(storage: Arc<Storage>, pk: #pk_type) -> Result<bool, AppError> {
            let mut removed: Vec<bool> = Vec::new();
-           let mut tx_context = #entity_name::begin_write_tx(&storage)?;
+           let tx_context = #entity_name::begin_write_ctx(&storage)?;
            #(#delete_statements)*
-           tx_context.commit_all()?;
+           tx_context.commit_and_close_ctx()?;
            Ok(!removed.contains(&false))
        }
     };
@@ -53,14 +53,14 @@ pub fn delete_and_commit_def(
             let storage = random_storage();
             let entity_count: usize = 3;
             let entities = #entity_type::sample_many(entity_count);
-            let mut tx_context = #entity_name::begin_write_tx(&storage).expect("Failed to begin write transaction context");
-            #entity_name::store_many(&mut tx_context, entities.clone()).expect("Failed to store many instances");
-            tx_context.commit_all().expect("Failed to commit transaction context");
+            let tx_context = #entity_name::begin_write_ctx(&storage).expect("Failed to begin write transaction context");
+            #entity_name::store_many(&tx_context, entities.clone()).expect("Failed to store many instances");
+            tx_context.commit_and_close_ctx().expect("Failed to commit transaction context");
 
             for test_entity in entities {
                 let pk = test_entity.#pk_name;
                 let removed = #entity_name::#fn_name(Arc::clone(&storage), pk).expect("Failed to delete and commit instance");
-                let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
+                let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
                 let is_empty = #entity_name::get(&tx_context, &pk).expect("Failed to get instance").is_none();
                 assert!(removed, "Instance should be deleted");
                 assert!(is_empty, "Instance should be deleted");

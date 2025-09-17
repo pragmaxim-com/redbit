@@ -1,11 +1,11 @@
-use chain::api::{BlockChainLike, BlockProvider};
+use chain::api::BlockProvider;
 use std::{sync::Arc, time::Duration};
 
 use chain::settings::AppConfig;
 use chain::syncer::ChainSyncer;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use demo::block_provider::DemoBlockProvider;
-use demo::model_v1::{Block, BlockChain};
+use demo::model_v1::*;
 use redbit::{info, Storage};
 use tokio::runtime::Runtime;
 use tokio::sync::watch;
@@ -15,7 +15,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     let storage = rt.block_on(Storage::temp("demo_benchmark", 1, true)).unwrap();
 
     let block_provider: Arc<dyn BlockProvider<Block, Block>> = DemoBlockProvider::new(10).expect("Failed to create block provider");
-    let chain: Arc<dyn BlockChainLike<Block>> = BlockChain::new(Arc::clone(&storage));
+    let chain = BlockChain::new(Arc::clone(&storage));
     chain.init().expect("Failed to initialize chain");
     let syncer = ChainSyncer::new(block_provider, chain.clone());
     let mut config = AppConfig::new("config/settings").expect("Failed to load app config");
@@ -34,6 +34,15 @@ fn criterion_benchmark(c: &mut Criterion) {
             syncer.sync(&config.indexer, None, shutdown_rx.clone()).await.expect("Syncing failed"); // syncing is ~ as fast as deleting, which is good
             chain.delete()
         })
+    });
+
+    group.bench_function(BenchmarkId::from_parameter("indexing_context"), |bencher| {
+        bencher.iter(|| {
+                let ctx = chain.new_indexing_ctx().expect("Failed to create indexing context");
+                ctx.begin_writing().unwrap();
+                ctx.commit_and_close_ctx().unwrap();
+            }
+        );
     });
 
     group.finish();

@@ -103,7 +103,7 @@ pub fn block_header_like(header_type: Type, field_defs: &[FieldDef]) -> Result<T
     })
 }
 
-pub fn block_like(block_type: Type, pk_name: &Ident, pk_type: &Type, field_defs: &[FieldDef]) -> Result<TokenStream, syn::Error> {
+pub fn block_like(block_type: Type, pk_name: &Ident, pk_type: &Type, field_defs: &[FieldDef], write_tx_context: &Type) -> Result<TokenStream, syn::Error> {
     let header_type = field_type_from(field_defs, "header")?;
 
     Ok(quote! {
@@ -119,62 +119,66 @@ pub fn block_like(block_type: Type, pk_name: &Ident, pk_type: &Type, field_defs:
         }
 
         impl BlockChain {
-            pub fn new(storage: Arc<Storage>) -> Arc<dyn BlockChainLike<#block_type>> {
+            pub fn new(storage: Arc<Storage>) -> Arc<dyn BlockChainLike<#block_type, #write_tx_context>> {
                 Arc::new(BlockChain { storage })
             }
         }
 
         #[async_trait::async_trait]
-        impl chain::BlockChainLike<#block_type> for BlockChain {
+        impl chain::BlockChainLike<#block_type, #write_tx_context> for BlockChain {
             fn init(&self) -> Result<(), chain::ChainError> {
                 Ok(#block_type::init(Arc::clone(&self.storage))?)
             }
 
+            fn new_indexing_ctx(&self) -> Result<#write_tx_context, chain::ChainError> {
+                #block_type::new_write_ctx(&self.storage).map_err(|e| chain::ChainError::Custom(format!("Failed to create new indexing context: {}", e)))
+            }
+
             fn delete(&self) -> Result<(), chain::ChainError> {
-                let tx_context = #header_type::begin_read_tx(&self.storage)?;
+                let tx_context = #header_type::begin_read_ctx(&self.storage)?;
                 if let Some(tip_header) = #header_type::last(&tx_context)? {
-                    let mut tx_context = #block_type::begin_write_tx(&self.storage)?;
+                    let tx_context = #block_type::begin_write_ctx(&self.storage)?;
                     let pks = #pk_type::from_many(&(0..=tip_header.#pk_name.0).collect::<Vec<u32>>());
-                    #block_type::delete_many(&mut tx_context, &pks)?;
-                    tx_context.commit_all()?;
+                    #block_type::delete_many(&tx_context, &pks)?;
+                    tx_context.commit_and_close_ctx()?;
                 }
                 Ok(())
             }
 
             fn get_last_header(&self) -> Result<Option<#header_type>, chain::ChainError> {
-                let tx_context = #header_type::begin_read_tx(&self.storage)?;
+                let tx_context = #header_type::begin_read_ctx(&self.storage)?;
                 let last = #header_type::last(&tx_context)?;
                 Ok(last)
             }
 
             fn get_header_by_hash(&self, hash: <<Block as BlockLike>::Header as BlockHeaderLike>::Hash) -> Result<Vec<#header_type>, chain::ChainError> {
-                let tx_context = #header_type::begin_read_tx(&self.storage)?;
+                let tx_context = #header_type::begin_read_ctx(&self.storage)?;
                 let header = #header_type::get_by_hash(&tx_context, &hash)?;
                 Ok(header)
             }
 
-            fn store_blocks(&self, blocks: Vec<#block_type>) -> Result<(), chain::ChainError> {
-                let mut tx_context = #block_type::begin_write_tx(&self.storage)?;
+            fn store_blocks(&self, indexing_context: &#write_tx_context, blocks: Vec<#block_type>) -> Result<(), chain::ChainError> {
+                let _ = indexing_context.begin_writing()?;
                 for block in blocks.into_iter() {
-                    #block_type::store(&mut tx_context, block)?;
+                    #block_type::store(&indexing_context, block)?;
                 }
-                tx_context.two_phase_commit()?;
+                let _ = indexing_context.two_phase_commit()?;
                 Ok(())
             }
 
-            fn update_blocks(&self, blocks: Vec<#block_type>) -> Result<(), chain::ChainError> {
-                let mut tx_context = #block_type::begin_write_tx(&self.storage)?;
+            fn update_blocks(&self, indexing_context: &#write_tx_context, blocks: Vec<#block_type>) -> Result<(), chain::ChainError> {
+                let _ = indexing_context.begin_writing()?;
                 for block in &blocks {
-                    #block_type::delete(&mut tx_context, block.#pk_name)?;
+                    #block_type::delete(&indexing_context, block.#pk_name)?;
                 }
-                tx_context.commit_all()?;
-                self.store_blocks(blocks)?;
+                let _ = indexing_context.two_phase_commit()?;
+                self.store_blocks(indexing_context, blocks)?;
                 Ok(())
             }
 
             async fn validate_chain(&self, validation_from_height: u32) -> Result<Vec<#header_type>, chain::ChainError> {
                 use futures::StreamExt;
-                let tx_context = #header_type::begin_read_tx(&self.storage)?; // kept as-is even if unused
+                let tx_context = #header_type::begin_read_ctx(&self.storage)?; // kept as-is even if unused
                 let mut affected_headers: Vec<#header_type> = Vec::new();
                 if let Some(tip_header) = #header_type::last(&tx_context)? {
                     let mut stream = #header_type::stream_range(tx_context, #pk_type(validation_from_height), tip_header.#pk_name, None)?;

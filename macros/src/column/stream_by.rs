@@ -59,7 +59,7 @@ pub fn by_dict_def(
         async fn #fn_name() {
             let storage = STORAGE.clone();
             let val = #column_type::default();
-            let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
+            let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             let entity_stream = #entity_name::#fn_name(tx_context, val, None).expect("Failed to get entities by dictionary index");
             let entities = entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
             let expected_entities = vec![#entity_type::sample()];
@@ -71,7 +71,7 @@ pub fn by_dict_def(
             let val = #column_type::default();
             let pk = #pk_type::default();
             let query = #stream_query_type::sample();
-            let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
+            let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             let entity_stream = #entity_name::#fn_name(tx_context, val, Some(query.clone())).expect("Failed to get entities by index");
             let entities = entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
             let expected_entity = #entity_type::sample_with_query(&pk, 0, &query).expect("Failed to create sample entity with query");
@@ -89,7 +89,7 @@ pub fn by_dict_def(
             let rt = Runtime::new().unwrap();
             b.iter(|| {
                 rt.block_on(async {
-                    let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
+                    let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
                     let val = #column_type::default();
                     let entity_stream = #entity_name::#fn_name(tx_context, val, Some(query.clone())).expect("Failed to get entities by index");
                     entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
@@ -121,7 +121,7 @@ pub fn by_dict_def(
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                impl IntoResponse {
-                   match #entity_name::begin_read_tx(&state.storage)
+                   match #entity_name::begin_read_ctx(&state.storage)
                         .and_then(|tx_context| #entity_name::#fn_name(tx_context, #column_name, body)) {
                             Ok(stream) => axum_streams::StreamBodyAs::json_nl_with_errors(stream).header("Content-Type", HeaderValue::from_str("application/x-ndjson").unwrap()).into_response(),
                             Err(err)   => err.into_response(),
@@ -177,7 +177,7 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
         async fn #fn_name() {
             let storage = STORAGE.clone();
             let val = #column_type::default();
-            let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
+            let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             let entity_stream = #entity_name::#fn_name(tx_context, val, None).expect("Failed to get entities by index");
             let entities = entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
             let expected_entities = vec![#entity_type::sample()];
@@ -189,7 +189,7 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
             let val = #column_type::default();
             let pk = #pk_type::default();
             let query = #stream_query_type::sample();
-            let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
+            let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             let entity_stream = #entity_name::#fn_name(tx_context, val, Some(query.clone())).expect("Failed to get entities by index");
             let entities = entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
             let expected_entity = #entity_type::sample_with_query(&pk, 0, &query).expect("Failed to create sample entity with query");
@@ -207,7 +207,7 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
             let rt = Runtime::new().unwrap();
             b.iter(|| {
                 rt.block_on(async {
-                    let tx_context = #entity_name::begin_read_tx(&storage).expect("Failed to begin read transaction context");
+                    let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
                     let entity_stream = #entity_name::#fn_name(tx_context, #column_type::default(), Some(query.clone())).expect("Failed to get entities by index");
                     entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
                 })
@@ -240,7 +240,7 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
                impl IntoResponse {
-                   match #entity_name::begin_read_tx(&state.storage)
+                   match #entity_name::begin_read_ctx(&state.storage)
                         .and_then(|tx_context| #entity_name::#fn_name(tx_context, #column_name, body)) {
                             Ok(stream) => axum_streams::StreamBodyAs::json_nl_with_errors(stream).header("Content-Type", HeaderValue::from_str("application/x-ndjson").unwrap()).into_response(),
                             Err(err)   => err.into_response(),

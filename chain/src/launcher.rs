@@ -4,7 +4,7 @@ use crate::settings::{AppConfig, DbCacheSize, HttpSettings, IndexerSettings};
 use crate::{combine, ChainError};
 use futures::future::ready;
 use redbit::storage::Storage;
-use redbit::{error, info, serve, OpenApiRouter, RequestState};
+use redbit::{error, info, serve, OpenApiRouter, RequestState, WriteTxContext};
 use std::env;
 use std::sync::Arc;
 use std::time::Duration;
@@ -33,10 +33,10 @@ pub async fn maybe_run_server(
     }
 }
 
-pub async fn maybe_run_syncing<FB: SizeLike + 'static, TB: BlockLike + 'static>(
+pub async fn maybe_run_syncing<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'static>(
     index_config: &IndexerSettings,
     last_header: Option<TB::Header>,
-    syncer: Arc<ChainSyncer<FB, TB>>,
+    syncer: Arc<ChainSyncer<FB, TB, CTX>>,
     shutdown: watch::Receiver<bool>,
 ) -> () {
     if index_config.enable {
@@ -51,9 +51,9 @@ pub async fn maybe_run_syncing<FB: SizeLike + 'static, TB: BlockLike + 'static>(
     }
 }
 
-pub async fn maybe_run_scheduling<FB: SizeLike + 'static, TB: BlockLike + 'static>(
+pub async fn maybe_run_scheduling<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'static>(
     index_config: IndexerSettings,
-    scheduler: Scheduler<FB, TB>,
+    scheduler: Scheduler<FB, TB, CTX>,
     shutdown: watch::Receiver<bool>,
 ) -> () {
     if index_config.enable && index_config.sync_interval_s.gt(&Duration::ZERO) {
@@ -76,14 +76,14 @@ fn maybe_console_init() {
     info!("Running production build without console subscriber");
 }
 
-pub async fn launch<FB: SizeLike + 'static, TB: BlockLike + 'static, F>(
+pub async fn launch<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'static, F>(
     block_provider: Arc<dyn BlockProvider<FB, TB>>,
     build_chain: F,
     extras: Option<OpenApiRouter<RequestState>>,
     cors: Option<CorsLayer>,
 ) -> Result<(), ChainError>
 where
-    F: FnOnce(Arc<Storage>) -> Arc<dyn BlockChainLike<TB>>,
+    F: FnOnce(Arc<Storage>) -> Arc<dyn BlockChainLike<TB, CTX>>,
 {
     let config = AppConfig::new("config/settings").expect("Failed to load app config");
     maybe_console_init();
@@ -91,7 +91,7 @@ where
     let full_path = env::home_dir().unwrap().join(&db_path);
     let db_cache_size_gb: DbCacheSize = config.indexer.db_cache_size_gb.clone().into();
     let (created, storage) = Storage::build_storage(full_path, db_cache_size_gb.0).await?;
-    let chain: Arc<dyn BlockChainLike<TB>> = build_chain(Arc::clone(&storage));
+    let chain: Arc<dyn BlockChainLike<TB, CTX>> = build_chain(Arc::clone(&storage));
     let unlinked_headers: Vec<TB::Header> =
         if created {
             chain.init()?;
@@ -100,7 +100,7 @@ where
             info!("Validating chain for being linked");
             chain.validate_chain(config.indexer.validation_from_height).await?
         };
-    let syncer: Arc<ChainSyncer<FB, TB>> = Arc::new(ChainSyncer::new(Arc::clone(&block_provider), Arc::clone(&chain)));
+    let syncer: Arc<ChainSyncer<FB, TB, CTX>> = Arc::new(ChainSyncer::new(Arc::clone(&block_provider), Arc::clone(&chain)));
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
     // we sync with the node first
     maybe_run_syncing(&config.indexer, unlinked_headers.first().cloned(), Arc::clone(&syncer), shutdown_rx.clone()).await;
