@@ -19,7 +19,7 @@ impl FlushFuture {
 }
 
 pub struct ValueBuf<V: Value> {
-    buf: Vec<u8>,
+    pub buf: Vec<u8>,
     _pd: PhantomData<V>,
 }
 
@@ -32,7 +32,7 @@ impl<V: Value> ValueBuf<V> {
 pub trait WriteTableLike<'txn, K: Key + 'static, V: Key + 'static> {
     fn insert_kv<'k, 'v>(&mut self, key: impl Borrow<K::SelfType<'k>>, value: impl Borrow<V::SelfType<'v>>) -> redb::Result<(), AppError>;
     fn delete_kv<'k>(&mut self, key: impl Borrow<K::SelfType<'k>>) -> redb::Result<bool, AppError>;
-    fn get_head_by_index<'v>(&self, value: impl Borrow<V::SelfType<'v>>) -> redb::Result<Option<ValueBuf<K>>>;
+    fn get_head_by_index<'v>(&mut self, value: impl Borrow<V::SelfType<'v>>) -> redb::Result<Option<ValueBuf<K>>>;
     fn range<'a, KR: Borrow<K::SelfType<'a>> + 'a>(&self, range: impl RangeBounds<KR> + 'a) -> redb::Result<Vec<(ValueBuf<K>, ValueBuf<V>)>>;
 
     fn key_buf(g: AccessGuard<'_, K>) -> ValueBuf<K> {
@@ -41,13 +41,14 @@ pub trait WriteTableLike<'txn, K: Key + 'static, V: Key + 'static> {
     fn value_buf(g: AccessGuard<'_, V>) -> ValueBuf<V> {
         ValueBuf::<V>::new(V::as_bytes(&g.value()).as_ref().to_vec())
     }
-
 }
 
 pub trait TableFactory<K: Key + 'static, V: Key + 'static> {
-    type Table<'txn>: WriteTableLike<'txn, K, V>;
+    type CacheCtx;
+    type Table<'txn, 'c>: WriteTableLike<'txn, K, V>;
 
-    fn open<'txn>(&self, tx: &'txn WriteTransaction) -> redb::Result<Self::Table<'txn>, AppError>;
+    fn new_cache(&self) -> Self::CacheCtx;
+    fn open<'txn, 'c>(&self, tx: &'txn WriteTransaction, cache: &'c mut Self::CacheCtx) -> Result<Self::Table<'txn, 'c>, AppError>;
 }
 
 pub enum WriterCommand<K: Key + Send + 'static, V: Key + Send + 'static> {
@@ -77,7 +78,7 @@ where
     K: Key + Send + 'static + Borrow<K::SelfType<'static>>,
     V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
     F: TableFactory<K, V> + Send + 'static,
-    F::Table<'static>: Send,
+    F::Table<'static, 'static>: Send,
 {
     fn step<'txn, T>(table: &mut T, cmd: WriterCommand<K, V>) -> Result<Control, AppError>
     where
@@ -132,10 +133,10 @@ where
         Ok(ctrl)
     }
 
-    pub fn new(dict_db: Arc<Database>, factory: F) -> redb::Result<Self, AppError> {
+    pub fn new(db: Arc<Database>, factory: F) -> redb::Result<Self, AppError> {
         let (topic, receiver): (Sender<WriterCommand<K, V>>, Receiver<WriterCommand<K, V>>) = unbounded();
         let handle = thread::spawn(move || {
-            // let mut lru = LruCache::new(...);
+            let mut cache = factory.new_cache();
             'outer: loop {
                 // wait until someone asks us to begin a write tx
                 let cmd = match receiver.recv() {
@@ -146,12 +147,12 @@ where
                 match cmd {
                     WriterCommand::Begin(ack) => {
                         // 1) open a new write tx
-                        let tx = match dict_db.begin_write() {
+                        let tx = match db.begin_write() {
                             Ok(tx) => tx,
                             Err(e) => { let _ = ack.send(Err(AppError::from(e))); continue 'outer; }
                         };
                         // 2) open typed table bound to &tx
-                        let mut table = match factory.open(&tx) {
+                        let mut table = match factory.open(&tx, &mut cache) {
                             Ok(t) => { let _ = ack.send(Ok(())); t },
                             Err(e) => { let _ = ack.send(Err(e)); continue 'outer; }
                         };
