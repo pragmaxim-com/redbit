@@ -81,7 +81,7 @@ fn collect_allocations_mb(shares: &[Share], db_defs: &[DbDef]) -> Vec<DbDefWithC
         name: db_defs[s.idx].name.clone(),
         db_cache_weight: db_defs[s.idx].db_cache_weight_or_zero,
         db_cache_in_mb: cast_u64_to_usize(s.base_mb),
-        lru_cache: 0
+        lru_cache: db_defs[s.idx].lru_cache_size_or_zero
     }).collect()
 }
 
