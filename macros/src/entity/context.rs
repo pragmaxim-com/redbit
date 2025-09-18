@@ -168,6 +168,7 @@ pub fn tx_context_index_item(defs: &IndexTableDefs) -> TxContextItem {
     let value_type = &defs.value_type;
     let index_by_pk_table_name = &defs.index_by_pk.name;
     let pk_by_index_table_name = &defs.pk_by_index.name;
+    let lru_cache_size = defs.lru_cache_size;
 
     let write_definition =
         quote! {
@@ -184,6 +185,7 @@ pub fn tx_context_index_item(defs: &IndexTableDefs) -> TxContextItem {
             #var_name: TableWriter::new(
                 storage.index_dbs.get(#var_name_literal).cloned().ok_or_else(|| TableError::TableDoesNotExist(format!("Index table '{}' not found", #var_name_literal)))?,
                 IndexFactory::new(
+                    #lru_cache_size,
                     #pk_by_index_table_name,
                     #index_by_pk_table_name,
                 ),
@@ -223,6 +225,7 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
     let value_by_dict_pk_table_name = &defs.value_by_dict_pk_table_def.name;
     let value_to_dict_pk_table_name = &defs.value_to_dict_pk_table_def.name;
     let dict_pk_by_pk_table_name = &defs.dict_pk_by_pk_table_def.name;
+    let non_zero_lru_cache_size = core::cmp::max(defs.lru_cache_size, 20_000);
 
     let write_definition =
         quote! {
@@ -239,6 +242,7 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
             #var_name: TableWriter::new(
                 storage.index_dbs.get(#var_name_literal).cloned().ok_or_else(|| TableError::TableDoesNotExist(format!("Dict table '{}' not found", #var_name_literal)))?,
                 DictFactory::new(
+                    #non_zero_lru_cache_size,
                     #dict_index_table_name,
                     #value_by_dict_pk_table_name,
                     #value_to_dict_pk_table_name,

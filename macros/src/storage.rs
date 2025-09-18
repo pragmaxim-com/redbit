@@ -8,7 +8,7 @@ pub struct StorageDef {
 }
 
 pub fn get_db_defs(plain_table_defs: &[TableDef], dict_table_defs: &[DictTableDefs], index_table_defs: &[IndexTableDefs]) -> StorageDef {
-    let table_defs: Vec<TokenStream> = plain_table_defs
+    let all_table_defs: Vec<TokenStream> = plain_table_defs
         .iter()
         .map(|table_def| table_def.definition.clone())
         .chain(index_table_defs.iter().flat_map(|defs| defs.all_table_defs().into_iter().map(|def| def.definition)))
@@ -37,5 +37,5 @@ pub fn get_db_defs(plain_table_defs: &[TableDef], dict_table_defs: &[DictTableDe
             vec![#( DbDef { name: String::from(stringify!(#idents)), db_cache_weight_or_zero: #db_caches, lru_cache_size_or_zero: #lru_cache_sizes } ),*]
         }
     };
-    StorageDef { db_defs, table_defs }
+    StorageDef { db_defs, table_defs: all_table_defs }
 }

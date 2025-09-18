@@ -10,7 +10,7 @@ mod chain_tests {
 
     #[tokio::test]
     async fn test_chain_sync() {
-        let target_height = 200u32;
+        let target_height = 99_000u32;
         let storage = Storage::temp("chain_sync_test", 1, true).await.expect("Failed to open database");
         let chain = BlockChain::new(Arc::clone(&storage));
         chain.init().expect("Failed to initialize chain");
