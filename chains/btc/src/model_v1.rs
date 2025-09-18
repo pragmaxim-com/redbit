@@ -51,9 +51,9 @@ pub struct Header {
 
 #[entity]
 pub struct Transaction {
-    #[fk(one2many, cache = 1)]
+    #[fk(one2many, db_cache = 1)]
     pub id: BlockPointer,
-    #[column(index, cache = 5)]
+    #[column(index, db_cache = 5)]
     pub hash: TxHash,
     pub utxos: Vec<Utxo>,
     #[write_from(input_refs)]
@@ -66,20 +66,20 @@ pub struct Transaction {
 
 #[entity]
 pub struct Utxo {
-    #[fk(one2many, cache = 1)]
+    #[fk(one2many, db_cache = 1)]
     pub id: TransactionPointer,
-    #[column(cache = 1)]
+    #[column(db_cache = 1)]
     pub amount: u64,
-    #[column(dictionary, cache = 10)]
+    #[column(dictionary, db_cache = 10)]
     pub script_hash: ScriptHash,
-    #[column(dictionary, cache = 10)]
+    #[column(dictionary, db_cache = 10)]
     pub address: Address,
 }
 
 #[entity]
 pub struct Input {
-    #[fk(one2many, cache = 1)]
+    #[fk(one2many, db_cache = 1)]
     pub id: TransactionPointer,
-    #[column(cache = 1)]
+    #[column(db_cache = 1)]
     pub utxo_pointer: TransactionPointer,
 }

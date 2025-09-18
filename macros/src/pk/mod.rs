@@ -47,10 +47,10 @@ pub struct DbPkMacros {
 }
 
 impl DbPkMacros {
-    pub fn new(entity_name: &Ident, entity_type: &Type, pk_field_def: &FieldDef, multiplicity: Option<Multiplicity>, stream_query_ty: &Type, no_columns: bool, cache_weight: usize) -> Self {
+    pub fn new(entity_name: &Ident, entity_type: &Type, pk_field_def: &FieldDef, multiplicity: Option<Multiplicity>, stream_query_ty: &Type, no_columns: bool, db_cache_weight: usize) -> Self {
         let pk_name = pk_field_def.name.clone();
         let pk_type = pk_field_def.tpe.clone();
-        let table_def = TableDef::pk(entity_name, &pk_name, &pk_type, cache_weight);
+        let table_def = TableDef::pk(entity_name, &pk_name, &pk_type, db_cache_weight);
         let range_query = entity::query::pk_range_query(entity_name, &pk_name, &pk_type);
         let write_tx_context_ty = context::entity_tx_context_type(entity_type, TxType::Write);
         let read_tx_context_ty = context::entity_tx_context_type(entity_type, TxType::Read);

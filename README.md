@@ -12,12 +12,17 @@ Redbit reads struct annotations and derives code necessary for persisting and qu
 ✅ parallel persistence, there is a long-running write thread spawn for each entity field (no blocking) \
 ✅ Querying and ranging by secondary index \
 ✅ Optional dictionaries for low cardinality fields \
-✅ First level cache (total cache is split proportionally by weights in the entity definition) :
+✅ First level DB cache (`db_cache_size_gb` is split proportionally by weights in the entity definition) :
   ```rust
-  #[column(cache = 4)]
-  #[column(index(cache = 10))]
-  #[column(range(cache = 10))]
-  #[column(dictionary(cache = 10))]
+  #[column(db_cache = 4)]
+  #[column(index, db_cache = 4)]
+  #[column(range, db_cache = 10)]
+  #[column(dictionary, db_cache = 10)]
+  ```
+✅ LRU cache for hot indexes and dictionaries (building dictionary requires db read ) :
+  ```rust
+  #[column(index, lru_cache = 300_000)]
+  #[column(dictionary, lru_cache = 300_000)]
   ```
 ✅ `One-to-One` / `One-to-Option` / `One-to-Many` entities with cascade read/write/delete \
 ✅ All goodies including intuitive data ordering without writing custom codecs \
@@ -134,7 +139,7 @@ Let's say we want to persist and query blockchain data using Redbit, declare ann
     pub struct Transaction {
         #[fk(one2many)]
         pub id: BlockPointer,
-        #[column(index, cache = 4)]
+        #[column(index, db_cache = 4)]
         pub hash: TxHash,
         pub utxos: Vec<Utxo>,
         #[write_from(input_refs)] // implement custom write_from function, see hook.rs
@@ -148,20 +153,20 @@ Let's say we want to persist and query blockchain data using Redbit, declare ann
     
     #[entity]
     pub struct Utxo {
-        #[fk(one2many, cache = 2)]
+        #[fk(one2many, db_cache = 2)]
         pub id: TransactionPointer,
         #[column]
         pub amount: u64,
-        #[column(dictionary, cache = 10)]
+        #[column(dictionary, db_cache = 10)]
         pub address: Address,
         pub assets: Vec<Asset>,
     }
     
     #[entity]
     pub struct Input {
-        #[fk(one2many, cache = 1)]
+        #[fk(one2many, db_cache = 1)]
         pub id: TransactionPointer,
-        #[column(cache = 1)]
+        #[column(db_cache = 1)]
         pub utxo_pointer: TransactionPointer,
     }
     
@@ -175,7 +180,7 @@ Let's say we want to persist and query blockchain data using Redbit, declare ann
     
     #[entity]
     pub struct Asset {
-        #[fk(one2many, cache = 1)]
+        #[fk(one2many, db_cache = 1)]
         pub id: UtxoPointer,
         #[column]
         pub amount: u64,

@@ -52,9 +52,9 @@ pub struct BlockHeader {
 
 #[entity]
 pub struct Transaction {
-    #[fk(one2many, cache = 1)]
+    #[fk(one2many, db_cache = 1)]
     pub id: BlockPointer,
-    #[column(index, cache = 5)]
+    #[column(index, db_cache = 5)]
     pub hash: TxHash,
     pub utxos: Vec<Utxo>,
     #[write_from(input_refs)]
@@ -67,35 +67,35 @@ pub struct Transaction {
 
 #[entity]
 pub struct Utxo {
-    #[fk(one2many, cache = 1)]
+    #[fk(one2many, db_cache = 1)]
     pub id: TransactionPointer,
-    #[column(cache = 1)]
+    #[column(db_cache = 1)]
     pub amount: u64,
-    #[column(dictionary, cache = 10)]
+    #[column(dictionary, db_cache = 10)]
     pub address: Address,
-    #[column(dictionary, cache = 10)]
+    #[column(dictionary, db_cache = 10)]
     pub script_hash: ScriptHash,
     pub assets: Vec<Asset>,
 }
 
 #[entity]
 pub struct Asset {
-    #[fk(one2many, cache = 1)]
+    #[fk(one2many, db_cache = 1)]
     pub id: UtxoPointer,
-    #[column(cache = 1)]
+    #[column(db_cache = 1)]
     pub amount: u64,
-    #[column(dictionary, cache = 2)]
+    #[column(dictionary, db_cache = 2)]
     pub name: AssetName,
-    #[column(dictionary, cache = 2)]
+    #[column(dictionary, db_cache = 2)]
     pub policy_id: PolicyId,
-    #[column(index, cache = 1)]
+    #[column(index, db_cache = 1)]
     pub asset_action: AssetAction,
 }
 
 #[entity]
 pub struct Input {
-    #[fk(one2many, cache = 1)]
+    #[fk(one2many, db_cache = 1)]
     pub id: TransactionPointer,
-    #[column(cache = 1)]
+    #[column(db_cache = 1)]
     pub utxo_pointer: TransactionPointer,
 }

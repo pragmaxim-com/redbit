@@ -366,9 +366,9 @@ impl RequestState {
 }
 
 #[derive(Clone, Debug)]
-pub struct DbDef { pub name: String, pub cache_weight_or_zero: usize }
+pub struct DbDef { pub name: String, pub db_cache_weight_or_zero: usize, pub lru_cache_size_or_zero: usize }
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DbDefWithCache { pub name: String, pub cache_in_mb: usize }
+pub struct DbDefWithCache { pub name: String, pub db_cache_weight: usize, pub db_cache_in_mb: usize, pub lru_cache: usize }
 
 pub struct StructInfo {
     pub name: &'static str,
