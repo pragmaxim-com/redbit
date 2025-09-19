@@ -11,4 +11,4 @@ validation_from_height = 3_777_921  # we validate from Shelley, Byron has Epoch 
 
 [http]
 enable = true
-bind_address = "127.0.0.1:3032"
+bind_address = "0.0.0.0:3032"
