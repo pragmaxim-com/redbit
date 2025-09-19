@@ -36,14 +36,14 @@ pub fn table_info_fn(entity_name: &Ident, table_defs: &[TableDef], dict_table_de
     let dict_stats_getters = dict_table_defs.iter().map(|defs| {
         let db_name = defs.var_name.clone();
         let db_name_literal = Literal::string(&db_name.to_string());
-        let dict_index_table_name = &defs.dict_index_table_def.name;
+        let dict_pk_to_ids_table_name = &defs.dict_pk_to_ids_table_def.name;
         let value_by_dict_pk_table_name = &defs.value_by_dict_pk_table_def.name;
         let value_to_dict_pk_table_name = &defs.value_to_dict_pk_table_def.name;
         let dict_pk_by_pk_table_name = &defs.dict_pk_by_pk_table_def.name;
 
         quote! {
             let db = index_dbs.get(#db_name_literal).cloned().unwrap();
-            let dict_table = ReadOnlyDictTable::new(db, #dict_index_table_name, #value_by_dict_pk_table_name, #value_to_dict_pk_table_name, #dict_pk_by_pk_table_name)?;
+            let dict_table = ReadOnlyDictTable::new(db, #dict_pk_to_ids_table_name, #value_by_dict_pk_table_name, #value_to_dict_pk_table_name, #dict_pk_by_pk_table_name)?;
             dict_table.stats()?.into_iter().for_each(|(table_type, stats)| {
                 tables.push(stats_for_table(#db_name_literal, &table_type, stats).unwrap());
             });
