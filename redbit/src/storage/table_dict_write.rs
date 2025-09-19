@@ -76,7 +76,7 @@ impl<'txn, 'c, K: Key + 'static, V: Key + 'static> DictTable<'txn, 'c, K, V> {
         })
     }
 }
-impl<'txn, 'c, K: Key + 'static, V: Key + 'static> WriteTableLike<'txn, K, V> for DictTable<'txn, 'c, K, V> {
+impl<'txn, 'c, K: Key + 'static, V: Key + 'static> WriteTableLike<K, V> for DictTable<'txn, 'c, K, V> {
     fn insert_kv<'k, 'v>(&mut self, key: impl Borrow<K::SelfType<'k>>, value: impl Borrow<V::SelfType<'v>>) -> Result<(), AppError>  {
         let key_ref: &K::SelfType<'k> = key.borrow();
         let val_ref: &V::SelfType<'v> = value.borrow();

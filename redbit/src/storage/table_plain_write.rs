@@ -40,7 +40,7 @@ impl<K: Key + 'static, V: Key + 'static> TableFactory<K, V> for PlainFactory<K, 
     }
 }
 
-impl<'txn, K: Key + 'static, V: Key + 'static> WriteTableLike<'txn, K, V> for PlainTable<'txn, K, V> {
+impl<'txn, K: Key + 'static, V: Key + 'static> WriteTableLike<K, V> for PlainTable<'txn, K, V> {
     fn insert_kv<'k, 'v>(&mut self, key: impl Borrow<K::SelfType<'k>>, value: impl Borrow<V::SelfType<'v>>) -> Result<(), AppError>  {
         self.table.insert(key, value)?;
         Ok(())
