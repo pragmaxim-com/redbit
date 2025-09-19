@@ -34,33 +34,16 @@ redbit = { path = "../../redbit" }
 chain = { path = "../../chain" }
 ```
 
-And then all you need to do is defining entities with minimal required fields and how to resolve transaction inputs : 
+And then all you need to do is defining entities with minimal required fields about resolving transaction inputs : 
 ```
     #[write_from(input_refs)]
     pub inputs: Vec<Input>,
     #[column(transient)]
     pub input_refs: Vec<InputRef>,
 ```
+With a custom defined [hook.rs](../chains/demo/src/hook.rs) which lets user turn input refs into redbit standard inputs.
 
-Which expects a custom defined `hook.rs` which lets user turn input refs into redbit standard inputs : 
-```rust 
-pub(crate) fn write_from_input_refs(tx_context: &TransactionWriteTxContext, parent: BlockPointer, input_index: usize, input_ref: &InputRef) -> Result<Input, AppError> {
-    let input =
-        match tx_context.transaction_hash_index.get(input_ref.tx_hash)?.next() {
-            Some(Ok(tx_pointer)) => {
-                let id = TransactionPointer::from_parent(parent, input_index as u16);
-                let utxo_pointer = TransactionPointer::from_parent(tx_pointer.value(), input_ref.index as u16);
-                Input { id, utxo_pointer }
-            },
-            _ => {
-                let id = TransactionPointer::from_parent(parent, input_index as u16);
-                let utxo_pointer = TransactionPointer::from_parent(BlockPointer::from_parent(Height(0), 0), 0); // genesis of unknown index
-                Input { id, utxo_pointer }
-            },
-        };
-    Ok(input)
-}
-```
+And [block_provider.rs](../chains/demo/src/block_provider.rs) that fetches blocks from utxo-like blockchain of your choice.
 
 - [Demo](../chains/btc)
 - [Btc](../chains/btc)
@@ -87,5 +70,26 @@ My throughput results after indexing whole bitcoin :
 - `2.0GHz` & `NVMe PCIe Gen3` & `DDR4 2933MHz 2Rx4` : `~ 30 000 Inputs+outputs / s`
 - `3.0GHz` & `NVMe PCIe Gen4` & `DDR4 3200MHz 4Rx4` : `~ 60 000 Inputs+outputs / s`
 - `3.5GHz` & `NVMe PCIe Gen5` & `DDR5 4800MHz 4RX8` : `~ 120 000 Inputs+outputs / s`
+
+
+The size of databases corresponds to bitcoin databases, note that I index both `address` and `script_hash` :
+```
+$ du -sh * | sort -rh
+1.3T    .
+427G	utxo_address_dict.db
+370G	utxo_script_hash_dict.db
+170G	transaction_hash_index.db
+105G	utxo_amount_by_id.db
+95G	    input_utxo_pointer_by_id.db
+53G	    utxo_id.db
+48G	    input_id.db
+15G	    transaction_id.db
+122M	header_prev_hash_index.db
+122M	header_merkle_root_index.db
+122M	header_hash_index.db
+45M	    header_timestamp_index.db
+7.2M	header_height.db
+7.2M	block_height.db
+```
 
 In a nutshell, whole bitcoin up to height ~ 0.9M can be indexed in half a day with enough RAM for the Linux VM (page cache).
