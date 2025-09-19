@@ -141,7 +141,7 @@ pub fn persist_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_
     FunctionDef {
         fn_stream,
         endpoint: Some(EndpointDef {
-            _entity_name: entity_name.clone(),
+            return_type: None,
             tag: EndpointTag::DataWrite,
             fn_name: fn_name.clone(),
             params: vec![Body(BodyExpr {

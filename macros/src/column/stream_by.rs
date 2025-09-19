@@ -103,7 +103,7 @@ pub fn by_dict_def(
     FunctionDef {
         fn_stream,
         endpoint: Some(EndpointDef {
-            _entity_name: entity_name.clone(),
+            return_type: Some(entity_type.clone()),
             tag: EndpointTag::DataRead,
             fn_name: fn_name.clone(),
             params: vec![Path(vec![PathExpr {
@@ -219,7 +219,7 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
     FunctionDef {
         fn_stream,
         endpoint: Some(EndpointDef {
-            _entity_name: entity_name.clone(),
+            return_type: Some(entity_type.clone()),
             tag: EndpointTag::DataRead,
             fn_name: fn_name.clone(),
             params: vec![

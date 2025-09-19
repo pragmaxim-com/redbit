@@ -103,7 +103,7 @@ pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, col_fi
     FunctionDef {
         fn_stream,
         endpoint: Some(EndpointDef {
-            _entity_name: entity_name.clone(),
+            return_type: Some(entity_type.clone()),
             tag: EndpointTag::DataRead,
             fn_name: fn_name.clone(),
             params: vec![Query(QueryExpr {

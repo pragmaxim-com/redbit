@@ -3,7 +3,7 @@ use crate::rest::HttpParams::Path;
 use crate::rest::{EndpointTag, FunctionDef, HttpMethod, PathExpr};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
-use syn::Type;
+use syn::{parse_quote, Type};
 
 pub fn one2one_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, pk_name: &Ident, pk_type: &Type, tx_context_ty: &Type) -> FunctionDef {
     let fn_name = format_ident!("get_{}", child_name);
@@ -43,7 +43,7 @@ pub fn one2one_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
             }
         },
         endpoint: Some(EndpointDef {
-            _entity_name: entity_name.clone(),
+            return_type: Some(child_type.clone()),
             tag: EndpointTag::DataRead,
             fn_name: fn_name.clone(),
             params: vec![Path(vec![PathExpr {
@@ -110,7 +110,7 @@ pub fn one2opt_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
             }
         },
         endpoint: Some(EndpointDef {
-            _entity_name: entity_name.clone(),
+            return_type: Some(child_type.clone()),
             tag: EndpointTag::DataRead,
             fn_name: fn_name.clone(),
             params: vec![Path(vec![PathExpr {
@@ -180,7 +180,7 @@ pub fn one2many_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, 
             }
         },
         endpoint: Some(EndpointDef {
-            _entity_name: entity_name.clone(),
+            return_type: Some(parse_quote!{ Vec<#child_type> }),
             tag: EndpointTag::DataRead,
             fn_name: fn_name.clone(),
             params: vec![Path(vec![PathExpr {

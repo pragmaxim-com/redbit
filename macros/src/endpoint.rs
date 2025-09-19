@@ -1,10 +1,11 @@
 use proc_macro2::{Ident, Literal, TokenStream};
 use quote::{format_ident, quote};
+use syn::Type;
 use crate::rest::{Endpoint, EndpointTag, HttpMethod, HttpParams, PathExpr};
 
 #[derive(Clone)]
 pub struct EndpointDef {
-    pub _entity_name: Ident,
+    pub return_type: Option<Type>,
     pub tag: EndpointTag,
     pub fn_name: Ident,
     pub params: Vec<HttpParams>,
@@ -74,6 +75,7 @@ impl EndpointDef {
         }
 
         let endpoint_path = &self.endpoint;
+        let return_type: Option<Type> = self.return_type.clone();
         let mut path_expr = quote! { #endpoint_path };
         let mut query_param = None;
         let mut body_param = None;
@@ -93,6 +95,20 @@ impl EndpointDef {
             }
         }
 
+        let deser_return_value_assert =
+            if let Some(ret_ty) = return_type {
+                quote! {
+                    response.assert_status_ok();
+                    let body = response.text();
+                    let line = body.lines().find(|l| !l.trim().is_empty()).expect("empty body");
+                    let _parsed: #ret_ty = serde_json::from_str(line).expect("cannot deserialize first line into return type");
+                }
+            } else {
+                quote! {
+                    response.assert_status_ok();
+                }
+            };
+
         let mut tests: Vec<TokenStream> = Vec::new();
         if let (Some(qp), Some(bp)) = (query_param, body_param) {
             let query_samples = qp.clone().samples;
@@ -109,11 +125,11 @@ impl EndpointDef {
                         eprintln!("Testing endpoint: {} : {} with body", #method_name, final_path);
                         for body_sample in #body_samples {
                             let response = #server.await.method(#method_name, &final_path).json(&body_sample).await;
-                            response.assert_status_ok();
+                            #deser_return_value_assert
                         }
                         if (!#body_required) {
                             let response = #server.await.method(#method_name, &final_path).await;
-                            response.assert_status_ok();
+                            #deser_return_value_assert
                         }
                     }
                 }
@@ -129,7 +145,7 @@ impl EndpointDef {
                             let final_path = format!("{}?{}", #path_expr, query_string);
                             eprintln!("Testing endpoint: {} : {}", #method_name, &final_path);
                             let response = #server.await.method(#method_name, &final_path).await;
-                            response.assert_status_ok();
+                            #deser_return_value_assert
                         }
                     }
                 });
@@ -144,11 +160,11 @@ impl EndpointDef {
                     for body_sample in #body_samples {
                         eprintln!("Testing endpoint: {} : {} with body", #method_name, #path_expr);
                         let response = #server.await.method(#method_name, &#path_expr).json(&body_sample).await;
-                        response.assert_status_ok();
+                        #deser_return_value_assert
                     }
                     if (!#body_required) {
                         let response = #server.await.method(#method_name, &#path_expr).await;
-                        response.assert_status_ok();
+                        #deser_return_value_assert
                     }
                 }
             });
@@ -159,7 +175,7 @@ impl EndpointDef {
                 async fn #test_fn_name() {
                     eprintln!("Testing endpoint: {} : {}", #method_name, #path_expr);
                     let response = #server.await.method(#method_name, &#path_expr).await;
-                    response.assert_status_ok();
+                    #deser_return_value_assert
                 }
             });
         };

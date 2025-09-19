@@ -167,6 +167,9 @@ pub fn root_key(_attr: TokenStream, item: TokenStream) -> TokenStream {
     s.attrs.insert(0, parse_quote! {
         #[derive(RootKey, Copy, Clone, Hash, Debug, Default, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
     });
+    s.attrs.insert(1, parse_quote! {
+        #[serde(into = "String", try_from = "String")]
+    });
     let stream = quote!(#s);
     expansion::submit_struct_to_stream(stream, "pk", struct_ident, "_attr.rs")
 }

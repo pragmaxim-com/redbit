@@ -87,7 +87,7 @@ pub fn remove_def(
     FunctionDef {
         fn_stream,
         endpoint: Some(EndpointDef {
-            _entity_name: entity_name.clone(),
+            return_type: None,
             tag: EndpointTag::DataDelete,
             fn_name: fn_name.clone(),
             params: vec![Path(vec![PathExpr {

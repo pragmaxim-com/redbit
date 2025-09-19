@@ -2,7 +2,7 @@ use crate::endpoint::EndpointDef;
 use crate::rest::{EndpointTag, FunctionDef, HttpMethod};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
-use syn::Type;
+use syn::{parse_quote, Type};
 
 pub fn fn_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &Type, table: &Ident) -> FunctionDef {
     let fn_name = format_ident!("first");
@@ -43,7 +43,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &Type, tab
     FunctionDef {
         fn_stream,
         endpoint: Some(EndpointDef {
-            _entity_name: entity_name.clone(),
+            return_type: Some(parse_quote! { Vec<#entity_type> }),
             tag: EndpointTag::DataRead,
             fn_name: fn_name.clone(),
             params: vec![],

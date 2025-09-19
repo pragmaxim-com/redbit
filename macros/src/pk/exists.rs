@@ -46,7 +46,7 @@ pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, tx_context_t
     FunctionDef {
         fn_stream,
         endpoint: Some(EndpointDef {
-            _entity_name: entity_name.clone(),
+            return_type: None,
             tag: EndpointTag::DataRead,
             fn_name: fn_name.clone(),
             params: vec![Path(vec![PathExpr {

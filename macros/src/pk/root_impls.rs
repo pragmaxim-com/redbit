@@ -51,13 +51,26 @@ pub fn new(struct_name: &Ident, index_field: Field) -> TokenStream {
                 format!("{}", self.0)
             }
         }
-        
-        impl std::str::FromStr for #struct_name {
-            type Err = ParsePointerError;
-            fn from_str(s: &str) -> Result<Self, Self::Err> {
+
+        impl Into<String> for #struct_name {
+            fn into(self) -> String {
+                self.url_encode()
+            }
+        }
+
+        impl TryFrom<String> for #struct_name {
+            type Error = ParsePointerError;
+            fn try_from(s: String) -> Result<Self, Self::Error> {
                 if s.contains('-') { return Err(ParsePointerError::Format); }
                 let idx = s.parse::<#index_type>()?;
                 Ok(#struct_name(idx))
+            }
+        }
+
+        impl std::str::FromStr for #struct_name {
+            type Err = ParsePointerError;
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                Self::try_from(s.to_string())
             }
         }
 

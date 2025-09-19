@@ -3,6 +3,7 @@ use crate::rest::{EndpointTag, FunctionDef, HttpMethod};
 use crate::table::{DictTableDefs, IndexTableDefs, TableDef};
 use proc_macro2::{Ident, Literal};
 use quote::{format_ident, quote};
+use syn::parse_quote;
 
 pub fn table_info_fn(entity_name: &Ident, table_defs: &[TableDef], dict_table_defs: &[DictTableDefs], index_table_defs: &[IndexTableDefs]) -> FunctionDef {
     let plain_stats_getters = table_defs.iter().map(|td| {
@@ -78,7 +79,7 @@ pub fn table_info_fn(entity_name: &Ident, table_defs: &[TableDef], dict_table_de
     FunctionDef {
         fn_stream,
         endpoint: Some(EndpointDef {
-            _entity_name: entity_name.clone(),
+            return_type: Some(parse_quote! { Vec<TableInfo> }),
             tag: EndpointTag::MetaRead,
             fn_name: fn_name.clone(),
             params: vec![],

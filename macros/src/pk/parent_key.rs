@@ -2,7 +2,7 @@ use crate::rest::HttpParams::Path;
 use crate::rest::{EndpointTag, FunctionDef, HttpMethod, PathExpr};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
-use syn::Type;
+use syn::{parse_quote, Type};
 use crate::endpoint::EndpointDef;
 
 pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type) -> FunctionDef {
@@ -17,7 +17,7 @@ pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type) -> FunctionD
     FunctionDef {
         fn_stream,
         endpoint: Some(EndpointDef {
-            _entity_name: entity_name.clone(),
+            return_type: Some(parse_quote! { String }),
             tag: EndpointTag::DataRead,
             fn_name: fn_name.clone(),
             params: vec![Path(vec![PathExpr {
