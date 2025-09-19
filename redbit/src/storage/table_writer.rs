@@ -29,7 +29,7 @@ impl<V: Value> ValueBuf<V> {
     pub fn as_bytes(&self) -> &[u8] { &self.buf }
 }
 
-pub trait WriteTableLike<'txn, K: Key + 'static, V: Key + 'static> {
+pub trait WriteTableLike<K: Key + 'static, V: Key + 'static> {
     fn insert_kv<'k, 'v>(&mut self, key: impl Borrow<K::SelfType<'k>>, value: impl Borrow<V::SelfType<'v>>) -> redb::Result<(), AppError>;
     fn delete_kv<'k>(&mut self, key: impl Borrow<K::SelfType<'k>>) -> redb::Result<bool, AppError>;
     fn get_head_by_index<'v>(&mut self, value: impl Borrow<V::SelfType<'v>>) -> redb::Result<Option<ValueBuf<K>>>;
@@ -45,7 +45,7 @@ pub trait WriteTableLike<'txn, K: Key + 'static, V: Key + 'static> {
 
 pub trait TableFactory<K: Key + 'static, V: Key + 'static> {
     type CacheCtx;
-    type Table<'txn, 'c>: WriteTableLike<'txn, K, V>;
+    type Table<'txn, 'c>: WriteTableLike<K, V>;
 
     fn new_cache(&self) -> Self::CacheCtx;
     fn open<'txn, 'c>(&self, tx: &'txn WriteTransaction, cache: &'c mut Self::CacheCtx) -> Result<Self::Table<'txn, 'c>, AppError>;
@@ -82,7 +82,7 @@ where
 {
     fn step<'txn, T>(table: &mut T, cmd: WriterCommand<K, V>) -> Result<Control, AppError>
     where
-        T: WriteTableLike<'txn, K, V>,
+        T: WriteTableLike<K, V>,
     {
         match cmd {
             WriterCommand::Insert(k, v) => {
@@ -115,7 +115,7 @@ where
 
     fn drain_batch<'txn, T>(table: &mut T, rx: &Receiver<WriterCommand<K, V>>) -> Result<Control, AppError>
     where
-        T: WriteTableLike<'txn, K, V>,
+        T: WriteTableLike<K, V>,
     {
         // 1) one blocking recv to ensure progress
         let mut ctrl = Self::step(table, rx.recv()?)?;
