@@ -221,7 +221,7 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
     let var_name_literal = Literal::string(&var_name.to_string());
     let key_type = &defs.key_type;
     let value_type = &defs.value_type;
-    let dict_index_table_name = &defs.dict_index_table_def.name;
+    let dict_pk_to_ids_table_name = &defs.dict_pk_to_ids_table_def.name;
     let value_by_dict_pk_table_name = &defs.value_by_dict_pk_table_def.name;
     let value_to_dict_pk_table_name = &defs.value_to_dict_pk_table_def.name;
     let dict_pk_by_pk_table_name = &defs.dict_pk_by_pk_table_def.name;
@@ -243,7 +243,7 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
                 storage.index_dbs.get(#var_name_literal).cloned().ok_or_else(|| TableError::TableDoesNotExist(format!("Dict table '{}' not found", #var_name_literal)))?,
                 DictFactory::new(
                     #non_zero_lru_cache_size,
-                    #dict_index_table_name,
+                    #dict_pk_to_ids_table_name,
                     #value_by_dict_pk_table_name,
                     #value_to_dict_pk_table_name,
                     #dict_pk_by_pk_table_name
@@ -267,7 +267,7 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
         quote! {
             #var_name: ReadOnlyDictTable::new(
                 storage.index_dbs.get(#var_name_literal).cloned().ok_or_else(|| TableError::TableDoesNotExist(format!("Dict table '{}' not found", #var_name_literal)))?,
-                #dict_index_table_name,
+                #dict_pk_to_ids_table_name,
                 #value_by_dict_pk_table_name,
                 #value_to_dict_pk_table_name,
                 #dict_pk_by_pk_table_name

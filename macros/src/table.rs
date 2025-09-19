@@ -56,7 +56,7 @@ pub struct DictTableDefs {
     #[allow(dead_code)]
     pub(crate) db_cache_weight: usize,
     pub(crate) lru_cache_size: usize,
-    pub(crate) dict_index_table_def: TableDef,
+    pub(crate) dict_pk_to_ids_table_def: TableDef,
     pub(crate) value_by_dict_pk_table_def: TableDef,
     pub(crate) value_to_dict_pk_table_def: TableDef,
     pub(crate) dict_pk_by_pk_table_def: TableDef,
@@ -73,7 +73,7 @@ impl DictTableDefs {
             value_type: column_type.clone(),
             db_cache_weight,
             lru_cache_size,
-            dict_index_table_def: TableDef::dict_index_table_def(entity_name, column_name, pk_type, 0, 0),
+            dict_pk_to_ids_table_def: TableDef::dict_pk_to_ids_table_def(entity_name, column_name, pk_type, 0, 0),
             value_by_dict_pk_table_def: TableDef::value_by_dict_pk_table_def(entity_name, column_name, column_type, pk_type, 0, 0),
             value_to_dict_pk_table_def: TableDef::value_to_dict_pk_table_def(entity_name, column_name, column_type, pk_type, 0, 0),
             dict_pk_by_pk_table_def: TableDef::dict_pk_by_pk_table_def(entity_name, column_name, pk_name, pk_type, 0, 0),
@@ -81,7 +81,7 @@ impl DictTableDefs {
     }
     pub fn all_table_defs(&self) -> Vec<TableDef> {
         vec![
-            self.dict_index_table_def.clone(),
+            self.dict_pk_to_ids_table_def.clone(),
             self.value_by_dict_pk_table_def.clone(),
             self.value_to_dict_pk_table_def.clone(),
             self.dict_pk_by_pk_table_def.clone(),
@@ -167,7 +167,7 @@ impl TableDef {
         }
     }
 
-    pub fn dict_index_table_def(entity_name: &Ident, column_name: &Ident, pk_type: &Type, db_cache_weight: usize, lru_cache_size: usize) -> TableDef {
+    pub fn dict_pk_to_ids_table_def(entity_name: &Ident, column_name: &Ident, pk_type: &Type, db_cache_weight: usize, lru_cache_size: usize) -> TableDef {
         let name = format_ident!("{}_{}_DICT_INDEX", entity_name.to_string().to_uppercase(), column_name.to_string().to_uppercase());
         let var_name = Ident::new(&format!("{}", name).to_lowercase(), name.span());
         let name_str = &name.to_string();

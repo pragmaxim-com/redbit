@@ -84,8 +84,8 @@ and higher blocks/s throughput.
 
 My throughput results after indexing whole bitcoin :
 
-- `2.0GHz` & `NVMe PCIe Gen3` & `DDR4 2933MHz 2Rx4` : `~ 60 000 Inputs+outputs / s`
-- `3.0GHz` & `NVMe PCIe Gen4` & `DDR4 3200MHz 4Rx4` : `~ 120 000 Inputs+outputs / s`
-- `3.5GHz` & `NVMe PCIe Gen5` & `DDR5 4800MHz 4RX8` : `~ 240 000 Inputs+outputs / s`
+- `2.0GHz` & `NVMe PCIe Gen3` & `DDR4 2933MHz 2Rx4` : `~ 30 000 Inputs+outputs / s`
+- `3.0GHz` & `NVMe PCIe Gen4` & `DDR4 3200MHz 4Rx4` : `~ 60 000 Inputs+outputs / s`
+- `3.5GHz` & `NVMe PCIe Gen5` & `DDR5 4800MHz 4RX8` : `~ 120 000 Inputs+outputs / s`
 
-In a nutshell, whole bitcoin up to height ~ 0.9M can be indexed in one afternoon with enough RAM for the Linux VM (page cache).
+In a nutshell, whole bitcoin up to height ~ 0.9M can be indexed in half a day with enough RAM for the Linux VM (page cache).

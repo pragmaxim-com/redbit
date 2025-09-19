@@ -6,19 +6,19 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 pub struct ReadOnlyDictTable<K: Key + 'static, V: Key + 'static> {
-    dict_index: ReadOnlyMultimapTable<K, K>,
-    by_dict_pk: ReadOnlyTable<K, V>,
-    to_dict_pk: ReadOnlyTable<V, K>,
+    dict_pk_to_ids: ReadOnlyMultimapTable<K, K>,
+    value_by_dict_pk: ReadOnlyTable<K, V>,
+    value_to_dict_pk: ReadOnlyTable<V, K>,
     dict_pk_by_id: ReadOnlyTable<K, K>,
 }
 
 impl<K: Key + 'static, V: Key + 'static> ReadOnlyDictTable<K, V> {
-    pub fn new(dict_db: Arc<Database>, dict_index_def: MultimapTableDefinition<K, K>, by_dict_pk_def: TableDefinition<K, V>, to_dict_pk_def: TableDefinition<V, K>, dict_pk_by_id_def: TableDefinition<K, K>) -> Result<Self, AppError> {
+    pub fn new(dict_db: Arc<Database>, dict_pk_to_ids_def: MultimapTableDefinition<K, K>, value_by_dict_pk_def: TableDefinition<K, V>, value_to_dict_pk_def: TableDefinition<V, K>, dict_pk_by_id_def: TableDefinition<K, K>) -> Result<Self, AppError> {
         let dict_tx = dict_db.begin_read()?;
         Ok(Self {
-            dict_index: dict_tx.open_multimap_table(dict_index_def)?,
-            by_dict_pk: dict_tx.open_table(by_dict_pk_def)?,
-            to_dict_pk: dict_tx.open_table(to_dict_pk_def)?,
+            dict_pk_to_ids: dict_tx.open_multimap_table(dict_pk_to_ids_def)?,
+            value_by_dict_pk: dict_tx.open_table(value_by_dict_pk_def)?,
+            value_to_dict_pk: dict_tx.open_table(value_to_dict_pk_def)?,
             dict_pk_by_id: dict_tx.open_table(dict_pk_by_id_def)?,
         })
     }
@@ -28,7 +28,7 @@ impl<K: Key + 'static, V: Key + 'static> ReadOnlyDictTable<K, V> {
         match birth_guard_opt {
             Some(birth_guard) => {
                 let birth_id = birth_guard.value();
-                let val_guard = self.by_dict_pk.get(birth_id)?;
+                let val_guard = self.value_by_dict_pk.get(birth_id)?;
                 match val_guard {
                     Some(vg) => Ok(Some(vg)),
                     None => Ok(None),
@@ -39,11 +39,11 @@ impl<K: Key + 'static, V: Key + 'static> ReadOnlyDictTable<K, V> {
 
     }
     pub fn get_keys<'v>(&self, val: impl Borrow<V::SelfType<'v>>) -> Result<Option<MultimapValue<'static, K>>> {
-        let birth_guard = self.to_dict_pk.get(val.borrow())?;
+        let birth_guard = self.value_to_dict_pk.get(val.borrow())?;
         match birth_guard {
             Some(g) => {
                 let birth_id = g.value();
-                let value = self.dict_index.get(&birth_id)?;
+                let value = self.dict_pk_to_ids.get(&birth_id)?;
                 Ok(Some(value))
             },
             None => Ok(None),
@@ -52,9 +52,9 @@ impl<K: Key + 'static, V: Key + 'static> ReadOnlyDictTable<K, V> {
 
     pub fn stats(&self) -> Result<HashMap<String, TableStats>> {
         let mut stats = HashMap::new();
-        stats.insert("dict_index".to_string(), self.dict_index.stats()?);
-        stats.insert("by_dict_pk".to_string(), self.by_dict_pk.stats()?);
-        stats.insert("to_dict_pk".to_string(), self.to_dict_pk.stats()?);
+        stats.insert("dict_pk_to_ids".to_string(), self.dict_pk_to_ids.stats()?);
+        stats.insert("value_by_dict_pk".to_string(), self.value_by_dict_pk.stats()?);
+        stats.insert("value_to_dict_pk".to_string(), self.value_to_dict_pk.stats()?);
         stats.insert("dict_pk_by_id".to_string(), self.dict_pk_by_id.stats()?);
         Ok(stats)
     }
