@@ -32,7 +32,7 @@ impl<K: Key + 'static, V: Key + 'static> TableFactory<K, V> for DictFactory<K, V
     type Table<'txn, 'c> = DictTable<'txn, 'c, K, V>;
 
     fn new_cache(&self) -> Self::CacheCtx {
-        LruCache::new(NonZeroUsize::new(self.lru_capacity).unwrap())
+        LruCache::new(NonZeroUsize::new(self.lru_capacity).expect("lru_capacity for dictionary must be > 0"))
     }
 
     fn open<'txn, 'c>(

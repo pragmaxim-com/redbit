@@ -50,7 +50,7 @@ impl<K: Key + 'static, V: Key + 'static> TableFactory<K, V> for IndexFactory<K, 
     type Table<'txn, 'c> = IndexTable<'txn, 'c, K, V>;
 
     fn new_cache(&self) -> Self::CacheCtx {
-        self.lru_capacity.map(|cap| LruCache::new(NonZeroUsize::new(cap).unwrap()))
+        self.lru_capacity.map(|cap| LruCache::new(NonZeroUsize::new(cap).expect("lru_capacity for index must be > 0")))
     }
 
     fn open<'txn, 'c>(
