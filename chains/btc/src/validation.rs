@@ -21,9 +21,21 @@ async fn main() -> Result<()> {
         let cbor = client.get_block_by_height(Height(height)).await?;
         let btc_block: bitcoin::Block = bitcoin::consensus::encode::deserialize(&cbor.raw)?;
         let storage_block = Block::get(&block_tx, &Height(height))?.expect("Block should exist in storage");
-        let storage_tx_hashes: HashSet<TxHash> = storage_block.transactions.into_iter().map(|tx| tx.hash).collect();
-        let btc_tx_hashes: HashSet<TxHash> = btc_block.txdata.into_iter().map(|tx| TxHash(*tx.compute_txid().as_ref())).collect();
+        let storage_tx_hashes: HashSet<TxHash> = storage_block.transactions.iter().map(|tx| tx.hash).collect();
+        let btc_tx_hashes: HashSet<TxHash> = btc_block.txdata.iter().map(|tx| TxHash(*tx.compute_txid().as_ref())).collect();
         assert_eq!(storage_tx_hashes, btc_tx_hashes, "Transaction hashes in storage do not match those in the original block");
+
+        let storage_scripts: HashSet<ScriptHash> =
+            storage_block.transactions.iter()
+                .flat_map(|tx| tx.utxos.iter().map(|out|out.script_hash.clone()))
+                .collect::<HashSet<ScriptHash>>();
+
+        let btc_scripts: HashSet<ScriptHash> =
+            btc_block.txdata.iter()
+                .flat_map(|tx| tx.output.iter().map(|out|ScriptHash(out.script_pubkey.as_bytes().to_vec())))
+                .collect::<HashSet<ScriptHash>>();
+
+        assert_eq!(storage_scripts, btc_scripts, "Output scripts in storage do not match those in the original block");
     }
 
     info!("Validation successful");
