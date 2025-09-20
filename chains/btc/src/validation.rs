@@ -16,7 +16,7 @@ async fn main() -> Result<()> {
     let client = Arc::new(BtcClient::new(&config)?);
     let block_tx = Block::begin_read_ctx(&storage)?;
 
-    for height in 914000..915585 {
+    for height in 915000..915585 {
         let cbor = client.get_block_by_height(Height(height)).await?;
         let btc_block: bitcoin::Block = bitcoin::consensus::encode::deserialize(&cbor.raw)?;
         let storage_block = Block::get(&block_tx, &Height(height))?.expect("Block should exist in storage");
@@ -35,14 +35,6 @@ async fn main() -> Result<()> {
                 .collect();
 
         assert_eq!(storage_scripts, btc_scripts, "Output scripts in storage do not match those in the original block");
-
-
-        let storage_sentinel_addresses: Vec<Address> =
-            storage_block.transactions.iter()
-                .flat_map(|tx| tx.utxos.iter().filter(|out|out.address.0 == btc::block_provider::SENTINEL).map(|u|u.address.clone()).into_iter())
-                .collect();
-
-        warn!("Found {} sentinel addresses for {} scripts and {} txs in block at height {}", storage_sentinel_addresses.len(), storage_scripts.len(), storage_block.transactions.len(), height);
     }
 
     info!("Validation successful");
