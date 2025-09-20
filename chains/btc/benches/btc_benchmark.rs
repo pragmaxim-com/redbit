@@ -1,10 +1,8 @@
 use btc::block_provider::BtcBlockProvider;
 use btc::model_v1::BlockChain;
-use btc::rest_client::BtcCBOR;
 use btc::validation;
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
 use redbit::{info, Storage, WriteTxContext};
-use serde_json;
 use std::{sync::Arc, time::Duration};
 
 fn criterion_benchmark(c: &mut Criterion) {

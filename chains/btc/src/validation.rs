@@ -6,6 +6,7 @@ use chain::settings::AppConfig;
 use redbit::info;
 use std::collections::HashSet;
 use std::fs;
+use serde_json;
 
 pub fn block_from_file(size: &str, height: u32, tx_count: usize) -> (bitcoin::Block, BtcCBOR) {
     info!("Getting {} block with {} txs", size, tx_count);
