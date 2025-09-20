@@ -1,20 +1,9 @@
-use crate::model_v1::{Block, Height, TxHash};
-use crate::rest_client::BtcCBOR;
 use anyhow::Result;
+use btc::block_provider::BtcBlockProvider;
+use btc::model_v1::*;
 use chain::launcher;
 use chain::settings::AppConfig;
-use redbit::info;
 use std::collections::HashSet;
-use std::fs;
-use serde_json;
-
-pub fn block_from_file(size: &str, height: u32, tx_count: usize) -> (bitcoin::Block, BtcCBOR) {
-    info!("Getting {} block with {} txs", size, tx_count);
-    let path = format!("blocks/{}_block.json", size);
-    let file_content = fs::read_to_string(path).expect("Failed to read block file");
-    let block: bitcoin::Block = serde_json::from_str(&file_content).expect("Failed to deserialize block from JSON");
-    (block.clone(), BtcCBOR { height: Height(height), raw: bitcoin::consensus::encode::serialize(&block) })
-}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -24,7 +13,7 @@ async fn main() -> Result<()> {
     assert_eq!(created, false, "We validate existing storage");
 
     let validated_height = 908244;
-    let (btc_block, _) = block_from_file("huge", validated_height, 3713);
+    let (btc_block, _) = BtcBlockProvider::block_from_file("huge", validated_height, 3713);
     let block_tx = Block::begin_read_ctx(&storage)?;
     let storage_block = Block::get(&block_tx, &Height(validated_height))?.expect("Block should exist in storage");
 

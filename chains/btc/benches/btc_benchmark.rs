@@ -1,6 +1,5 @@
 use btc::block_provider::BtcBlockProvider;
 use btc::model_v1::BlockChain;
-use btc::validation;
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
 use redbit::{info, Storage, WriteTxContext};
 use std::{sync::Arc, time::Duration};
@@ -11,9 +10,9 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     let chain = BlockChain::new(Arc::clone(&storage));
 
-    let (_, small_block) = validation::block_from_file("small", 135204, 29);
-    let (_, avg_block) = validation::block_from_file("avg", 217847, 343);
-    let (_, huge_block) = validation::block_from_file("huge", 908244, 3713);
+    let (_, small_block) = BtcBlockProvider::block_from_file("small", 135204, 29);
+    let (_, avg_block) = BtcBlockProvider::block_from_file("avg", 217847, 343);
+    let (_, huge_block) = BtcBlockProvider::block_from_file("huge", 908244, 3713);
 
     info!("Initiating processing");
     let processed_small_block = BtcBlockProvider::process_block_pure(&small_block).expect("Failed to process small_block");

@@ -7,7 +7,6 @@ pub mod config;
 pub mod model_v1;
 pub mod codec;
 pub mod hook;
-pub mod validation;
 
 use bitcoin::block::Bip34Error;
 use chain::ChainError;
