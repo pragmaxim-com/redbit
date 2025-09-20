@@ -67,9 +67,9 @@ and higher blocks/s throughput.
 
 My throughput results after indexing whole bitcoin :
 
-- `2.0GHz` & `NVMe PCIe Gen3` & `DDR4 2933MHz 2Rx4` : `~ 30 000 Inputs+outputs / s`
-- `3.0GHz` & `NVMe PCIe Gen4` & `DDR4 3200MHz 4Rx4` : `~ 60 000 Inputs+outputs / s`
-- `3.5GHz` & `NVMe PCIe Gen5` & `DDR5 4800MHz 4RX8` : `~ 120 000 Inputs+outputs / s`
+- `2.0GHz` & `NVMe PCIe Gen3` & `DDR4 2100MHz 2Rx4` : `~ 30 000 Inputs+outputs / s`
+- `3.0GHz` & `NVMe PCIe Gen4` & `DDR4 3200MHz 4Rx4` : `~ 50 000 Inputs+outputs / s`
+- `3.5GHz` & `NVMe PCIe Gen5` & `DDR5 4800MHz 4RX8` : `~ 90 000 Inputs+outputs / s`
 
 
 The size of databases corresponds to bitcoin databases, note that I index both `address` and `script_hash` :

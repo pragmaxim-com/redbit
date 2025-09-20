@@ -4,7 +4,7 @@ use crate::settings::{AppConfig, DbCacheSize, HttpSettings, IndexerSettings};
 use crate::{combine, ChainError};
 use futures::future::ready;
 use redbit::storage::Storage;
-use redbit::{error, info, serve, OpenApiRouter, RequestState, WriteTxContext};
+use redbit::{error, info, serve, AppError, OpenApiRouter, RequestState, WriteTxContext};
 use std::env;
 use std::sync::Arc;
 use std::time::Duration;
@@ -76,6 +76,13 @@ fn maybe_console_init() {
     info!("Running production build without console subscriber");
 }
 
+pub async fn build_storage(config: &AppConfig) -> Result<(bool, Arc<Storage>), AppError>  {
+    let db_path: String = format!("{}/{}/{}", config.indexer.db_path, "main", config.indexer.name);
+    let full_path = env::home_dir().unwrap().join(&db_path);
+    let db_cache_size_gb: DbCacheSize = config.indexer.db_cache_size_gb.clone().into();
+    Storage::build_storage(full_path, db_cache_size_gb.0).await
+}
+
 pub async fn launch<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'static, F>(
     block_provider: Arc<dyn BlockProvider<FB, TB>>,
     build_chain: F,
@@ -87,10 +94,7 @@ where
 {
     let config = AppConfig::new("config/settings").expect("Failed to load app config");
     maybe_console_init();
-    let db_path: String = format!("{}/{}/{}", config.indexer.db_path, "main", config.indexer.name);
-    let full_path = env::home_dir().unwrap().join(&db_path);
-    let db_cache_size_gb: DbCacheSize = config.indexer.db_cache_size_gb.clone().into();
-    let (created, storage) = Storage::build_storage(full_path, db_cache_size_gb.0).await?;
+    let (created, storage) = build_storage(&config).await?;
     let chain: Arc<dyn BlockChainLike<TB, CTX>> = build_chain(Arc::clone(&storage));
     let unlinked_headers: Vec<TB::Header> =
         if created {
