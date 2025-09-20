@@ -42,7 +42,7 @@ async fn main() -> Result<()> {
                 .flat_map(|tx| tx.utxos.iter().filter(|out|out.address.0 == btc::block_provider::SENTINEL).map(|u|u.address.clone()).into_iter())
                 .collect();
 
-        warn!("Found {} sentinel addresses in block at height {}", storage_sentinel_addresses.len(), height);
+        warn!("Found {} sentinel addresses for {} scripts and {} txs in block at height {}", storage_sentinel_addresses.len(), storage_scripts.len(), storage_block.transactions.len(), height);
     }
 
     info!("Validation successful");
