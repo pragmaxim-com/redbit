@@ -1,16 +1,18 @@
 use crate::config::BitcoinConfig;
-use crate::model_v1::{Address, Block, BlockHash, BlockPointer, Timestamp, Header, Height, MerkleRoot, ScriptHash, InputRef, Transaction, TransactionPointer, TxHash, Utxo, Weight};
+use crate::model_v1::{Address, Block, BlockHash, BlockPointer, Header, Height, InputRef, MerkleRoot, ScriptHash, Timestamp, Transaction, TransactionPointer, TxHash, Utxo, Weight};
+use crate::rest_client::{BtcCBOR, BtcClient};
+use crate::ExplorerError;
 use async_trait::async_trait;
 use chain::api::{BlockProvider, ChainError};
 use chain::batcher::SyncMode;
 use chain::monitor::BoxWeight;
+use chain::settings::Parallelism;
 use futures::stream::StreamExt;
 use futures::Stream;
+use redbit::info;
 use redbit::*;
-use std::{pin::Pin, sync::Arc};
-use chain::settings::Parallelism;
-use crate::ExplorerError;
-use crate::rest_client::{BtcCBOR, BtcClient};
+use serde_json;
+use std::{fs, pin::Pin, sync::Arc};
 
 pub const SENTINEL: [u8; 25] = [
     0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -30,6 +32,15 @@ impl BtcBlockProvider {
         let fetching_par: Parallelism = config.fetching_parallelism.clone();
         Ok(Arc::new(BtcBlockProvider { client, fetching_par }))
     }
+
+    pub fn block_from_file(size: &str, height: u32, tx_count: usize) -> (bitcoin::Block, BtcCBOR) {
+        info!("Getting {} block with {} txs", size, tx_count);
+        let path = format!("blocks/{}_block.json", size);
+        let file_content = fs::read_to_string(path).expect("Failed to read block file");
+        let block: bitcoin::Block = serde_json::from_str(&file_content).expect("Failed to deserialize block from JSON");
+        (block.clone(), BtcCBOR { height: Height(height), raw: bitcoin::consensus::encode::serialize(&block) })
+    }
+
 
     pub fn process_block_pure(cbor: &BtcCBOR) -> Result<Block, ChainError> {
         let block: bitcoin::Block = bitcoin::consensus::encode::deserialize(&cbor.raw).map_err(|e| ChainError::new(&format!("Failed to deser CBOR: {}", e)))?;
