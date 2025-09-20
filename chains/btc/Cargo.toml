@@ -10,6 +10,14 @@ ci = []
 chain = ["redbit/chain"]
 tracing = ["chain/tracing"]
 
+[[bin]]
+name = "btc"
+path = "src/main.rs"
+
+[[bin]]
+name = "validation"
+path = "src/validation.rs"
+
 [lib]
 doctest = false
 

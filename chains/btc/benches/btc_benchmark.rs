@@ -1,17 +1,11 @@
 use btc::block_provider::BtcBlockProvider;
-use btc::model_v1::{BlockChain, Height};
+use btc::model_v1::BlockChain;
 use btc::rest_client::BtcCBOR;
+use btc::validation;
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
 use redbit::{info, Storage, WriteTxContext};
 use serde_json;
-use std::{fs, sync::Arc, time::Duration};
-
-fn block_from_file(size: &str, tx_count: usize) -> bitcoin::Block {
-    info!("Getting {} block with {} txs", size, tx_count);
-    let path = format!("blocks/{}_block.json", size);
-    let file_content = fs::read_to_string(path).expect("Failed to read block file");
-    serde_json::from_str(&file_content).expect("Failed to deserialize block from JSON")
-}
+use std::{sync::Arc, time::Duration};
 
 fn criterion_benchmark(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
@@ -19,9 +13,9 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     let chain = BlockChain::new(Arc::clone(&storage));
 
-    let small_block: BtcCBOR = BtcCBOR { height: Height(135204), raw: bitcoin::consensus::encode::serialize(&block_from_file("small", 29)) };
-    let avg_block: BtcCBOR = BtcCBOR { height: Height(217847), raw: bitcoin::consensus::encode::serialize(&block_from_file("avg", 343)) };
-    let huge_block: BtcCBOR = BtcCBOR { height: Height(908244), raw: bitcoin::consensus::encode::serialize(&block_from_file("huge", 3713)) };
+    let (_, small_block) = validation::block_from_file("small", 135204, 29);
+    let (_, avg_block) = validation::block_from_file("avg", 217847, 343);
+    let (_, huge_block) = validation::block_from_file("huge", 908244, 3713);
 
     info!("Initiating processing");
     let processed_small_block = BtcBlockProvider::process_block_pure(&small_block).expect("Failed to process small_block");

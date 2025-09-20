@@ -45,7 +45,10 @@ jobs:
 
       - name: Run tests
         run: |
-          cargo test --workspace --features ci,integration
+          cargo test --package demo --features integration,ci
+          cargo test --package btc --features integration,ci
+          cargo test --package cardano --features integration,ci
+          cargo test --package ergo --features integration,ci
 
   bench:
     needs: integration
