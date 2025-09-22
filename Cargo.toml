@@ -1,6 +1,6 @@
 [package]
 name = "root"
-version = "1.0.4"
+version = "1.0.5"
 edition = "2024"
 
 [features]
@@ -8,7 +8,7 @@ ci = []
 integration = []
 
 [workspace.package]
-version = "1.0.4"
+version = "1.0.5"
 
 [workspace]
 members = [
