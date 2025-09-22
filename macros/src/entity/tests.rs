@@ -19,10 +19,10 @@ pub fn test_suite(entity_name: &Ident, parent_def: Option<OneToManyParentDef>, f
         };
 
     let db_init = quote! {
-        fn random_storage() -> Arc<Storage> {
+        fn random_storage() -> (StorageOwner, Arc<Storage>) {
             tokio::runtime::Runtime::new()
                 .expect("tokio runtime")
-                .block_on(Storage::temp(#entity_literal, 0, true))
+                .block_on(StorageOwner::temp(#entity_literal, 0, true))
                 .expect("Failed to create temporary storage")
         }
 
@@ -44,10 +44,10 @@ pub fn test_suite(entity_name: &Ident, parent_def: Option<OneToManyParentDef>, f
 
             #db_init
             
-            static STORAGE: Lazy<Arc<Storage>> = Lazy::new(|| {
-                let storage = random_storage();
+            static STORAGE: Lazy<(StorageOwner, Arc<Storage>)> = Lazy::new(|| {
+                let (storage_owner, storage) = random_storage();
                 initialize_storage(Arc::clone(&storage));
-                Arc::clone(&storage)
+                (storage_owner, Arc::clone(&storage))
             });
 
             #(#unit_tests)*
@@ -63,26 +63,28 @@ pub fn test_suite(entity_name: &Ident, parent_def: Option<OneToManyParentDef>, f
 
             #db_init
 
-            static SERVER: OnceCell<Arc<axum_test::TestServer>> = OnceCell::const_new();
+            static SERVER: OnceCell<(StorageOwner, Arc<axum_test::TestServer>)> = OnceCell::const_new();
 
-            async fn random_storage_async() -> Arc<Storage> {
-               Storage::temp(#entity_literal, 0, true).await.expect("Failed to create temporary storage")
+            async fn random_storage_async() -> (StorageOwner, Arc<Storage>) {
+               StorageOwner::temp(#entity_literal, 0, true).await.expect("Failed to create temporary storage")
             }
 
-            async fn get_delete_server() -> Arc<axum_test::TestServer> {
-                let storage = random_storage_async().await;
+            async fn get_delete_server() -> (StorageOwner, Arc<axum_test::TestServer>) {
+                let (storage_owner, storage) = random_storage_async().await;
                 initialize_storage(Arc::clone(&storage));
                 let router = build_router(RequestState { storage }, None, None);
-                Arc::new(axum_test::TestServer::new(router).unwrap())
+                (storage_owner, Arc::new(axum_test::TestServer::new(router).unwrap()))
             }
 
-            async fn get_test_server() -> Arc<axum_test::TestServer> {
-                SERVER.get_or_init(|| async {
-                    let storage = random_storage_async().await;
+            async fn get_test_server() -> (&'static StorageOwner, Arc<axum_test::TestServer>) {
+                let (owner, server) = SERVER.get_or_init(|| async {
+                    let (storage_owner, storage) = random_storage_async().await;
                     initialize_storage(Arc::clone(&storage));
                     let router = build_router(RequestState { storage }, None, None);
-                    Arc::new(axum_test::TestServer::new(router).unwrap())
-                }).await.clone()
+                    (storage_owner, Arc::new(axum_test::TestServer::new(router).unwrap()))
+                }).await;
+
+                (owner, Arc::clone(server))
             }
 
             #(#http_tests)*

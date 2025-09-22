@@ -1,9 +1,9 @@
 use crate::AppError;
-use redb::*;
 use redb::Key;
+use redb::*;
 use std::borrow::Borrow;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::Weak;
 
 pub struct ReadOnlyDictTable<K: Key + 'static, V: Key + 'static> {
     dict_pk_to_ids: ReadOnlyMultimapTable<K, K>,
@@ -13,8 +13,9 @@ pub struct ReadOnlyDictTable<K: Key + 'static, V: Key + 'static> {
 }
 
 impl<K: Key + 'static, V: Key + 'static> ReadOnlyDictTable<K, V> {
-    pub fn new(dict_db: Arc<Database>, dict_pk_to_ids_def: MultimapTableDefinition<K, K>, value_by_dict_pk_def: TableDefinition<K, V>, value_to_dict_pk_def: TableDefinition<V, K>, dict_pk_by_id_def: TableDefinition<K, K>) -> Result<Self, AppError> {
-        let dict_tx = dict_db.begin_read()?;
+    pub fn new(dict_db: Weak<Database>, dict_pk_to_ids_def: MultimapTableDefinition<K, K>, value_by_dict_pk_def: TableDefinition<K, V>, value_to_dict_pk_def: TableDefinition<V, K>, dict_pk_by_id_def: TableDefinition<K, K>) -> Result<Self, AppError> {
+        let db_arc = dict_db.upgrade().ok_or_else(|| AppError::Custom("database closed".to_string()))?;
+        let dict_tx = db_arc.begin_read()?;
         Ok(Self {
             dict_pk_to_ids: dict_tx.open_multimap_table(dict_pk_to_ids_def)?,
             value_by_dict_pk: dict_tx.open_table(value_by_dict_pk_def)?,

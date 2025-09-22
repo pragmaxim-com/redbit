@@ -37,7 +37,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &Type, tab
     let test_stream = Some(quote! {
         #[test]
         fn #fn_name() {
-            let storage = STORAGE.clone();
+            let (storage_owner, storage) = &*STORAGE;
             let n: usize = 2;
             let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             let entities = #entity_name::#fn_name(&tx_context, n).expect("Failed to tail entities");
@@ -51,7 +51,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &Type, tab
     let bench_stream = Some(quote! {
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
-            let storage = STORAGE.clone();
+            let (storage_owner, storage) = &*STORAGE;
             let n: usize = 2;
             let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             b.iter(|| {

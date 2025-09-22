@@ -8,7 +8,7 @@ use chain::settings::AppConfig;
 #[tokio::main]
 async fn main() -> Result<()> {
     let config = AppConfig::new("config/settings").expect("Failed to load app config");
-    let (created, storage) = launcher::build_storage(&config).await?;
+    let (created, storage_owner, storage) = launcher::build_storage(&config).await?;
 
     assert_eq!(created, false, "We validate existing storage");
 
@@ -36,7 +36,7 @@ async fn main() -> Result<()> {
 
         assert_eq!(storage_scripts, btc_scripts, "Output scripts in storage do not match those in the original block");
     }
-
+    drop(storage_owner);
     info!("Validation successful");
     Ok(())
 }

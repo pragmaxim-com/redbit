@@ -1,9 +1,9 @@
 use cardano::block_provider::CardanoBlockProvider;
 use cardano::cardano_client::CardanoCBOR;
+use cardano::model_v1::*;
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
 use pallas_traverse::wellknown::GenesisValues;
-use redbit::{info, Storage, WriteTxContext};
-use cardano::model_v1::*;
+use redbit::{info, WriteTxContext};
 use std::{fs, sync::Arc, time::Duration};
 
 fn block_from_file(size: &str, tx_count: usize) -> CardanoCBOR {
@@ -15,7 +15,7 @@ fn block_from_file(size: &str, tx_count: usize) -> CardanoCBOR {
 
 fn criterion_benchmark(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let storage = rt.block_on(Storage::temp("cardano_benchmark", 1, true)).expect("Failed to open database");
+    let (storage_owner, storage) = rt.block_on(StorageOwner::temp("cardano_benchmark", 1, true)).expect("Failed to open database");
 
     let chain = BlockChain::new(Arc::clone(&storage));
 
@@ -80,6 +80,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         );
     });
     indexing_context.stop_writing().unwrap();
+    drop(storage_owner);
     group.finish();
 }
 

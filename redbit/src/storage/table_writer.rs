@@ -4,7 +4,7 @@ use redb::{AccessGuard, Database, Key, Value, WriteTransaction};
 use std::borrow::Borrow;
 use std::marker::PhantomData;
 use std::ops::RangeBounds;
-use std::sync::Arc;
+use std::sync::Weak;
 use std::thread;
 use std::thread::JoinHandle;
 
@@ -133,7 +133,7 @@ where
         Ok(ctrl)
     }
 
-    pub fn new(db: Arc<Database>, factory: F) -> redb::Result<Self, AppError> {
+    pub fn new(db_weak: Weak<Database>, factory: F) -> redb::Result<Self, AppError> {
         let (topic, receiver): (Sender<WriterCommand<K, V>>, Receiver<WriterCommand<K, V>>) = unbounded();
         let handle = thread::spawn(move || {
             let mut cache = factory.new_cache();
@@ -146,17 +146,25 @@ where
 
                 match cmd {
                     WriterCommand::Begin(ack) => {
-                        // 1) open a new write tx
-                        let tx = match db.begin_write() {
+                        let db_arc = match db_weak.upgrade() {
+                            Some(db) => db,
+                            None => {
+                                let _ = ack.send(Err(AppError::Custom("database closed".to_string())));
+                                break 'outer;
+                            }
+                        };
+                        // 0) open a new write tx
+                        let tx = match db_arc.begin_write() {
                             Ok(tx) => tx,
                             Err(e) => { let _ = ack.send(Err(AppError::from(e))); continue 'outer; }
                         };
+                        // 1) drop the strong Arc immediately; owner keeps DB alive
+                        drop(db_arc);
                         // 2) open typed table bound to &tx
                         let mut table = match factory.open(&tx, &mut cache) {
                             Ok(t) => { let _ = ack.send(Ok(())); t },
                             Err(e) => { let _ = ack.send(Err(e)); continue 'outer; }
                         };
-
                         // 3) process commands until a Flush arrives
                         let mut flush_ack: Option<Sender<redb::Result<(), AppError>>> = None;
                         let mut write_error: Option<Result<(), AppError>> = None;

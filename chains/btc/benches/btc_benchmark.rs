@@ -1,12 +1,12 @@
 use btc::block_provider::BtcBlockProvider;
 use btc::model_v1::BlockChain;
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
-use redbit::{info, Storage, WriteTxContext};
+use redbit::{info, StorageOwner, WriteTxContext};
 use std::{sync::Arc, time::Duration};
 
 fn criterion_benchmark(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let storage = rt.block_on(Storage::temp("btc_benchmark", 1, true)).expect("Failed to create temporary storage");
+    let (storage_owner, storage) = rt.block_on(StorageOwner::temp("btc_benchmark", 1, true)).expect("Failed to create temporary storage");
 
     let chain = BlockChain::new(Arc::clone(&storage));
 
@@ -69,6 +69,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         );
     });
     indexing_context.stop_writing().unwrap();
+    drop(storage_owner);
     group.finish();
 }
 

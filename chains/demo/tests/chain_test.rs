@@ -11,7 +11,7 @@ mod chain_tests {
     #[tokio::test]
     async fn test_chain_sync() {
         let target_height = 200u32;
-        let storage = Storage::temp("chain_sync_test", 1, true).await.expect("Failed to open database");
+        let (storage_owner, storage) = StorageOwner::temp("chain_sync_test", 1, true).await.expect("Failed to open database");
         let chain = BlockChain::new(Arc::clone(&storage));
         chain.init().expect("Failed to initialize chain");
         let config = AppConfig::new("config/settings").expect("Failed to load app config");
@@ -38,5 +38,17 @@ mod chain_tests {
         syncer.sync(&config.indexer, Some(header_near_tip), shutdown_rx).await.expect("Syncing from 40 failed");
         let result = chain.validate_chain(0).await.expect("Chain validation returned an error");
         assert!(result.is_empty(), "Chain validation failed: {:?}", result);
+
+        drop(storage);
+        drop(chain);
+        drop(syncer);
+
+        for (name, db_arc) in &storage_owner.index_dbs {
+            let sc = Arc::strong_count(db_arc);
+            if sc != 1 {
+                error!("Database {name} still has {sc} strong refs at shutdown");
+            }
+        }
+        drop(storage_owner);
     }
 }

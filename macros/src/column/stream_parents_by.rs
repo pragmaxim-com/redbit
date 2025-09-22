@@ -65,7 +65,7 @@ pub fn by_dict_def(
     let test_stream = Some(quote! {
         #[tokio::test]
         async fn #fn_name() {
-            let storage = STORAGE.clone();
+            let (storage_owner, storage) = &*STORAGE;
             let val = #column_type::default();
             let tx_context = #parent_type::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             let entity_stream = #entity_name::#fn_name(tx_context, val, None).expect("Failed to get parent entities by dictionary index");
@@ -75,7 +75,7 @@ pub fn by_dict_def(
         }
         #[tokio::test]
         async fn #test_with_filter_fn_name() {
-            let storage = STORAGE.clone();
+            let (storage_owner, storage) = &*STORAGE;
             let val = #column_type::default();
             let pk = #pk_type::default();
             let parent_pk = pk.parent();
@@ -93,7 +93,7 @@ pub fn by_dict_def(
     let bench_stream = Some(quote! {
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
-            let storage = STORAGE.clone();
+            let (storage_owner, storage) = &*STORAGE;
             let query = #stream_parent_query_type::sample();
             let rt = Runtime::new().unwrap();
             b.iter(|| {
@@ -201,7 +201,7 @@ pub fn by_index_def(
     let test_stream = Some(quote! {
         #[tokio::test]
         async fn #fn_name() {
-            let storage = STORAGE.clone();
+            let (storage_owner, storage) = &*STORAGE;
             let val = #column_type::default();
             let tx_context = #parent_type::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             let entity_stream = #entity_name::#fn_name(tx_context, val, None).expect("Failed to get parent entities by index");
@@ -211,7 +211,7 @@ pub fn by_index_def(
         }
         #[tokio::test]
         async fn #test_with_filter_fn_name() {
-            let storage = STORAGE.clone();
+            let (storage_owner, storage) = &*STORAGE;
             let val = #column_type::default();
             let pk = #pk_type::default();
             let parent_pk = pk.parent();
@@ -229,7 +229,7 @@ pub fn by_index_def(
     let bench_stream = Some(quote! {
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
-            let storage = STORAGE.clone();
+            let (storage_owner, storage) = &*STORAGE;
             let query = #stream_parent_query_type::sample();
             let rt = Runtime::new().unwrap();
             b.iter(|| {

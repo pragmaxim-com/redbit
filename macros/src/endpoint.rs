@@ -45,10 +45,10 @@ impl EndpointDef {
 
     pub fn generate_tests(&self) -> Vec<TokenStream> {
         let (server, method_name) = match self.method {
-            HttpMethod::GET => (quote! { get_test_server() }, quote! { http::Method::GET }),
-            HttpMethod::POST => (quote! { get_test_server() }, quote! { http::Method::POST }),
-            HttpMethod::HEAD => (quote! { get_test_server() }, quote! { http::Method::HEAD }),
-            HttpMethod::DELETE => (quote! { get_delete_server() }, quote! { http::Method::DELETE }),
+            HttpMethod::GET => (quote! { get_test_server().await }, quote! { http::Method::GET }),
+            HttpMethod::POST => (quote! { get_test_server().await }, quote! { http::Method::POST }),
+            HttpMethod::HEAD => (quote! { get_test_server().await }, quote! { http::Method::HEAD }),
+            HttpMethod::DELETE => (quote! { get_delete_server().await }, quote! { http::Method::DELETE }),
         };
 
         fn generate_path_expr(endpoint_path: &str, exprs: &[PathExpr]) -> TokenStream {
@@ -119,16 +119,17 @@ impl EndpointDef {
             tests.push(quote! {
                 #[tokio::test]
                 async fn #test_fn_name() {
+                    let (storage_owner, server) = #server;
                     for query_sample in #query_samples {
                         let query_string = serde_urlencoded::to_string(query_sample.clone()).unwrap();
                         let final_path = format!("{}?{}", #path_expr, query_string);
                         eprintln!("Testing endpoint: {} : {} with body", #method_name, final_path);
                         for body_sample in #body_samples {
-                            let response = #server.await.method(#method_name, &final_path).json(&body_sample).await;
+                            let response = server.method(#method_name, &final_path).json(&body_sample).await;
                             #deser_return_value_assert
                         }
                         if (!#body_required) {
-                            let response = #server.await.method(#method_name, &final_path).await;
+                            let response = server.method(#method_name, &final_path).await;
                             #deser_return_value_assert
                         }
                     }
@@ -140,11 +141,12 @@ impl EndpointDef {
                 tests.push(quote! {
                     #[tokio::test]
                     async fn #test_fn_name() {
+                        let (storage_owner, server) = #server;
                         for query_sample in #query_samples {
                             let query_string = serde_urlencoded::to_string(query_sample).unwrap();
                             let final_path = format!("{}?{}", #path_expr, query_string);
                             eprintln!("Testing endpoint: {} : {}", #method_name, &final_path);
-                            let response = #server.await.method(#method_name, &final_path).await;
+                            let response = server.method(#method_name, &final_path).await;
                             #deser_return_value_assert
                         }
                     }
@@ -157,13 +159,14 @@ impl EndpointDef {
             tests.push(quote! {
                 #[tokio::test]
                 async fn #test_fn_name() {
+                    let (storage_owner, server) = #server;
                     for body_sample in #body_samples {
                         eprintln!("Testing endpoint: {} : {} with body", #method_name, #path_expr);
-                        let response = #server.await.method(#method_name, &#path_expr).json(&body_sample).await;
+                        let response = server.method(#method_name, &#path_expr).json(&body_sample).await;
                         #deser_return_value_assert
                     }
                     if (!#body_required) {
-                        let response = #server.await.method(#method_name, &#path_expr).await;
+                        let response = server.method(#method_name, &#path_expr).await;
                         #deser_return_value_assert
                     }
                 }
@@ -173,8 +176,9 @@ impl EndpointDef {
             tests.push(quote! {
                 #[tokio::test]
                 async fn #test_fn_name() {
+                    let (storage_owner, server) = #server;
                     eprintln!("Testing endpoint: {} : {}", #method_name, #path_expr);
-                    let response = #server.await.method(#method_name, &#path_expr).await;
+                    let response = server.method(#method_name, &#path_expr).await;
                     #deser_return_value_assert
                 }
             });

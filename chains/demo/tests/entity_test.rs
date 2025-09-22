@@ -2,14 +2,15 @@
 mod entity_tests {
     use demo::model_v1::*;
     use std::collections::HashSet;
+    use redbit::storage::StorageOwner;
 
-    async fn init_temp_storage(name: &str, db_cache_size_gb: u8) -> (Vec<Block>, Arc<Storage>) {
-        let storage = Storage::temp(name, db_cache_size_gb, true).await.unwrap();
+    async fn init_temp_storage(name: &str, db_cache_size_gb: u8) -> (Vec<Block>, StorageOwner, Arc<Storage>) {
+        let (storage_owner, storage) = StorageOwner::temp(name, db_cache_size_gb, true).await.unwrap();
         let blocks = Block::sample_many(3);
         let tx_context = Block::begin_write_ctx(&storage).unwrap();
         Block::store_many(&tx_context, blocks.clone()).expect("Failed to persist blocks");
         tx_context.commit_and_close_ctx().unwrap();
-        (blocks, storage)
+        (blocks, storage_owner, storage)
     }
 
     #[test]
@@ -36,9 +37,9 @@ mod entity_tests {
 
     #[tokio::test]
     async fn it_should_commit_multiple_blocks_in_a_single_tx() {
-        let (blocks, multi_tx_storage) = init_temp_storage("db_test", 0).await;
+        let (blocks, _multi_tx_storage_owner, multi_tx_storage) = init_temp_storage("db_test", 0).await;
 
-        let single_tx_db = Storage::temp("db_test_2", 0, true).await.unwrap();
+        let (_storage_owner, single_tx_db) = StorageOwner::temp("db_test_2", 0, true).await.unwrap();
         let tx_context = Block::begin_write_ctx(&single_tx_db).unwrap();
         blocks.into_iter().for_each(|block| Block::store(&tx_context, block).expect("Failed to persist blocks"));
         tx_context.commit_and_close_ctx().unwrap();
@@ -52,7 +53,7 @@ mod entity_tests {
 
     #[tokio::test]
     async fn it_should_get_entity_by_unique_id() {
-        let (blocks, storage) = init_temp_storage("db_test", 0).await;
+        let (blocks, _storage_owner, storage) = init_temp_storage("db_test", 0).await;
         let block = blocks.first().unwrap();
         let block_tx = Block::begin_read_ctx(&storage).unwrap();
         let found_by_id = Block::get(&block_tx, &block.height).expect("Failed to query by ID").unwrap();
@@ -63,7 +64,7 @@ mod entity_tests {
 
     #[tokio::test]
     async fn it_should_delete_entity_by_unique_id() {
-        let (blocks, storage) = init_temp_storage("db_test", 0).await;
+        let (blocks, _storage_owner, storage) = init_temp_storage("db_test", 0).await;
         let block = blocks.first().unwrap();
         let block_tx = Block::begin_read_ctx(&storage).unwrap();
         let found_by_id = Block::get(&block_tx, &block.height).expect("Failed to query by ID").unwrap();
@@ -90,7 +91,7 @@ mod entity_tests {
 
     #[tokio::test]
     async fn it_should_stream_entities_by_index() {
-        let (blocks, storage) = init_temp_storage("db_test", 0).await;
+        let (blocks, _storage_owner, storage) = init_temp_storage("db_test", 0).await;
 
         let transaction_tx = Transaction::begin_read_ctx(&storage).unwrap();
         let transaction = blocks.first().unwrap().transactions.first().unwrap();
@@ -103,7 +104,7 @@ mod entity_tests {
 
     #[tokio::test]
     async fn it_should_stream_entities_by_index_with_dict() {
-        let (blocks, storage) = init_temp_storage("db_test", 0).await;
+        let (blocks, _storage_owner, storage) = init_temp_storage("db_test", 0).await;
 
         let utxo_tx = Utxo::begin_read_ctx(&storage).unwrap();
         let utxo = blocks.first().unwrap().transactions.first().unwrap().utxos.first().unwrap();
@@ -116,7 +117,7 @@ mod entity_tests {
 
     #[tokio::test]
     async fn store_many_utxos() {
-        let (blocks, storage) = init_temp_storage("db_test", 0).await;
+        let (blocks, _storage_owner, storage) = init_temp_storage("db_test", 0).await;
         let all_utxos = blocks.iter().flat_map(|b| b.transactions.iter().flat_map(|t| t.utxos.clone())).collect::<Vec<Utxo>>();
         let tx_context = Utxo::begin_write_ctx(&storage).unwrap();
         Utxo::store_many(&tx_context, all_utxos).expect("Failed to store UTXO");
@@ -125,7 +126,7 @@ mod entity_tests {
 
     #[tokio::test]
     async fn it_should_stream_entities_by_range_on_index() {
-        let (blocks, storage) = init_temp_storage("db_test", 0).await;
+        let (blocks, _storage_owner, storage) = init_temp_storage("db_test", 0).await;
 
         let header_tx = Header::begin_read_ctx(&storage).unwrap();
 
@@ -143,7 +144,7 @@ mod entity_tests {
 
     #[tokio::test]
     async fn it_should_get_entities_by_index() {
-        let (blocks, storage) = init_temp_storage("db_test", 0).await;
+        let (blocks, _storage_owner, storage) = init_temp_storage("db_test", 0).await;
 
         let transaction_tx = Transaction::begin_read_ctx(&storage).unwrap();
         let transaction = blocks.first().unwrap().transactions.first().unwrap();
@@ -156,7 +157,7 @@ mod entity_tests {
 
     #[tokio::test]
     async fn it_should_get_entities_by_index_with_dict() {
-        let (blocks, storage) = init_temp_storage("db_test", 0).await;
+        let (blocks, _storage_owner, storage) = init_temp_storage("db_test", 0).await;
 
         let utxo_tx = Utxo::begin_read_ctx(&storage).unwrap();
         let utxo = blocks.first().unwrap().transactions.first().unwrap().utxos.first().unwrap();
@@ -170,7 +171,7 @@ mod entity_tests {
 
     #[tokio::test]
     async fn it_should_get_entities_by_range_on_pk() {
-        let (blocks, storage) = init_temp_storage("db_test", 0).await;
+        let (blocks, _storage_owner, storage) = init_temp_storage("db_test", 0).await;
 
         let block_tx = Block::begin_read_ctx(&storage).unwrap();
 
@@ -199,7 +200,7 @@ mod entity_tests {
 
     #[tokio::test]
     async fn it_should_get_related_one_to_many_entities() {
-        let (blocks, storage) = init_temp_storage("db_test", 0).await;
+        let (blocks, _storage_owner, storage) = init_temp_storage("db_test", 0).await;
         let transaction_tx = Transaction::begin_read_ctx(&storage).unwrap();
         let block = blocks.first().unwrap();
 
@@ -219,7 +220,7 @@ mod entity_tests {
 
     #[tokio::test]
     async fn it_should_get_related_one_to_one_entity() {
-        let (blocks, storage) = init_temp_storage("db_test", 0).await;
+        let (blocks, _storage_owner, storage) = init_temp_storage("db_test", 0).await;
         let header_tx = Header::begin_read_ctx(&storage).unwrap();
         let block = blocks.first().unwrap();
 
@@ -231,7 +232,7 @@ mod entity_tests {
 
     #[tokio::test]
     async fn it_should_override_entity() {
-        let (blocks, storage) = init_temp_storage("db_test", 0).await;
+        let (blocks, _storage_owner, storage) = init_temp_storage("db_test", 0).await;
         let block_tx = Block::begin_read_ctx(&storage).unwrap();
         let block = blocks.first().cloned().unwrap();
         let block_height = block.height;
@@ -248,7 +249,7 @@ mod entity_tests {
 
     #[tokio::test]
     async fn it_should_get_first_and_last_entity() {
-        let (blocks, storage) = init_temp_storage("db_test", 0).await;
+        let (blocks, _storage_owner, storage) = init_temp_storage("db_test", 0).await;
 
         let block_tx = Block::begin_read_ctx(&storage).unwrap();
         let first_block = Block::first(&block_tx).expect("Failed to get first block").unwrap();

@@ -2,10 +2,11 @@ use anyhow::Result;
 use redbit::*;
 use std::sync::Arc;
 use demo::model_v1::*;
+use redbit::storage::StorageOwner;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let storage = Storage::temp("showcase", 1, true).await?;
+    let (storage_owner, storage) = StorageOwner::temp("showcase", 1, true).await?;
     let blocks = Block::sample_many(2);
     let block_heights: Vec<Height> = blocks.iter().map(|b|b.height).collect();
     println!("Persisting blocks:");
@@ -127,5 +128,6 @@ async fn main() -> Result<()> {
     for height in block_heights.into_iter() {
         Block::remove(Arc::clone(&storage), height)?;
     }
+    drop(storage_owner);
     Ok(())
 }

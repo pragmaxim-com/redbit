@@ -3,7 +3,7 @@ use crate::scheduler::Scheduler;
 use crate::settings::{AppConfig, DbCacheSize, HttpSettings, IndexerSettings};
 use crate::{combine, ChainError};
 use futures::future::ready;
-use redbit::storage::Storage;
+use redbit::storage::{Storage, StorageOwner};
 use redbit::{error, info, serve, AppError, OpenApiRouter, RequestState, WriteTxContext};
 use std::env;
 use std::sync::Arc;
@@ -76,11 +76,11 @@ fn maybe_console_init() {
     info!("Running production build without console subscriber");
 }
 
-pub async fn build_storage(config: &AppConfig) -> Result<(bool, Arc<Storage>), AppError>  {
+pub async fn build_storage(config: &AppConfig) -> Result<(bool, StorageOwner, Arc<Storage>), AppError>  {
     let db_path: String = format!("{}/{}/{}", config.indexer.db_path, "main", config.indexer.name);
     let full_path = env::home_dir().unwrap().join(&db_path);
     let db_cache_size_gb: DbCacheSize = config.indexer.db_cache_size_gb.clone().into();
-    Storage::build_storage(full_path, db_cache_size_gb.0).await
+    StorageOwner::build_storage(full_path, db_cache_size_gb.0).await
 }
 
 pub async fn launch<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'static, F>(
@@ -94,8 +94,9 @@ where
 {
     let config = AppConfig::new("config/settings").expect("Failed to load app config");
     maybe_console_init();
-    let (created, storage) = build_storage(&config).await?;
-    let chain: Arc<dyn BlockChainLike<TB, CTX>> = build_chain(Arc::clone(&storage));
+    let (created, storage_owner, storage_view) = build_storage(&config).await?;
+    let chain: Arc<dyn BlockChainLike<TB, CTX>> = build_chain(Arc::clone(&storage_view));
+
     let unlinked_headers: Vec<TB::Header> =
         if created {
             chain.init()?;
@@ -104,12 +105,29 @@ where
             info!("Validating chain for being linked");
             chain.validate_chain(config.indexer.validation_from_height).await?
         };
+
     let syncer: Arc<ChainSyncer<FB, TB, CTX>> = Arc::new(ChainSyncer::new(Arc::clone(&block_provider), Arc::clone(&chain)));
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
-    // we sync with the node first
+
     maybe_run_syncing(&config.indexer, unlinked_headers.first().cloned(), Arc::clone(&syncer), shutdown_rx.clone()).await;
-    // then we sync periodically with chain tip and start server
+
     let indexing_f = maybe_run_scheduling(config.indexer, Scheduler::new(Arc::clone(&syncer)), shutdown_rx.clone());
-    let server_f = maybe_run_server(config.http, Arc::clone(&storage), extras, cors, shutdown_rx.clone());
-    Ok(combine::futures(indexing_f, server_f, shutdown_tx).await)
+    let server_f = maybe_run_server(config.http, Arc::clone(&storage_view), extras, cors, shutdown_rx.clone());
+
+    // run and wait for shutdown
+    let res = combine::futures(indexing_f, server_f, shutdown_tx).await;
+
+    drop(storage_view);
+    drop(chain);
+    drop(syncer);
+
+    for (name, db_arc) in &storage_owner.index_dbs {
+        let sc = Arc::strong_count(db_arc);
+        if sc != 1 {
+            error!("Database {name} still has {sc} strong refs at shutdown");
+        }
+    }
+    drop(storage_owner);
+
+    Ok(res)
 }

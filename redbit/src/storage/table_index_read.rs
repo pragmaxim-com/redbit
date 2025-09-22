@@ -1,9 +1,9 @@
+use crate::AppError;
+use redb::{AccessGuard, Database, Key, MultimapTableDefinition, MultimapValue, ReadOnlyMultimapTable, ReadOnlyTable, ReadableDatabase, ReadableTableMetadata, TableDefinition, TableStats};
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::ops::RangeBounds;
-use std::sync::Arc;
-use redb::{AccessGuard, Database, Key, MultimapTableDefinition, MultimapValue, ReadOnlyMultimapTable, ReadOnlyTable, ReadableDatabase, ReadableTableMetadata, TableDefinition, TableStats};
-use crate::AppError;
+use std::sync::Weak;
 
 pub struct ReadOnlyIndexTable<K: Key + 'static, V: Key + 'static> {
     pk_by_index: ReadOnlyMultimapTable<V, K>,
@@ -11,8 +11,9 @@ pub struct ReadOnlyIndexTable<K: Key + 'static, V: Key + 'static> {
 }
 
 impl<K: Key + 'static, V: Key + 'static> ReadOnlyIndexTable<K, V> {
-    pub fn new(index_db: Arc<Database>, pk_by_index_def: MultimapTableDefinition<V, K>, index_by_pk_def: TableDefinition<K, V>) -> redb::Result<Self, AppError> {
-        let index_tx = index_db.begin_read()?;
+    pub fn new(index_db: Weak<Database>, pk_by_index_def: MultimapTableDefinition<V, K>, index_by_pk_def: TableDefinition<K, V>) -> redb::Result<Self, AppError> {
+        let db_arc = index_db.upgrade().ok_or_else(|| AppError::Custom("database closed".to_string()))?;
+        let index_tx = db_arc.begin_read()?;
         Ok(Self {
             pk_by_index: index_tx.open_multimap_table(pk_by_index_def)?,
             index_by_pk: index_tx.open_table(index_by_pk_def)?,
