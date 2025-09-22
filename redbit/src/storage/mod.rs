@@ -17,15 +17,29 @@ pub mod cache;
 
 #[derive(Clone)]
 pub struct Storage {
+    pub index_dbs: HashMap<String, Weak<Database>>,
+}
+
+pub struct StorageOwner {
     pub index_dbs: HashMap<String, Arc<Database>>,
 }
 
-impl Storage {
+impl StorageOwner {
+    pub fn view(&self) -> Arc<Storage> {
+        let mut weak_map = HashMap::with_capacity(self.index_dbs.len());
+        for (k, v) in &self.index_dbs {
+            weak_map.insert(k.clone(), Arc::downgrade(v));
+        }
+        Arc::new(Storage { index_dbs: weak_map })
+    }
+}
+
+impl StorageOwner {
     pub fn new(index_dbs: HashMap<String, Arc<Database>>) -> Self {
         Self { index_dbs }
     }
 
-    pub async fn build_storage(db_dir: PathBuf, db_cache_size_gb: u8) -> redb::Result<(bool, Arc<Storage>), AppError> {
+    pub async fn build_storage(db_dir: PathBuf, db_cache_size_gb: u8) -> redb::Result<(bool, StorageOwner, Arc<Storage>), AppError> {
         let mut db_defs: Vec<DbDef> = Vec::new();
         for info in inventory::iter::<StructInfo> {
             db_defs.extend((info.db_defs)())
@@ -33,12 +47,8 @@ impl Storage {
         Self::init(db_dir, db_defs, db_cache_size_gb).await
     }
 
-    pub async fn temp(name: &str, db_cache_size_gb: u8, random: bool) -> redb::Result<Arc<Storage>, AppError> {
-        let db_name = if random {
-            format!("{}_{}", name, rand::random::<u64>())
-        } else {
-            name.to_string()
-        };
+    pub async fn temp(name: &str, db_cache_size_gb: u8, random: bool) -> redb::Result<(StorageOwner, Arc<Storage>), AppError> {
+        let db_name = if random { format!("{}_{}", name, rand::random::<u64>()) } else { name.to_string() };
         let db_path = env::temp_dir().join(format!("{}/{}", "redbit", db_name));
         if random && db_path.exists() {
             fs::remove_dir_all(&db_path)?;
@@ -47,8 +57,8 @@ impl Storage {
         for info in inventory::iter::<StructInfo> {
             db_defs.extend((info.db_defs)())
         }
-        let (_, storage) = Storage::init(db_path, db_defs, db_cache_size_gb).await?;
-        Ok(storage)
+        let (_, owner, view) = StorageOwner::init(db_path, db_defs, db_cache_size_gb).await?;
+        Ok((owner, view))
     }
 
     fn db_name_with_cache_table(db_defs: &[DbDefWithCache]) -> Vec<String> {
@@ -65,7 +75,7 @@ impl Storage {
         lines
     }
 
-    pub async fn init(db_dir: PathBuf, db_defs: Vec<DbDef>, total_cache_size_gb: u8) -> redb::Result<(bool, Arc<Storage>), AppError> {
+    pub async fn init(db_dir: PathBuf, db_defs: Vec<DbDef>, total_cache_size_gb: u8) -> redb::Result<(bool, StorageOwner, Arc<Storage>), AppError> {
         let db_defs_with_cache: Vec<DbDefWithCache> = cache::allocate_cache_mb(&db_defs, (total_cache_size_gb as u64) * 1024);
         let db_name_with_cache_table = Self::db_name_with_cache_table(&db_defs_with_cache).join("\n");
         if !db_dir.exists() {
@@ -77,14 +87,13 @@ impl Storage {
                 let index_db = Database::builder().set_cache_size(dbc.db_cache_in_mb).create(index_db_path)?;
                 index_dbs.insert(dbc.name, Arc::new(index_db));
             }
-
-            Ok((true, Arc::new(Storage::new(index_dbs))))
+            let owner = StorageOwner::new(index_dbs);
+            let view = owner.view();
+            Ok((true, owner, view))
         } else {
             info!(
                 "Opening existing dbs at {:?} with total cache size {} GB, it might take a while in case previous process was killed\n{}",
-                db_dir,
-                total_cache_size_gb,
-                db_name_with_cache_table
+                db_dir, total_cache_size_gb, db_name_with_cache_table
             );
             let index_tasks = db_defs.into_iter().map(|db_def| {
                 let path = db_dir.join(format!("{}.db", db_def.name));
@@ -99,7 +108,9 @@ impl Storage {
                 .into_iter()
                 .collect::<redb::Result<HashMap<String, Arc<Database>>, DatabaseError>>()?;
 
-            Ok((false, Arc::new(Storage::new(index_dbs))))
+            let owner = StorageOwner::new(index_dbs);
+            let view = owner.view();
+            Ok((false, owner, view))
         }
     }
 }

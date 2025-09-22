@@ -20,7 +20,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
     let test_stream = Some(quote! {
         #[test]
         fn #fn_name() {
-            let storage = STORAGE.clone();
+            let (storage_owner, storage) = &*STORAGE;
             let entity_count: usize = 3;
             let from_value = #pk_type::default();
             let until_value = #pk_type::default().next_index().next_index().next_index();
@@ -39,7 +39,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type:
     let bench_stream = Some(quote! {
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
-            let storage = STORAGE.clone();
+            let (storage_owner, storage) = &*STORAGE;
             let from_value = #pk_type::default();
             let until_value = #pk_type::default().next_index().next_index().next_index();
             let tx_context = #entity_name::new_write_ctx(&storage).unwrap();

@@ -48,7 +48,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_field_def: &FieldDef, 
         Some(quote! {
             #[tokio::test]
             async fn #test_with_filter_fn_name() {
-                let storage = STORAGE.clone();
+                let (storage_owner, storage) = &*STORAGE;
                 let pk = #pk_type::default();
                 let from_value = #pk_type::default();
                 let until_value = #pk_type::default().next_index().next_index().next_index();
@@ -66,7 +66,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_field_def: &FieldDef, 
     let test_stream = Some(quote! {
         #[tokio::test]
         async fn #fn_name() {
-            let storage = STORAGE.clone();
+            let (storage_owner, storage) = &*STORAGE;
             let from_value = #pk_type::default();
             let until_value = #pk_type::default().next_index().next_index();
             let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
@@ -82,7 +82,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_field_def: &FieldDef, 
     let bench_stream = Some(quote! {
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
-            let storage = STORAGE.clone();
+            let (storage_owner, storage) = &*STORAGE;
             let query = #stream_query_type::sample();
             let rt = Runtime::new().unwrap();
             b.iter(|| {

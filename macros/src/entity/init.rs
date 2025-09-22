@@ -21,7 +21,7 @@ pub fn init(root_entity_ident: &Ident, key_def: &KeyDef) -> Vec<FunctionDef> {
                 test_stream: Some(quote! {
                     #[test]
                     fn init_storage() {
-                        let storage = random_storage();
+                        let (storage_owner, storage) = random_storage();
                         let result = #root_entity_ident::init(Arc::clone(&storage));
                         assert!(result.is_ok());
                     }

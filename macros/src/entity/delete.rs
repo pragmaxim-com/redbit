@@ -50,7 +50,7 @@ pub fn remove_def(
     let test_stream = Some(quote! {
         #[test]
         fn #fn_name() {
-            let storage = random_storage();
+            let (storage_owner, storage) = random_storage();
             let entity_count: usize = 3;
             let entities = #entity_type::sample_many(entity_count);
             let tx_context = #entity_name::begin_write_ctx(&storage).expect("Failed to begin write transaction context");
@@ -72,7 +72,7 @@ pub fn remove_def(
     let bench_stream = Some(quote! {
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
-            let storage = random_storage();
+            let (storage_owner, storage) = random_storage();
             let test_entity = #entity_type::sample();
             let pk = test_entity.#pk_name;
             #entity_name::persist(Arc::clone(&storage), test_entity).expect("Failed to store and commit instance");

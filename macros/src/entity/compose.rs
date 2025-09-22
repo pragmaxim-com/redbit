@@ -17,7 +17,7 @@ pub fn compose_token_stream(entity_name: &Ident, entity_type: &Type, pk_type: &T
         test_stream: Some(quote! {
             #[test]
             fn compose_valid_entity() {
-                let storage = random_storage();
+                let (storage_owner, storage) = random_storage();
                 let pk = #pk_type::default();
                 let sample_entity = #entity_name::sample();
                 let write_result = #entity_name::persist(Arc::clone(&storage), sample_entity);
@@ -48,7 +48,7 @@ pub fn compose_with_filter_token_stream(entity_type: &Type, pk_type: &Type, tx_c
         test_stream: Some(quote! {
             #[test]
             fn compose_with_filter_valid_entity() {
-                let storage = random_storage();
+                let (storage_owner, storage) = random_storage();
                 let pk = #pk_type::default();
                 let sample_entity = #entity_type::sample();
                 let write_result = #entity_type::persist(Arc::clone(&storage), sample_entity);

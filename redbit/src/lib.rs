@@ -69,6 +69,7 @@ pub use serde_with;
 pub use std::collections::VecDeque;
 pub use std::pin::Pin;
 pub use std::sync::Arc;
+pub use std::sync::Weak;
 pub use std::time::Duration;
 pub use urlencoding;
 pub use utoipa;
@@ -80,6 +81,7 @@ pub use utoipa_axum;
 pub use utoipa_axum::router::OpenApiRouter;
 pub use utoipa_swagger_ui;
 pub use storage::Storage;
+pub use storage::StorageOwner;
 pub use storage::ReadTxContext;
 pub use storage::WriteTxContext;
 pub use storage::table_writer::TableWriter;
@@ -357,12 +359,6 @@ impl IntoResponse for AppError {
 #[derive(Clone)]
 pub struct RequestState {
     pub storage: Arc<Storage>,
-}
-
-impl RequestState {
-    pub fn new(storage: Arc<Storage>) -> Self {
-        Self { storage }
-    }
 }
 
 #[derive(Clone, Debug)]

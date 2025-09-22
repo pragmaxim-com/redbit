@@ -34,7 +34,7 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
     let test_stream = Some(quote! {
         #[test]
         fn #fn_name() {
-            let storage = STORAGE.clone();
+            let (storage_owner, storage) = &*STORAGE;
             let from_value = #column_type::default();
             let until_value = #column_type::default().next_value();
             let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
@@ -48,7 +48,7 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
     let bench_stream = Some(quote! {
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
-            let storage = STORAGE.clone();
+            let (storage_owner, storage) = &*STORAGE;
             let from_value = #column_type::default();
             let until_value = #column_type::default().next_value();
             let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");

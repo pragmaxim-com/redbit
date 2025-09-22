@@ -37,7 +37,7 @@ pub fn by_dict_def(
     let test_stream = Some(quote! {
         #[tokio::test]
         async fn #fn_name() {
-            let storage = STORAGE.clone();
+            let (storage_owner, storage) = &*STORAGE;
             let val = #column_type::default();
             let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             let pk_stream = #entity_name::#fn_name(tx_context, val).expect("Stream creation failed");
@@ -50,7 +50,7 @@ pub fn by_dict_def(
     let bench_stream = Some(quote! {
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
-            let storage = STORAGE.clone();
+            let (storage_owner, storage) = &*STORAGE;
             let rt = Runtime::new().unwrap();
             b.iter(|| {
                 rt.block_on(async {
@@ -127,7 +127,7 @@ pub fn by_index_def(
     let test_stream = Some(quote! {
         #[tokio::test]
         async fn #fn_name() {
-            let storage = STORAGE.clone();
+            let (storage_owner, storage) = &*STORAGE;
             let val = #column_type::default();
             let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             let pk_stream = #entity_name::#fn_name(tx_context, val).expect("Stream creation failed");
@@ -140,7 +140,7 @@ pub fn by_index_def(
     let bench_stream = Some(quote! {
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
-            let storage = STORAGE.clone();
+            let (storage_owner, storage) = &*STORAGE;
             let rt = Runtime::new().unwrap();
             b.iter(|| {
                 rt.block_on(async {

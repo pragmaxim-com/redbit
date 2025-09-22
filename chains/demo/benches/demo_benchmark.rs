@@ -6,13 +6,13 @@ use chain::syncer::ChainSyncer;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use demo::block_provider::DemoBlockProvider;
 use demo::model_v1::*;
-use redbit::{info, Storage};
+use redbit::info;
 use tokio::runtime::Runtime;
 use tokio::sync::watch;
 
 fn criterion_benchmark(c: &mut Criterion) {
     let rt = Runtime::new().unwrap();
-    let storage = rt.block_on(Storage::temp("demo_benchmark", 1, true)).unwrap();
+    let (storage_owner, storage) = rt.block_on(StorageOwner::temp("demo_benchmark", 1, true)).unwrap();
 
     let block_provider: Arc<dyn BlockProvider<Block, Block>> = DemoBlockProvider::new(10).expect("Failed to create block provider");
     let chain = BlockChain::new(Arc::clone(&storage));
@@ -44,7 +44,7 @@ fn criterion_benchmark(c: &mut Criterion) {
             }
         );
     });
-
+    drop(storage_owner);
     group.finish();
 }
 

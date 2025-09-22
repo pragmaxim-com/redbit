@@ -152,7 +152,8 @@ pub fn tx_context_plain_item(def: &TableDef) -> TxContextItem {
         quote! {
             #var_name: {
                 let index_db = storage.index_dbs.get(#var_name_literal).cloned().ok_or_else(|| TableError::TableDoesNotExist(format!("Plain table '{}' not found", #var_name_literal)))?;
-                let plain_tx = index_db.begin_read()?;
+                let index_db_arc = index_db.upgrade().ok_or_else(|| AppError::Custom("database closed".to_string()))?;
+                let plain_tx = index_db_arc.begin_read()?;
                 plain_tx.open_table(#table_name)?
             }
         };

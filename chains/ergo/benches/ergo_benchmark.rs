@@ -3,8 +3,8 @@ use std::{fs, sync::Arc, time::Duration};
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
 use ergo::block_provider::ErgoBlockProvider;
 use ergo::ergo_client::ErgoCBOR;
-use redbit::{info, Storage, WriteTxContext};
-use ergo::model_v1::{BlockChain};
+use ergo::model_v1::BlockChain;
+use redbit::{info, StorageOwner, WriteTxContext};
 
 fn block_from_file(size: &str, tx_count: usize) -> ErgoCBOR {
     info!("Getting {} block with {} txs", size, tx_count);
@@ -15,7 +15,7 @@ fn block_from_file(size: &str, tx_count: usize) -> ErgoCBOR {
 
 fn criterion_benchmark(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let storage = rt.block_on(Storage::temp("ergo_benchmark", 1, true)).expect("Failed to open database");
+    let (storage_owner, storage) = rt.block_on(StorageOwner::temp("ergo_benchmark", 1, true)).expect("Failed to open database");
     let chain = BlockChain::new(Arc::clone(&storage));
 
     let small_block: ErgoCBOR = block_from_file("small", 8);
@@ -77,6 +77,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         );
     });
     indexing_context.stop_writing().unwrap();
+    drop(storage_owner);
     group.finish();
 }
 

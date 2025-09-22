@@ -14,7 +14,8 @@ pub fn table_info_fn(entity_name: &Ident, table_defs: &[TableDef], dict_table_de
 
         quote! {
             let db = index_dbs.get(#db_name_literal).cloned().unwrap();
-            let tx = db.begin_read()?;
+            let db_arc = db.upgrade().ok_or_else(|| AppError::Custom("database closed".to_string()))?;
+            let tx = db_arc.begin_read()?;
             let table = tx.open_table(#table_name)?;
             let stats = table.stats()?;
             tables.push(stats_for_table(#db_name_literal, #table_type, stats)?);
