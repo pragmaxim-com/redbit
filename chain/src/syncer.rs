@@ -9,6 +9,7 @@ use futures::StreamExt;
 use redbit::{error, info, warn, WriteTxContext};
 use std::sync::Arc;
 use tokio::sync::{mpsc, watch};
+use tokio::sync::mpsc::error::TryRecvError;
 use tokio_stream::wrappers::ReceiverStream;
 
 pub struct ChainSyncer<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext> {
@@ -153,13 +154,14 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
             let shutdown = shutdown.clone();
             task::spawn_blocking_named("persist", move || {
                 if let Ok(index_context) = chain.new_indexing_ctx() {
+                    let tick = std::time::Duration::from_millis(50);
                     loop {
                         if *shutdown.borrow() {
                             info!("persist: shutdown signal received");
                             break;
                         } else {
-                            match sort_rx.blocking_recv() {
-                                Some(batch) => {
+                            match sort_rx.try_recv() {
+                                Ok(batch) => {
                                     if let Err(e) = Self::persist_or_link(
                                         &index_context,
                                         batch,
@@ -171,11 +173,19 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
                                         return;
                                     }
                                 }
-                                None => break,
+                                Err(TryRecvError::Empty) => {
+                                    std::thread::sleep(tick);
+                                    continue;
+                                }
+                                Err(TryRecvError::Disconnected) => {
+                                    break;
+                                }
                             }
                         }
                     }
-                    index_context.stop_writing().unwrap();
+                    if let Err(e) = index_context.stop_writing() {
+                        error!("persist: stop_writing error: {e}");
+                    }
                 } else {
                     panic!("persist: cannot create indexing context");
                 }
