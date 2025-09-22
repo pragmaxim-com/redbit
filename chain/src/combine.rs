@@ -14,12 +14,15 @@ where
     tokio::select! {
         _ = sigint.recv() => {
             println!("Received SIGINT, shutting down...");
-            let _ = shutdown_tx.send(true);
+            let _ = shutdown_tx.send_replace(true);
         }
         _ = sigterm.recv() => {
             println!("Received SIGTERM, shutting down...");
-            let _ = shutdown_tx.send(true);
+            let _ = shutdown_tx.send_replace(true);
         }
-        _ = join(future_a, future_b) => {}
+        _ = join(future_a, future_b) => {
+            // Ensure cooperative shutdown when workers finish first
+            let _ = shutdown_tx.send_replace(true);
+        }
     }
 }
