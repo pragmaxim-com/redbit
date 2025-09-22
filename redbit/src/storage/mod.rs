@@ -142,3 +142,16 @@ pub trait ReadTxContext {
     where
         Self: Sized;
 }
+
+#[tokio::test]
+async fn test_storage_weak_owner_drop() {
+    let (owner, storage) = StorageOwner::temp("weak_drop_test", 1, true)
+        .await
+        .expect("temp storage");
+    // read works while owner alive
+    let _ = storage.index_dbs.values().map(|db| db.upgrade().expect("db should be alive")).collect::<Vec<_>>();
+    // drop owner, upgrades from Storage's Weak<Database> must fail
+    drop(owner);
+    let dropped = storage.index_dbs.values().find(|db| db.upgrade().is_some()).is_none();
+    assert!(dropped, "All dbs must be dropped when owner is dropped");
+}

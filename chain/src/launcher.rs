@@ -33,22 +33,59 @@ pub async fn maybe_run_server(
     }
 }
 
-pub async fn maybe_run_syncing<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'static>(
-    index_config: &IndexerSettings,
+async fn run_initial_sync_phase<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'static>(
+    indexer_settings: IndexerSettings,
     last_header: Option<TB::Header>,
     syncer: Arc<ChainSyncer<FB, TB, CTX>>,
-    shutdown: watch::Receiver<bool>,
-) -> () {
-    if index_config.enable {
-        info!("Syncing initiated");
-        match syncer.sync(index_config, last_header, shutdown).await {
-            Ok(_) => info!("Syncing completed successfully"),
-            Err(e) => error!("Syncing failed: {}", e),
+    shutdown_tx: watch::Sender<bool>,
+    shutdown_rx: watch::Receiver<bool>,
+) -> Flow {
+    let sync_f = {
+        let syncer = Arc::clone(&syncer);
+        let rx_in_task = shutdown_rx.clone(); // the task consumes this clone
+        let tx_in_task = shutdown_tx.clone(); // the task consumes this clone
+        async move {
+            if indexer_settings.enable {
+                info!("Syncing initiated");
+                match syncer.sync(&indexer_settings, last_header, rx_in_task.clone()).await {
+                    Ok(_) => info!("Syncing completed successfully"),
+                    Err(e) => {
+                        error!("Syncing failed: {}", e);
+                        let _ = tx_in_task.send_replace(true); // ensure Phase 2 is skipped
+                    }
+                }
+            } else {
+                info!("Syncing is disabled, skipping");
+                futures::future::ready(()).await
+            }
         }
-    } else {
-        info!("Syncing is disabled, skipping");
-        ready(()).await
+    };
+
+    let ready_f = futures::future::ready(());
+    let _ = combine::futures(sync_f, ready_f, shutdown_tx.clone()).await;
+
+    if *shutdown_rx.borrow() { Flow::Stop } else { Flow::Continue }
+}
+
+fn teardown<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'static>(
+    storage_view: Arc<Storage>,
+    chain: Arc<dyn BlockChainLike<TB, CTX>>,
+    syncer: Arc<ChainSyncer<FB, TB, CTX>>,
+    storage_owner: StorageOwner,
+) {
+    drop(storage_view);
+    drop(chain);
+    drop(syncer);
+
+    // optional tripwire: no extra strong Arcs to DBs
+    for (name, db_arc) in &storage_owner.index_dbs {
+        let sc = Arc::strong_count(db_arc);
+        if sc != 1 {
+            error!("Database {name} still has {sc} strong refs at shutdown");
+        }
     }
+    drop(storage_owner);
+    info!("Shutdown complete");
 }
 
 pub async fn maybe_run_scheduling<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'static>(
@@ -83,6 +120,8 @@ pub async fn build_storage(config: &AppConfig) -> Result<(bool, StorageOwner, Ar
     StorageOwner::build_storage(full_path, db_cache_size_gb.0).await
 }
 
+enum Flow { Continue, Stop }
+
 pub async fn launch<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'static, F>(
     block_provider: Arc<dyn BlockProvider<FB, TB>>,
     build_chain: F,
@@ -109,25 +148,21 @@ where
     let syncer: Arc<ChainSyncer<FB, TB, CTX>> = Arc::new(ChainSyncer::new(Arc::clone(&block_provider), Arc::clone(&chain)));
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
 
-    maybe_run_syncing(&config.indexer, unlinked_headers.first().cloned(), Arc::clone(&syncer), shutdown_rx.clone()).await;
+    // Phase 1: initial sync
+    match run_initial_sync_phase(config.indexer.clone(), unlinked_headers.first().cloned(), Arc::clone(&syncer), shutdown_tx.clone(), shutdown_rx.clone()).await {
+        Flow::Stop => {
+            teardown::<FB, TB, CTX>(storage_view, chain, syncer, storage_owner);
+            Ok(())
+        }
+        Flow::Continue => {
+            // Phase 2: schedule + HTTP (also under signal handling)
+            let indexing_f = maybe_run_scheduling(config.indexer, Scheduler::new(Arc::clone(&syncer)), shutdown_rx.clone());
+            let server_f   = maybe_run_server(config.http, Arc::clone(&storage_view), extras, cors, shutdown_rx.clone());
+            let res = combine::futures(indexing_f, server_f, shutdown_tx).await;
 
-    let indexing_f = maybe_run_scheduling(config.indexer, Scheduler::new(Arc::clone(&syncer)), shutdown_rx.clone());
-    let server_f = maybe_run_server(config.http, Arc::clone(&storage_view), extras, cors, shutdown_rx.clone());
-
-    // run and wait for shutdown
-    let res = combine::futures(indexing_f, server_f, shutdown_tx).await;
-
-    drop(storage_view);
-    drop(chain);
-    drop(syncer);
-
-    for (name, db_arc) in &storage_owner.index_dbs {
-        let sc = Arc::strong_count(db_arc);
-        if sc != 1 {
-            error!("Database {name} still has {sc} strong refs at shutdown");
+            teardown::<FB, TB, CTX>(storage_view, chain, syncer, storage_owner);
+            Ok(res)
         }
     }
-    drop(storage_owner);
 
-    Ok(res)
 }
