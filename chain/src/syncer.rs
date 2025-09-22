@@ -68,20 +68,16 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
                 let mut s = block_provider.stream(node_chain_tip_header.clone(), last_persisted_header, indexing_mode);
                 loop {
                     tokio::select! {
-                        item = s.next() => {
-                            match item {
-                                Some(raw) => {
-                                    if fetch_tx.send(raw).await.is_err() {
-                                        error!("fetch: raw_rx closed, stopping fetcher");
-                                        break;
-                                    }
-                                }
-                                None => break,
-                            }
-                        }
+                        biased; // prefers reacting to shutdown signal
                         _ = combine::await_shutdown(shutdown.clone()) => {
                             info!("fetch: shutdown");
                             break;
+                        }
+                        item = s.next() => {
+                            match item {
+                                Some(raw) => if fetch_tx.send(raw).await.is_err() { break; },
+                                None => break,
+                            }
                         }
                     }
                 }
