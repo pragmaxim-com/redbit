@@ -29,7 +29,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &Type, tab
 
             queue
                 .into_iter()
-                .map(|pk| Self::compose(tx_context, &pk))
+                .map(|pk| Self::compose(tx_context, pk))
                 .collect::<Result<Vec<#entity_type>, AppError>>()
         }
     };

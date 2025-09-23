@@ -21,7 +21,7 @@ pub fn get_by_dict_def(
                     let mut results = Vec::new();
                     while let Some(x) = iter.next() {
                         let pk = x?.value();
-                        match Self::compose(&tx_context, &pk) {
+                        match Self::compose(&tx_context, pk) {
                             Ok(item) => {
                                 results.push(item);
                             }
@@ -77,7 +77,7 @@ pub fn get_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &I
             let mut results = Vec::new();
             while let Some(x) = iter.next() {
                 let pk = x?.value();
-                match Self::compose(&tx_context, &pk) {
+                match Self::compose(&tx_context, pk) {
                     Ok(item) => {
                         results.push(item);
                     }

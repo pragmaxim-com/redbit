@@ -35,10 +35,10 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
         let height_to_index_from = last_persisted_header.as_ref().map_or(1, |h| h.height() + 1);
         let heights_to_fetch = chain_tip_height - last_persisted_header.as_ref().map_or(0, |h| h.height());
 
-        let indexing_par: Parallelism = indexer_conf.processing_parallelism.clone().into();
+        let indexing_par: Parallelism = indexer_conf.processing_parallelism;
         let fork_detection_height: u32 = chain_tip_height - indexer_conf.fork_detection_heights as u32;
 
-        if heights_to_fetch <= 0 {
+        if heights_to_fetch < 1 {
             return Ok(());
         }
         let (indexing_how, indexing_mode) =
@@ -137,10 +137,8 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
                                     let ready = reorder.insert(h, block);
 
                                     // Optional observability/backpressure hint on wide gaps:
-                                    if reorder.is_saturated() {
-                                        if let Some((need, seen)) = reorder.gap_span() {
-                                            monitor.warn_gap(need, seen, reorder.pending_len());
-                                        }
+                                    if reorder.is_saturated() && let Some((need, seen)) = reorder.gap_span() {
+                                        monitor.warn_gap(need, seen, reorder.pending_len());
                                     }
 
                                     // 2) Feed in-order items into weight batcher.
@@ -241,7 +239,7 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
                 let _ = fetch_handle.await;
                 let _ = process_handle.await;
                 let _ = sort_handle.await;
-                let _ = persist_handle.await?;
+                persist_handle.await?;
             }
         }
         Ok(())
@@ -275,21 +273,18 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
                     Ok(fork)
                 }
             }
+        } else if let Some(prev_header) = prev_headers.first() {
+            panic!(
+                "Found prev header {} with different height {} @ {} : {} -> {}",
+                &prev_header.hash(),
+                prev_header.height(),
+                height,
+                hash_str,
+                prev_hash_str
+            );
         } else {
-            if let Some(prev_header) = prev_headers.first() {
-                panic!(
-                    "Found prev header {} with different height {} @ {} : {} -> {}",
-                    &prev_header.hash(),
-                    prev_header.height(),
-                    height,
-                    hash_str,
-                    prev_hash_str
-                );
-            } else {
-                panic!("Found {} prev headers", prev_headers.len())
-            }
+            panic!("Found {} prev headers", prev_headers.len())
         }
-
     }
 
     pub fn persist_or_link(indexing_context: &CTX, mut blocks: Vec<TB>, fork_detection_height: u32, block_provider: Arc<dyn BlockProvider<FB, TB>>, block_chain: Arc<dyn BlockChainLike<TB, CTX>>) -> Result<(), ChainError> {

@@ -9,7 +9,7 @@ Redbit reads struct annotations and derives code necessary for persisting and qu
 
 ### Major Out-of-the-Box Features
 
-✅ parallel persistence, there is a long-running write thread spawn for each entity field (no blocking) \
+✅ Parallel persistence, there is a long-running write thread spawned for each entity field (no blocking) \
 ✅ Querying and ranging by secondary index \
 ✅ Optional dictionaries for low cardinality fields \
 ✅ First level DB cache (`db_cache_size_gb` is split proportionally by weights in the entity definition) :
@@ -61,7 +61,7 @@ To use redbit in your project:
 
 ```toml
 [dependencies]
-redbit = "1.0.4"
+redbit = "1.0.5"
 ```
 
 ```

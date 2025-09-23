@@ -18,7 +18,7 @@ fn store_dict_stmnt(column_name: &Ident, pk_name: &Ident, dict_table_var: &Ident
 }
 
 pub fn store_dict_def(column_name: &Ident, pk_name: &Ident, dict_table_var: &Ident) -> TokenStream {
-    let store_dict = store_dict_stmnt(column_name, pk_name, &dict_table_var);
+    let store_dict = store_dict_stmnt(column_name, pk_name, dict_table_var);
     quote! {
         #store_dict
     }

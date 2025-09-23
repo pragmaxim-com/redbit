@@ -8,7 +8,7 @@ use syn::Type;
 pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, tx_context_ty: &Type, table: &Ident) -> FunctionDef {
     let fn_name = format_ident!("exists");
     let fn_stream = quote! {
-        pub fn #fn_name(tx_context: &#tx_context_ty, pk: &#pk_type) -> Result<bool, AppError> {
+        pub fn #fn_name(tx_context: &#tx_context_ty, pk: #pk_type) -> Result<bool, AppError> {
             if tx_context.#table.get(pk)?.is_some() {
                 Ok(true)
             } else {
@@ -23,7 +23,7 @@ pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, tx_context_t
             let (storage_owner, storage) = &*STORAGE;
             let pk_value = #pk_type::default();
             let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
-            let entity_exists = #entity_name::#fn_name(&tx_context, &pk_value).expect("Failed to check entity exists");
+            let entity_exists = #entity_name::#fn_name(&tx_context, pk_value).expect("Failed to check entity exists");
             assert!(entity_exists, "Entity is supposed to exist for the given PK");
         }
     });
@@ -36,7 +36,7 @@ pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, tx_context_t
             let pk_value = #pk_type::default();
             let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             b.iter(|| {
-                #entity_name::#fn_name(&tx_context, &pk_value).expect("Failed to check entity exists");
+                #entity_name::#fn_name(&tx_context, pk_value).expect("Failed to check entity exists");
             });
         }
     });
@@ -66,7 +66,7 @@ pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, tx_context_t
             handler_impl_stream: quote! {
                 impl IntoResponse {
                     match #entity_name::begin_read_ctx(&state.storage)
-                          .and_then(|tx_context| #entity_name::#fn_name(&tx_context, &#pk_name)) {
+                          .and_then(|tx_context| #entity_name::#fn_name(&tx_context, #pk_name)) {
                             Ok(true) => {
                                 Response::builder().status(StatusCode::OK).body(Body::empty()).unwrap().into_response()
                             },

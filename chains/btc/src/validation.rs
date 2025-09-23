@@ -19,7 +19,7 @@ async fn main() -> Result<()> {
     for height in 915000..915585 {
         let cbor = client.get_block_by_height(Height(height)).await?;
         let btc_block: bitcoin::Block = bitcoin::consensus::encode::deserialize(&cbor.raw)?;
-        let storage_block = Block::get(&block_tx, &Height(height))?.expect("Block should exist in storage");
+        let storage_block = Block::get(&block_tx, Height(height))?.expect("Block should exist in storage");
         let storage_tx_hashes: Vec<TxHash> = storage_block.transactions.iter().map(|tx| tx.hash).collect();
         let btc_tx_hashes: Vec<TxHash> = btc_block.txdata.iter().map(|tx| TxHash(*tx.compute_txid().as_ref())).collect();
         assert_eq!(storage_tx_hashes, btc_tx_hashes, "Transaction hashes in storage do not match those in the original block");

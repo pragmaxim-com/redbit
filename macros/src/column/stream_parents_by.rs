@@ -43,13 +43,13 @@ pub fn by_dict_def(
                     match iter.next() {
                         Some(parent_pointer) => {
                             if let Some(ref stream_query) = query {
-                                match #parent_type::compose_with_filter(&parent_tx_context, &parent_pointer, stream_query) {
+                                match #parent_type::compose_with_filter(&parent_tx_context, parent_pointer, stream_query) {
                                     Ok(Some(entity)) => Some((Ok(entity), (iter, parent_tx_context, query))),
                                     Ok(None) => None,
                                     Err(e) => Some((Err(e), (iter, parent_tx_context, query))),
                                 }
                             } else {
-                                Some((#parent_type::compose(&parent_tx_context, &parent_pointer), (iter, parent_tx_context, query)))
+                                Some((#parent_type::compose(&parent_tx_context, parent_pointer), (iter, parent_tx_context, query)))
                             }
                         }
                         None => None,
@@ -83,7 +83,7 @@ pub fn by_dict_def(
             let tx_context = #parent_type::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             let entity_stream = #entity_name::#fn_name(tx_context, val, Some(query.clone())).expect("Failed to get parent entities by index");
             let parent_entities = entity_stream.try_collect::<Vec<#parent_type>>().await.expect("Failed to collect parent entity stream");
-            let expected_entity = #parent_type::sample_with_query(&parent_pk, 0, &query).expect("Failed to create sample entity with query");
+            let expected_entity = #parent_type::sample_with_query(parent_pk, 0, &query).expect("Failed to create sample entity with query");
             assert_eq!(parent_entities.len(), 1, "Expected only one parent entity to be returned for the given dictionary index with filter");
             assert_eq!(parent_entities[0], expected_entity, "Dict result is not equal to sample because it is filtered, query: {:?}", query);
         }
@@ -180,13 +180,13 @@ pub fn by_index_def(
                     match iter.next() {
                         Some(parent_pointer) => {
                             if let Some(ref stream_query) = query {
-                                match #parent_type::compose_with_filter(&parent_tx_context, &parent_pointer, stream_query) {
+                                match #parent_type::compose_with_filter(&parent_tx_context, parent_pointer, stream_query) {
                                     Ok(Some(entity)) => Some((Ok(entity), (iter, parent_tx_context, query))),
                                     Ok(None) => None,
                                     Err(e) => Some((Err(e), (iter, parent_tx_context, query))),
                                 }
                             } else {
-                                Some((#parent_type::compose(&parent_tx_context, &parent_pointer), (iter, parent_tx_context, query)))
+                                Some((#parent_type::compose(&parent_tx_context, parent_pointer), (iter, parent_tx_context, query)))
                             }
                         }
                         None => None,
@@ -219,7 +219,7 @@ pub fn by_index_def(
             let tx_context = #parent_type::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             let entity_stream = #entity_name::#fn_name(tx_context, val, Some(query.clone())).expect("Failed to get parent entities by index");
             let parent_entities = entity_stream.try_collect::<Vec<#parent_type>>().await.expect("Failed to collect parent entity stream");
-            let expected_entity = #parent_type::sample_with_query(&parent_pk, 0, &query).expect("Failed to create sample entity with query");
+            let expected_entity = #parent_type::sample_with_query(parent_pk, 0, &query).expect("Failed to create sample entity with query");
             assert_eq!(parent_entities.len(), 1, "Expected only one parent entity to be returned for the given index with filter");
             assert_eq!(parent_entities[0], expected_entity, "Indexed result is not equal to sample because it is filtered, query: {:?}", query);
         }

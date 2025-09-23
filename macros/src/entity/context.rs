@@ -145,7 +145,7 @@ pub fn tx_context_plain_item(def: &TableDef) -> TxContextItem {
     });
 
     let write_shutdown = quote! {
-        let _ = self.#var_name.shutdown()?
+        self.#var_name.shutdown()?
     };
 
     let read_constructor =
@@ -202,7 +202,7 @@ pub fn tx_context_index_item(defs: &IndexTableDefs) -> TxContextItem {
     });
 
     let write_shutdown = quote! {
-        let _ = self.#var_name.shutdown()?
+        self.#var_name.shutdown()?
     };
 
     let read_constructor =
@@ -261,7 +261,7 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
     });
 
     let write_shutdown = quote! {
-        let _ = self.#var_name.shutdown()?
+        self.#var_name.shutdown()?
     };
 
     let read_constructor =
@@ -281,7 +281,7 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
 pub fn tx_context_items(table_defs: &[TableDef]) -> Vec<TxContextItem> {
     table_defs
         .iter()
-        .map(|def| tx_context_plain_item(def))
+        .map(tx_context_plain_item)
         .collect()
 }
 

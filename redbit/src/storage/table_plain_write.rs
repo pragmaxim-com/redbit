@@ -33,7 +33,7 @@ impl<K: Key + 'static, V: Key + 'static> TableFactory<K, V> for PlainFactory<K, 
     type CacheCtx = ();
     type Table<'txn, 'c> = PlainTable<'txn, K, V>;
 
-    fn new_cache(&self) -> Self::CacheCtx { () }
+    fn new_cache(&self) -> Self::CacheCtx { }
 
     fn open<'txn, 'c>(&self, tx: &'txn WriteTransaction, _cache: &'c mut Self::CacheCtx) -> Result<Self::Table<'txn, 'c>, AppError> {
         PlainTable::new(tx, self.table_def)

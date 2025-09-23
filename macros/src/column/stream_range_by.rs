@@ -32,13 +32,13 @@ pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, col_fi
                         match pk_res {
                             Ok(pk) => {
                                 if let Some(ref stream_query) = query {
-                                    match Self::compose_with_filter(&tx_context, &pk, stream_query) {
+                                    match Self::compose_with_filter(&tx_context, pk, stream_query) {
                                         Ok(Some(entity)) => Some(Ok(entity)),
                                         Ok(None) => None,
                                         Err(e) => Some(Err(e)),
                                     }
                                 } else {
-                                    Some(Self::compose(&tx_context, &pk)) // <- already Result<T, AppError>
+                                    Some(Self::compose(&tx_context, pk)) // <- already Result<T, AppError>
                                 }
                             }
                             Err(e) => Some(Err(e)),
@@ -73,7 +73,7 @@ pub fn stream_range_by_index_def(entity_name: &Ident, entity_type: &Type, col_fi
             let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             let entity_stream = #entity_name::#fn_name(tx_context, from_value, until_value, Some(query.clone())).expect("Failed to range entities by index");
             let entities = entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
-            let expected_entity = #entity_type::sample_with_query(&pk, 0, &query).expect("Failed to create sample entity with query");
+            let expected_entity = #entity_type::sample_with_query(pk, 0, &query).expect("Failed to create sample entity with query");
             assert_eq!(entities.len(), 1, "Expected only one entity to be returned for the given range by with filter");
             assert_eq!(entities[0], expected_entity, "RangeBy result is not equal to sample because it is filtered, query: {:?}", query);
         }

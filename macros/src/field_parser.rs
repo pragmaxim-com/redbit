@@ -237,87 +237,85 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                     return Ok(column_def);
                 }
             }
-            if let Type::Path(type_path) = &column_type {
-                if let Some(segment) = type_path.path.segments.last() {
-                    match segment.ident.to_string().as_str() {
-                        "Vec" => {
-                            // one-to-many
-                            if let PathArguments::AngleBracketed(args) = &segment.arguments {
-                                if let Some(GenericArgument::Type(Type::Path(inner_type_path))) = args.args.first() {
-                                    let inner_type = inner_type_path
-                                        .path
-                                        .segments
-                                        .last()
-                                        .ok_or_else(|| syn::Error::new(field.span(), "Parent field missing"))?
-                                        .ident
-                                        .clone();
+            if let Type::Path(type_path) = &column_type && let Some(segment) = type_path.path.segments.last() {
+                match segment.ident.to_string().as_str() {
+                    "Vec" => {
+                        // one-to-many
+                        if let PathArguments::AngleBracketed(args) = &segment.arguments
+                            && let Some(GenericArgument::Type(Type::Path(inner_type_path))) = args.args.first() {
+                                let inner_type = inner_type_path
+                                    .path
+                                    .segments
+                                    .last()
+                                    .ok_or_else(|| syn::Error::new(field.span(), "Parent field missing"))?
+                                    .ident
+                                    .clone();
 
-                                    validate_one_to_many_name(&column_name, &inner_type, field.span())?;
+                                validate_one_to_many_name(column_name, &inner_type, field.span())?;
 
-                                    let type_path = Type::Path(syn::TypePath {
-                                        qself: None,
-                                        path: syn::Path::from(inner_type.clone()),
-                                    });
-                                    let field_def = FieldDef {
-                                        name: column_name.clone(),
-                                        tpe: type_path,
-                                    };
-
-                                    let write_from: Option<WriteFrom> =
-                                        field.attrs.iter()
-                                            .find(|attr| attr.path().is_ident("write_from"))
-                                            .and_then(|attr| {
-                                                let mut field_ref_name: Option<WriteFrom> = None;
-                                                let _ = attr.parse_nested_meta(|nested| {
-                                                    if let Some(nested_ident) = nested.path.get_ident() {
-                                                        field_ref_name = Some(WriteFrom(nested_ident.clone()));
-                                                    }
-                                                    Ok(())
-                                                });
-                                                field_ref_name
-                                            });
-
-                                    return Ok(ColumnDef::Relationship(field_def, write_from, Multiplicity::OneToMany));
-                                }
-                            }
-                        }
-                        "Option" => {
-                            // one-to-option
-                            if let PathArguments::AngleBracketed(args) = &segment.arguments {
-                                if let Some(GenericArgument::Type(Type::Path(inner_type_path))) = args.args.first() {
-                                    let inner_type = inner_type_path
-                                        .path
-                                        .segments
-                                        .last()
-                                        .ok_or_else(|| syn::Error::new(field.span(), "Parent field missing"))?
-                                        .ident
-                                        .clone();
-                                    let type_path = Type::Path(syn::TypePath {
-                                        qself: None,
-                                        path: syn::Path::from(inner_type),
-                                    });
-                                    let field = FieldDef {
-                                        name: column_name.clone(),
-                                        tpe: type_path,
-                                    };
-                                    return Ok(ColumnDef::Relationship(field, None, Multiplicity::OneToOption));
-                                }
-                            }
-                        }
-                        _ => {
-                            // one-to-one (plain type)
-                            let struct_type = &segment.ident;
-                            if segment.arguments.is_empty() {
                                 let type_path = Type::Path(syn::TypePath {
                                     qself: None,
-                                    path: syn::Path::from(struct_type.clone()),
+                                    path: syn::Path::from(inner_type.clone()),
+                                });
+                                let field_def = FieldDef {
+                                    name: column_name.clone(),
+                                    tpe: type_path,
+                                };
+
+                                let write_from: Option<WriteFrom> =
+                                    field.attrs.iter()
+                                        .find(|attr| attr.path().is_ident("write_from"))
+                                        .and_then(|attr| {
+                                            let mut field_ref_name: Option<WriteFrom> = None;
+                                            let _ = attr.parse_nested_meta(|nested| {
+                                                if let Some(nested_ident) = nested.path.get_ident() {
+                                                    field_ref_name = Some(WriteFrom(nested_ident.clone()));
+                                                }
+                                                Ok(())
+                                            });
+                                            field_ref_name
+                                        });
+
+                                return Ok(ColumnDef::Relationship(field_def, write_from, Multiplicity::OneToMany));
+                            }
+
+                    }
+                    "Option" => {
+                        // one-to-option
+                        if let PathArguments::AngleBracketed(args) = &segment.arguments
+                            && let Some(GenericArgument::Type(Type::Path(inner_type_path))) = args.args.first() {
+                                let inner_type = inner_type_path
+                                    .path
+                                    .segments
+                                    .last()
+                                    .ok_or_else(|| syn::Error::new(field.span(), "Parent field missing"))?
+                                    .ident
+                                    .clone();
+                                let type_path = Type::Path(syn::TypePath {
+                                    qself: None,
+                                    path: syn::Path::from(inner_type),
                                 });
                                 let field = FieldDef {
                                     name: column_name.clone(),
                                     tpe: type_path,
                                 };
-                                return Ok(ColumnDef::Relationship(field, None, Multiplicity::OneToOne));
+                                return Ok(ColumnDef::Relationship(field, None, Multiplicity::OneToOption));
                             }
+
+                    }
+                    _ => {
+                        // one-to-one (plain type)
+                        let struct_type = &segment.ident;
+                        if segment.arguments.is_empty() {
+                            let type_path = Type::Path(syn::TypePath {
+                                qself: None,
+                                path: syn::Path::from(struct_type.clone()),
+                            });
+                            let field = FieldDef {
+                                name: column_name.clone(),
+                                tpe: type_path,
+                            };
+                            return Ok(ColumnDef::Relationship(field, None, Multiplicity::OneToOne));
                         }
                     }
                 }
@@ -336,7 +334,7 @@ fn validate_one_to_many_name(
     span: proc_macro2::Span,
 ) -> syn::Result<()> {
     let expected = macro_utils::one_to_many_field_name_from_ident(inner_type);
-    if field_name.to_string() != expected.to_string() {
+    if *field_name != expected {
         Err(syn::Error::new(
             span,
             format!(

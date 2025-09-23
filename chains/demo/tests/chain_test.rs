@@ -27,7 +27,7 @@ mod chain_tests {
         let last_header = chain.get_last_header().unwrap().expect("Last header must be present");
         assert_eq!(last_header.height, Height(target_height));
         let tx_context = Header::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
-        let block_headers = Header::range(&tx_context, &Height(0), &Height(target_height + 1), None).unwrap();
+        let block_headers = Header::range(&tx_context, Height(0), Height(target_height + 1), None).unwrap();
         let header_near_tip = block_headers.get(target_height as usize - 11).cloned().unwrap();
         assert_eq!(block_headers.len(), target_height as usize); // genesis not stored
         let heights: Vec<u32> = block_headers.iter().map(|h| h.height.0).collect();
@@ -85,7 +85,7 @@ mod chain_tests {
 
         // exhaustively read headers to ensure no gaps (genesis not stored)
         let tx_context = Header::begin_read_ctx(&storage).expect("read tx ctx");
-        let headers = Header::range(&tx_context, &Height(0), &Height(target_height + 1), None).unwrap();
+        let headers = Header::range(&tx_context, Height(0), Height(target_height + 1), None).unwrap();
         assert!(headers.len() > 0 && headers.len() < target_height as usize, "we shutdown somewhere in the middle, got {}", headers.len());
 
         // database should be consistent; you can validate what got written so far

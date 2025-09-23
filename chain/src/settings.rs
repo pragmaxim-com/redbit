@@ -18,7 +18,7 @@ impl Parallelism {
                 Ratio::Low => System::new_all().cpus().len() / 8,
                 Ratio::Mild => System::new_all().cpus().len() / 4,
                 Ratio::High => System::new_all().cpus().len() / 2,
-                Ratio::Ultra => System::new_all().cpus().len() / 1,
+                Ratio::Ultra => System::new_all().cpus().len(),
             };
         Parallelism(core::cmp::max(1, parallelism))
     }

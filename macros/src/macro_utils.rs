@@ -28,20 +28,14 @@ pub(crate) fn one_to_many_field_name_from_ident(inner_type: &Ident) -> Ident {
 }
 
 pub(crate) fn unwrap_vec_type(ty: &Type) -> Option<&Type> {
-    if let Type::Path(type_path) = ty {
-        if type_path.qself.is_none()
+    if let Type::Path(type_path) = ty
+            && type_path.qself.is_none()
             && type_path.path.segments.len() == 1
             && type_path.path.segments[0].ident == "Vec"
-        {
-            if let syn::PathArguments::AngleBracketed(args) =
-                &type_path.path.segments[0].arguments
-            {
-                if let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
+            && let syn::PathArguments::AngleBracketed(args) =
+                &type_path.path.segments[0].arguments && let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
                     return Some(inner_ty);
                 }
-            }
-        }
-    }
     None
 }
 
@@ -101,17 +95,14 @@ pub fn is_uuid(ty: &Type) -> bool {
 pub fn is_datetime_utc(ty: &Type) -> bool {
     if let Type::Path(tp) = ty {
         let segments = &tp.path.segments;
-        if segments.last().map(|s| s.ident == "DateTime") == Some(true) {
-            if let Some(syn::PathArguments::AngleBracketed(gen_args)) = &segments.last().map(|s|s.arguments.clone()) {
+        if segments.last().map(|s| s.ident == "DateTime") == Some(true)
+            && let Some(syn::PathArguments::AngleBracketed(gen_args)) = &segments.last().map(|s|s.arguments.clone()) {
                 for arg in gen_args.args.iter() {
-                    if let syn::GenericArgument::Type(Type::Path(p)) = arg {
-                        if p.path.segments.last().is_some_and(|seg| seg.ident == "Utc") {
-                            return true;
-                        }
+                    if let syn::GenericArgument::Type(Type::Path(p)) = arg && p.path.segments.last().is_some_and(|seg| seg.ident == "Utc") {
+                        return true;
                     }
                 }
             }
-        }
     }
     false
 }
@@ -168,21 +159,15 @@ pub fn classify_inner_type(ty: &Type) -> InnerKind {
     } else if is_time(ty) {
         InnerKind::Time
     } else {
-        if let Type::Array(arr) = ty {
-            if let Type::Path(tp) = &*arr.elem {
-                if let Some(seg) = tp.path.segments.last() {
-                    if seg.ident == "u8" {
-                        if let syn::Expr::Lit(expr_lit) = &arr.len {
-                            if let syn::Lit::Int(int_lit) = &expr_lit.lit {
-                                if let Ok(n) = int_lit.base10_parse::<usize>() {
-                                    return InnerKind::ByteArray(n);
-                                }
-                            }
-                        }
-                    }
-                }
+        if let Type::Array(arr) = ty
+            && let Type::Path(tp) = &*arr.elem
+            && let Some(seg) = tp.path.segments.last()
+            && seg.ident == "u8"
+            && let syn::Expr::Lit(expr_lit) = &arr.len
+            && let syn::Lit::Int(int_lit) = &expr_lit.lit
+            && let Ok(n) = int_lit.base10_parse::<usize>() {
+                return InnerKind::ByteArray(n);
             }
-        }
         extract_int_type(ty)
     }
 }

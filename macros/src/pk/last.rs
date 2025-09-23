@@ -9,7 +9,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &Type, tab
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: &#tx_context_ty) -> Result<Option<#entity_type>, AppError> {
             if let Some((k, _)) = tx_context.#table.last()? {
-                return Self::compose(&tx_context, &k.value()).map(Some);
+                return Self::compose(&tx_context, k.value()).map(Some);
             }
             Ok(None)
         }

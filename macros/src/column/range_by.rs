@@ -17,7 +17,7 @@ pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident
                 let (_, mut multi_iter) = entry_res?;
                 while let Some(x) = multi_iter.next() {
                     let pk = x?.value();
-                    match Self::compose(&tx_context, &pk) {
+                    match Self::compose(&tx_context, pk) {
                         Ok(item) => {
                             results.push(item);
                         }

@@ -83,10 +83,7 @@ impl<TB> ReorderBuffer<TB> {
             self.max_seen = height;
         }
         // First-come-wins; ignore duplicates to avoid double-release.
-        if !self.pending.contains_key(&height) {
-            self.pending.insert(height, block);
-        }
-
+        self.pending.entry(height).or_insert(block);
         let mut ready = Vec::new();
         while let Some(b) = self.pending.remove(&self.next_height) {
             ready.push(b);
@@ -174,7 +171,7 @@ impl<TB> Batcher<TB> {
         match self.mode {
             SyncMode::Continuous => {
                 // Ignore buf/weight entirely; emit single-item batch.
-                return Some(vec![item]);
+                Some(vec![item])
             }
             SyncMode::Batching => {
                 let w = weight_of(&item);

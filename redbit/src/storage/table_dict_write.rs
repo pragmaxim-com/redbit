@@ -115,15 +115,13 @@ impl<'txn, 'c, K: Key + 'static, V: Key + 'static> WriteTableLike<K, V> for Dict
         if let Some(birth_guard) = self.dict_pk_by_id.remove(key_ref)? {
             let birth_id = birth_guard.value();
             let was_removed = self.dict_pk_to_ids.remove(&birth_id, key_ref)?;
-            if self.dict_pk_to_ids.get(&birth_id)?.is_empty() {
-                if let Some(value_guard) = self.value_by_dict_pk.remove(&birth_id)? {
-                    let value = value_guard.value();
-                    self.value_to_dict_pk.remove(&value)?;
+            if self.dict_pk_to_ids.get(&birth_id)?.is_empty() && let Some(value_guard) = self.value_by_dict_pk.remove(&birth_id)? {
+                let value = value_guard.value();
+                self.value_to_dict_pk.remove(&value)?;
 
-                    // evict from cache (value -> dict_pk)
-                    let v_bytes = V::as_bytes(&value).as_ref().to_vec();
-                    let _ = self.cache.pop(&v_bytes);
-                }
+                // evict from cache (value -> dict_pk)
+                let v_bytes = V::as_bytes(&value).as_ref().to_vec();
+                let _ = self.cache.pop(&v_bytes);
             }
             Ok(was_removed)
         } else {

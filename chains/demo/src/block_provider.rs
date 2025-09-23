@@ -27,11 +27,11 @@ impl DemoBlockProvider {
         let mut block_by_hash = HashMap::new();
         let mut blocks_iter = Block::sample_many(chain_tip_height as usize + 1).into_iter();
         let genesis = blocks_iter.next().expect("at least one block");
-        let mut prev_hash = genesis.header.hash.clone();
+        let mut prev_hash = genesis.header.hash;
         for mut block in blocks_iter {
-            block.header.prev_hash = prev_hash.clone();
+            block.header.prev_hash = prev_hash;
             block.header.weight = Self::calculate_weight(&block);
-            prev_hash = block.header.hash.clone();
+            prev_hash = block.header.hash;
             hash_by_height.insert(block.header.height, block.header.hash);
             block_by_hash.insert(block.header.hash, block);
         }

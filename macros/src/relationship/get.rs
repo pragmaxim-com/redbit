@@ -14,7 +14,7 @@ pub fn one2one_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
             let (storage_owner, storage) = &*STORAGE;
             let pk_value = #pk_type::default();
             let tx_context = #child_type::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
-            let child = #entity_name::#fn_name(&tx_context, &pk_value).expect("Failed to get child by PK");
+            let child = #entity_name::#fn_name(&tx_context, pk_value).expect("Failed to get child by PK");
             assert_eq!(child.#pk_name, pk_value, "Child PK does not match the requested PK");
         }
     });
@@ -27,7 +27,7 @@ pub fn one2one_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
             let pk_value = #pk_type::default();
             let tx_context = #child_type::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             b.iter(|| {
-                #entity_name::#fn_name(&tx_context, &pk_value).expect("Failed to get child by PK");
+                #entity_name::#fn_name(&tx_context, pk_value).expect("Failed to get child by PK");
             });
         }
     });
@@ -36,8 +36,8 @@ pub fn one2one_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
 
     FunctionDef {
         fn_stream: quote! {
-            pub fn #fn_name(tx_context: &#tx_context_ty, pk: &#pk_type) -> Result<#child_type, AppError> {
-                #child_type::get(&tx_context, &pk).and_then(|opt| {
+            pub fn #fn_name(tx_context: &#tx_context_ty, pk: #pk_type) -> Result<#child_type, AppError> {
+                #child_type::get(&tx_context, pk).and_then(|opt| {
                     opt.ok_or_else(|| AppError::NotFound(format!("No {} found for {:?}", stringify!(#child_name), pk)))
                 })
             }
@@ -57,7 +57,7 @@ pub fn one2one_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
             handler_impl_stream: quote! {
                Result<AppJson<#child_type>, AppError> {
                     let tx_context = #child_type::begin_read_ctx(&state.storage)?;
-                    let result = #entity_name::#fn_name(&tx_context, &#pk_name)?;
+                    let result = #entity_name::#fn_name(&tx_context, #pk_name)?;
                     Ok(AppJson(result))
                 }
             },
@@ -83,7 +83,7 @@ pub fn one2opt_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
             let (storage_owner, storage) = &*STORAGE;
             let pk_value = #pk_type::default();
             let tx_context = #child_type::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
-            let maybe_child = #entity_name::#fn_name(&tx_context, &pk_value).expect("Failed to get child by PK");
+            let maybe_child = #entity_name::#fn_name(&tx_context, pk_value).expect("Failed to get child by PK");
             assert!(maybe_child.is_none() || maybe_child.unwrap().#pk_name == pk_value, "Unexpected child PK");
         }
     });
@@ -96,7 +96,7 @@ pub fn one2opt_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
             let pk_value = #pk_type::default();
             let tx_context = #child_type::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             b.iter(|| {
-                #entity_name::#fn_name(&tx_context, &pk_value).expect("Failed to get child by PK");
+                #entity_name::#fn_name(&tx_context, pk_value).expect("Failed to get child by PK");
             });
         }
     });
@@ -105,7 +105,7 @@ pub fn one2opt_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
 
     FunctionDef {
         fn_stream: quote! {
-            pub fn #fn_name(tx_context: &#tx_context_ty, pk: &#pk_type) -> Result<Option<#child_type>, AppError> {
+            pub fn #fn_name(tx_context: &#tx_context_ty, pk: #pk_type) -> Result<Option<#child_type>, AppError> {
                 #child_type::get(&tx_context, pk)
             }
         },
@@ -124,7 +124,7 @@ pub fn one2opt_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
             handler_impl_stream: quote! {
                Result<AppJson<#child_type>, AppError> {
                  #child_type::begin_read_ctx(&state.storage)
-                    .and_then(|tx_context| #entity_name::#fn_name(&tx_context, &#pk_name)
+                    .and_then(|tx_context| #entity_name::#fn_name(&tx_context, #pk_name)
                         .and_then(|opt| {
                             opt.ok_or_else(|| AppError::NotFound(format!("No {} found", stringify!(#child_name)))) }) )
                     .map(AppJson)
@@ -152,7 +152,7 @@ pub fn one2many_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, 
             let (storage_owner, storage) = &*STORAGE;
             let pk_value = #pk_type::default();
             let tx_context = #child_type::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
-            let children = #entity_name::#fn_name(&tx_context, &pk_value).expect("Failed to get children by PK");
+            let children = #entity_name::#fn_name(&tx_context, pk_value).expect("Failed to get children by PK");
             assert!(children.len() == 3, "Expected 3 children for the given PK");
         }
     });
@@ -165,7 +165,7 @@ pub fn one2many_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, 
             let pk_value = #pk_type::default();
             let tx_context = #child_type::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             b.iter(|| {
-                #entity_name::#fn_name(&tx_context, &pk_value).expect("Failed to get children by PK");
+                #entity_name::#fn_name(&tx_context, pk_value).expect("Failed to get children by PK");
             });
         }
     });
@@ -174,9 +174,9 @@ pub fn one2many_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, 
 
     FunctionDef {
         fn_stream: quote! {
-            pub fn #fn_name(tx_context: &#tx_context_ty, pk: &#pk_type) -> Result<Vec<#child_type>, AppError> {
+            pub fn #fn_name(tx_context: &#tx_context_ty, pk: #pk_type) -> Result<Vec<#child_type>, AppError> {
                 let (from, to) = pk.fk_range();
-                #child_type::range(&tx_context, &from, &to, None)
+                #child_type::range(&tx_context, from, to, None)
             }
         },
         endpoint: Some(EndpointDef {
@@ -200,7 +200,7 @@ pub fn one2many_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, 
             handler_impl_stream: quote! {
                Result<AppJson<Vec<#child_type>>, AppError> {
                     let tx_context = #child_type::begin_read_ctx(&state.storage)?;
-                    let result = #entity_name::#fn_name(&tx_context, &#pk_name)?;
+                    let result = #entity_name::#fn_name(&tx_context, #pk_name)?;
                     Ok(AppJson(result))
                 }
             },

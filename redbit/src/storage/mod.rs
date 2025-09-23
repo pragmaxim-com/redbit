@@ -124,7 +124,7 @@ pub trait WriteTxContext {
 
     fn begin_write_ctx(storage: &Arc<Storage>) -> redb::Result<Self, AppError> where Self: Sized {
         let ctx = Self::new_write_ctx(storage)?;
-        let _ = ctx.begin_writing()?;
+        ctx.begin_writing()?;
         Ok(ctx)
     }
     fn commit_and_close_ctx(self) -> Result<(), AppError> where Self: Sized {

@@ -16,13 +16,13 @@ impl TransientMacros {
 
     pub fn read_from(field_name: &Ident, field_type: &Type, outer: Ident, inner: Ident) -> (TokenStream, TokenStream) {
         let inner_type = macro_utils::unwrap_vec_type(field_type).unwrap();
-        let inner_tx_context = macro_utils::one_to_many_field_name_from_type(&inner_type);
+        let inner_tx_context = macro_utils::one_to_many_field_name_from_type(inner_type);
         (
             quote! {
                 let #field_name = {
                     let mut result = Vec::with_capacity(#outer.len());
                     for in_field in &#outer {
-                        if let Some(out_field) = #inner_type::get(&tx_context.#inner_tx_context, &in_field.#inner)? {
+                        if let Some(out_field) = #inner_type::get(&tx_context.#inner_tx_context, in_field.#inner)? {
                             result.push(out_field);
                         }
                     }
@@ -35,7 +35,7 @@ impl TransientMacros {
                         .iter()
                         .take(3)
                         .enumerate()
-                        .map(|(i, item)| #inner_type::sample_with(&item.#inner, i))
+                        .map(|(i, item)| #inner_type::sample_with(item.#inner, i))
                         .collect::<Vec<_>>()
                 };
             }

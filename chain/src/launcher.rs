@@ -116,7 +116,7 @@ fn maybe_console_init() {
 pub async fn build_storage(config: &AppConfig) -> Result<(bool, StorageOwner, Arc<Storage>), AppError>  {
     let db_path: String = format!("{}/{}/{}", config.indexer.db_path, "main", config.indexer.name);
     let full_path = env::home_dir().unwrap().join(&db_path);
-    let db_cache_size_gb: DbCacheSize = config.indexer.db_cache_size_gb.clone().into();
+    let db_cache_size_gb: DbCacheSize = config.indexer.db_cache_size_gb;
     StorageOwner::build_storage(full_path, db_cache_size_gb.0).await
 }
 

@@ -3,6 +3,6 @@ use quote::quote;
 
 pub fn pk_init(pk_name: &Ident) -> TokenStream {
     quote! {
-        let #pk_name = pk.clone();
+        let #pk_name = pk;
     }
 }

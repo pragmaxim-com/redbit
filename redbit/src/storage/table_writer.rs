@@ -80,10 +80,7 @@ where
     F: TableFactory<K, V> + Send + 'static,
     F::Table<'static, 'static>: Send,
 {
-    fn step<'txn, T>(table: &mut T, cmd: WriterCommand<K, V>) -> Result<Control, AppError>
-    where
-        T: WriteTableLike<K, V>,
-    {
+    fn step<T: WriteTableLike<K, V>>(table: &mut T, cmd: WriterCommand<K, V>) -> Result<Control, AppError> {
         match cmd {
             WriterCommand::Insert(k, v) => {
                 table.insert_kv(k, v)?;
@@ -113,10 +110,7 @@ where
         }
     }
 
-    fn drain_batch<'txn, T>(table: &mut T, rx: &Receiver<WriterCommand<K, V>>) -> Result<Control, AppError>
-    where
-        T: WriteTableLike<K, V>,
-    {
+    fn drain_batch<T: WriteTableLike<K, V>>(table: &mut T, rx: &Receiver<WriterCommand<K, V>>) -> Result<Control, AppError> {
         // 1) one blocking recv to ensure progress
         let mut ctrl = Self::step(table, rx.recv()?)?;
         if !matches!(ctrl, Control::Continue) {
@@ -269,8 +263,8 @@ where
     pub fn shutdown(self) -> redb::Result<(), AppError> {
         let (ack_tx, ack_rx) = bounded::<redb::Result<(), AppError>>(1);
         Self::fast_send(&self.topic, WriterCommand::Shutdown(ack_tx))?;
-        let res = ack_rx.recv()??;
+        ack_rx.recv()??;
         self.handle.join().map_err(|_| AppError::Custom("Write table join failed".to_string()))?;
-        Ok(res)
+        Ok(())
     }
 }

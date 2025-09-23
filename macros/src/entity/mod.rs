@@ -67,21 +67,22 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
 
     let field_names: Vec<Ident> = field_defs.iter().map(|f| f.name.clone()).collect();
 
-    let mut function_defs = Vec::new();
-    function_defs.push(store::persist_def(entity_ident, &entity_type, &key.name, &key.tpe, &store_statements));
-    function_defs.push(store::store_def(entity_ident, &entity_type, &write_tx_context_type, &store_statements));
-    function_defs.push(store::store_many_def(entity_ident, &entity_type, &write_tx_context_type, &store_many_statements));
-    function_defs.push(context::begin_write_fn_def(&write_tx_context_type));
-    function_defs.push(context::new_write_fn_def(&write_tx_context_type));
-    function_defs.push(context::begin_read_fn_def(&read_tx_context_type));
-    function_defs.extend(column_function_defs.clone());
-    function_defs.push(delete::remove_def(entity_ident, &entity_type, &key.name, &key.tpe, &delete_statements));
-    function_defs.push(delete::delete_def(&key.tpe, &write_tx_context_type, &delete_statements));
-    function_defs.push(delete::delete_many_def(&key.tpe, &write_tx_context_type, &delete_many_statements));
-    function_defs.push(info::table_info_fn(entity_ident, &plain_table_defs, &dict_table_defs, &index_table_defs));
-    function_defs.push(compose::compose_token_stream(entity_ident, &entity_type, &key.tpe, &read_tx_context_type, &field_names, &struct_inits));
-    function_defs.push(compose::compose_with_filter_token_stream(&entity_type, &key.tpe, &read_tx_context_type, &stream_query_type, &field_names, &struct_inits_with_query));
+    let mut function_defs = vec![
+        store::persist_def(entity_ident, &entity_type, &key.name, &key.tpe, &store_statements),
+        store::store_def(entity_ident, &entity_type, &write_tx_context_type, &store_statements),
+        store::store_many_def(entity_ident, &entity_type, &write_tx_context_type, &store_many_statements),
+        context::begin_write_fn_def(&write_tx_context_type),
+        context::new_write_fn_def(&write_tx_context_type),
+        context::begin_read_fn_def(&read_tx_context_type),
+        delete::remove_def(entity_ident, &entity_type, &key.name, &key.tpe, &delete_statements),
+        delete::delete_def(&key.tpe, &write_tx_context_type, &delete_statements),
+        delete::delete_many_def(&key.tpe, &write_tx_context_type, &delete_many_statements),
+        info::table_info_fn(entity_ident, &plain_table_defs, &dict_table_defs, &index_table_defs),
+        compose::compose_token_stream(entity_ident, &entity_type, &key.tpe, &read_tx_context_type, &field_names, &struct_inits),
+        compose::compose_with_filter_token_stream(&entity_type, &key.tpe, &read_tx_context_type, &stream_query_type, &field_names, &struct_inits_with_query),
+    ];
     function_defs.extend(sample::sample_token_fns(entity_ident, &entity_type, &key.tpe, &stream_query_type, &struct_default_inits, &struct_default_inits_with_query, &field_names));
+    function_defs.extend(column_function_defs.clone());
     function_defs.extend(init::init(entity_ident, &key_def));
 
     let stream_query_struct = query::stream_query(&stream_query_type, &stream_queries);

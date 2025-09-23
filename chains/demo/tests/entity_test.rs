@@ -56,7 +56,7 @@ mod entity_tests {
         let (blocks, _storage_owner, storage) = init_temp_storage("db_test", 0).await;
         let block = blocks.first().unwrap();
         let block_tx = Block::begin_read_ctx(&storage).unwrap();
-        let found_by_id = Block::get(&block_tx, &block.height).expect("Failed to query by ID").unwrap();
+        let found_by_id = Block::get(&block_tx, block.height).expect("Failed to query by ID").unwrap();
         assert_eq!(found_by_id.height, block.height);
         assert_eq!(found_by_id.transactions, block.transactions);
         assert_eq!(found_by_id.header, block.header);
@@ -67,21 +67,21 @@ mod entity_tests {
         let (blocks, _storage_owner, storage) = init_temp_storage("db_test", 0).await;
         let block = blocks.first().unwrap();
         let block_tx = Block::begin_read_ctx(&storage).unwrap();
-        let found_by_id = Block::get(&block_tx, &block.height).expect("Failed to query by ID").unwrap();
+        let found_by_id = Block::get(&block_tx, block.height).expect("Failed to query by ID").unwrap();
         assert_eq!(found_by_id.height, block.height);
 
         Block::remove(Arc::clone(&storage), block.height).expect("Failed to delete by ID");
 
         let block_tx = Block::begin_read_ctx(&storage).unwrap();
 
-        let block_not_found = Block::get(&block_tx, &block.height).expect("Failed to query by ID after deletion").is_none();
+        let block_not_found = Block::get(&block_tx, block.height).expect("Failed to query by ID after deletion").is_none();
         assert!(block_not_found);
 
         let transitive_entities_not_found = block.transactions.iter().any(|tx| {
-            let tx_not_found = Transaction::get(&block_tx.transactions, &tx.id).unwrap().is_none();
+            let tx_not_found = Transaction::get(&block_tx.transactions, tx.id).unwrap().is_none();
             let utxos_not_found = tx.utxos.iter().any(|utxo| {
-                let utxo_not_found = Utxo::get(&block_tx.transactions.utxos, &utxo.id).unwrap().is_none();
-                let assets_not_found = utxo.assets.iter().any(|asset| Asset::get(&block_tx.transactions.utxos.assets, &asset.id).unwrap().is_none());
+                let utxo_not_found = Utxo::get(&block_tx.transactions.utxos, utxo.id).unwrap().is_none();
+                let assets_not_found = utxo.assets.iter().any(|asset| Asset::get(&block_tx.transactions.utxos.assets, asset.id).unwrap().is_none());
                 utxo_not_found && assets_not_found
             });
             tx_not_found && utxos_not_found
@@ -178,7 +178,7 @@ mod entity_tests {
         let height_1 = Height(1);
         let height_2 = Height(2);
         let height_3 = Height(3);
-        let actual_blocks = Block::range(&block_tx, &height_1, &height_3, None).expect("Failed to range by PK");
+        let actual_blocks = Block::range(&block_tx, height_1, height_3, None).expect("Failed to range by PK");
         let expected_blocks: Vec<Block> = vec![blocks[1].clone(), blocks[2].clone()];
 
         assert_eq!(expected_blocks.len(), actual_blocks.len());
@@ -188,7 +188,7 @@ mod entity_tests {
 
         let tx_pointer_1 = BlockPointer::from_parent(height_1, 1);
         let tx_pointer_2 = BlockPointer::from_parent(height_2, 3);
-        let actual_transactions = Transaction::range(&block_tx.transactions, &tx_pointer_1, &tx_pointer_2, None).expect("Failed to range by PK");
+        let actual_transactions = Transaction::range(&block_tx.transactions, tx_pointer_1, tx_pointer_2, None).expect("Failed to range by PK");
         let mut expected_transactions: Vec<Transaction> = Vec::new();
         expected_transactions.extend(blocks[1].transactions.clone().into_iter().filter(|t| t.id.index >= 1));
         expected_transactions.extend(blocks[2].transactions.clone().into_iter().filter(|t| t.id.index < 3));
@@ -205,7 +205,7 @@ mod entity_tests {
         let block = blocks.first().unwrap();
 
         let expected_transactions: Vec<Transaction> = block.transactions.clone();
-        let transactions = Block::get_transactions(&transaction_tx, &block.height).expect("Failed to get transactions");
+        let transactions = Block::get_transactions(&transaction_tx, block.height).expect("Failed to get transactions");
 
         let expected_utxos: Vec<Utxo> = expected_transactions.iter().flat_map(|t| t.utxos.clone()).collect();
         let utxos: Vec<Utxo> = transactions.iter().flat_map(|t| t.utxos.clone()).collect();
@@ -225,7 +225,7 @@ mod entity_tests {
         let block = blocks.first().unwrap();
 
         let expected_header: Header = block.header.clone();
-        let header = Block::get_header(&header_tx, &block.height).expect("Failed to get header");
+        let header = Block::get_header(&header_tx, block.height).expect("Failed to get header");
 
         assert_eq!(expected_header, header);
     }
@@ -237,12 +237,12 @@ mod entity_tests {
         let block = blocks.first().cloned().unwrap();
         let block_height = block.height;
 
-        let loaded_block = Block::get(&block_tx, &block_height).expect("Failed to get by ID").unwrap();
+        let loaded_block = Block::get(&block_tx, block_height).expect("Failed to get by ID").unwrap();
 
         assert_eq!(&block, &loaded_block);
 
         Block::persist(Arc::clone(&storage), block.clone()).expect("Failed to delete by ID");
-        let loaded_block2 = Block::get(&block_tx, &block_height).expect("Failed to get by ID").unwrap();
+        let loaded_block2 = Block::get(&block_tx, block_height).expect("Failed to get by ID").unwrap();
 
         assert_eq!(&block, &loaded_block2);
     }

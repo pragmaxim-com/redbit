@@ -20,7 +20,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &Type, tab
                         break;
                     }
                     let pk = entry_res?.0.value();
-                    results.push(Self::compose(&tx_context, &pk)?);
+                    results.push(Self::compose(&tx_context, pk)?);
                     count += 1;
                 }
                 Ok(results)

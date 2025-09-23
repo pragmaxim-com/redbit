@@ -87,11 +87,9 @@ impl<'txn, 'c, K: Key + 'static, V: Key + 'static> WriteTableLike<K, V> for Inde
         if let Some(value_guard) = self.index_by_pk.remove(key_ref)? {
             let value = value_guard.value();
             let removed = self.pk_by_index.remove(&value, key_ref)?;
-            if removed {
-                if let Some(c) = self.cache.as_mut() {
-                    let v_bytes = V::as_bytes(&value).as_ref().to_vec();
-                    let _ = c.pop(&v_bytes);
-                }
+            if removed && let Some(c) = self.cache.as_mut() {
+                let v_bytes = V::as_bytes(&value).as_ref().to_vec();
+                let _ = c.pop(&v_bytes);
             }
             Ok(removed)
         } else {

@@ -90,7 +90,7 @@ pub fn one2many_relation_init(child_name: &Ident, child_type: &Type) -> TokenStr
     quote! {
         let #child_name = {
             let (from, to) = pk.fk_range();
-            #child_type::range(&tx_context.#child_name, &from, &to, None)?
+            #child_type::range(&tx_context.#child_name, from, to, None)?
         };
     }
 }
@@ -99,7 +99,7 @@ pub fn one2many_relation_init_with_query(child_name: &Ident, child_type: &Type) 
     quote! {
         let #child_name = {
             let (from, to) = pk.fk_range();
-            let children = #child_type::range(&tx_context.#child_name, &from, &to, stream_query.#child_name.clone())?;
+            let children = #child_type::range(&tx_context.#child_name, from, to, stream_query.#child_name.clone())?;
             if children.is_empty() {
                 return Ok(None); // short-circuit
             }
@@ -112,9 +112,9 @@ pub fn one2many_relation_default_init(child_name: &Ident, child_type: &Type) -> 
     quote! {
         let #child_name = {
             let (from, _) = pk.fk_range();
-            let sample_0 = #child_type::sample_with(&from, 0);
-            let sample_1 = #child_type::sample_with(&from.next_index(), 1);
-            let sample_2 = #child_type::sample_with(&from.next_index().next_index(), 2);
+            let sample_0 = #child_type::sample_with(from, 0);
+            let sample_1 = #child_type::sample_with(from.next_index(), 1);
+            let sample_2 = #child_type::sample_with(from.next_index().next_index(), 2);
             vec![sample_0, sample_1, sample_2]
         };
     }
@@ -126,21 +126,21 @@ pub fn one2many_relation_default_init_with_query(child_name: &Ident, child_type:
             let (from, _) = pk.fk_range();
             let sample_0 =
                 if let Some(child_query) = stream_query.#child_name.clone() {
-                    #child_type::sample_with_query(&from, 0, &child_query)
+                    #child_type::sample_with_query(from, 0, &child_query)
                 } else {
-                    Some(#child_type::sample_with(&from, 0))
+                    Some(#child_type::sample_with(from, 0))
                 };
             let sample_1 =
                 if let Some(child_query) = stream_query.#child_name.clone() {
-                    #child_type::sample_with_query(&from.next_index(), 1, &child_query)
+                    #child_type::sample_with_query(from.next_index(), 1, &child_query)
                 } else {
-                    Some(#child_type::sample_with(&from.next_index(), 1))
+                    Some(#child_type::sample_with(from.next_index(), 1))
                 };
             let sample_2 =
                 if let Some(child_query) = stream_query.#child_name.clone() {
-                    #child_type::sample_with_query(&from.next_index().next_index(), 2, &child_query)
+                    #child_type::sample_with_query(from.next_index().next_index(), 2, &child_query)
                 } else {
-                    Some(#child_type::sample_with(&from.next_index().next_index(), 2))
+                    Some(#child_type::sample_with(from.next_index().next_index(), 2))
                 };
 
             vec![sample_0, sample_1, sample_2].into_iter().flatten().collect::<Vec<#child_type>>()

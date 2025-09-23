@@ -1,4 +1,4 @@
-#[cfg(feature = "chain")]
+#![cfg(feature = "chain")]
 
 use crate::field_parser::FieldDef;
 use proc_macro2::{Ident, Span, TokenStream};
@@ -58,7 +58,7 @@ fn impl_where_bounds(column_path: &TokenStream, wants: &[(&Type, Expected)]) -> 
 }
 
 fn field_type_from(fields: &[FieldDef], field_name: &str) -> Result<Type, syn::Error> {
-    match find_field(fields, &field_name) {
+    match find_field(fields, field_name) {
         Some(fd) => Ok(fd.tpe.clone()),
         None => Err(syn::Error::new(
             Span::call_site(),
