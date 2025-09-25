@@ -8,7 +8,7 @@ pub enum TableType {
     Pk,
     Plain,
     Index,
-    DictIndex,
+    DictPkToIds,
     ValueByDictPk,
     ValueToDictPk,
     DictPkByPk,
@@ -106,7 +106,7 @@ pub struct TableDef {
     pub value_type: Option<Type>,
     pub db_cache_weight: usize,
     pub lru_cache_size: usize,
-    pub table_type: TableType,
+    pub _table_type: TableType,
     pub definition: TokenStream,
 }
 
@@ -130,7 +130,7 @@ impl TableDef {
             lru_cache_size: 0,
             key_type: pk_type.clone(),
             value_type: None,
-            table_type: TableType::Pk,
+            _table_type: TableType::Pk,
             definition
         }
     }
@@ -158,7 +158,7 @@ impl TableDef {
             lru_cache_size,
             key_type: pk_type.clone(),
             value_type: Some(column_type.clone()),
-            table_type: TableType::Plain,
+            _table_type: TableType::Plain,
             definition
         }
     }
@@ -179,7 +179,7 @@ impl TableDef {
             lru_cache_size,
             key_type: column_type.clone(),
             value_type: Some(pk_type.clone()),
-            table_type: TableType::Index,
+            _table_type: TableType::Index,
             definition
         }
     }
@@ -199,7 +199,7 @@ impl TableDef {
             lru_cache_size,
             key_type: pk_type.clone(),
             value_type: Some(pk_type.clone()),
-            table_type: TableType::DictIndex,
+            _table_type: TableType::DictPkToIds,
             definition
         }
     }
@@ -219,7 +219,7 @@ impl TableDef {
             lru_cache_size,
             key_type: pk_type.clone(),
             value_type: Some(column_type.clone()),
-            table_type: TableType::ValueByDictPk,
+            _table_type: TableType::ValueByDictPk,
             definition
         }
     }
@@ -239,7 +239,7 @@ impl TableDef {
             lru_cache_size,
             key_type: column_type.clone(),
             value_type: Some(pk_type.clone()),
-            table_type: TableType::ValueToDictPk,
+            _table_type: TableType::ValueToDictPk,
             definition,
         }
     }
@@ -263,7 +263,7 @@ impl TableDef {
             lru_cache_size,
             key_type: pk_type.clone(),
             value_type: Some(pk_type.clone()),
-            table_type: TableType::DictPkByPk,
+            _table_type: TableType::DictPkByPk,
             definition
         }
     }

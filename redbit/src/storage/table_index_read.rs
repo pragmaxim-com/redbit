@@ -1,7 +1,6 @@
-use crate::AppError;
-use redb::{AccessGuard, Database, Key, MultimapTableDefinition, MultimapValue, ReadOnlyMultimapTable, ReadOnlyTable, ReadableDatabase, ReadableTableMetadata, TableDefinition, TableStats};
+use crate::{AppError, TableInfo};
+use redb::{AccessGuard, Database, Key, MultimapTableDefinition, MultimapValue, ReadOnlyMultimapTable, ReadOnlyTable, ReadableDatabase, ReadableTableMetadata, TableDefinition};
 use std::borrow::Borrow;
-use std::collections::HashMap;
 use std::ops::RangeBounds;
 use std::sync::Weak;
 
@@ -33,10 +32,12 @@ impl<K: Key + 'static, V: Key + 'static> ReadOnlyIndexTable<K, V> {
         self.pk_by_index.range(range)
     }
 
-    pub fn stats(&self) -> redb::Result<HashMap<String, TableStats>> {
-        let mut stats = HashMap::new();
-        stats.insert("pk_by_index".to_string(), self.pk_by_index.stats()?);
-        stats.insert("index_by_pk".to_string(), self.index_by_pk.stats()?);
-        Ok(stats)
+    pub fn stats(&self) -> redb::Result<Vec<TableInfo>> {
+        Ok(
+            vec![
+                TableInfo::from_stats("pk_by_index", self.pk_by_index.len()?, self.pk_by_index.stats()?),
+                TableInfo::from_stats("index_by_pk", self.index_by_pk.len()?, self.index_by_pk.stats()?),
+            ]
+        )
     }
 }

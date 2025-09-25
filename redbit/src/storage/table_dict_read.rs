@@ -1,8 +1,7 @@
-use crate::AppError;
+use crate::{AppError, TableInfo};
 use redb::Key;
 use redb::*;
 use std::borrow::Borrow;
-use std::collections::HashMap;
 use std::sync::Weak;
 
 pub struct ReadOnlyDictTable<K: Key + 'static, V: Key + 'static> {
@@ -51,12 +50,14 @@ impl<K: Key + 'static, V: Key + 'static> ReadOnlyDictTable<K, V> {
         }
     }
 
-    pub fn stats(&self) -> Result<HashMap<String, TableStats>> {
-        let mut stats = HashMap::new();
-        stats.insert("dict_pk_to_ids".to_string(), self.dict_pk_to_ids.stats()?);
-        stats.insert("value_by_dict_pk".to_string(), self.value_by_dict_pk.stats()?);
-        stats.insert("value_to_dict_pk".to_string(), self.value_to_dict_pk.stats()?);
-        stats.insert("dict_pk_by_id".to_string(), self.dict_pk_by_id.stats()?);
-        Ok(stats)
+    pub fn stats(&self) -> Result<Vec<TableInfo>> {
+        Ok(
+            vec! [
+                TableInfo::from_stats("dict_pk_to_ids", self.dict_pk_to_ids.len()?, self.dict_pk_to_ids.stats()?),
+                TableInfo::from_stats("value_by_dict_pk", self.value_by_dict_pk.len()?, self.value_by_dict_pk.stats()?),
+                TableInfo::from_stats("value_to_dict_pk", self.value_to_dict_pk.len()?, self.value_to_dict_pk.stats()?),
+                TableInfo::from_stats("dict_pk_by_id", self.dict_pk_by_id.len()?, self.dict_pk_by_id.stats()?),
+            ]
+        )
     }
 }

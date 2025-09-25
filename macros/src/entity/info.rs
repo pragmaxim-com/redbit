@@ -10,7 +10,6 @@ pub fn table_info_fn(entity_name: &Ident, table_defs: &[TableDef], dict_table_de
         let db_name = td.var_name.to_string();
         let db_name_literal = Literal::string(&db_name.to_string());
         let table_name = &td.name;
-        let table_type = format!("{:?}", &td.table_type);
 
         quote! {
             let db = index_dbs.get(#db_name_literal).cloned().unwrap();
@@ -18,7 +17,8 @@ pub fn table_info_fn(entity_name: &Ident, table_defs: &[TableDef], dict_table_de
             let tx = db_arc.begin_read()?;
             let table = tx.open_table(#table_name)?;
             let stats = table.stats()?;
-            tables.push(stats_for_table(#db_name_literal, #table_type, stats)?);
+            let table_entries = table.len()?;
+            tables.push(TableInfo::from_stats(#db_name_literal, table_entries, stats));
         }
     });
     let index_stats_getters = index_table_defs.iter().map(|defs| {
@@ -29,10 +29,8 @@ pub fn table_info_fn(entity_name: &Ident, table_defs: &[TableDef], dict_table_de
 
         quote! {
             let db = index_dbs.get(#db_name_literal).cloned().unwrap();
-            let dict_table = ReadOnlyIndexTable::new(db, #pk_by_index_table_name, #index_by_pk_table_name)?;
-            dict_table.stats()?.into_iter().for_each(|(table_type, stats)| {
-                tables.push(stats_for_table(#db_name_literal, &table_type, stats).unwrap());
-            });
+            let index_table = ReadOnlyIndexTable::new(db, #pk_by_index_table_name, #index_by_pk_table_name)?;
+            tables.extend(index_table.stats()?);
         }
     });
     let dict_stats_getters = dict_table_defs.iter().map(|defs| {
@@ -46,27 +44,13 @@ pub fn table_info_fn(entity_name: &Ident, table_defs: &[TableDef], dict_table_de
         quote! {
             let db = index_dbs.get(#db_name_literal).cloned().unwrap();
             let dict_table = ReadOnlyDictTable::new(db, #dict_pk_to_ids_table_name, #value_by_dict_pk_table_name, #value_to_dict_pk_table_name, #dict_pk_by_pk_table_name)?;
-            dict_table.stats()?.into_iter().for_each(|(table_type, stats)| {
-                tables.push(stats_for_table(#db_name_literal, &table_type, stats).unwrap());
-            });
+            tables.extend(dict_table.stats()?);
         }
     });
     let fn_name = format_ident!("table_info");
     let fn_stream = quote! {
         pub fn #fn_name(storage: &Arc<Storage>) -> Result<Vec<TableInfo>, AppError> {
             let index_dbs = &storage.index_dbs;
-            fn stats_for_table(table_name: &str, table_type: &str, stats: TableStats) -> Result<TableInfo, AppError> {
-                Ok(TableInfo {
-                    table_name: table_name.to_string(),
-                    table_type: table_type.to_string(),
-                    tree_height: stats.tree_height(),
-                    leaf_pages: stats.leaf_pages(),
-                    branch_pages: stats.branch_pages(),
-                    stored_leaf_bytes: stats.stored_bytes(),
-                    metadata_bytes: stats.metadata_bytes(),
-                    fragmented_bytes: stats.fragmented_bytes(),
-                })
-            }
             let mut tables = Vec::new();
             #(#plain_stats_getters)*
             #(#index_stats_getters)*
