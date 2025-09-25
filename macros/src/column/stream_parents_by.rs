@@ -1,5 +1,5 @@
 use crate::endpoint::EndpointDef;
-use crate::field_parser::OneToManyParentDef;
+use crate::field_parser::{EntityDef, OneToManyParentDef};
 use crate::rest::HttpParams::{Body, Path};
 use crate::rest::{BodyExpr, EndpointTag, FunctionDef, HttpMethod, PathExpr};
 use proc_macro2::Ident;
@@ -7,13 +7,14 @@ use quote::{format_ident, quote};
 use syn::Type;
 
 pub fn by_dict_def(
-    entity_name: &Ident,
+    entity_def: &EntityDef,
     column_name: &Ident,
     column_type: &Type,
-    pk_type: &Type,
     dict_table_var: &Ident,
     parent_def: &OneToManyParentDef,
 ) -> FunctionDef {
+    let entity_name = &entity_def.entity_name;
+    let pk_type = &entity_def.key_def.field_def().tpe;
     let parent_ident = &parent_def.parent_ident;
     let parent_type = &parent_def.parent_type;
     let stream_parent_query_type = &parent_def.stream_query_ty;
@@ -151,13 +152,14 @@ pub fn by_dict_def(
 }
 
 pub fn by_index_def(
-    entity_name: &Ident,
+    entity_def: &EntityDef,
     column_name: &Ident,
     column_type: &Type,
-    pk_type: &Type,
     index_table: &Ident,
     parent_def: &OneToManyParentDef,
 ) -> FunctionDef {
+    let entity_name = &entity_def.entity_name;
+    let pk_type = &entity_def.key_def.field_def().tpe;
     let parent_ident = &parent_def.parent_ident;
     let parent_type = &parent_def.parent_type;
     let stream_parent_query_type = &parent_def.stream_query_ty;

@@ -1,12 +1,14 @@
+use crate::field_parser::EntityDef;
 use crate::rest::FunctionDef;
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
-use syn::Type;
 
-pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, tx_context_ty: &Type, table: &Ident, stream_query_type: &Type, no_columns: bool) -> FunctionDef {
+pub fn fn_def(entity_def: &EntityDef, table: &Ident, no_columns: bool) -> FunctionDef {
+    let EntityDef { key_def, entity_name, entity_type, query_type, read_ctx_type, write_ctx_type: _} = &entity_def;
+    let pk_type = key_def.field_def().tpe;
     let fn_name = format_ident!("filter");
     let fn_stream = quote! {
-        pub fn #fn_name(tx_context: &#tx_context_ty, pk: #pk_type, query: &#stream_query_type) -> Result<Option<#entity_type>, AppError> {
+        pub fn #fn_name(tx_context: &#read_ctx_type, pk: #pk_type, query: &#query_type) -> Result<Option<#entity_type>, AppError> {
             if tx_context.#table.get(pk)?.is_some() {
                 Ok(Self::compose_with_filter(&tx_context, pk, query)?)
             } else {
@@ -23,7 +25,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, tx_contex
             #[test]
             fn #test_with_filter_fn_name() {
                 let (storage_owner, storage) = &*STORAGE;
-                let query = #stream_query_type::sample();
+                let query = #query_type::sample();
                 let pk_default_next = #pk_type::default().next_index();
                 let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
                 let entity_opt = #entity_name::#fn_name(&tx_context, pk_default_next, &query).expect("Failed to get entity by PK");
@@ -36,7 +38,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, tx_contex
         #[test]
         fn #fn_name() {
             let (storage_owner, storage) = &*STORAGE;
-            let query = #stream_query_type::sample();
+            let query = #query_type::sample();
             let pk_default = #pk_type::default();
             let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             let entity = #entity_name::#fn_name(&tx_context, pk_default, &query).expect("Failed to get entity by PK").expect("Expected entity to exist");
@@ -51,7 +53,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_type: &Type, tx_contex
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
             let (storage_owner, storage) = &*STORAGE;
-            let query = #stream_query_type::sample();
+            let query = #query_type::sample();
             let pk_default = #pk_type::default();
             let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             b.iter(|| {

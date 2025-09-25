@@ -1,19 +1,20 @@
+use crate::endpoint::EndpointDef;
+use crate::field_parser::EntityDef;
 use crate::rest::HttpParams::{Body, Query};
 use crate::rest::{BodyExpr, EndpointTag, FunctionDef, HttpMethod, QueryExpr};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
-use crate::endpoint::EndpointDef;
-use crate::field_parser::FieldDef;
 
-pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_field_def: &FieldDef, tx_context_ty: &Type, table: &Ident, range_query_ty: &Type, stream_query_type: &Type, no_columns: bool) -> FunctionDef {
-    let pk_name = pk_field_def.name.clone();
-    let pk_type = pk_field_def.tpe.clone();
-
+pub fn fn_def(entity_def: &EntityDef, table: &Ident, range_query_ty: &Type, no_columns: bool) -> FunctionDef {
+    let EntityDef { key_def, entity_name, entity_type, query_type, read_ctx_type, write_ctx_type: _} = &entity_def;
+    let key_def = key_def.field_def();
+    let pk_name = &key_def.name;
+    let pk_type = &key_def.tpe;
     let fn_name = format_ident!("stream_range");
     let fn_stream =
         quote! {
-            pub fn #fn_name(tx_context: #tx_context_ty, from: #pk_type, until: #pk_type, query: Option<#stream_query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#entity_type, AppError>> + Send>>, AppError> {
+            pub fn #fn_name(tx_context: #read_ctx_type, from: #pk_type, until: #pk_type, query: Option<#query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#entity_type, AppError>> + Send>>, AppError> {
                 let range = from..until;
                 let iter_box = Box::new(tx_context.#table.range::<#pk_type>(range)?);
                 let stream = futures::stream::unfold(
@@ -52,7 +53,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_field_def: &FieldDef, 
                 let pk = #pk_type::default();
                 let from_value = #pk_type::default();
                 let until_value = #pk_type::default().next_index().next_index().next_index();
-                let query = #stream_query_type::sample();
+                let query = #query_type::sample();
                 let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
                 let entity_stream = #entity_name::#fn_name(tx_context, from_value, until_value, Some(query.clone())).expect("Failed to range entities by pk");
                 let entities = entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
@@ -83,7 +84,7 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_field_def: &FieldDef, 
         #[bench]
         fn #bench_fn_name(b: &mut Bencher) {
             let (storage_owner, storage) = &*STORAGE;
-            let query = #stream_query_type::sample();
+            let query = #query_type::sample();
             let rt = Runtime::new().unwrap();
             b.iter(|| {
                 rt.block_on(async {
@@ -110,9 +111,9 @@ pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_field_def: &FieldDef, 
                 extraction: quote! { extract::Query(query): extract::Query<#range_query_ty> },
                 samples: quote! { vec![#range_query_ty::sample()] },
             }), Body(BodyExpr {
-                ty: syn::parse_quote! { Option<#stream_query_type> },
-                extraction: quote! { MaybeJson(body): MaybeJson<#stream_query_type> },
-                samples: quote! { vec![#stream_query_type::sample()] },
+                ty: syn::parse_quote! { Option<#query_type> },
+                extraction: quote! { MaybeJson(body): MaybeJson<#query_type> },
+                samples: quote! { vec![#query_type::sample()] },
                 required: false,
             })],
             method: HttpMethod::POST,

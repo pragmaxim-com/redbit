@@ -2,15 +2,15 @@ use crate::rest::FunctionDef;
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
+use crate::field_parser::EntityDef;
 
-pub fn by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident, column_type: &Type, tx_context_ty: &Type, index_table: &Ident) -> FunctionDef {
+pub fn by_index_def(entity_def: &EntityDef, column_name: &Ident, column_type: &Type, index_table: &Ident) -> FunctionDef {
     let fn_name = format_ident!("range_by_{}", column_name);
+    let entity_name = &entity_def.entity_name;
+    let entity_type = &entity_def.entity_type;
+    let read_ctx_type = &entity_def.read_ctx_type;
     let fn_stream = quote! {
-        pub fn #fn_name(
-            tx_context: &#tx_context_ty,
-            from: &#column_type,
-            until: &#column_type
-        ) -> Result<Vec<#entity_type>, AppError> {
+        pub fn #fn_name(tx_context: &#read_ctx_type, from: &#column_type, until: &#column_type) -> Result<Vec<#entity_type>, AppError> {
             let range_iter = tx_context.#index_table.range_keys::<#column_type>(from..until)?;
             let mut results = Vec::new();
             for entry_res in range_iter {

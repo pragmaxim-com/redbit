@@ -1,12 +1,16 @@
+use crate::endpoint::EndpointDef;
+use crate::field_parser::EntityDef;
 use crate::rest::HttpParams::Path;
 use crate::rest::{EndpointTag, FunctionDef, HttpMethod, PathExpr};
-use proc_macro2::Ident;
 use quote::{format_ident, quote};
-use syn::{parse_quote, Type};
-use crate::endpoint::EndpointDef;
+use syn::parse_quote;
 
-pub fn fn_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type) -> FunctionDef {
+pub fn fn_def(entity_def: &EntityDef) -> FunctionDef {
     let fn_name = format_ident!("parent_key");
+    let entity_name = &entity_def.entity_name;
+    let key_def = &entity_def.key_def.field_def();
+    let pk_name = &key_def.name;
+    let pk_type = &key_def.tpe;
     let fn_stream = quote! {
         pub fn #fn_name(pk: #pk_type) -> Result<<#pk_type as ChildPointer>::Parent, AppError> {
             Ok(pk.parent().clone())

@@ -2,19 +2,17 @@ use crate::rest::FunctionDef;
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
+use crate::field_parser::EntityDef;
 
-pub fn by_dict_def(
-    entity_name: &Ident,
-    pk_name: &Ident,
-    pk_type: &Type,
-    column_name: &Ident,
-    column_type: &Type,
-    tx_context_ty: &Type,
-    dict_table_var: &Ident,
-) -> FunctionDef {
+pub fn by_dict_def(entity_def: &EntityDef, column_name: &Ident, column_type: &Type, dict_table_var: &Ident) -> FunctionDef {
+    let key_def = &entity_def.key_def.field_def();
+    let pk_name = &key_def.name;
+    let pk_type = &key_def.tpe;
     let fn_name = format_ident!("get_{}s_by_{}", pk_name, column_name);
+    let entity_name = &entity_def.entity_name;
+    let read_ctx_ty = &entity_def.read_ctx_type;
     let fn_stream = quote! {
-        pub fn #fn_name(tx_context: &#tx_context_ty, val: &#column_type) -> Result<Vec<#pk_type>, AppError> {
+        pub fn #fn_name(tx_context: &#read_ctx_ty, val: &#column_type) -> Result<Vec<#pk_type>, AppError> {
             let iter_opt = tx_context.#dict_table_var.get_keys(val)?;
             let results =
                 match iter_opt {
@@ -65,11 +63,16 @@ pub fn by_dict_def(
     }
 }
 
-pub fn by_index_def(entity_name: &Ident, pk_name: &Ident, pk_type: &Type, column_name: &Ident, column_type: &Type, tx_context_ty: &Type, index_table: &Ident) -> FunctionDef {
+pub fn by_index_def(entity_def: &EntityDef, column_name: &Ident, column_type: &Type, index_table: &Ident) -> FunctionDef {
+    let entity_name = &entity_def.entity_name;
+    let read_ctx_type = &entity_def.read_ctx_type;
+    let key_def = &entity_def.key_def.field_def();
+    let pk_name = &key_def.name;
+    let pk_type = &key_def.tpe;
     let fn_name = format_ident!("get_{}s_by_{}", pk_name, column_name);
     let fn_stream = quote! {
         pub fn #fn_name(
-            tx_context: &#tx_context_ty,
+            tx_context: &#read_ctx_type,
             val: &#column_type
         ) -> Result<Vec<#pk_type>, AppError> {
             let mut iter = tx_context.#index_table.get_keys(val)?;

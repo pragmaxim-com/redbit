@@ -1,14 +1,17 @@
-use proc_macro2::{Ident, TokenStream};
 use crate::endpoint::EndpointDef;
+use crate::field_parser::EntityDef;
 use crate::rest::HttpParams::Body;
 use crate::rest::{BodyExpr, EndpointTag, FunctionDef, HttpMethod};
+use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use syn::Type;
 
-pub fn store_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &Type, store_statements: &[TokenStream]) -> FunctionDef {
+pub fn store_def(entity_def: &EntityDef,store_statements: &[TokenStream]) -> FunctionDef {
+    let entity_name = &entity_def.entity_name;
+    let entity_type = &entity_def.entity_type;
+    let write_ctx_type = &entity_def.write_ctx_type;
     let fn_name = format_ident!("store");
     let fn_stream = quote! {
-        pub fn #fn_name(tx_context: &#tx_context_ty, instance: #entity_type) -> Result<(), AppError> {
+        pub fn #fn_name(tx_context: &#write_ctx_type, instance: #entity_type) -> Result<(), AppError> {
             #(#store_statements)*
             Ok(())
         }
@@ -51,10 +54,13 @@ pub fn store_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &Type, 
     }
 }
 
-pub fn store_many_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &Type, store_many_statements: &[TokenStream]) -> FunctionDef {
+pub fn store_many_def(entity_def: &EntityDef, store_many_statements: &[TokenStream]) -> FunctionDef {
+    let entity_name = &entity_def.entity_name;
+    let entity_type = &entity_def.entity_type;
+    let write_ctx_type = &entity_def.write_ctx_type;
     let fn_name = format_ident!("store_many");
     let fn_stream = quote! {
-        pub fn #fn_name(tx_context: &#tx_context_ty, instances: Vec<#entity_type>) -> Result<(), AppError> {
+        pub fn #fn_name(tx_context: &#write_ctx_type, instances: Vec<#entity_type>) -> Result<(), AppError> {
             for instance in instances {
                 #(#store_many_statements)*
             }
@@ -100,8 +106,13 @@ pub fn store_many_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &T
     }
 }
 
-pub fn persist_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type: &Type, store_statements: &[TokenStream]) -> FunctionDef {
+pub fn persist_def(entity_def: &EntityDef, store_statements: &[TokenStream]) -> FunctionDef {
     let fn_name = format_ident!("persist");
+    let entity_name = &entity_def.entity_name;
+    let entity_type = &entity_def.entity_type;
+    let key_def = &entity_def.key_def.field_def();
+    let pk_name = &key_def.name;
+    let pk_type = &key_def.tpe;
     let fn_stream = quote! {
         pub fn #fn_name(storage: Arc<Storage>, instance: #entity_type) -> Result<#pk_type, AppError> {
            let pk = instance.#pk_name;

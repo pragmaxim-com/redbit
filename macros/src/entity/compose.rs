@@ -1,12 +1,18 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::Type;
+use crate::field_parser::EntityDef;
 use crate::rest::FunctionDef;
 
-pub fn compose_token_stream(entity_name: &Ident, entity_type: &Type, pk_type: &Type, tx_context_ty: &Type, field_names: &[Ident], struct_inits: &[TokenStream]) -> FunctionDef {
+pub fn compose_token_stream(entity_def: &EntityDef, field_names: &[Ident], struct_inits: &[TokenStream]) -> FunctionDef {
+    let entity_name = &entity_def.entity_name;
+    let entity_type = &entity_def.entity_type;
+    let pk_type: &Type = &entity_def.key_def.field_def().tpe;
+    let read_ctx_type: &Type = &entity_def.read_ctx_type;
+
     FunctionDef {
         fn_stream: quote! {
-            fn compose(tx_context: &#tx_context_ty, pk: #pk_type) -> Result<#entity_type, AppError> {
+            fn compose(tx_context: &#read_ctx_type, pk: #pk_type) -> Result<#entity_type, AppError> {
                 #(#struct_inits)*
                 Ok(#entity_type {
                     #(#field_names,)*
@@ -33,10 +39,12 @@ pub fn compose_token_stream(entity_name: &Ident, entity_type: &Type, pk_type: &T
     }
 }
 
-pub fn compose_with_filter_token_stream(entity_type: &Type, pk_type: &Type, tx_context_ty: &Type, stream_query_type: &Type, field_names: &[Ident], struct_inits_with_query: &[TokenStream]) -> FunctionDef {
+pub fn compose_with_filter_token_stream(entity_def: &EntityDef, field_names: &[Ident], struct_inits_with_query: &[TokenStream]) -> FunctionDef {
+    let EntityDef { key_def, entity_name: _, entity_type, query_type, read_ctx_type, write_ctx_type: _} = &entity_def;
+    let pk_type: &Type = &key_def.field_def().tpe;
     FunctionDef {
         fn_stream: quote! {
-            fn compose_with_filter(tx_context: &#tx_context_ty, pk: #pk_type, stream_query: &#stream_query_type) -> Result<Option<#entity_type>, AppError> {
+            fn compose_with_filter(tx_context: &#read_ctx_type, pk: #pk_type, stream_query: &#query_type) -> Result<Option<#entity_type>, AppError> {
                 // First: fetch & filter every column, short‑circuit on mismatch
                 #(#struct_inits_with_query)*
                 Ok(Some(#entity_type {
@@ -52,7 +60,7 @@ pub fn compose_with_filter_token_stream(entity_type: &Type, pk_type: &Type, tx_c
                 let pk = #pk_type::default();
                 let sample_entity = #entity_type::sample();
                 let write_result = #entity_type::persist(Arc::clone(&storage), sample_entity);
-                let query = #stream_query_type::default();
+                let query = #query_type::default();
                 let tx_context = #entity_type::begin_read_ctx(&storage).unwrap();
                 let entity = #entity_type::compose_with_filter(&tx_context, pk, &query).expect("Failed to compose entity").expect("Entity does not match");
                 assert!(write_result.is_ok());

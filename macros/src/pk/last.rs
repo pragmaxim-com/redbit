@@ -1,13 +1,17 @@
 use crate::endpoint::EndpointDef;
+use crate::field_parser::EntityDef;
 use crate::rest::{EndpointTag, FunctionDef, HttpMethod};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
-use syn::{parse_quote, Type};
+use syn::parse_quote;
 
-pub fn fn_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &Type, table: &Ident) -> FunctionDef {
+pub fn fn_def(entity_def: &EntityDef, table: &Ident) -> FunctionDef {
     let fn_name = format_ident!("last");
+    let entity_name = &entity_def.entity_name;
+    let entity_type = &entity_def.entity_type;
+    let read_ctx_type = &entity_def.read_ctx_type;
     let fn_stream = quote! {
-        pub fn #fn_name(tx_context: &#tx_context_ty) -> Result<Option<#entity_type>, AppError> {
+        pub fn #fn_name(tx_context: &#read_ctx_type) -> Result<Option<#entity_type>, AppError> {
             if let Some((k, _)) = tx_context.#table.last()? {
                 return Self::compose(&tx_context, k.value()).map(Some);
             }

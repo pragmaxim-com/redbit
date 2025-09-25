@@ -4,20 +4,18 @@ use crate::rest::{EndpointTag, FunctionDef, HttpMethod, PathExpr};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
+use crate::field_parser::EntityDef;
 
 /// Generates a streaming SSE endpoint definition for querying primary keys by a dictionary index.
-pub fn by_dict_def(
-    entity_name: &Ident,
-    pk_name: &Ident,
-    pk_type: &Type,
-    column_name: &Ident,
-    column_type: &Type,
-    tx_context_ty: &Type,
-    dict_table_var: &Ident,
-) -> FunctionDef {
+pub fn by_dict_def(entity_def: &EntityDef, column_name: &Ident, column_type: &Type, dict_table_var: &Ident) -> FunctionDef {
+    let key_def = &entity_def.key_def.field_def();
+    let pk_name = &key_def.name;
+    let pk_type = &key_def.tpe;
     let fn_name = format_ident!("stream_{}s_by_{}", pk_name, column_name);
+    let entity_name = &entity_def.entity_name;
+    let read_ctx_type = &entity_def.read_ctx_type;
     let fn_stream = quote! {
-        pub fn #fn_name(tx_context: #tx_context_ty, val: #column_type) -> Result<impl futures::Stream<Item = Result<#pk_type, AppError>> + Send, AppError> {
+        pub fn #fn_name(tx_context: #read_ctx_type, val: #column_type) -> Result<impl futures::Stream<Item = Result<#pk_type, AppError>> + Send, AppError> {
             let multi_value = tx_context.#dict_table_var.get_keys(val)?;
             let iter_box: Box<dyn Iterator<Item = Result<_, _>> + Send> =
                 if let Some(v) = multi_value {
@@ -103,19 +101,15 @@ pub fn by_dict_def(
 }
 
 /// Generates a streaming SSE endpoint definition for querying primary keys by a simple index.
-pub fn by_index_def(
-    entity_name: &Ident,
-    pk_name: &Ident,
-    pk_type: &Type,
-    column_name: &Ident,
-    column_type: &Type,
-    tx_context_ty: &Type,
-    index_table: &Ident,
-) -> FunctionDef {
+pub fn by_index_def(entity_def: &EntityDef, column_name: &Ident, column_type: &Type, index_table: &Ident) -> FunctionDef {
+    let entity_name = &entity_def.entity_name;
+    let read_ctx_type = &entity_def.read_ctx_type;
+    let key_def = &entity_def.key_def.field_def();
+    let pk_name = &key_def.name;
+    let pk_type = &key_def.tpe;
     let fn_name = format_ident!("stream_{}s_by_{}", pk_name, column_name);
-
     let fn_stream = quote! {
-        pub fn #fn_name(tx_context: #tx_context_ty, val: #column_type) -> Result<impl futures::Stream<Item = Result<#pk_type, AppError>> + Send, AppError> {
+        pub fn #fn_name(tx_context: #read_ctx_type, val: #column_type) -> Result<impl futures::Stream<Item = Result<#pk_type, AppError>> + Send, AppError> {
             let iter = tx_context.#index_table.get_keys(&val)?;
             let iter_box: Box<dyn Iterator<Item = Result<_, _>> + Send> = Box::new(iter);
             let stream = stream::iter(iter_box).map(|res| res.map(|e| e.value().clone()).map_err(AppError::from));

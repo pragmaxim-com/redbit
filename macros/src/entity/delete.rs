@@ -1,14 +1,17 @@
 use crate::endpoint::EndpointDef;
+use crate::field_parser::EntityDef;
 use crate::rest::HttpParams::Path;
 use crate::rest::{EndpointTag, FunctionDef, HttpMethod, PathExpr};
-use proc_macro2::{Ident, TokenStream};
+use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::Type;
 
-pub fn delete_def(pk_type: &Type, tx_context_ty: &Type, delete_statements: &[TokenStream]) -> FunctionDef {
+pub fn delete_def(entity_def: &EntityDef, delete_statements: &[TokenStream]) -> FunctionDef {
+    let pk_type: &Type = &entity_def.key_def.field_def().tpe;
+    let write_ctx_type: &Type = &entity_def.write_ctx_type;
     let fn_name = format_ident!("delete");
     let fn_stream = quote! {
-        pub fn #fn_name(tx_context: &#tx_context_ty, pk: #pk_type) -> Result<bool, AppError> {
+        pub fn #fn_name(tx_context: &#write_ctx_type, pk: #pk_type) -> Result<bool, AppError> {
             let mut removed: Vec<bool> = Vec::new();
             #(#delete_statements)*
             Ok(!removed.contains(&false))
@@ -17,10 +20,12 @@ pub fn delete_def(pk_type: &Type, tx_context_ty: &Type, delete_statements: &[Tok
     FunctionDef { fn_stream, endpoint: None, test_stream: None, bench_stream: None }
 }
 
-pub fn delete_many_def(pk_type: &Type, tx_context_ty: &Type, delete_many_statements: &[TokenStream]) -> FunctionDef {
+pub fn delete_many_def(entity_def: &EntityDef, delete_many_statements: &[TokenStream]) -> FunctionDef {
+    let pk_type: &Type = &entity_def.key_def.field_def().tpe;
+    let write_ctx_type: &Type = &entity_def.write_ctx_type;
     let fn_name = format_ident!("delete_many");
     let fn_stream = quote! {
-        pub fn #fn_name(tx_context: &#tx_context_ty, pks: &[#pk_type]) -> Result<bool, AppError> {
+        pub fn #fn_name(tx_context: &#write_ctx_type, pks: &[#pk_type]) -> Result<bool, AppError> {
             let mut removed: Vec<bool> = Vec::new();
             #(#delete_many_statements)*
             Ok(!removed.contains(&false))
@@ -29,13 +34,10 @@ pub fn delete_many_def(pk_type: &Type, tx_context_ty: &Type, delete_many_stateme
     FunctionDef { fn_stream, endpoint: None, test_stream: None, bench_stream: None }
 }
 
-pub fn remove_def(
-    entity_name: &Ident,
-    entity_type: &Type,
-    pk_name: &Ident,
-    pk_type: &Type,
-    delete_statements: &[TokenStream],
-) -> FunctionDef {
+pub fn remove_def(entity_def: &EntityDef, delete_statements: &[TokenStream]) -> FunctionDef {
+    let EntityDef { key_def, entity_name, entity_type, query_type: _, read_ctx_type: _, write_ctx_type: _} = &entity_def;
+    let pk_name = &key_def.field_def().name;
+    let pk_type = &key_def.field_def().tpe;
     let fn_name = format_ident!("remove");
     let fn_stream = quote! {
         pub fn #fn_name(storage: Arc<Storage>, pk: #pk_type) -> Result<bool, AppError> {

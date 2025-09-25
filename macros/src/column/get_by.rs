@@ -2,18 +2,20 @@ use crate::rest::FunctionDef;
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::Type;
+use crate::field_parser::EntityDef;
 
 pub fn get_by_dict_def(
-    entity_name: &Ident,
-    entity_type: &Type,
+    entity_def: &EntityDef,
     column_name: &Ident,
     column_type: &Type,
-    tx_context_ty: &Type,
     dict_table_var: &Ident,
 ) -> FunctionDef {
     let fn_name = format_ident!("get_by_{}", column_name);
+    let entity_name = &entity_def.entity_name;
+    let entity_type = &entity_def.entity_type;
+    let read_tx_context_ty = &entity_def.read_ctx_type;
     let fn_stream = quote! {
-        pub fn #fn_name(tx_context: &#tx_context_ty, val: &#column_type) -> Result<Vec<#entity_type>, AppError> {
+        pub fn #fn_name(tx_context: &#read_tx_context_ty, val: &#column_type) -> Result<Vec<#entity_type>, AppError> {
             let iter_opt = tx_context.#dict_table_var.get_keys(val)?;
             match iter_opt {
                 None => Ok(Vec::new()),
@@ -69,10 +71,13 @@ pub fn get_by_dict_def(
     }
 }
 
-pub fn get_by_index_def(entity_name: &Ident, entity_type: &Type, column_name: &Ident, column_type: &Type, tx_context_ty: &Type, index_table_var: &Ident) -> FunctionDef {
+pub fn get_by_index_def(entity_def: &EntityDef, column_name: &Ident, column_type: &Type, index_table_var: &Ident) -> FunctionDef {
     let fn_name = format_ident!("get_by_{}", column_name);
+    let entity_name = &entity_def.entity_name;
+    let entity_type = &entity_def.entity_type;
+    let read_ctx_type = &entity_def.read_ctx_type;
     let fn_stream = quote! {
-        pub fn #fn_name(tx_context: &#tx_context_ty, val: &#column_type) -> Result<Vec<#entity_type>, AppError> {
+        pub fn #fn_name(tx_context: &#read_ctx_type, val: &#column_type) -> Result<Vec<#entity_type>, AppError> {
             let mut iter = tx_context.#index_table_var.get_keys(val)?;
             let mut results = Vec::new();
             while let Some(x) = iter.next() {

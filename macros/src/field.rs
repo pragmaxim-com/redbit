@@ -3,7 +3,7 @@ use crate::entity::context::{TxContextItem, TxType};
 use crate::entity::query::{RangeQuery, StreamQueryItem};
 use crate::entity::{context, query};
 use crate::field_parser;
-use crate::field_parser::{ColumnDef, FieldDef, KeyDef, Multiplicity, OneToManyParentDef};
+use crate::field_parser::{ColumnDef, EntityDef, FieldDef, KeyDef, Multiplicity, OneToManyParentDef};
 use crate::pk::DbPkMacros;
 use crate::relationship::DbRelationshipMacros;
 use crate::rest::FunctionDef;
@@ -22,15 +22,13 @@ pub enum FieldMacros {
 impl FieldMacros {
     pub fn new(
         item_struct: &ItemStruct,
-        entity_ident: &Ident,
-        entity_type: &Type,
-        read_tx_context_ty: &Type,
-        stream_query_ty: &Type,
-    ) -> Result<(KeyDef, Option<OneToManyParentDef>, Vec<FieldMacros>), syn::Error> {
+        entity_name: &Ident,
+        entity_type: Type
+    ) -> Result<(EntityDef, Option<OneToManyParentDef>, Vec<FieldMacros>), syn::Error> {
         let (key_def, field_macros) = field_parser::get_field_macros(item_struct)?;
         let one_to_many_parent_def =
             match key_def.clone() {
-                KeyDef::Fk{ field_def: _, multiplicity: Multiplicity::OneToMany , parent_type: Some(parent_ty), db_cache_weight: _} => Some(OneToManyParentDef {
+                KeyDef::Fk { field_def: _, multiplicity: Multiplicity::OneToMany , parent_type: Some(parent_ty), db_cache_weight: _} => Some(OneToManyParentDef {
                     tx_context_ty: context::entity_tx_context_type(&parent_ty, TxType::Read),
                     stream_query_ty: query::stream_query_type(&parent_ty),
                     parent_type: parent_ty.clone(),
@@ -41,35 +39,31 @@ impl FieldMacros {
                 }),
                 _ => None
             };
-        let field_def = key_def.field_def();
+        let entity_def= EntityDef::new(key_def.clone(), entity_name.clone(), entity_type.clone());
         let field_macros = field_macros.iter().map(|c| match c {
-            ColumnDef::Key(KeyDef::Pk { field_def, db_cache_weight}) => {
-                FieldMacros::Pk(DbPkMacros::new(entity_ident, entity_type, field_def, None, stream_query_ty, field_macros.len() == 1, *db_cache_weight))
+            ColumnDef::Key(KeyDef::Pk { field_def: _, db_cache_weight}) => {
+                FieldMacros::Pk(DbPkMacros::new(&entity_def, None, field_macros.len() == 1, *db_cache_weight))
             },
-            ColumnDef::Key(KeyDef::Fk { field_def, multiplicity, parent_type: _, db_cache_weight}) => {
-                FieldMacros::Pk(DbPkMacros::new(entity_ident, entity_type, field_def, Some(multiplicity.clone()), stream_query_ty, field_macros.len() == 1, *db_cache_weight))
+            ColumnDef::Key(KeyDef::Fk { field_def: _, multiplicity, parent_type: _, db_cache_weight}) => {
+                FieldMacros::Pk(DbPkMacros::new(&entity_def, Some(multiplicity.clone()), field_macros.len() == 1, *db_cache_weight))
             },
-            ColumnDef::Plain(field , indexing_type) => {
+            ColumnDef::Plain(field, indexing_type) => {
                 FieldMacros::Plain(
                     DbColumnMacros::new(
+                        &entity_def,
                         field,
                         indexing_type.clone(),
-                        entity_ident,
-                        entity_type,
-                        &field_def,
-                        read_tx_context_ty,
-                        stream_query_ty,
                         one_to_many_parent_def.clone()
                     ))
             },
             ColumnDef::Relationship(field, write_from, multiplicity) => {
-                FieldMacros::Relationship(DbRelationshipMacros::new(field.clone(), multiplicity.clone(), entity_ident, &field_def.name, &field_def.tpe, write_from.clone()))
+                FieldMacros::Relationship(DbRelationshipMacros::new(&entity_def, field.clone(), multiplicity.clone(), write_from.clone()))
             }
             ColumnDef::Transient(field, read_from) => {
                 FieldMacros::Transient(TransientMacros::new(field.clone(), read_from.clone()))
             }
         }).collect::<Vec<FieldMacros>>();
-        Ok((key_def, one_to_many_parent_def, field_macros))
+        Ok((entity_def, one_to_many_parent_def, field_macros))
     }
 
     pub fn field_def(&self) -> FieldDef {

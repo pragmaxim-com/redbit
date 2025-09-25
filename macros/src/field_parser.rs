@@ -7,6 +7,8 @@ use syn::spanned::Spanned;
 use syn::token::Comma;
 use syn::{Data, DeriveInput, Field, Fields, GenericArgument, ItemStruct, PathArguments, Type};
 use syn::meta::ParseNestedMeta;
+use crate::entity::{context, query};
+use crate::entity::context::TxType;
 
 #[derive(Clone)]
 #[allow(clippy::enum_variant_names)]
@@ -31,6 +33,25 @@ pub struct FieldDef {
 }
 
 #[derive(Clone)]
+pub struct EntityDef {
+    pub key_def: KeyDef,
+    pub entity_name: Ident,
+    pub entity_type: Type,
+    pub query_type: Type,
+    pub read_ctx_type: Type,
+    pub write_ctx_type: Type,
+}
+
+impl EntityDef {
+    pub fn new(key_def: KeyDef, entity_name: Ident, entity_type: Type) -> Self {
+        let query_type = query::stream_query_type(&entity_type);
+        let read_ctx_type = context::entity_tx_context_type(&entity_type, TxType::Read);
+        let write_ctx_type = context::entity_tx_context_type(&entity_type, TxType::Write);
+        EntityDef { key_def, entity_name, entity_type, query_type, read_ctx_type, write_ctx_type }
+    }
+}
+
+#[derive(Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum KeyDef {
     Pk { field_def: FieldDef, db_cache_weight: usize },
@@ -45,7 +66,7 @@ impl KeyDef {
     }
     pub fn field_def(&self) -> FieldDef {
         match self {
-            KeyDef::Pk{ field_def, .. } => field_def.clone(),
+            KeyDef::Pk { field_def, .. } => field_def.clone(),
             KeyDef::Fk { field_def, .. } => field_def.clone(),
         }
     }

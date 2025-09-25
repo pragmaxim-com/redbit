@@ -1,14 +1,19 @@
 use crate::endpoint::EndpointDef;
+use crate::field_parser::EntityDef;
 use crate::rest::HttpParams::Path;
 use crate::rest::{EndpointTag, FunctionDef, HttpMethod, PathExpr};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
-use syn::Type;
 
-pub fn fn_def(entity_name: &Ident, entity_type: &Type, pk_name: &Ident, pk_type: &Type, tx_context_ty: &Type, table: &Ident) -> FunctionDef {
+pub fn fn_def(entity_def: &EntityDef, table: &Ident) -> FunctionDef {
     let fn_name = format_ident!("get");
+    let EntityDef { key_def, entity_name, entity_type, query_type:_, read_ctx_type, write_ctx_type:_ } = &entity_def;
+    let key_def = key_def.field_def();
+    let pk_name = &key_def.name;
+    let pk_type = &key_def.tpe;
+
     let fn_stream = quote! {
-        pub fn #fn_name(tx_context: &#tx_context_ty, pk: #pk_type) -> Result<Option<#entity_type>, AppError> {
+        pub fn #fn_name(tx_context: &#read_ctx_type, pk: #pk_type) -> Result<Option<#entity_type>, AppError> {
             if tx_context.#table.get(pk)?.is_some() {
                 Ok(Some(Self::compose(&tx_context, pk)?))
             } else {

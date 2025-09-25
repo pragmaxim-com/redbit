@@ -1,17 +1,17 @@
+use crate::field_parser::EntityDef;
+use crate::rest::FunctionDef;
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::Type;
-use crate::rest::FunctionDef;
 
 pub fn sample_token_fns(
-    entity_name: &Ident,
-    entity_type: &Type,
-    pk_type: &Type,
-    stream_query_type: &Type,
+    entity_def: &EntityDef,
     struct_default_inits: &[TokenStream],
     struct_default_inits_with_query: &[TokenStream],
     field_names: &[Ident],
 ) -> Vec<FunctionDef> {
+    let EntityDef { key_def, entity_name, entity_type, query_type, read_ctx_type: _, write_ctx_type: _} = &entity_def;
+    let pk_type: &Type = &key_def.field_def().tpe;
     vec![
         FunctionDef {
             fn_stream: quote! {
@@ -68,7 +68,7 @@ pub fn sample_token_fns(
         },
         FunctionDef {
             fn_stream: quote! {
-                pub fn sample_with_query(pk: #pk_type, sample_index: usize, stream_query: &#stream_query_type) -> Option<#entity_type> {
+                pub fn sample_with_query(pk: #pk_type, sample_index: usize, stream_query: &#query_type) -> Option<#entity_type> {
                     // First: fetch & filter every column, short‑circuit on mismatch
                     #(#struct_default_inits_with_query)*
                     Some(
@@ -83,7 +83,7 @@ pub fn sample_token_fns(
                 #[test]
                 fn sample_with_query_json() {
                     let pk = #pk_type::default();
-                    let query = #stream_query_type::sample();
+                    let query = #query_type::sample();
                     let entity = #entity_name::sample_with_query(pk, 3, &query);
                     serde_json::to_string(&entity).expect("Failed to serialize sample entity with query to JSON");
                 }

@@ -1,14 +1,18 @@
 use crate::endpoint::EndpointDef;
+use crate::field_parser::EntityDef;
 use crate::rest::HttpParams::Query;
 use crate::rest::{EndpointTag, FunctionDef, HttpMethod, QueryExpr};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
-use syn::{parse_quote, Type};
+use syn::parse_quote;
 
-pub fn fn_def(entity_name: &Ident, entity_type: &Type, tx_context_ty: &Type, table: &Ident) -> FunctionDef {
+pub fn fn_def(entity_def: &EntityDef, table: &Ident) -> FunctionDef {
+    let entity_name = &entity_def.entity_name;
+    let entity_type = &entity_def.entity_type;
+    let read_ctx_type = &entity_def.read_ctx_type;
     let fn_name = format_ident!("take");
     let fn_stream = quote! {
-        pub fn #fn_name(tx_context: &#tx_context_ty, n: usize) -> Result<Vec<#entity_type>, AppError> {
+        pub fn #fn_name(tx_context: &#read_ctx_type, n: usize) -> Result<Vec<#entity_type>, AppError> {
             let mut iter = tx_context.#table.iter()?;
             let mut results = Vec::new();
             let mut count: usize = 0;

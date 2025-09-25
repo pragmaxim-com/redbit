@@ -1,13 +1,12 @@
 use crate::field::FieldMacros;
 use crate::field_parser::{FieldDef, KeyDef};
 use crate::rest::Rest;
-use proc_macro2::{Ident, TokenStream};
-use quote::quote;
-use syn::{parse_quote, ItemStruct, Type};
 use crate::storage;
-use crate::entity::context::TxType;
 use crate::storage::StorageDef;
 use crate::table::{DictTableDefs, IndexTableDefs, TableDef};
+use proc_macro2::{Ident, TokenStream};
+use quote::quote;
+use syn::{parse_quote, ItemStruct};
 
 pub mod query;
 mod store;
@@ -21,14 +20,9 @@ pub mod chain;
 pub mod context;
 
 pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStream), syn::Error> {
-    let entity_ident = &item_struct.ident;
-    let entity_type: Type = parse_quote! { #entity_ident };
-    let stream_query_type = query::stream_query_type(&entity_type);
-    let write_tx_context_type = context::entity_tx_context_type(&entity_type, TxType::Write);
-    let read_tx_context_type = context::entity_tx_context_type(&entity_type, TxType::Read);
-    let (key_def, one_to_many_parent_def, field_macros) =
-        FieldMacros::new(item_struct, entity_ident, &entity_type, &read_tx_context_type, &stream_query_type)?;
-    let key = key_def.field_def();
+    let entity_name = &item_struct.ident;
+    let (entity_def, one_to_many_parent_def, field_macros) =
+        FieldMacros::new(item_struct, entity_name, parse_quote! { #entity_name })?;
     let mut field_defs = Vec::new();
     let mut plain_table_defs: Vec<TableDef> = Vec::new();
     let mut index_table_defs: Vec<IndexTableDefs> = Vec::new();
@@ -66,27 +60,28 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
     }
 
     let field_names: Vec<Ident> = field_defs.iter().map(|f| f.name.clone()).collect();
+    let key_def = &entity_def.key_def.clone();
 
     let mut function_defs = vec![
-        store::persist_def(entity_ident, &entity_type, &key.name, &key.tpe, &store_statements),
-        store::store_def(entity_ident, &entity_type, &write_tx_context_type, &store_statements),
-        store::store_many_def(entity_ident, &entity_type, &write_tx_context_type, &store_many_statements),
-        context::begin_write_fn_def(&write_tx_context_type),
-        context::new_write_fn_def(&write_tx_context_type),
-        context::begin_read_fn_def(&read_tx_context_type),
-        delete::remove_def(entity_ident, &entity_type, &key.name, &key.tpe, &delete_statements),
-        delete::delete_def(&key.tpe, &write_tx_context_type, &delete_statements),
-        delete::delete_many_def(&key.tpe, &write_tx_context_type, &delete_many_statements),
-        info::table_info_fn(entity_ident, &plain_table_defs, &dict_table_defs, &index_table_defs),
-        compose::compose_token_stream(entity_ident, &entity_type, &key.tpe, &read_tx_context_type, &field_names, &struct_inits),
-        compose::compose_with_filter_token_stream(&entity_type, &key.tpe, &read_tx_context_type, &stream_query_type, &field_names, &struct_inits_with_query),
+        store::persist_def(&entity_def, &store_statements),
+        store::store_def(&entity_def, &store_statements),
+        store::store_many_def(&entity_def, &store_many_statements),
+        context::begin_write_fn_def(&entity_def.write_ctx_type),
+        context::new_write_fn_def(&entity_def.write_ctx_type),
+        context::begin_read_fn_def(&entity_def.read_ctx_type),
+        delete::remove_def(&entity_def, &delete_statements),
+        delete::delete_def(&entity_def, &delete_statements),
+        delete::delete_many_def(&entity_def, &delete_many_statements),
+        info::table_info_fn(entity_name, &plain_table_defs, &dict_table_defs, &index_table_defs),
+        compose::compose_token_stream(&entity_def, &field_names, &struct_inits),
+        compose::compose_with_filter_token_stream(&entity_def, &field_names, &struct_inits_with_query),
     ];
-    function_defs.extend(sample::sample_token_fns(entity_ident, &entity_type, &key.tpe, &stream_query_type, &struct_default_inits, &struct_default_inits_with_query, &field_names));
+    function_defs.extend(sample::sample_token_fns(&entity_def, &struct_default_inits, &struct_default_inits_with_query, &field_names));
     function_defs.extend(column_function_defs.clone());
-    function_defs.extend(init::init(entity_ident, &key_def));
+    function_defs.extend(init::init(entity_name, key_def));
 
-    let stream_query_struct = query::stream_query(&stream_query_type, &stream_queries);
-    let tx_context_structs = context::tx_context(&write_tx_context_type, &read_tx_context_type, &tx_context_items);
+    let stream_query_struct = query::stream_query(&entity_def.query_type, &stream_queries);
+    let tx_context_structs = context::tx_context(&entity_def.write_ctx_type, &entity_def.read_ctx_type, &tx_context_items);
     let range_query_structs = range_queries.into_iter().map(|rq| rq.stream).collect::<Vec<_>>();
 
     let api_functions: Vec<TokenStream> = function_defs.iter().map(|f| f.fn_stream.clone()).collect::<Vec<_>>();
@@ -96,7 +91,7 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
     let Rest { endpoint_handlers, routes: api_routes } =
         Rest::new(&function_defs);
 
-    let test_suite = tests::test_suite(entity_ident, one_to_many_parent_def.clone(), &function_defs);
+    let test_suite = tests::test_suite(entity_name, one_to_many_parent_def.clone(), &function_defs);
 
     let stream: TokenStream =
         quote! {
@@ -111,7 +106,7 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
             // axum endpoints cannot be in the impl object https://docs.rs/axum/latest/axum/attr.debug_handler.html#limitations
             #(#endpoint_handlers)*
 
-            impl #entity_ident {
+            impl #entity_name {
                 // api functions are exposed to users
                 #(#api_functions)*
                 // axum routes
@@ -122,5 +117,5 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
             // unit tests and rest api tests
             #test_suite
         };
-    Ok((key_def, field_defs, stream))
+    Ok((key_def.clone(), field_defs, stream))
 }
