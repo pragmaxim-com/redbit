@@ -22,7 +22,6 @@ where
         }
         _ = join(future_a, future_b) => {
             // Ensure cooperative shutdown when workers finish first
-            let _ = shutdown_tx.send_replace(true);
         }
     }
 }
