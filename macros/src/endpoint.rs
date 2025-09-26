@@ -123,7 +123,7 @@ impl EndpointDef {
                     for query_sample in #query_samples {
                         let query_string = serde_urlencoded::to_string(query_sample.clone()).unwrap();
                         let final_path = format!("{}?{}", #path_expr, query_string);
-                        eprintln!("Testing endpoint: {} : {} with body", #method_name, final_path);
+                        info!("Testing endpoint: {} : {} with body", #method_name, final_path);
                         for body_sample in #body_samples {
                             let response = server.method(#method_name, &final_path).json(&body_sample).await;
                             #deser_return_value_assert
@@ -145,7 +145,7 @@ impl EndpointDef {
                         for query_sample in #query_samples {
                             let query_string = serde_urlencoded::to_string(query_sample).unwrap();
                             let final_path = format!("{}?{}", #path_expr, query_string);
-                            eprintln!("Testing endpoint: {} : {}", #method_name, &final_path);
+                            info!("Testing endpoint: {} : {}", #method_name, &final_path);
                             let response = server.method(#method_name, &final_path).await;
                             #deser_return_value_assert
                         }
@@ -161,7 +161,7 @@ impl EndpointDef {
                 async fn #test_fn_name() {
                     let (storage_owner, server) = #server;
                     for body_sample in #body_samples {
-                        eprintln!("Testing endpoint: {} : {} with body", #method_name, #path_expr);
+                        info!("Testing endpoint: {} : {} with body", #method_name, #path_expr);
                         let response = server.method(#method_name, &#path_expr).json(&body_sample).await;
                         #deser_return_value_assert
                     }
@@ -177,7 +177,7 @@ impl EndpointDef {
                 #[tokio::test]
                 async fn #test_fn_name() {
                     let (storage_owner, server) = #server;
-                    eprintln!("Testing endpoint: {} : {}", #method_name, #path_expr);
+                    info!("Testing endpoint: {} : {}", #method_name, #path_expr);
                     let response = server.method(#method_name, &#path_expr).await;
                     #deser_return_value_assert
                 }

@@ -2,6 +2,7 @@ use futures::future::join;
 use std::future::Future;
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::watch;
+use redbit::info;
 
 pub async fn futures<A, B, OA, OB>(future_a: A, future_b: B, shutdown_tx: watch::Sender<bool>)
 where
@@ -13,11 +14,11 @@ where
 
     tokio::select! {
         _ = sigint.recv() => {
-            println!("Received SIGINT, shutting down...");
+            info!("Received SIGINT, shutting down...");
             let _ = shutdown_tx.send_replace(true);
         }
         _ = sigterm.recv() => {
-            println!("Received SIGTERM, shutting down...");
+            info!("Received SIGTERM, shutting down...");
             let _ = shutdown_tx.send_replace(true);
         }
         _ = join(future_a, future_b) => {

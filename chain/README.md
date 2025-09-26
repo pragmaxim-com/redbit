@@ -8,10 +8,13 @@ Ie. only one winning fork is kept in the DB at given moment. This allows for muc
 
 ### Perf 
 
-Chain syncing uses 3 main independent threads : 
-    - block fetching, processing and persistence while persistence being sequential, block after block.
-and the persistence thread spawns a thread for each entity column and submits batches of work to them.
-This way the indexing is as fast as the slowest column indexing due to higher quantity or size.
+Chain syncing uses 3 main independent threads : block fetching, processing and persistence. 
+Persistence thread persists block after block sequentially however the thread spawns a child thread for each entity column and submits batches of work to them.
+This way the indexing is as fast as the slowest column indexing due to higher quantity or size. If you keep adding new columns,
+indexing speed will not be affected much until you fully utilize SSD.
+
+This concurrency model was crafted for utxo-like chains to keep utxo state valid at any time regardless of crashes while reaching the maximum
+indexing throughput and CPU utilization possible.
 
 You can use [tokio console](https://github.com/tokio-rs/console), basically it breaks down to 3 named task you can see in the console :
 - fetch - task that fetches blocks from the node

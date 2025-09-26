@@ -67,8 +67,8 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
     let mut function_defs = vec![
         info::table_info_fn(&entity_def),
         store::persist_def(&entity_def, &store_statements),
-        store::store_def(&entity_def, &store_statements),
         store::store_many_def(&entity_def, &store_many_statements),
+        store::store_def(&entity_def, &store_statements),
         context::begin_write_fn_def(&entity_def.write_ctx_type),
         context::new_write_fn_def(&entity_def.write_ctx_type),
         context::begin_read_fn_def(&entity_def.read_ctx_type),

@@ -79,11 +79,18 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
                         item = s.next() => {
                             match item {
                                 Some(raw) => {
-                                    buf_bytes += raw.size();
-                                    buf.push(raw);
-                                    if buf_bytes > proc_min_batch_limit {
-                                        if fetch_tx.send(std::mem::take(&mut buf)).await.is_err() { break; }
-                                        buf_bytes = 0;
+                                    match indexing_mode {
+                                        SyncMode::Continuous => {
+                                            if fetch_tx.send(vec![raw]).await.is_err() { break; }
+                                        }
+                                        SyncMode::Batching => {
+                                            buf_bytes += raw.size();
+                                            buf.push(raw);
+                                            if buf_bytes > proc_min_batch_limit {
+                                                if fetch_tx.send(std::mem::take(&mut buf)).await.is_err() { break; }
+                                                buf_bytes = 0;
+                                            }
+                                        }
                                     }
                                 }
                                 None => break,
@@ -91,7 +98,7 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
                         }
                     }
                 }
-                if !buf.is_empty() {
+                if matches!(indexing_mode, SyncMode::Batching) && !buf.is_empty() {
                     let _ = fetch_tx.send(buf).await;
                 }
                 drop(fetch_tx);

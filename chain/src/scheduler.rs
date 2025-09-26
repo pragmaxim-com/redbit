@@ -1,7 +1,7 @@
 use crate::api::{BlockLike, SizeLike};
 use crate::settings::IndexerSettings;
 use crate::syncer::ChainSyncer;
-use redbit::{error, WriteTxContext};
+use redbit::{error, info, WriteTxContext};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::watch;
@@ -22,7 +22,7 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
         loop {
             tokio::select! {
                 _ = shutdown.changed() => {
-                    println!("Shutting down syncer ...");
+                    info!("Shutting down syncer ...");
                     break;
                 }
                 _ = interval.tick() => {

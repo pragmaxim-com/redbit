@@ -58,7 +58,7 @@ To use redbit in your project:
 
 ```toml
 [dependencies]
-redbit = "1.0.5"
+redbit = "1.0.6"
 ```
 
 ```
@@ -308,15 +308,15 @@ The same api is accessible through http endpoints at http://127.0.0.1:3033/swagg
 
 ### ⏱ Redbit benchmarks (results from github servers)
 
-The demo example persists data into 30 tables to allow for rich querying. Each `index` is backed by 2 tables and `dictionary` by 4 tables.
+The demo example persists data into 24 tables to allow for rich querying. Each `index` is backed by 2 tables and `dictionary` by 4 tables.
 Each PK, FK, simple column, index or dictionary is backed by its own redb DB and a long-running indexing thread. If you have 20 of these, you are still 
 fine on Raspberry Pi, consider stronger machine for deeply nested entities with many indexes and dictionaries.
 
-Indexing process is always as slow as the column that in comparison to others has either bigger values, more values or combination of both.
+Indexing process is always as slow as the column which in comparison to others has either bigger values, more values or combination of both.
 
 See [chain](./chain) for more details on performance and data size.
 
-The `persist` is slow because each bench iteration opens ~ 30 tables in comparison to `store` which just writes to them and commits.  
+The `persist` is slower because each bench iteration opens ~ 24 tables in comparison to `store` which just writes to them and commits.  
 The `remove/delete` is analogous to `persist/store`
 
 The `block::_store_many` operation in this context writes and commits 3 blocks of 3 transactions of 1 input and 3 utxos of 3 assets, ie.
