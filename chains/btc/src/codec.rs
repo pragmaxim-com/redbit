@@ -568,6 +568,4 @@ mod tests {
             assert_eq!(back, json, "string roundtrip mismatch for {s}");
         }
     }
-
-
 }
