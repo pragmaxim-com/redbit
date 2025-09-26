@@ -16,7 +16,7 @@ use crate::combine::ShutdownReason;
 pub struct ChainSyncer<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext> {
     pub block_provider: Arc<dyn BlockProvider<FB, TB>>,
     pub chain: Arc<dyn BlockChainLike<TB, CTX>>,
-    pub monitor: Arc<ProgressMonitor>,
+    pub monitor: Arc<ProgressMonitor<TB>>,
 }
 
 impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'static> ChainSyncer<FB, TB, CTX> {
@@ -171,17 +171,7 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
                                     // 2) Feed in-order items into weight batcher.
                                     for b in ready {
                                         if let Some(out) = batcher.push_with(b, |x| x.header().weight() as usize) {
-                                            if let Some(last) = out.last() {
-                                                let lh = last.header();
-                                                monitor.log(
-                                                    lh.height(),
-                                                    &lh.timestamp().to_string(),
-                                                    &lh.hash().to_string(),
-                                                    out.len(),
-                                                    out.iter().map(|x| x.header().weight() as usize).sum::<usize>(),
-                                                    proc_rx.len(),
-                                                );
-                                            }
+                                            monitor.log_batch(&out, proc_rx.len());
                                             if sort_tx.send(out).await.is_err() { break; }
                                         }
                                     }

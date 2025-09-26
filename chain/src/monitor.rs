@@ -2,22 +2,25 @@ use std::{time::Instant};
 
 use std::sync::Mutex;
 use redbit::{info, warn};
+use crate::{BlockHeaderLike, BlockLike};
 
 pub type BatchWeight = usize;
 pub type BoxWeight = usize;
 
-pub struct ProgressMonitor {
+pub struct ProgressMonitor<B: BlockLike> {
     min_weight_report: usize,
     start_time: Instant,
     total_and_last_report_weight: Mutex<(usize, usize)>,
+    phantom: std::marker::PhantomData<B>,
 }
 
-impl ProgressMonitor {
+impl<B: BlockLike> ProgressMonitor<B> {
     pub fn new(min_tx_count_report: usize) -> Self {
         ProgressMonitor {
             min_weight_report: min_tx_count_report,
             start_time: Instant::now(),
             total_and_last_report_weight: Mutex::new((0, 0)),
+            phantom: std::marker::PhantomData,
         }
     }
 
@@ -25,27 +28,27 @@ impl ProgressMonitor {
         warn!("Block @ {} not fetched, currently @ {} ... pending {} blocks", need_height, seen_height, pending_heights);
     }
 
-    pub fn log(
-        &self,
-        height: u32,
-        timestamp: &str,
-        hash: &str,
-        cur_batch_size: usize,
-        batch_weight: BatchWeight,
-        buffer_size: usize,
-    ) {
-        let mut total_weight = self.total_and_last_report_weight.lock().unwrap();
-        let new_total_weight = total_weight.0 + batch_weight;
-        if new_total_weight > total_weight.1 + self.min_weight_report {
-            *total_weight = (new_total_weight, new_total_weight);
-            let total_time = self.start_time.elapsed().as_secs();
-            let txs_per_sec = format!("{:.1}", new_total_weight as f64 / total_time as f64);
-            info!(
-                "Batch[{}] @ {} : {} from {} at {} ins+outs+assets/s, total {}, proc_buffer {}",
-                cur_batch_size, height, &hash[..12], timestamp, txs_per_sec, new_total_weight, buffer_size
-            );
-        } else {
-            *total_weight = (new_total_weight, total_weight.1);
+    pub fn log_batch(&self, batch: &Vec<B>, buffer_size: usize) {
+        if let Some(first) = batch.first() {
+            let batch_weight = batch.iter().map(|x| x.header().weight() as usize).sum::<usize>();
+            let lh = first.header();
+            let mut total_weight = self.total_and_last_report_weight.lock().unwrap();
+            let new_total_weight = total_weight.0 + batch_weight;
+            if new_total_weight > total_weight.1 + self.min_weight_report {
+                let height = lh.height();
+                let timestamp = &lh.timestamp().to_string();
+                let hash = &lh.hash().to_string();
+
+                *total_weight = (new_total_weight, new_total_weight);
+                let total_time = self.start_time.elapsed().as_secs();
+                let txs_per_sec = format!("{:.1}", new_total_weight as f64 / total_time as f64);
+                info!(
+                    "Batch[{}] @ {} : {} from {} at {} ins+outs+assets/s, total {}, proc_buffer {}",
+                    batch.len(), height, &hash[..12], timestamp, txs_per_sec, new_total_weight, buffer_size
+                );
+            } else {
+                *total_weight = (new_total_weight, total_weight.1);
+            }
         }
     }
 }
