@@ -6,7 +6,7 @@ use proc_macro2::Ident;
 use quote::{format_ident, quote};
 
 pub fn fn_def(entity_def: &EntityDef, table: &Ident) -> FunctionDef {
-    let EntityDef { key_def, entity_name, entity_type: _, query_type: _, read_ctx_type, write_ctx_type: _} = &entity_def;
+    let EntityDef { key_def, entity_name, entity_type: _, query_type: _, info_type:_, read_ctx_type, write_ctx_type: _} = &entity_def;
     let key_def = key_def.field_def();
     let pk_name = &key_def.name;
     let pk_type = &key_def.tpe;

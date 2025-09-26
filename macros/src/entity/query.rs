@@ -4,34 +4,34 @@ use syn::Type;
 use crate::field_parser::EntityDef;
 use crate::macro_utils;
 
-static STREAM_QUERY: &str = "StreamQuery";
+static FILTER_QUERY: &str = "FilterQuery";
 
-pub fn stream_query_type(entity_type: &Type) -> Type {
-    let suffix = STREAM_QUERY.to_string();
+pub fn filter_query_type(entity_type: &Type) -> Type {
+    let suffix = FILTER_QUERY.to_string();
     let entity_ident = match entity_type {
         Type::Path(p) => p.path.segments.last().unwrap().ident.clone(),
-        _ => panic!("Unsupported entity type for stream query"),
+        _ => panic!("Unsupported entity type for filter query"),
     };
-    let stream_query_type = format_ident!("{}{}", entity_ident, suffix);
-    syn::parse_quote!(#stream_query_type)
+    let filter_query_type = format_ident!("{}{}", entity_ident, suffix);
+    syn::parse_quote!(#filter_query_type)
 }
 
 #[derive(Clone)]
-pub struct StreamQueryItem {
+pub struct FilterQueryItem {
     pub definition: TokenStream,
     pub init: TokenStream,
 }
 
-pub fn stream_query(stream_query_ty: &Type, stream_queries: &[StreamQueryItem]) -> TokenStream {
-    let definitions: Vec<TokenStream> = stream_queries.iter().map(|item| item.definition.clone()).collect();
-    let inits: Vec<TokenStream> = stream_queries.iter().map(|item| item.init.clone()).collect();
+pub fn filter_query(filter_query_ty: &Type, filter_queries: &[FilterQueryItem]) -> TokenStream {
+    let definitions: Vec<TokenStream> = filter_queries.iter().map(|item| item.definition.clone()).collect();
+    let inits: Vec<TokenStream> = filter_queries.iter().map(|item| item.init.clone()).collect();
     quote! {
         #[derive(Clone, Debug, IntoParams, Serialize, Deserialize, Default, ToSchema)]
-        #[schema(example = json!(#stream_query_ty::sample()))]
-        pub struct #stream_query_ty {
+        #[schema(example = json!(#filter_query_ty::sample()))]
+        pub struct #filter_query_ty {
             #(#definitions),*
         }
-        impl #stream_query_ty {
+        impl #filter_query_ty {
             pub fn sample() -> Self {
                 Self {
                     #(#inits),*

@@ -31,11 +31,7 @@ async fn main() -> Result<()> {
     Block::get_transactions(tx_read_ctx, first_block.height)?;
     Block::get_header(header_read_ctx, first_block.height)?;
 
-    let block_infos = Block::table_info(&storage)?;
-    println!("Block persisted with tables :");
-    for info in block_infos {
-        println!("{}", serde_json::to_string_pretty(&info)?);
-    }
+    Block::table_info(&storage)?;
 
     let first_block_header = Header::first(header_read_ctx)?.unwrap();
     let last_block_header = Header::last(header_read_ctx)?.unwrap();
@@ -46,12 +42,6 @@ async fn main() -> Result<()> {
     Header::get(header_read_ctx, first_block_header.height)?;
     Header::range(header_read_ctx, first_block_header.height, last_block_header.height, None)?;
     Header::range_by_timestamp(header_read_ctx, &first_block_header.timestamp, &last_block_header.timestamp)?;
-
-    let block_header_infos = Header::table_info(&storage)?;
-    println!("\nBlock header persisted with tables :");
-    for info in block_header_infos {
-        println!("{}", serde_json::to_string_pretty(&info)?);
-    }
 
     let first_transaction = Transaction::first(tx_read_ctx)?.unwrap();
     let last_transaction = Transaction::last(tx_read_ctx)?.unwrap();
@@ -69,12 +59,6 @@ async fn main() -> Result<()> {
     Transaction::get_utxos(utxo_read_ctx, first_transaction.id)?;
     Transaction::get_maybe(maybe_value_read_ctx, first_transaction.id)?;
 
-    let transaction_infos = Transaction::table_info(&storage)?;
-    println!("\nTransaction persisted with tables :");
-    for info in transaction_infos {
-        println!("{}", serde_json::to_string_pretty(&info)?);
-    }
-
     let first_utxo = Utxo::first(utxo_read_ctx)?.unwrap();
     let last_utxo = Utxo::last(utxo_read_ctx)?.unwrap();
 
@@ -88,12 +72,6 @@ async fn main() -> Result<()> {
     let asset_read_ctx = &utxo_read_ctx.assets;
     Utxo::get_assets(asset_read_ctx, first_utxo.id)?;
 
-    let utxo_infos = Utxo::table_info(&storage)?;
-    println!("\nUtxo persisted with tables :");
-    for info in utxo_infos {
-        println!("{}", serde_json::to_string_pretty(&info)?);
-    }
-
     let first_asset = Asset::first(asset_read_ctx)?.unwrap();
     let last_asset = Asset::last(asset_read_ctx)?.unwrap();
 
@@ -102,12 +80,6 @@ async fn main() -> Result<()> {
     Asset::get(asset_read_ctx, first_asset.id)?;
     Asset::range(asset_read_ctx, first_asset.id, last_asset.id, None)?;
     Asset::parent_key(first_asset.id)?;
-
-    let asset_infos = Asset::table_info(&storage)?;
-    println!("\nAsset persisted with tables :");
-    for info in asset_infos {
-        println!("{}", serde_json::to_string_pretty(&info)?);
-    }
 
     /* Streaming examples */
     Block::stream_range(Block::begin_read_ctx(&storage)?, first_block.height, last_block.height, None)?.try_collect::<Vec<Block>>().await?;

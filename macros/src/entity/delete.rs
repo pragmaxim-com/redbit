@@ -35,7 +35,7 @@ pub fn delete_many_def(entity_def: &EntityDef, delete_many_statements: &[TokenSt
 }
 
 pub fn remove_def(entity_def: &EntityDef, delete_statements: &[TokenStream]) -> FunctionDef {
-    let EntityDef { key_def, entity_name, entity_type, query_type: _, read_ctx_type: _, write_ctx_type: _} = &entity_def;
+    let EntityDef { key_def, entity_name, entity_type, query_type: _, info_type:_, read_ctx_type: _, write_ctx_type: _} = &entity_def;
     let pk_name = &key_def.field_def().name;
     let pk_type = &key_def.field_def().tpe;
     let fn_name = format_ident!("remove");

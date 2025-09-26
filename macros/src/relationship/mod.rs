@@ -4,19 +4,22 @@ mod store;
 mod delete;
 mod query;
 mod context;
+mod info;
 
 use crate::entity;
 use crate::entity::context::{TxContextItem, TxType};
-use crate::entity::query::StreamQueryItem;
+use crate::entity::query::FilterQueryItem;
 use crate::field_parser::*;
 use crate::rest::FunctionDef;
 use proc_macro2::TokenStream;
+use crate::entity::info::TableInfoItem;
 
 pub struct DbRelationshipMacros {
     pub field_def: FieldDef,
     pub struct_init: TokenStream,
-    pub stream_query_init: StreamQueryItem,
+    pub stream_query_init: FilterQueryItem,
     pub tx_context_item: TxContextItem,
+    pub table_info_item: TableInfoItem,
     pub struct_init_with_query: TokenStream,
     pub struct_default_init: TokenStream,
     pub struct_default_init_with_query: TokenStream,
@@ -35,7 +38,8 @@ impl DbRelationshipMacros {
         let key_def = &entity_def.key_def.field_def();
         let pk_name = &key_def.name;
         let pk_type = &key_def.tpe;
-        let child_stream_query_type = entity::query::stream_query_type(child_type);
+        let child_stream_query_type = entity::query::filter_query_type(child_type);
+        let child_table_info_type = entity::info::table_info_type(child_type);
         let write_child_tx_context_type = entity::context::entity_tx_context_type(child_type, TxType::Write);
         let read_child_tx_context_type = entity::context::entity_tx_context_type(child_type, TxType::Read);
         match multiplicity {
@@ -43,8 +47,9 @@ impl DbRelationshipMacros {
                 DbRelationshipMacros {
                     field_def: field_def.clone(),
                     struct_init: init::one2one_relation_init(child_name, child_type),
-                    stream_query_init: query::stream_query_init(child_name, &child_stream_query_type),
+                    stream_query_init: query::query_init(child_name, &child_stream_query_type),
                     tx_context_item: context::tx_context_item(child_name, &write_child_tx_context_type, &read_child_tx_context_type),
+                    table_info_item: info::table_info_init(child_name, &child_table_info_type),
                     struct_init_with_query: init::one2one_relation_init_with_query(child_name, child_type),
                     struct_default_init: init::one2one_relation_default_init(child_name, child_type),
                     struct_default_init_with_query: init::one2one_relation_default_init_with_query(child_name, child_type),
@@ -59,8 +64,9 @@ impl DbRelationshipMacros {
                 DbRelationshipMacros {
                     field_def: field_def.clone(),
                     struct_init: init::one2opt_relation_init(child_name, child_type),
-                    stream_query_init: query::stream_query_init(child_name, &child_stream_query_type),
+                    stream_query_init: query::query_init(child_name, &child_stream_query_type),
                     tx_context_item: context::tx_context_item(child_name, &write_child_tx_context_type, &read_child_tx_context_type),
+                    table_info_item: info::table_info_init(child_name, &child_table_info_type),
                     struct_init_with_query: init::one2opt_relation_init_with_query(child_name, child_type),
                     struct_default_init: init::one2opt_relation_default_init(child_name, child_type),
                     struct_default_init_with_query: init::one2opt_relation_default_init_with_query(child_name, child_type),
@@ -76,8 +82,9 @@ impl DbRelationshipMacros {
                 DbRelationshipMacros {
                     field_def: field_def.clone(),
                     struct_init: init::one2many_relation_init(child_name, child_type),
-                    stream_query_init: query::stream_query_init(child_name, &child_stream_query_type),
+                    stream_query_init: query::query_init(child_name, &child_stream_query_type),
                     tx_context_item: context::tx_context_item(child_name, &write_child_tx_context_type, &read_child_tx_context_type),
+                    table_info_item: info::table_info_init(child_name, &child_table_info_type),
                     struct_init_with_query: init::one2many_relation_init_with_query(child_name, child_type),
                     struct_default_init: init::one2many_relation_default_init(child_name, child_type),
                     struct_default_init_with_query: init::one2many_relation_default_init_with_query(child_name, child_type),

@@ -11,15 +11,17 @@ mod get_by;
 mod get_keys_by;
 pub mod column_impls;
 pub mod column_codec;
+pub mod info;
 
 use crate::entity;
 use crate::entity::context;
 use crate::entity::context::TxContextItem;
-use crate::entity::query::{RangeQuery, StreamQueryItem};
+use crate::entity::query::{RangeQuery, FilterQueryItem};
 use crate::field_parser::{EntityDef, FieldDef, IndexingType, OneToManyParentDef};
 use crate::rest::*;
 use crate::table::{DictTableDefs, IndexTableDefs, TableDef};
 use proc_macro2::TokenStream;
+use crate::entity::info::TableInfoItem;
 
 pub struct DbColumnMacros {
     pub field_def: FieldDef,
@@ -28,8 +30,9 @@ pub struct DbColumnMacros {
     pub table_index_definition: Option<IndexTableDefs>,
     pub table_dict_definition: Option<DictTableDefs>,
     pub struct_init: TokenStream,
-    pub stream_query_init: StreamQueryItem,
+    pub filter_query_init: FilterQueryItem,
     pub tx_context_items: Vec<TxContextItem>,
+    pub table_info_item: TableInfoItem,
     pub struct_init_with_query: TokenStream,
     pub struct_default_init: TokenStream,
     pub struct_default_init_with_query: TokenStream,
@@ -76,8 +79,9 @@ impl DbColumnMacros {
         DbColumnMacros {
             field_def: col_def.clone(),
             range_query: None,
-            stream_query_init: query::stream_query_init(column_name, column_type),
+            filter_query_init: query::filter_query_init(column_name, column_type),
             tx_context_items: context::tx_context_items(&table_definitions),
+            table_info_item: info::plain_table_info(column_name, &table_def),
             table_plain_definitions: table_definitions,
             table_index_definition: None,
             table_dict_definition: None,
@@ -127,8 +131,9 @@ impl DbColumnMacros {
         DbColumnMacros {
             field_def: col_field_def.clone(),
             range_query,
-            stream_query_init: query::stream_query_init(column_name, column_type),
+            filter_query_init: query::filter_query_init(column_name, column_type),
             tx_context_items: vec![context::tx_context_index_item(&index_tables)],
+            table_info_item: info::index_table_info(column_name, &index_tables),
             table_plain_definitions: vec![],
             table_index_definition: Some(index_tables.clone()),
             table_dict_definition: None,
@@ -172,8 +177,9 @@ impl DbColumnMacros {
         DbColumnMacros {
             field_def: col_field_def.clone(),
             range_query: None,
-            stream_query_init: query::stream_query_init(column_name, column_type),
+            filter_query_init: query::filter_query_init(column_name, column_type),
             tx_context_items: vec![context::tx_context_dict_item(&dict_tables)],
+            table_info_item: info::dict_table_info(&dict_tables, column_name),
             table_plain_definitions: Vec::new(),
             table_index_definition: None,
             table_dict_definition: Some(dict_tables.clone()),

@@ -13,7 +13,7 @@ pub fn by_dict_def(
     dict_table_var: &Ident,
 ) -> FunctionDef {
     let fn_name = format_ident!("stream_by_{}", column_name);
-    let EntityDef { key_def, entity_name, entity_type, query_type, read_ctx_type, write_ctx_type: _} = &entity_def;
+    let EntityDef { key_def, entity_name, entity_type, query_type, info_type:_, read_ctx_type, write_ctx_type: _} = &entity_def;
     let pk_type = key_def.field_def().tpe;
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: #read_ctx_type, val: #column_type, query: Option<#query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#entity_type, AppError>> + Send>>, AppError> {
@@ -142,7 +142,7 @@ pub fn by_dict_def(
 
 pub fn by_index_def(entity_def: &EntityDef, column_name: &Ident, column_type: &Type, index_table: &Ident) -> FunctionDef {
     let fn_name = format_ident!("stream_by_{}", column_name);
-    let EntityDef { key_def, entity_name, entity_type, query_type, read_ctx_type, write_ctx_type: _} = &entity_def;
+    let EntityDef { key_def, entity_name, entity_type, query_type, info_type:_, read_ctx_type, write_ctx_type: _} = &entity_def;
     let pk_type = key_def.field_def().tpe;
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: #read_ctx_type, val: #column_type, query: Option<#query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#entity_type, AppError>> + Send>>, AppError> {

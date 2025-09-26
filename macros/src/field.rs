@@ -1,6 +1,6 @@
 use crate::column::DbColumnMacros;
 use crate::entity::context::{TxContextItem, TxType};
-use crate::entity::query::{RangeQuery, StreamQueryItem};
+use crate::entity::query::{RangeQuery, FilterQueryItem};
 use crate::entity::{context, query};
 use crate::field_parser;
 use crate::field_parser::{ColumnDef, EntityDef, FieldDef, KeyDef, Multiplicity, OneToManyParentDef};
@@ -11,6 +11,7 @@ use crate::table::{DictTableDefs, IndexTableDefs, TableDef};
 use crate::transient::TransientMacros;
 use proc_macro2::{Ident, TokenStream};
 use syn::{ItemStruct, Type};
+use crate::entity::info::TableInfoItem;
 
 pub enum FieldMacros {
     Pk(DbPkMacros),
@@ -30,7 +31,7 @@ impl FieldMacros {
             match key_def.clone() {
                 KeyDef::Fk { field_def: _, multiplicity: Multiplicity::OneToMany , parent_type: Some(parent_ty), db_cache_weight: _} => Some(OneToManyParentDef {
                     tx_context_ty: context::entity_tx_context_type(&parent_ty, TxType::Read),
-                    stream_query_ty: query::stream_query_type(&parent_ty),
+                    stream_query_ty: query::filter_query_type(&parent_ty),
                     parent_type: parent_ty.clone(),
                     parent_ident: match parent_ty {
                         Type::Path(p) => p.path.segments.last().unwrap().ident.clone(),
@@ -141,9 +142,9 @@ impl FieldMacros {
         }
     }
 
-    pub fn stream_queries(&self) -> Vec<StreamQueryItem> {
+    pub fn stream_queries(&self) -> Vec<FilterQueryItem> {
         match self {
-            FieldMacros::Plain(column) => vec![column.stream_query_init.clone()],
+            FieldMacros::Plain(column) => vec![column.filter_query_init.clone()],
             FieldMacros::Relationship(rel) => vec![rel.stream_query_init.clone()],
             _ => vec![],
         }
@@ -154,6 +155,15 @@ impl FieldMacros {
             FieldMacros::Pk(pk) => vec![pk.tx_context_item.clone()],
             FieldMacros::Plain(column) => column.tx_context_items.clone(),
             FieldMacros::Relationship(rel) => vec![rel.tx_context_item.clone()],
+            _ => vec![],
+        }
+    }
+
+    pub fn table_info_items(&self) -> Vec<TableInfoItem> {
+        match self {
+            FieldMacros::Pk(pk) => vec![pk.table_info_item.clone()],
+            FieldMacros::Plain(column) => vec![column.table_info_item.clone()],
+            FieldMacros::Relationship(rel) => vec![rel.table_info_item.clone()],
             _ => vec![],
         }
     }

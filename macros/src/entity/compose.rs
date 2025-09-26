@@ -40,7 +40,7 @@ pub fn compose_token_stream(entity_def: &EntityDef, field_names: &[Ident], struc
 }
 
 pub fn compose_with_filter_token_stream(entity_def: &EntityDef, field_names: &[Ident], struct_inits_with_query: &[TokenStream]) -> FunctionDef {
-    let EntityDef { key_def, entity_name: _, entity_type, query_type, read_ctx_type, write_ctx_type: _} = &entity_def;
+    let EntityDef { key_def, entity_name: _, entity_type, query_type, info_type:_, read_ctx_type, write_ctx_type: _} = &entity_def;
     let pk_type: &Type = &key_def.field_def().tpe;
     FunctionDef {
         fn_stream: quote! {

@@ -1,61 +1,29 @@
 use crate::endpoint::EndpointDef;
+use crate::field_parser::EntityDef;
 use crate::rest::{EndpointTag, FunctionDef, HttpMethod};
-use crate::table::{DictTableDefs, IndexTableDefs, TableDef};
-use proc_macro2::{Ident, Literal};
+use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use syn::parse_quote;
+use syn::{parse_quote, Type};
 
-pub fn table_info_fn(entity_name: &Ident, table_defs: &[TableDef], dict_table_defs: &[DictTableDefs], index_table_defs: &[IndexTableDefs]) -> FunctionDef {
-    let plain_stats_getters = table_defs.iter().map(|td| {
-        let db_name = td.var_name.to_string();
-        let db_name_literal = Literal::string(&db_name.to_string());
-        let table_name = &td.name;
+static TABLE_INFO: &str = "TableInfo";
 
-        quote! {
-            let db = index_dbs.get(#db_name_literal).cloned().unwrap();
-            let db_arc = db.upgrade().ok_or_else(|| AppError::Custom("database closed".to_string()))?;
-            let tx = db_arc.begin_read()?;
-            let table = tx.open_table(#table_name)?;
-            let stats = table.stats()?;
-            let table_entries = table.len()?;
-            tables.push(TableInfo::from_stats(#db_name_literal, table_entries, stats));
-        }
-    });
-    let index_stats_getters = index_table_defs.iter().map(|defs| {
-        let db_name = defs.var_name.clone();
-        let db_name_literal = Literal::string(&db_name.to_string());
-        let pk_by_index_table_name = &defs.pk_by_index.name;
-        let index_by_pk_table_name = &defs.index_by_pk.name;
+pub fn table_info_type(entity_type: &Type) -> Type {
+    let suffix = TABLE_INFO.to_string();
+    let entity_ident = match entity_type {
+        Type::Path(p) => p.path.segments.last().unwrap().ident.clone(),
+        _ => panic!("Unsupported entity type for stream query"),
+    };
+    let table_info_type = format_ident!("{}{}", entity_ident, suffix);
+    syn::parse_quote!(#table_info_type)
+}
 
-        quote! {
-            let db = index_dbs.get(#db_name_literal).cloned().unwrap();
-            let index_table = ReadOnlyIndexTable::new(db, #pk_by_index_table_name, #index_by_pk_table_name)?;
-            tables.extend(index_table.stats()?);
-        }
-    });
-    let dict_stats_getters = dict_table_defs.iter().map(|defs| {
-        let db_name = defs.var_name.clone();
-        let db_name_literal = Literal::string(&db_name.to_string());
-        let dict_pk_to_ids_table_name = &defs.dict_pk_to_ids_table_def.name;
-        let value_by_dict_pk_table_name = &defs.value_by_dict_pk_table_def.name;
-        let value_to_dict_pk_table_name = &defs.value_to_dict_pk_table_def.name;
-        let dict_pk_by_pk_table_name = &defs.dict_pk_by_pk_table_def.name;
-
-        quote! {
-            let db = index_dbs.get(#db_name_literal).cloned().unwrap();
-            let dict_table = ReadOnlyDictTable::new(db, #dict_pk_to_ids_table_name, #value_by_dict_pk_table_name, #value_to_dict_pk_table_name, #dict_pk_by_pk_table_name)?;
-            tables.extend(dict_table.stats()?);
-        }
-    });
+pub fn table_info_fn(entity_def: &EntityDef) -> FunctionDef {
+    let entity_name = &entity_def.entity_name;
+    let table_info_type = &entity_def.info_type;
     let fn_name = format_ident!("table_info");
     let fn_stream = quote! {
-        pub fn #fn_name(storage: &Arc<Storage>) -> Result<Vec<TableInfo>, AppError> {
-            let index_dbs = &storage.index_dbs;
-            let mut tables = Vec::new();
-            #(#plain_stats_getters)*
-            #(#index_stats_getters)*
-            #(#dict_stats_getters)*
-            Ok(tables)
+        pub fn #fn_name(storage: &Arc<Storage>) -> Result<#table_info_type, AppError> {
+            #table_info_type::new_table_info(storage)
         }
     };
 
@@ -64,20 +32,20 @@ pub fn table_info_fn(entity_name: &Ident, table_defs: &[TableDef], dict_table_de
     FunctionDef {
         fn_stream,
         endpoint: Some(EndpointDef {
-            return_type: Some(parse_quote! { Vec<TableInfo> }),
+            return_type: Some(parse_quote! { #table_info_type }),
             tag: EndpointTag::MetaRead,
             fn_name: fn_name.clone(),
             params: vec![],
             method: HttpMethod::GET,
             handler_name: format_ident!("{}", handler_fn_name),
             handler_impl_stream: quote! {
-               Result<AppJson<Vec<TableInfo>>, AppError> {
+               Result<AppJson<#table_info_type>, AppError> {
                     #entity_name::#fn_name(&state.storage).map(AppJson)
                 }
             },
             utoipa_responses: quote! {
                 responses(
-                    (status = OK, content_type = "application/json", body = Vec<TableInfo>),
+                    (status = OK, content_type = "application/json", body = #table_info_type),
                     (status = 500, content_type = "application/json", body = ErrorResponse),
                 )
             },
@@ -87,4 +55,31 @@ pub fn table_info_fn(entity_name: &Ident, table_defs: &[TableDef], dict_table_de
         bench_stream: None
     }
 
+}
+
+#[derive(Clone)]
+pub struct TableInfoItem {
+    pub definition: TokenStream,
+    pub init: TokenStream,
+}
+
+pub fn table_info_struct(table_info_ty: &Type, table_info_items: &[TableInfoItem]) -> TokenStream {
+    let definitions: Vec<TokenStream> = table_info_items.iter().map(|item| item.definition.clone()).collect();
+    let inits: Vec<TokenStream> = table_info_items.iter().map(|item| item.init.clone()).collect();
+    quote! {
+        #[derive(Clone, Debug, IntoParams, Serialize, Deserialize, Default, ToSchema)]
+        pub struct #table_info_ty {
+            #(#definitions),*
+        }
+        impl #table_info_ty {
+            pub fn new_table_info(storage: &Arc<Storage>) -> Result<#table_info_ty, AppError> {
+                let index_dbs = &storage.index_dbs;
+                Ok(
+                    Self {
+                        #(#inits),*
+                    }
+                )
+            }
+        }
+    }
 }

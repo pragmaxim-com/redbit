@@ -23,6 +23,8 @@ use crate::field_parser::{EntityDef, FieldDef, Multiplicity};
 use crate::rest::FunctionDef;
 use crate::table::TableDef;
 use proc_macro2::TokenStream;
+use crate::column;
+use crate::entity::info::TableInfoItem;
 
 pub enum PointerType {
     Root,
@@ -37,6 +39,7 @@ pub struct DbPkMacros {
     pub struct_default_init: TokenStream,
     pub struct_default_init_with_query: TokenStream,
     pub tx_context_item: TxContextItem,
+    pub table_info_item: TableInfoItem,
     pub range_query: RangeQuery,
     pub store_statement: TokenStream,
     pub store_many_statement: TokenStream,
@@ -67,7 +70,8 @@ impl DbPkMacros {
             function_defs.push(parent_key::fn_def(entity_def));
         }
 
-        let pk_init = init::pk_init(&entity_def.key_def.field_def().name);
+        let pk_name = &entity_def.key_def.field_def().name;
+        let pk_init = init::pk_init(pk_name);
         DbPkMacros {
             field_def: entity_def.key_def.field_def().clone(),
             table_def: table_def.clone(),
@@ -76,9 +80,10 @@ impl DbPkMacros {
             struct_default_init: pk_init.clone(),
             struct_default_init_with_query: pk_init.clone(),
             tx_context_item: context::tx_context_plain_item(&table_def),
+            table_info_item: column::info::plain_table_info(pk_name, &table_def),
             range_query,
-            store_statement: store::store_statement(&entity_def.key_def.field_def().name, &table_def.var_name),
-            store_many_statement: store::store_many_statement(&entity_def.key_def.field_def().name, &table_def.var_name),
+            store_statement: store::store_statement(pk_name, &table_def.var_name),
+            store_many_statement: store::store_many_statement(pk_name, &table_def.var_name),
             delete_statement: delete::delete_statement(&table_def.var_name),
             delete_many_statement: delete::delete_many_statement(&table_def.var_name),
             function_defs,

@@ -14,7 +14,7 @@ mod delete;
 mod sample;
 mod compose;
 mod tests;
-mod info;
+pub mod info;
 pub mod init;
 pub mod chain;
 pub mod context;
@@ -28,7 +28,8 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
     let mut index_table_defs: Vec<IndexTableDefs> = Vec::new();
     let mut dict_table_defs: Vec<DictTableDefs> = Vec::new();
     let mut range_queries = Vec::new();
-    let mut stream_queries = Vec::new();
+    let mut filter_queries = Vec::new();
+    let mut table_info_items = Vec::new();
     let mut tx_context_items = Vec::new();
     let mut struct_inits = Vec::new();
     let mut struct_inits_with_query = Vec::new();
@@ -46,8 +47,9 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
         index_table_defs.extend(field_macro.index_table_definitions());
         dict_table_defs.extend(field_macro.dict_table_definitions());
         range_queries.extend(field_macro.range_queries());
-        stream_queries.extend(field_macro.stream_queries());
+        filter_queries.extend(field_macro.stream_queries());
         tx_context_items.extend(field_macro.tx_context_items());
+        table_info_items.extend(field_macro.table_info_items());
         struct_inits.push(field_macro.struct_init());
         struct_inits_with_query.push(field_macro.struct_init_with_query());
         struct_default_inits.push(field_macro.struct_default_init());
@@ -63,6 +65,7 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
     let key_def = &entity_def.key_def.clone();
 
     let mut function_defs = vec![
+        info::table_info_fn(&entity_def),
         store::persist_def(&entity_def, &store_statements),
         store::store_def(&entity_def, &store_statements),
         store::store_many_def(&entity_def, &store_many_statements),
@@ -72,7 +75,6 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
         delete::remove_def(&entity_def, &delete_statements),
         delete::delete_def(&entity_def, &delete_statements),
         delete::delete_many_def(&entity_def, &delete_many_statements),
-        info::table_info_fn(entity_name, &plain_table_defs, &dict_table_defs, &index_table_defs),
         compose::compose_token_stream(&entity_def, &field_names, &struct_inits),
         compose::compose_with_filter_token_stream(&entity_def, &field_names, &struct_inits_with_query),
     ];
@@ -80,7 +82,8 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
     function_defs.extend(column_function_defs.clone());
     function_defs.extend(init::init(entity_name, key_def));
 
-    let stream_query_struct = query::stream_query(&entity_def.query_type, &stream_queries);
+    let table_info_struct = info::table_info_struct(&entity_def.info_type, &table_info_items);
+    let filter_query_struct = query::filter_query(&entity_def.query_type, &filter_queries);
     let tx_context_structs = context::tx_context(&entity_def.write_ctx_type, &entity_def.read_ctx_type, &tx_context_items);
     let range_query_structs = range_queries.into_iter().map(|rq| rq.stream).collect::<Vec<_>>();
 
@@ -95,8 +98,10 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
 
     let stream: TokenStream =
         quote! {
-            // StreamQuery is passed from the rest api as POST body and used to filter the stream of entities
-            #stream_query_struct
+            // Table info renders information about the tables used by the entity, including count of records !
+            #table_info_struct
+            // Query is passed from the rest api as POST body and used to filter the stream of entities
+            #filter_query_struct
             // TxContext is used to open tables
             #tx_context_structs
             // Query structs to map query params into

@@ -193,7 +193,7 @@ pub trait BinaryCodec {
     fn size() -> usize;
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct TableInfo {
     pub table_name: String,
     pub table_entries: u64,

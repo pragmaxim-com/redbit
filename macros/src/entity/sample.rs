@@ -10,7 +10,7 @@ pub fn sample_token_fns(
     struct_default_inits_with_query: &[TokenStream],
     field_names: &[Ident],
 ) -> Vec<FunctionDef> {
-    let EntityDef { key_def, entity_name, entity_type, query_type, read_ctx_type: _, write_ctx_type: _} = &entity_def;
+    let EntityDef { key_def, entity_name, entity_type, query_type, info_type:_, read_ctx_type: _, write_ctx_type: _} = &entity_def;
     let pk_type: &Type = &key_def.field_def().tpe;
     vec![
         FunctionDef {
