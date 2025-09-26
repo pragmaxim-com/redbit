@@ -83,6 +83,7 @@ impl FromStr for Ratio {
             "low" => Ok(Ratio::Low),
             "mild" => Ok(Ratio::Mild),
             "high" => Ok(Ratio::High),
+            "ultra" => Ok(Ratio::Ultra),
             _ => Err(format!("Invalid value for Parallelism: {}", s)),
         }
     }

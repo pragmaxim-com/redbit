@@ -52,34 +52,47 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
             "Going to {} index {} blocks from {} to {}, parallelism : {}, fork_detection @ {}",
             indexing_how, heights_to_fetch, height_to_index_from, chain_tip_height, indexing_par.0, fork_detection_height
         );
-        let buffer_size = 512;
-        let block_byte_size_blocking_limit = 128 * 1024;
-        let min_batch_size = indexer_conf.min_batch_size;
-        let batch_buffer_size = buffer_size / 4;
-        let (fetch_tx, fetch_rx) = mpsc::channel::<FB>(buffer_size);
-        let (proc_tx, mut proc_rx) = mpsc::channel::<TB>(buffer_size);
-        let (sort_tx, mut sort_rx) = mpsc::channel::<Vec<TB>>(batch_buffer_size);
+        let proc_buffer_size = 512;
+        let fetch_buffer_size = proc_buffer_size / 4;
+        let persist_buffer_size = proc_buffer_size / 4;
+        let proc_min_batch_limit = 128 * 1024;
+        let persist_min_batch_size = indexer_conf.min_batch_size;
 
-        // Process + batch stage (consumes provider.stream() directly)
+        let (fetch_tx, fetch_rx) = mpsc::channel::<Vec<FB>>(fetch_buffer_size);
+        let (proc_tx, mut proc_rx) = mpsc::channel::<TB>(proc_buffer_size);
+        let (sort_tx, mut sort_rx) = mpsc::channel::<Vec<TB>>(persist_buffer_size);
+
         let fetch_handle = {
             let block_provider = Arc::clone(&self.block_provider);
             let shutdown = shutdown.clone();
             task::spawn_named("fetch", async move {
                 let mut s = block_provider.stream(node_chain_tip_header.clone(), last_persisted_header, indexing_mode);
+                let mut buf: Vec<FB> = Vec::new();
+                let mut buf_bytes: usize = 0;
                 loop {
                     tokio::select! {
-                        biased; // prefers reacting to shutdown signal
+                        biased;
                         _ = combine::await_shutdown(shutdown.clone()) => {
                             info!("fetch: shutdown");
                             break;
                         }
                         item = s.next() => {
                             match item {
-                                Some(raw) => if fetch_tx.send(raw).await.is_err() { break; },
+                                Some(raw) => {
+                                    buf_bytes += raw.size();
+                                    buf.push(raw);
+                                    if buf_bytes > proc_min_batch_limit {
+                                        if fetch_tx.send(std::mem::take(&mut buf)).await.is_err() { break; }
+                                        buf_bytes = 0;
+                                    }
+                                }
                                 None => break,
                             }
                         }
                     }
+                }
+                if !buf.is_empty() {
+                    let _ = fetch_tx.send(buf).await;
                 }
                 drop(fetch_tx);
             })
@@ -91,25 +104,32 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
             let shutdown = shutdown.clone();
             task::spawn_named("process", async move {
                 tokio::select! {
-                    _ = ReceiverStream::new(fetch_rx)
-                        .for_each_concurrent(indexing_par.0, move |raw_block| {
-                            let tx = proc_tx_stream.clone();
-                            let proc_fn = proc_fn.clone();
-                            async move {
-                                if raw_block.size() < block_byte_size_blocking_limit {
-                                    match proc_fn(&raw_block) {
-                                        Ok(block) => { let _ = tx.send(block).await; }
-                                        Err(e)    => { error!("Small block processing failure: {e}"); }
-                                    }
-                                } else {
-                                    match tokio::task::spawn_blocking(move || proc_fn(&raw_block)).await {
-                                        Ok(Ok(block)) => { let _ = tx.send(block).await; }
-                                        Ok(Err(e))    => { error!("Big block processing failure: {e}"); }
-                                        Err(e)        => { error!("spawn_blocking join error: {e}"); }
+                    _ = {
+                        ReceiverStream::new(fetch_rx)
+                            .map(move |batch| {
+                                let proc_fn = proc_fn.clone();
+                                async move {
+                                    tokio::task::spawn_blocking(move || batch.into_iter().map(|raw| proc_fn(&raw)).collect::<Vec<_>>()).await
+                                }
+                            })
+                            .buffer_unordered(indexing_par.0)
+                            .for_each(move |res| {
+                                let tx = proc_tx_stream.clone();
+                                async move {
+                                    match res {
+                                        Ok(results) => {
+                                            for r in results {
+                                                match r {
+                                                    Ok(block) => { let _ = tx.send(block).await; }
+                                                    Err(e)    => { error!("processing failure: {e}"); }
+                                                }
+                                            }
+                                        }
+                                        Err(e) => { error!("spawn_blocking join error: {e}"); }
                                     }
                                 }
-                            }
-                        }) => { }
+                            })
+                    } => { }
                     _ = combine::await_shutdown(shutdown.clone()) => {
                         info!("process: shutdown");
                     }
@@ -122,8 +142,8 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
         let sort_handle = {
             let shutdown = shutdown.clone();
             task::spawn_named("sort", async move {
-                let mut reorder: ReorderBuffer<TB> = ReorderBuffer::new(height_to_index_from, buffer_size * 4);
-                let mut batcher: Batcher<TB> = Batcher::new(min_batch_size, buffer_size, indexing_mode);
+                let mut reorder: ReorderBuffer<TB> = ReorderBuffer::new(height_to_index_from, proc_buffer_size * 4);
+                let mut batcher: Batcher<TB> = Batcher::new(persist_min_batch_size, proc_buffer_size, indexing_mode);
 
                 loop {
                     tokio::select! {
