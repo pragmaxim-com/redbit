@@ -37,11 +37,11 @@ pub fn store_def(entity_def: &EntityDef,store_statements: &[TokenStream]) -> Fun
             let (storage_owner, storage) = random_storage();
             let test_entity = #entity_type::sample();
             let tx_context = #entity_name::new_write_ctx(&storage).unwrap();
-            let _ = tx_context.begin_writing().expect("Failed to begin writing");
             b.iter(|| {
-                #entity_name::#fn_name(&tx_context, test_entity.clone()).expect("Failed to store instance");
+                let _ = tx_context.begin_writing().expect("Failed to begin writing");
+                #entity_name::#fn_name(&tx_context, test_entity.clone()).expect("Failed to store and commit instance");
+                let _ = tx_context.commit_ctx_async().unwrap().into_iter().map(|f| f.wait()).collect::<Result<Vec<_>, _>>();
             });
-            let _ = tx_context.two_phase_commit().expect("Failed to commit");
             tx_context.stop_writing().unwrap();
         }
     });

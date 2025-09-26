@@ -8,7 +8,7 @@ Redbit reads struct annotations and derives code necessary for persisting and qu
 
 ✅ Parallel persistence, there is a long-running write thread spawned for each entity field (no blocking) \
 ✅ Querying and ranging by secondary index \
-✅ Optional dictionaries for low cardinality fields \
+✅ Optional dictionaries for low cardinality fields or for building unique values (addresses) \
 ✅ First level DB cache (`db_cache_size_gb` is split proportionally by weights in the entity definition) :
   ```rust
   #[column(db_cache = 4)]
