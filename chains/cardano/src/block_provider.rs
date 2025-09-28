@@ -14,6 +14,8 @@ use pallas::network::miniprotocols::{Point, MAINNET_MAGIC};
 use pallas_traverse::wellknown::GenesisValues;
 use std::{pin::Pin, sync::Arc};
 use pallas::network::facades::NodeClient;
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
 use crate::{AssetType, ExplorerError};
 
 pub struct CardanoBlockProvider {
@@ -166,32 +168,52 @@ impl BlockProvider<CardanoCBOR, Block> for CardanoBlockProvider {
     fn stream(&self, _remote_chain_tip: BlockHeader, last_persisted_header: Option<BlockHeader>, _mode: SyncMode) -> Pin<Box<dyn Stream<Item = CardanoCBOR> + Send + 'static>> {
         let last_point = last_persisted_header.as_ref().map_or(Point::Origin, |h| Point::new(h.slot.0 as u64, h.hash.0.to_vec()));
         let socket_path = self.config.socket_path.clone();
-        stream! {
-            let mut node_client = NodeClient::connect(socket_path, MAINNET_MAGIC).await.expect("Failed to connect to Cardano node client");
-            let cs: &mut N2CClient = node_client.chainsync();
-            let (intersected, tip) = cs.find_intersect(vec![last_point]).await.expect("chainsync find_intersect failed");
-            info!("Cardano intersection point: {:?} and tip {:?}", intersected, tip);
+        let stream_buffer_size = self.config.stream_buffer_size.clone();
 
+        let (tx, rx) = mpsc::channel::<CardanoCBOR>(stream_buffer_size);
+
+        tokio::spawn(async move {
+            // The background-task + mpsc pattern runs the protocol in an owned task that can do async cleanup
+            let mut node_client = match NodeClient::connect(socket_path, MAINNET_MAGIC).await {
+                Ok(c) => c,
+                Err(e) => {
+                    error!("stream: failed to connect node client: {e:?}");
+                    return;
+                }
+            };
+            let cs: &mut N2CClient = node_client.chainsync();
+            match cs.find_intersect(vec![last_point]).await {
+                Ok((intersected, tip)) => info!("Cardano intersection point: {:?} and tip {:?}", intersected, tip),
+                Err(e) => {
+                    error!("chainsync find_intersect failed: {e:?}");
+                    let _ = cs.send_done().await;
+                    return;
+                }
+            }
             loop {
                 match cs.request_next().await {
                     Ok(NextResponse::RollForward(bytes, _new_tip)) => {
-                        yield CardanoCBOR(bytes.0);
+                        if tx.send(CardanoCBOR(bytes.0)).await.is_err() {
+                            let _ = cs.send_done().await;
+                            break;
+                        }
                     }
                     Ok(NextResponse::RollBackward(_point, new_tip)) => {
-                        info !("Cardano roll backward to: {:?} ", new_tip);
+                        info!("Cardano roll backward to: {:?}", new_tip);
                         continue;
                     }
                     Ok(NextResponse::Await) => {
                         let _ = cs.send_done().await;
-                        break
-                    },
+                        break;
+                    }
                     Err(e) => {
-                        error!("chainsync request_next failed (stopping): {e}");
-                        let _ = cs.send_done();
-                        break
+                        error!("chainsync request_next failed (stopping): {e:?}");
+                        let _ = cs.send_done().await;
+                        break;
                     }
                 }
             }
-        }.boxed()
+        });
+        ReceiverStream::new(rx).boxed()
     }
 }

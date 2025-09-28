@@ -7,6 +7,7 @@ use serde::Deserialize;
 pub struct CardanoConfig {
     pub api_host: String,
     pub socket_path: String,
+    pub stream_buffer_size: usize,
 }
 
 impl CardanoConfig {
