@@ -183,7 +183,7 @@ impl BlockProvider<CardanoCBOR, Block> for CardanoBlockProvider {
             };
             let cs: &mut N2CClient = node_client.chainsync();
             match cs.find_intersect(vec![last_point]).await {
-                Ok((intersected, tip)) => info!("Cardano intersection point: {:?} and tip {:?}", intersected, tip),
+                Ok(_) => {},
                 Err(e) => {
                     error!("chainsync find_intersect failed: {e:?}");
                     let _ = cs.send_done().await;
@@ -198,8 +198,7 @@ impl BlockProvider<CardanoCBOR, Block> for CardanoBlockProvider {
                             break;
                         }
                     }
-                    Ok(NextResponse::RollBackward(_point, new_tip)) => {
-                        info!("Cardano roll backward to: {:?}", new_tip);
+                    Ok(NextResponse::RollBackward(_point, _new_tip)) => {
                         continue;
                     }
                     Ok(NextResponse::Await) => {
