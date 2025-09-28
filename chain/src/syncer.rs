@@ -149,7 +149,7 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
         let sort_handle = {
             let shutdown = shutdown.clone();
             task::spawn_named("sort", async move {
-                let mut reorder: ReorderBuffer<TB> = ReorderBuffer::new(height_to_index_from, proc_buffer_size * 4);
+                let mut reorder: ReorderBuffer<TB> = ReorderBuffer::new(height_to_index_from, proc_buffer_size * 8);
                 let mut batcher: Batcher<TB> = Batcher::new(persist_min_batch_size, proc_buffer_size, indexing_mode);
 
                 loop {

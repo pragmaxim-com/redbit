@@ -10,22 +10,24 @@ use futures::{Stream, StreamExt};
 use pallas::codec::minicbor::{Encode, Encoder};
 use pallas::ledger::traverse::{MultiEraBlock, MultiEraInput, MultiEraOutput};
 use pallas::network::miniprotocols::chainsync::{N2CClient, NextResponse};
-use pallas::network::miniprotocols::Point;
+use pallas::network::miniprotocols::{Point, MAINNET_MAGIC};
 use pallas_traverse::wellknown::GenesisValues;
 use std::{pin::Pin, sync::Arc};
+use pallas::network::facades::NodeClient;
 use crate::{AssetType, ExplorerError};
 
 pub struct CardanoBlockProvider {
     client: CardanoClient,
     genesis: Arc<GenesisValues>,
+    config: CardanoConfig
 }
 
 impl CardanoBlockProvider {
     pub async fn new() -> Arc<Self> {
-        let cardano_config = CardanoConfig::new("config/cardano").expect("Failed to load Cardano configuration");
-        let client = CardanoClient::new(&cardano_config).await;
+        let config = CardanoConfig::new("config/cardano").expect("Failed to load Cardano configuration");
+        let client = CardanoClient::new(&config).await;
         let genesis = Arc::new(GenesisValues::mainnet());
-        Arc::new(CardanoBlockProvider { client, genesis })
+        Arc::new(CardanoBlockProvider { client, genesis, config })
     }
 
     fn is_byron_ebb(b: &MultiEraBlock<'_>) -> bool {
@@ -162,12 +164,11 @@ impl BlockProvider<CardanoCBOR, Block> for CardanoBlockProvider {
     }
 
     fn stream(&self, _remote_chain_tip: BlockHeader, last_persisted_header: Option<BlockHeader>, _mode: SyncMode) -> Pin<Box<dyn Stream<Item = CardanoCBOR> + Send + 'static>> {
-        let node_client = Arc::clone(&self.client.node_client);
         let last_point = last_persisted_header.as_ref().map_or(Point::Origin, |h| Point::new(h.slot.0 as u64, h.hash.0.to_vec()));
-
+        let socket_path = self.config.socket_path.clone();
         stream! {
-            let mut guard = node_client.lock().await;
-            let cs: &mut N2CClient = guard.chainsync();
+            let mut node_client = NodeClient::connect(socket_path, MAINNET_MAGIC).await.expect("Failed to connect to Cardano node client");
+            let cs: &mut N2CClient = node_client.chainsync();
             let (intersected, tip) = cs.find_intersect(vec![last_point]).await.expect("chainsync find_intersect failed");
             info!("Cardano intersection point: {:?} and tip {:?}", intersected, tip);
 
@@ -181,10 +182,12 @@ impl BlockProvider<CardanoCBOR, Block> for CardanoBlockProvider {
                         continue;
                     }
                     Ok(NextResponse::Await) => {
+                        let _ = cs.send_done().await;
                         break
                     },
                     Err(e) => {
                         error!("chainsync request_next failed (stopping): {e}");
+                        let _ = cs.send_done();
                         break
                     }
                 }
