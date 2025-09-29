@@ -55,7 +55,8 @@ pub enum WriterCommand<K: Key + Send + 'static, V: Key + Send + 'static> {
     Begin(Sender<redb::Result<(), AppError>>),              // start new WriteTransaction + open table
     Insert(K, V),
     Remove(K, Sender<redb::Result<bool, AppError>>),
-    HeadByIndex(Vec<V>, Sender<redb::Result<Vec<Option<ValueBuf<K>>>, AppError>>),
+    HeadForIndex(Vec<V>, Sender<redb::Result<Vec<Option<ValueBuf<K>>>, AppError>>),
+    HeadForIndexTagged(Vec<(usize, V)>, Sender<redb::Result<Vec<(usize, Option<ValueBuf<K>>)>, AppError>>),
     Range(K, K, Sender<redb::Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>>),
     Flush(Sender<redb::Result<(), AppError>>),              // commit current tx, stay alive (idle)
     Shutdown(Sender<redb::Result<(), AppError>>),           // graceful stop (no commit)
@@ -91,10 +92,19 @@ where
                 let _ = ack.send(Ok(r));
                 Ok(Control::Continue)
             }
-            WriterCommand::HeadByIndex(values, ack) => {
+            WriterCommand::HeadForIndex(values, ack) => {
                 let mut out = Vec::with_capacity(values.len());
                 for v in values {
                     out.push(table.get_head_by_index(v)?);
+                }
+                let _ = ack.send(Ok(out));
+                Ok(Control::Continue)
+            }
+            WriterCommand::HeadForIndexTagged(pairs, ack) => {
+                let mut out = Vec::with_capacity(pairs.len());
+                for (pos, v) in pairs {
+                    let head = table.get_head_by_index(v)?;
+                    out.push((pos, head));
                 }
                 let _ = ack.send(Ok(out));
                 Ok(Control::Continue)
@@ -208,11 +218,10 @@ where
         Ok(Self { topic, handle, _marker: PhantomData })
     }
 
-    #[inline]
-    fn fast_send(tx: &Sender<WriterCommand<K, V>>, msg: WriterCommand<K, V>) -> Result<(), AppError> {
-        match tx.try_send(msg) {
+    pub fn fast_send(&self,  msg: WriterCommand<K, V>) -> Result<(), AppError> {
+        match self.topic.try_send(msg) {
             Ok(()) => Ok(()),
-            Err(TrySendError::Full(v)) => tx.send(v).map_err(|e| AppError::Custom(e.to_string())),
+            Err(TrySendError::Full(v)) => self.topic.send(v).map_err(|e| AppError::Custom(e.to_string())),
             Err(e) => Err(AppError::Custom(e.to_string())),
         }
     }
@@ -220,49 +229,55 @@ where
     // ---- new API to (re)begin a transaction ----
     pub fn begin(&self) -> redb::Result<(), AppError> {
         let (ack_tx, ack_rx) = bounded::<redb::Result<(), AppError>>(1);
-        Self::fast_send(&self.topic, WriterCommand::Begin(ack_tx))?;
+        self.fast_send(WriterCommand::Begin(ack_tx))?;
         ack_rx.recv()?
     }
 
     // your existing ops now must be called after begin()
     pub fn insert_kv(&self, key: K, value: V) -> Result<(), AppError> {
-        Self::fast_send(&self.topic, WriterCommand::Insert(key, value))
+        self.fast_send(WriterCommand::Insert(key, value))
+    }
+
+    pub fn get_head_for_index_tagged(&self, pairs: Vec<(usize, V)>) -> redb::Result<Vec<(usize, Option<ValueBuf<K>>)>, AppError> {
+        let (ack_tx, ack_rx) = bounded(1);
+        self.fast_send(WriterCommand::HeadForIndexTagged(pairs, ack_tx))?;
+        ack_rx.recv()?
     }
 
     pub fn get_head_for_index(&self, values: Vec<V>) -> redb::Result<Vec<Option<ValueBuf<K>>>, AppError> {
         let (ack_tx, ack_rx) = bounded::<redb::Result<Vec<Option<ValueBuf<K>>>, AppError>>(1);
-        Self::fast_send(&self.topic, WriterCommand::HeadByIndex(values, ack_tx))?;
+        self.fast_send(WriterCommand::HeadForIndex(values, ack_tx))?;
         ack_rx.recv()?
     }
 
     pub fn range(&self, from: K, until: K) -> redb::Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError> {
         let (ack_tx, ack_rx) = bounded::<redb::Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>>(1);
-        Self::fast_send(&self.topic, WriterCommand::Range(from, until, ack_tx))?;
+        self.fast_send(WriterCommand::Range(from, until, ack_tx))?;
         ack_rx.recv()?
     }
 
     pub fn delete_kv(&self, key: K) -> redb::Result<bool, AppError> {
         let (ack_tx, ack_rx) = bounded::<redb::Result<bool, AppError>>(1);
-        Self::fast_send(&self.topic, WriterCommand::Remove(key, ack_tx))?;
+        self.fast_send(WriterCommand::Remove(key, ack_tx))?;
         ack_rx.recv()?
     }
 
     // commit current tx but KEEP worker alive (idle); you can call begin() again
     pub fn flush(&self) -> redb::Result<(), AppError> {
         let (ack_tx, ack_rx) = bounded::<redb::Result<(), AppError>>(1);
-        Self::fast_send(&self.topic, WriterCommand::Flush(ack_tx))?;
+        self.fast_send(WriterCommand::Flush(ack_tx))?;
         ack_rx.recv()?
     }
 
     pub fn flush_async(&self) -> redb::Result<Vec<FlushFuture>, AppError> {
         let (ack_tx, ack_rx) = bounded::<redb::Result<(), AppError>>(1);
-        Self::fast_send(&self.topic, WriterCommand::Flush(ack_tx))?;
+        self.fast_send(WriterCommand::Flush(ack_tx))?;
         Ok(vec![FlushFuture { ack_rx }])
     }
     // optional: graceful shutdown when you’re done with the writer forever
     pub fn shutdown(self) -> redb::Result<(), AppError> {
         let (ack_tx, ack_rx) = bounded::<redb::Result<(), AppError>>(1);
-        Self::fast_send(&self.topic, WriterCommand::Shutdown(ack_tx))?;
+        self.fast_send(WriterCommand::Shutdown(ack_tx))?;
         ack_rx.recv()??;
         self.handle.join().map_err(|_| AppError::Custom("Write table join failed".to_string()))?;
         Ok(())

@@ -48,7 +48,7 @@ pub fn index_table_info(column_name: &Ident, defs: &IndexTableDefs) -> TableInfo
         quote! {
             #column_name: {
                 let ro = ShardedReadOnlyIndexTable::new(
-                    BytesPartitioner::new(#shards),
+                    Xxh3Partitioner::new(#shards),
                     storage.fetch_sharded_dbs(#name_lit, Some(#shards))?,
                     #pk_by_index,
                     #index_by_pk
