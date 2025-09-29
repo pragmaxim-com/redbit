@@ -214,7 +214,7 @@ pub fn tx_context_index_item(defs: &IndexTableDefs) -> TxContextItem {
 
     let read_definition = if is_sharded {
         quote! {
-            pub #var_ident: ShardedReadOnlyIndexTable<#key_ty, #val_ty, BytesPartitioner>
+            pub #var_ident: ShardedReadOnlyIndexTable<#key_ty, #val_ty, Xxh3Partitioner>
         }
     } else {
         quote! {
@@ -226,7 +226,7 @@ pub fn tx_context_index_item(defs: &IndexTableDefs) -> TxContextItem {
     let write_constructor = if is_sharded {
         quote! {
             #var_ident: ShardedTableWriter::new(
-                Partitioning::by_key(#shards),
+                Partitioning::by_value(#shards),
                 storage.fetch_sharded_dbs(#name_lit, Some(#shards))?,
                 IndexFactory::new(#lru_cache, #pk_by_index, #index_by_pk),
             )?
@@ -243,7 +243,7 @@ pub fn tx_context_index_item(defs: &IndexTableDefs) -> TxContextItem {
     let read_constructor = if is_sharded {
         quote! {
             #var_ident: ShardedReadOnlyIndexTable::new(
-                BytesPartitioner::new(#shards),
+                Xxh3Partitioner::new(#shards),
                 storage.fetch_sharded_dbs(#name_lit, Some(#shards))?,
                 #pk_by_index,
                 #index_by_pk,

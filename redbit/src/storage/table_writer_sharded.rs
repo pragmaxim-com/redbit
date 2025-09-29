@@ -1,5 +1,5 @@
 use crate::storage::partitioning::{KeyPartitioner, Partitioning, ValuePartitioner};
-use crate::storage::table_writer::TableFactory;
+use crate::storage::table_writer::{TableFactory, ValueBuf, WriterCommand};
 use crate::{AppError, FlushFuture, TableWriter};
 use redb::{Database, Key};
 use std::borrow::Borrow;
@@ -42,6 +42,44 @@ where
     pub fn begin(&self) -> redb::Result<(), AppError> {
         for w in &self.shards { w.begin()?; }
         Ok(())
+    }
+
+    pub fn get_head_for_index(&self, values: Vec<V>) -> redb::Result<Vec<Option<ValueBuf<K>>>, AppError> {
+        match &self.partitioner {
+            Partitioning::ByKey(_) => {
+                Err(AppError::Custom("ShardedTableWriter: get_head_for_index not supported with key partitioning".into()))
+            }
+            Partitioning::ByValue(vp) => {
+                let shards_count = self.shards.len();
+                let values_count = values.len();
+                if values_count == 0 { return Ok(Vec::new()); }
+
+                let mut buckets: Vec<Vec<(usize, V)>> = (0..shards_count).map(|_| Vec::new()).collect();
+                for (pos, v) in values.into_iter().enumerate() {
+                    let sid = vp.partition_value(v.borrow());
+                    buckets[sid].push((pos, v));
+                }
+
+                let mut out: Vec<Option<ValueBuf<K>>> = Vec::with_capacity(values_count);
+                out.resize_with(values_count, || None);
+
+                let mut acks = Vec::with_capacity(shards_count);
+                for (sid, bucket) in buckets.into_iter().enumerate() {
+                    if bucket.is_empty() { continue; }
+                    let (ack_tx, ack_rx) = crossbeam::channel::bounded(1);
+                    let _ = &self.shards[sid].fast_send(WriterCommand::HeadForIndexTagged(bucket, ack_tx))?;
+                    acks.push(ack_rx);
+                }
+
+                for rx in acks {
+                    for (pos, head) in rx.recv()?? {
+                        out[pos] = head;
+                    }
+                }
+
+                Ok(out)
+            }
+        }
     }
 
     pub fn insert_kv(&self, key: K, value: V) -> Result<(), AppError> {

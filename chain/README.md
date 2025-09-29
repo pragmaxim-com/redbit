@@ -16,12 +16,24 @@ Persistence thread persists block after block sequentially, submitting batches o
  - multiple child threads spawned for each shard if column is sharded
 
 Without sharding, indexing would be only as fast as the slowest column indexing due to higher quantity or size.
-If you identify a bottleneck column, just shard it so it is as fast as the others :
-```rust
-  #[column(shards = 4)]
-  #[column(index, shards = 4)]
-  #[column(dictionary, shards = 4)]
+If you identify a bottleneck column, just shard it so it is as fast as the others. Try to shard columns by DB sizes :
 ```
+  #[column(index, shards = 2)]
+  pub hash: TxHash,
+  #[column(dictionary, shards = 4)]
+  pub address: Address,
+```
+Here at height `362 544` of bitcoin, we have 2 shards for `transaction_hash_index` and 4 shards for `utxo_address_dict` and they have similar sizes :
+```
+5.7G    /opt/.chain/main/btc/input_utxo_pointer_by_id.db
+5.0G     /opt/.chain/main/btc/transaction_hash_index-0.db
+5.0G     /opt/.chain/main/btc/transaction_hash_index-1.db
+5.2G    /opt/.chain/main/btc/utxo_address_dict-0.db
+5.1G    /opt/.chain/main/btc/utxo_address_dict-1.db
+5.2G    /opt/.chain/main/btc/utxo_address_dict-2.db
+5.0G    /opt/.chain/main/btc/utxo_address_dict-3.db
+```
+
 Due to this concurrency model, if you keep adding new columns, indexing speed will not be affected much until you fully utilize SSD.
 It is also a unique and first of its kind way to keep utxo state valid at any time regardless of crashes while reaching the maximum
 indexing throughput and CPU utilization possible. As we parallelize indexing while indexing block by block and transaction by transaction.
