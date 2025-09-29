@@ -12,7 +12,7 @@ pub fn fn_def(entity_def: &EntityDef, table: &Ident, no_columns: bool) -> Functi
         quote! {
             pub fn #fn_name(tx_context: &#read_ctx_type, from: #pk_type, until: #pk_type, query: Option<#query_type>) -> Result<Vec<#entity_type>, AppError> {
                 let range = from..until;
-                let mut iter = tx_context.#table.range::<#pk_type>(range)?;
+                let mut iter = tx_context.#table.underlying.range::<#pk_type>(range)?;
                 let mut results = Vec::new();
                 if let Some(ref q) = query {
                     while let Some(entry_res) = iter.next() {

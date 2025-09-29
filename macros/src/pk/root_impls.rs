@@ -32,17 +32,23 @@ pub fn new(struct_name: &Ident, index_field: Field) -> TokenStream {
         }
 
         impl BinaryCodec for #struct_name {
-            fn from_bytes(bytes: &[u8]) -> Self {
+            fn from_le_bytes(bytes: &[u8]) -> Self {
                 let arr: [u8; std::mem::size_of::<#index_type>()] = bytes.try_into().expect("invalid byte length for index");
                 Self(<#index_type>::from_le_bytes(arr))
             }
 
-            fn as_bytes(&self) -> Vec<u8> {
+            fn as_le_bytes(&self) -> Vec<u8> {
                 self.0.to_le_bytes().to_vec()
             }
 
             fn size() -> usize {
                 std::mem::size_of::<#index_type>()
+            }
+
+            // NEW: emit stack array without allocating
+            fn encode_le_chunks<E: FnMut(&[u8])>(&self, emit: &mut E) {
+                let arr = self.0.to_le_bytes();
+                emit(&arr);
             }
         }
 

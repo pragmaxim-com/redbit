@@ -13,7 +13,7 @@ pub fn fn_def(entity_def: &EntityDef, table: &Ident) -> FunctionDef {
     let fn_name = format_ident!("exists");
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: &#read_ctx_type, pk: #pk_type) -> Result<bool, AppError> {
-            if tx_context.#table.get(pk)?.is_some() {
+            if tx_context.#table.get_value(pk)?.is_some() {
                 Ok(true)
             } else {
                 Ok(false)

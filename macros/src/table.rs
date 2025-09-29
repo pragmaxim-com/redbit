@@ -1,7 +1,7 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use syn::Type;
-use crate::field_parser::EntityDef;
+use crate::field_parser::{ColumnProps, EntityDef};
 
 #[derive(Clone, Debug, strum_macros::Display)]
 pub enum TableType {
@@ -15,19 +15,39 @@ pub enum TableType {
 }
 
 #[derive(Clone)]
+pub struct PlainTableDef {
+    pub(crate) var_name: Ident,
+    pub(crate) key_type: Type,
+    pub(crate) value_type: Option<Type>,
+    pub(crate) column_props: ColumnProps,
+    pub(crate) underlying: TableDef,
+}
+
+impl PlainTableDef {
+    pub fn new(underlying: TableDef, column_props: ColumnProps) -> PlainTableDef {
+        PlainTableDef {
+            var_name: underlying.var_name.clone(),
+            key_type: underlying.key_type.clone(),
+            value_type: underlying.value_type.clone(),
+            column_props,
+            underlying,
+        }
+    }
+}
+
+
+#[derive(Clone)]
 pub struct IndexTableDefs {
     pub(crate) var_name: Ident,
     pub(crate) key_type: Type,
     pub(crate) value_type: Type,
-    #[allow(dead_code)]
-    pub(crate) db_cache_weight: usize,
-    pub(crate) lru_cache_size: usize,
+    pub(crate) column_props: ColumnProps,
     pub(crate) pk_by_index: TableDef,
     pub(crate) index_by_pk: TableDef,
 }
 
 impl IndexTableDefs {
-    pub fn new(entity_def: &EntityDef, column_name: &Ident, column_type: &Type, db_cache_weight: usize, lru_cache_size: usize) -> IndexTableDefs {
+    pub fn new(entity_def: &EntityDef, column_name: &Ident, column_type: &Type, column_props: ColumnProps) -> IndexTableDefs {
         let entity_name = &entity_def.entity_name;
         let pk_type = &entity_def.key_def.field_def().tpe;
         let name = format_ident!("{}_{}_INDEX", entity_name.to_string().to_uppercase(), column_name.to_string().to_uppercase());
@@ -37,10 +57,9 @@ impl IndexTableDefs {
             var_name,
             key_type: pk_type.clone(),
             value_type: column_type.clone(),
-            db_cache_weight,
-            lru_cache_size,
-            pk_by_index: TableDef::index_table_def(entity_def, column_name, column_type, 0, 0),
-            index_by_pk: TableDef::plain_table_def(entity_def, column_name, column_type, 0, 0),
+            column_props,
+            pk_by_index: TableDef::index_table_def(entity_def, column_name, column_type),
+            index_by_pk: TableDef::plain_table_def(entity_def, column_name, column_type),
         }
     }
     pub fn all_table_defs(&self) -> Vec<TableDef> {
@@ -56,9 +75,7 @@ pub struct DictTableDefs {
     pub(crate) var_name: Ident,
     pub(crate) key_type: Type,
     pub(crate) value_type: Type,
-    #[allow(dead_code)]
-    pub(crate) db_cache_weight: usize,
-    pub(crate) lru_cache_size: usize,
+    pub(crate) column_props: ColumnProps,
     pub(crate) dict_pk_to_ids_table_def: TableDef,
     pub(crate) value_by_dict_pk_table_def: TableDef,
     pub(crate) value_to_dict_pk_table_def: TableDef,
@@ -66,7 +83,7 @@ pub struct DictTableDefs {
 }
 
 impl DictTableDefs {
-    pub fn new(entity_def: &EntityDef, column_name: &Ident, column_type: &Type, db_cache_weight: usize, lru_cache_size: usize) -> DictTableDefs {
+    pub fn new(entity_def: &EntityDef, column_name: &Ident, column_type: &Type, column_props: ColumnProps) -> DictTableDefs {
         let entity_name = &entity_def.entity_name;
         let key_def = &entity_def.key_def.field_def();
         let pk_name = &key_def.name;
@@ -78,12 +95,11 @@ impl DictTableDefs {
             var_name,
             key_type: pk_type.clone(),
             value_type: column_type.clone(),
-            db_cache_weight,
-            lru_cache_size,
-            dict_pk_to_ids_table_def: TableDef::dict_pk_to_ids_table_def(entity_name, column_name, pk_type, 0, 0),
-            value_by_dict_pk_table_def: TableDef::value_by_dict_pk_table_def(entity_name, column_name, column_type, pk_type, 0, 0),
-            value_to_dict_pk_table_def: TableDef::value_to_dict_pk_table_def(entity_name, column_name, column_type, pk_type, 0, 0),
-            dict_pk_by_pk_table_def: TableDef::dict_pk_by_pk_table_def(entity_name, column_name, pk_name, pk_type, 0, 0),
+            column_props,
+            dict_pk_to_ids_table_def: TableDef::dict_pk_to_ids_table_def(entity_name, column_name, pk_type),
+            value_by_dict_pk_table_def: TableDef::value_by_dict_pk_table_def(entity_name, column_name, column_type, pk_type),
+            value_to_dict_pk_table_def: TableDef::value_to_dict_pk_table_def(entity_name, column_name, column_type, pk_type),
+            dict_pk_by_pk_table_def: TableDef::dict_pk_by_pk_table_def(entity_name, column_name, pk_name, pk_type),
         }
     }
     pub fn all_table_defs(&self) -> Vec<TableDef> {
@@ -104,14 +120,12 @@ pub struct TableDef {
     pub var_name: Ident,
     pub key_type: Type,
     pub value_type: Option<Type>,
-    pub db_cache_weight: usize,
-    pub lru_cache_size: usize,
     pub _table_type: TableType,
     pub definition: TokenStream,
 }
 
 impl TableDef {
-    pub fn pk(entity_def: &EntityDef, db_cache_weight: usize) -> TableDef {
+    pub fn pk(entity_def: &EntityDef) -> TableDef {
         let entity_name = &entity_def.entity_name;
         let key_def = &entity_def.key_def.field_def();
         let pk_name = &key_def.name;
@@ -126,8 +140,6 @@ impl TableDef {
         TableDef {
             name,
             var_name,
-            db_cache_weight,
-            lru_cache_size: 0,
             key_type: pk_type.clone(),
             value_type: None,
             _table_type: TableType::Pk,
@@ -135,7 +147,7 @@ impl TableDef {
         }
     }
 
-    pub fn plain_table_def(entity_def: &EntityDef, column_name: &Ident, column_type: &Type, db_cache_weight: usize, lru_cache_size: usize) -> TableDef {
+    pub fn plain_table_def(entity_def: &EntityDef, column_name: &Ident, column_type: &Type) -> TableDef {
         let entity_name = &entity_def.entity_name;
         let key_def = &entity_def.key_def.field_def();
         let pk_name = &key_def.name;
@@ -154,8 +166,6 @@ impl TableDef {
         TableDef {
             name,
             var_name,
-            db_cache_weight,
-            lru_cache_size,
             key_type: pk_type.clone(),
             value_type: Some(column_type.clone()),
             _table_type: TableType::Plain,
@@ -163,7 +173,7 @@ impl TableDef {
         }
     }
     
-    pub fn index_table_def(entity_def: &EntityDef, column_name: &Ident, column_type: &Type, db_cache_weight: usize, lru_cache_size: usize) -> TableDef {
+    pub fn index_table_def(entity_def: &EntityDef, column_name: &Ident, column_type: &Type) -> TableDef {
         let entity_name = &entity_def.entity_name;
         let pk_type = &entity_def.key_def.field_def().tpe;
         let name = format_ident!("{}_{}_INDEX", entity_name.to_string().to_uppercase(), column_name.to_string().to_uppercase());
@@ -175,8 +185,6 @@ impl TableDef {
         TableDef {
             name,
             var_name,
-            db_cache_weight,
-            lru_cache_size,
             key_type: column_type.clone(),
             value_type: Some(pk_type.clone()),
             _table_type: TableType::Index,
@@ -184,7 +192,7 @@ impl TableDef {
         }
     }
 
-    pub fn dict_pk_to_ids_table_def(entity_name: &Ident, column_name: &Ident, pk_type: &Type, db_cache_weight: usize, lru_cache_size: usize) -> TableDef {
+    pub fn dict_pk_to_ids_table_def(entity_name: &Ident, column_name: &Ident, pk_type: &Type) -> TableDef {
         let name = format_ident!("{}_{}_DICT_INDEX", entity_name.to_string().to_uppercase(), column_name.to_string().to_uppercase());
         let var_name = Ident::new(&format!("{}", name).to_lowercase(), name.span());
         let name_str = &name.to_string();
@@ -195,8 +203,6 @@ impl TableDef {
         TableDef {
             name,
             var_name,
-            db_cache_weight,
-            lru_cache_size,
             key_type: pk_type.clone(),
             value_type: Some(pk_type.clone()),
             _table_type: TableType::DictPkToIds,
@@ -204,7 +210,7 @@ impl TableDef {
         }
     }
 
-    pub fn value_by_dict_pk_table_def(entity_name: &Ident, column_name: &Ident, column_type: &Type, pk_type: &Type, db_cache_weight: usize, lru_cache_size: usize) -> TableDef {
+    pub fn value_by_dict_pk_table_def(entity_name: &Ident, column_name: &Ident, column_type: &Type, pk_type: &Type) -> TableDef {
         let name = format_ident!("{}_{}_BY_DICT_PK", entity_name.to_string().to_uppercase(), column_name.to_string().to_uppercase());
         let var_name = Ident::new(&format!("{}", name).to_lowercase(), name.span());
         let name_str = &name.to_string();
@@ -215,8 +221,6 @@ impl TableDef {
         TableDef {
             name,
             var_name,
-            db_cache_weight,
-            lru_cache_size,
             key_type: pk_type.clone(),
             value_type: Some(column_type.clone()),
             _table_type: TableType::ValueByDictPk,
@@ -224,7 +228,7 @@ impl TableDef {
         }
     }
 
-    pub fn value_to_dict_pk_table_def(entity_name: &Ident, column_name: &Ident, column_type: &Type, pk_type: &Type, db_cache_weight: usize, lru_cache_size: usize) -> TableDef {
+    pub fn value_to_dict_pk_table_def(entity_name: &Ident, column_name: &Ident, column_type: &Type, pk_type: &Type) -> TableDef {
         let name = format_ident!("{}_{}_TO_DICT_PK", entity_name.to_string().to_uppercase(), column_name.to_string().to_uppercase());
         let var_name = Ident::new(&format!("{}", name).to_lowercase(), name.span());
         let name_str = &name.to_string();
@@ -235,8 +239,6 @@ impl TableDef {
         TableDef {
             name,
             var_name,
-            db_cache_weight,
-            lru_cache_size,
             key_type: column_type.clone(),
             value_type: Some(pk_type.clone()),
             _table_type: TableType::ValueToDictPk,
@@ -244,7 +246,7 @@ impl TableDef {
         }
     }
 
-    pub fn dict_pk_by_pk_table_def(entity_name: &Ident, column_name: &Ident, pk_name: &Ident, pk_type: &Type, db_cache_weight: usize, lru_cache_size: usize) -> TableDef {
+    pub fn dict_pk_by_pk_table_def(entity_name: &Ident, column_name: &Ident, pk_name: &Ident, pk_type: &Type) -> TableDef {
         let name = format_ident!(
             "{}_{}_DICT_PK_BY_{}",
             entity_name.to_string().to_uppercase(),
@@ -259,8 +261,6 @@ impl TableDef {
         TableDef {
             name,
             var_name,
-            db_cache_weight,
-            lru_cache_size,
             key_type: pk_type.clone(),
             value_type: Some(pk_type.clone()),
             _table_type: TableType::DictPkByPk,

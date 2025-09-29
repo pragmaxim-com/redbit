@@ -3,7 +3,7 @@ use crate::field_parser::{FieldDef, KeyDef};
 use crate::rest::Rest;
 use crate::storage;
 use crate::storage::StorageDef;
-use crate::table::{DictTableDefs, IndexTableDefs, TableDef};
+use crate::table::{DictTableDefs, IndexTableDefs, PlainTableDef};
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::{parse_quote, ItemStruct};
@@ -24,7 +24,7 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
     let (entity_def, one_to_many_parent_def, field_macros) =
         FieldMacros::new(item_struct, entity_name, parse_quote! { #entity_name })?;
     let mut field_defs = Vec::new();
-    let mut plain_table_defs: Vec<TableDef> = Vec::new();
+    let mut plain_table_defs: Vec<PlainTableDef> = Vec::new();
     let mut index_table_defs: Vec<IndexTableDefs> = Vec::new();
     let mut dict_table_defs: Vec<DictTableDefs> = Vec::new();
     let mut range_queries = Vec::new();
@@ -43,7 +43,7 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
 
     for field_macro in field_macros.iter() {
         field_defs.push(field_macro.field_def().clone());
-        plain_table_defs.extend(field_macro.table_definitions());
+        plain_table_defs.extend(field_macro.plain_table_definitions());
         index_table_defs.extend(field_macro.index_table_definitions());
         dict_table_defs.extend(field_macro.dict_table_definitions());
         range_queries.extend(field_macro.range_queries());
@@ -94,7 +94,7 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
     let Rest { endpoint_handlers, routes: api_routes } =
         Rest::new(&function_defs);
 
-    let test_suite = tests::test_suite(entity_name, one_to_many_parent_def.clone(), &function_defs);
+    let test_suite = tests::test_suite(&entity_def, one_to_many_parent_def.clone(), &function_defs);
 
     let stream: TokenStream =
         quote! {

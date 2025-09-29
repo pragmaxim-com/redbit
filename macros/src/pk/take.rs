@@ -13,7 +13,7 @@ pub fn fn_def(entity_def: &EntityDef, table: &Ident) -> FunctionDef {
     let fn_name = format_ident!("take");
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: &#read_ctx_type, n: usize) -> Result<Vec<#entity_type>, AppError> {
-            let mut iter = tx_context.#table.iter()?;
+            let mut iter = tx_context.#table.underlying.iter()?;
             let mut results = Vec::new();
             let mut count: usize = 0;
             if n > 100 {

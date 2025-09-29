@@ -6,9 +6,15 @@ Redbit reads struct annotations and derives code necessary for persisting and qu
 
 ### Major Out-of-the-Box Features
 
-✅ Parallel persistence, there is a long-running write thread spawned for each entity field (no blocking) \
+✅ Parallel persistence, there is a long-running write thread spawned for each entity column (no blocking) \
 ✅ Querying and ranging by secondary index \
 ✅ Optional dictionaries for low cardinality fields or for building unique values (addresses) \
+✅ Sharding of columns which parallelizes their indexing (high quantity/volume columns) \
+  ```rust
+  #[column(shards = 4)]
+  #[column(index, shards = 4)]
+  #[column(dictionary, shards = 4)]
+  ```
 ✅ First level DB cache (`db_cache_size_gb` is split proportionally by weights in the entity definition) :
   ```rust
   #[column(db_cache = 4)]
@@ -16,7 +22,7 @@ Redbit reads struct annotations and derives code necessary for persisting and qu
   #[column(range, db_cache = 10)]
   #[column(dictionary, db_cache = 10)]
   ```
-✅ LRU cache for hot indexes and dictionaries (building dictionary requires db read ) :
+✅ LRU cache for hot indexes and dictionaries (building dictionary requires a db read) :
   ```rust
   #[column(index, lru_cache = 300_000)]
   #[column(dictionary, lru_cache = 300_000)]

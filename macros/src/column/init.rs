@@ -31,7 +31,7 @@ pub fn default_init_with_query(column_name: &Ident, column_type: &Type) -> Token
 pub fn plain_init_expr(table: &Ident) -> TokenStream {
     quote! {
         {
-            let guard = tx_context.#table.get(pk)?;
+            let guard = tx_context.#table.get_value(pk)?;
             guard.ok_or_else(|| AppError::NotFound(format!(
                     "table `{}`: no row for primary key {:?}",
                     stringify!(#table),
@@ -59,13 +59,13 @@ pub fn plain_init_with_query(column_name: &Ident, table: &Ident) -> TokenStream 
     }
 }
 
-pub fn index_init_expr(table: &Ident) -> TokenStream {
+pub fn index_init_expr(plain_table_var: &Ident) -> TokenStream {
     quote! {
         {
-            let guard = tx_context.#table.get_value(pk)?;
+            let guard = tx_context.#plain_table_var.get_value(pk)?;
             guard.ok_or_else(|| AppError::NotFound(format!(
                     "table `{}`: no row for primary key {:?}",
-                    stringify!(#table),
+                    stringify!(#plain_table_var),
                     pk
                 ))
             )?.value()

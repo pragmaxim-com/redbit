@@ -7,6 +7,7 @@ use std::num::NonZeroUsize;
 use std::ops::RangeBounds;
 use lru::LruCache;
 
+#[derive(Clone)]
 pub struct IndexFactory<K: Key + 'static, V: Key + 'static> {
     pub pk_by_index_def: MultimapTableDefinition<'static, V, K>,
     pub index_by_pk_def: TableDefinition<'static, K, V>,

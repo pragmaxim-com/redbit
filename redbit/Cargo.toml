@@ -5,6 +5,7 @@ version.workspace = true
 
 [features]
 default = ["chain"]
+integration = []
 chain = ["macros/chain"]  # forward feature to libC
 
 [lib]
@@ -41,3 +42,4 @@ lru = "0.16.0"
 anyhow = "1.0.99"
 log = "0.4.27"
 crossbeam = "0.8.4"
+xxhash-rust = { version = "0.8.12", features = ["xxh3"] }

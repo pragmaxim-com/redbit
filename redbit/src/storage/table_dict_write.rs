@@ -7,6 +7,7 @@ use std::num::NonZeroUsize;
 use std::ops::RangeBounds;
 use lru::LruCache;
 
+#[derive(Clone)]
 pub struct DictFactory<K: Key + 'static, V: Key + 'static> {
     pub dict_pk_to_ids_def: MultimapTableDefinition<'static, K, K>,
     pub value_by_dict_pk_def: TableDefinition<'static, K, V>,
@@ -138,8 +139,8 @@ impl<'txn, 'c, K: Key + 'static, V: Key + 'static> WriteTableLike<K, V> for Dict
     }
 }
 
-#[cfg(test)]
-mod dict_table_tests {
+#[cfg(all(test, not(feature = "integration")))]
+mod tests {
     use super::*;
     use lru::LruCache;
 
@@ -250,8 +251,6 @@ mod dict_table_tests {
         let b = birth_id_of(&dict, 1);
         assert_eq!(value_of_birth(&dict, b), vec![0xaa, 0xbb, 0xcc], "stored value mismatch");
         assert_eq!(reverse_birth_of(&dict, &[0xaa, 0xbb, 0xcc]), b, "reverse map mismatch");
-
-        // cache effect: single key for that value (O(1) to check)
         assert_eq!(cache.len(), 1, "cache should contain one entry for the value");
     }
 
@@ -474,6 +473,5 @@ mod dict_table_tests {
                     "len()={} should equal distinct keys ({}) or total pairs ({})", mm_len, distinct, pairs);
         }
     }
-
 }
 

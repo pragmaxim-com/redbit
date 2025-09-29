@@ -1,13 +1,12 @@
+use crate::config::CardanoConfig;
+use crate::ExplorerError;
+use chain::api::SizeLike;
 use futures::lock::Mutex;
 use pallas::network::{
     facades::{NodeClient, PeerClient},
     miniprotocols::{localstate::queries_v16, Point, MAINNET_MAGIC},
 };
 use std::sync::Arc;
-use chain::api::SizeLike;
-use redbit::info;
-use crate::config::CardanoConfig;
-use crate::ExplorerError;
 
 pub struct CardanoCBOR(pub Vec<u8>);
 

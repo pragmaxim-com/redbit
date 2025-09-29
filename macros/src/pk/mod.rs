@@ -19,9 +19,9 @@ use crate::entity;
 use crate::entity::context;
 use crate::entity::context::TxContextItem;
 use crate::entity::query::RangeQuery;
-use crate::field_parser::{EntityDef, FieldDef, Multiplicity};
+use crate::field_parser::{ColumnProps, EntityDef, FieldDef, Multiplicity};
 use crate::rest::FunctionDef;
-use crate::table::TableDef;
+use crate::table::{PlainTableDef, TableDef};
 use proc_macro2::TokenStream;
 use crate::column;
 use crate::entity::info::TableInfoItem;
@@ -33,7 +33,7 @@ pub enum PointerType {
 
 pub struct DbPkMacros {
     pub field_def: FieldDef,
-    pub table_def: TableDef,
+    pub plain_table_def: PlainTableDef,
     pub struct_init: TokenStream,
     pub struct_init_with_query: TokenStream,
     pub struct_default_init: TokenStream,
@@ -50,20 +50,21 @@ pub struct DbPkMacros {
 
 impl DbPkMacros {
     pub fn new(entity_def: &EntityDef, multiplicity: Option<Multiplicity>, no_columns: bool, db_cache_weight: usize) -> Self {
-        let table_def = TableDef::pk(entity_def, db_cache_weight);
+        let column_props = ColumnProps::for_pk(db_cache_weight);
+        let plain_table_def = PlainTableDef::new(TableDef::pk(entity_def), column_props);
         let range_query = entity::query::pk_range_query(entity_def);
 
         let mut function_defs: Vec<FunctionDef> = vec![
-            get::fn_def(entity_def, &table_def.var_name),
-            filter::fn_def(entity_def, &table_def.var_name, no_columns),
-            take::fn_def(entity_def, &table_def.var_name),
-            tail::fn_def(entity_def, &table_def.var_name),
-            first::fn_def(entity_def, &table_def.var_name),
-            last::fn_def(entity_def, &table_def.var_name),
-            exists::fn_def(entity_def, &table_def.var_name),
-            range::fn_def(entity_def, &table_def.var_name, no_columns),
-            stream_range::fn_def(entity_def, &table_def.var_name, &range_query.ty, no_columns),
-            pk_range::fn_def(entity_def, &table_def.var_name),
+            get::fn_def(entity_def, &plain_table_def.var_name),
+            filter::fn_def(entity_def, &plain_table_def.var_name, no_columns),
+            take::fn_def(entity_def, &plain_table_def.var_name),
+            tail::fn_def(entity_def, &plain_table_def.var_name),
+            first::fn_def(entity_def, &plain_table_def.var_name),
+            last::fn_def(entity_def, &plain_table_def.var_name),
+            exists::fn_def(entity_def, &plain_table_def.var_name),
+            range::fn_def(entity_def, &plain_table_def.var_name, no_columns),
+            stream_range::fn_def(entity_def, &plain_table_def.var_name, &range_query.ty, no_columns),
+            pk_range::fn_def(entity_def, &plain_table_def.var_name),
         ];
 
         if let Some(Multiplicity::OneToMany) = multiplicity {
@@ -74,18 +75,18 @@ impl DbPkMacros {
         let pk_init = init::pk_init(pk_name);
         DbPkMacros {
             field_def: entity_def.key_def.field_def().clone(),
-            table_def: table_def.clone(),
+            plain_table_def: plain_table_def.clone(),
             struct_init: pk_init.clone(),
             struct_init_with_query: pk_init.clone(),
             struct_default_init: pk_init.clone(),
             struct_default_init_with_query: pk_init.clone(),
-            tx_context_item: context::tx_context_plain_item(&table_def),
-            table_info_item: column::info::plain_table_info(pk_name, &table_def),
+            tx_context_item: context::tx_context_plain_item(&plain_table_def),
+            table_info_item: column::info::plain_table_info(pk_name, &plain_table_def),
             range_query,
-            store_statement: store::store_statement(pk_name, &table_def.var_name),
-            store_many_statement: store::store_many_statement(pk_name, &table_def.var_name),
-            delete_statement: delete::delete_statement(&table_def.var_name),
-            delete_many_statement: delete::delete_many_statement(&table_def.var_name),
+            store_statement: store::store_statement(pk_name, &plain_table_def.var_name),
+            store_many_statement: store::store_many_statement(pk_name, &plain_table_def.var_name),
+            delete_statement: delete::delete_statement(&plain_table_def.var_name),
+            delete_many_statement: delete::delete_many_statement(&plain_table_def.var_name),
             function_defs,
         }
     }

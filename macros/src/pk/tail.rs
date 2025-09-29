@@ -13,14 +13,14 @@ pub fn fn_def(entity_def: &EntityDef, table: &Ident) -> FunctionDef {
     let read_ctx_type = &entity_def.read_ctx_type;
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: &#read_ctx_type, n: usize) -> Result<Vec<#entity_type>, AppError> {
-            let Some((key_guard, _)) = tx_context.#table.last()? else {
+            let Some((key_guard, _)) = tx_context.#table.underlying.last()? else {
                 return Ok(Vec::new());
             };
             let key = key_guard.value();
             let until = key.next_index();
             let from = until.rollback_or_init(n as u32);
             let range = from..until;
-            let iter = tx_context.#table.range(range)?;
+            let iter = tx_context.#table.underlying.range(range)?;
             let mut queue = VecDeque::with_capacity(n);
 
             for entry_res in iter {
