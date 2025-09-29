@@ -11,12 +11,20 @@ Utxo state is built on the fly during indexing, addresses are stored as a dictio
 ### Perf 
 
 Chain syncing uses 3 main independent threads : block fetching, processing and persistence. 
-Persistence thread persists block after block sequentially however the thread spawns a child thread for each entity column and submits batches of work to them.
-This way the indexing is as fast as the slowest column indexing due to higher quantity or size. If you keep adding new columns,
-indexing speed will not be affected much until you fully utilize SSD.
+Persistence thread persists block after block sequentially, submitting batches of values to either : 
+ - one child thread spawned for each entity column
+ - multiple child threads spawned for each shard if column is sharded
 
-This concurrency model was crafted for utxo-like chains to keep utxo state valid at any time regardless of crashes while reaching the maximum
-indexing throughput and CPU utilization possible.
+Without sharding, indexing would be only as fast as the slowest column indexing due to higher quantity or size.
+If you identify a bottleneck column, just shard it so it is as fast as the others :
+```rust
+  #[column(shards = 4)]
+  #[column(index, shards = 4)]
+  #[column(dictionary, shards = 4)]
+```
+Due to this concurrency model, if you keep adding new columns, indexing speed will not be affected much until you fully utilize SSD.
+It is also a unique and first of its kind way to keep utxo state valid at any time regardless of crashes while reaching the maximum
+indexing throughput and CPU utilization possible. As we parallelize indexing while indexing block by block and transaction by transaction.
 
 You can use [tokio console](https://github.com/tokio-rs/console), basically it breaks down to 3 named task you can see in the console :
 - fetch - task that fetches blocks from the node

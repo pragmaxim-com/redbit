@@ -6,13 +6,12 @@
 - always ask if not certain about the specification, better stop and ask than coding something wrong
 - document each function or type with one smart sentence
 - always review the code from performance and memory usage perspective
-- avoid reformatting my code so I can diff it easily
+- avoid reformatting my code, so I can diff it easily and make rather surgical fixes to existing code
 - keep extra attention to O(?) complexity optimizations and make code comments about it when it could introduce a bottleneck
 
 ### Rust best practices
 
-- prefer robust ADTs with verbose pattern matching over some heavy, parameterized code with generics
-- avoid lifetime annotations, prefer to use `Arc` and `Mutex` for shared state
+- if you were to design new code, prefer robust meaningful Abstract Data Types in combinations with meaningful helper functions
 - leverage enums a newtypes
 - avoid cloning unless needed, prefer borrowing (&T) over cloning (.clone())
 - use `?` operator for error handling

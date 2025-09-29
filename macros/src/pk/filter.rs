@@ -9,7 +9,7 @@ pub fn fn_def(entity_def: &EntityDef, table: &Ident, no_columns: bool) -> Functi
     let fn_name = format_ident!("filter");
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: &#read_ctx_type, pk: #pk_type, query: &#query_type) -> Result<Option<#entity_type>, AppError> {
-            if tx_context.#table.get(pk)?.is_some() {
+            if tx_context.#table.get_value(pk)?.is_some() {
                 Ok(Self::compose_with_filter(&tx_context, pk, query)?)
             } else {
                 Ok(None)

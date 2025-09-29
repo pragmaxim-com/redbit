@@ -1,9 +1,10 @@
-use proc_macro2::{Ident, Literal, TokenStream};
-use quote::{format_ident, quote};
-use crate::field_parser::OneToManyParentDef;
+use crate::field_parser::{EntityDef, OneToManyParentDef};
 use crate::rest::FunctionDef;
+use proc_macro2::{Literal, TokenStream};
+use quote::{format_ident, quote};
 
-pub fn test_suite(entity_name: &Ident, parent_def: Option<OneToManyParentDef>, fn_defs: &[FunctionDef]) -> TokenStream {
+pub fn test_suite(entity_def: &EntityDef, parent_def: Option<OneToManyParentDef>, fn_defs: &[FunctionDef]) -> TokenStream {
+    let entity_name = &entity_def.entity_name;
     let parent_entity = parent_def.clone().map(|p|p.parent_ident);
     let entity_tests = format_ident!("{}", entity_name.to_string().to_lowercase());
     let entity_integration_tests = format_ident!("{}_integration", entity_name.to_string().to_lowercase());

@@ -29,24 +29,29 @@ pub fn new(struct_name: &Ident, parent_field: Field, index_field: Field) -> Toke
         }
 
         impl BinaryCodec for #struct_name {
-            fn from_bytes(bytes: &[u8]) -> Self {
+            fn from_le_bytes(bytes: &[u8]) -> Self {
                 let parent_size = <#parent_type as BinaryCodec>::size();
                 let index_size = std::mem::size_of::<#index_type>();
                 assert_eq!(bytes.len(), parent_size + index_size, "invalid byte length for child pointer");
                 let (parent_bytes, index_bytes) = bytes.split_at(parent_size);
-                let parent = <#parent_type as BinaryCodec>::from_bytes(parent_bytes);
+                let parent = <#parent_type as BinaryCodec>::from_le_bytes(parent_bytes);
                 let index_arr: [u8; std::mem::size_of::<#index_type>()] = index_bytes.try_into().unwrap();
                 let index = <#index_type>::from_le_bytes(index_arr);
                 #struct_name { #parent_name: parent, #index_name: index }
             }
-
-            fn as_bytes(&self) -> Vec<u8> {
-                let mut buf = self.#parent_name.as_bytes();
+            fn as_le_bytes(&self) -> Vec<u8> {
+                let mut buf = self.#parent_name.as_le_bytes();
                 buf.extend_from_slice(&self.#index_name.to_le_bytes());
                 buf
             }
             fn size() -> usize {
                 <#parent_type as BinaryCodec>::size() + std::mem::size_of::<#index_type>()
+            }
+            // NEW: stream parent first, then our own index bytes
+            fn encode_le_chunks<E: FnMut(&[u8])>(&self, emit: &mut E) {
+                self.#parent_name.encode_le_chunks(emit);
+                let arr = self.#index_name.to_le_bytes();
+                emit(&arr);
             }
         }
 

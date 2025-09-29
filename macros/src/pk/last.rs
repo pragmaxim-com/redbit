@@ -12,7 +12,7 @@ pub fn fn_def(entity_def: &EntityDef, table: &Ident) -> FunctionDef {
     let read_ctx_type = &entity_def.read_ctx_type;
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: &#read_ctx_type) -> Result<Option<#entity_type>, AppError> {
-            if let Some((k, _)) = tx_context.#table.last()? {
+            if let Some((k, _)) = tx_context.#table.underlying.last()? {
                 return Self::compose(&tx_context, k.value()).map(Some);
             }
             Ok(None)

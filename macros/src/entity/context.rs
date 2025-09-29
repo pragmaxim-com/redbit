@@ -1,5 +1,5 @@
 use crate::rest::FunctionDef;
-use crate::table::{DictTableDefs, IndexTableDefs, TableDef};
+use crate::table::{DictTableDefs, IndexTableDefs, PlainTableDef};
 use proc_macro2::{Ident, Literal, TokenStream};
 use quote::{format_ident, quote};
 use syn::Type;
@@ -28,7 +28,6 @@ pub fn entity_tx_context_type(entity_type: &Type, tx_type: TxType) -> Type {
     let tx_context_type = format_ident!("{}{}", entity_ident, tx_context_name(tx_type));
     syn::parse_quote!(#tx_context_type)
 }
-
 
 #[derive(Clone)]
 pub struct TxContextItem {
@@ -111,178 +110,264 @@ pub fn tx_context(write_tx_context_ty: &Type, read_tx_context_ty: &Type, tx_cont
     }
 }
 
-pub fn tx_context_plain_item(def: &TableDef) -> TxContextItem {
-    let var_name = &def.var_name;
-    let var_name_literal = Literal::string(&var_name.to_string());
-    let key_type = &def.key_type;
-    let value_type = def.value_type.clone().unwrap_or_else(|| syn::parse_str::<Type>("()").unwrap());
-    let table_name = &def.name;
+pub fn tx_context_plain_item(def: &PlainTableDef) -> TxContextItem {
+    let var_ident   = &def.var_name;
+    let name_lit    = Literal::string(&var_ident.to_string());
+    let key_ty      = &def.key_type;
+    let val_ty: Type = def.value_type.clone().unwrap_or_else(|| syn::parse_str::<Type>("()").unwrap());
+    let table_name  = &def.underlying.name;
+    let shards      = def.column_props.shards;
+    let is_sharded  = shards >= 2;
 
-    let write_definition =
+    let write_definition = if is_sharded {
         quote! {
-            pub #var_name: TableWriter<#key_type, #value_type, PlainFactory<#key_type, #value_type>>
-        };
+            pub #var_ident: ShardedTableWriter<#key_ty, #val_ty, PlainFactory<#key_ty, #val_ty>, BytesPartitioner, Xxh3Partitioner>
+        }
+    } else {
+        quote! {
+            pub #var_ident: TableWriter<#key_ty, #val_ty, PlainFactory<#key_ty, #val_ty>>
+        }
+    };
 
-    let read_definition =
+    let read_definition = if is_sharded {
         quote! {
-            pub #var_name: ReadOnlyTable<#key_type, #value_type>
-        };
+            pub #var_ident: ShardedReadOnlyPlainTable<#key_ty, #val_ty, BytesPartitioner>
+        }
+    } else {
+        quote! {
+            pub #var_ident: ReadOnlyPlainTable<#key_ty, #val_ty>
+        }
+    };
 
-    let write_constructor =
+    // --- constructors (plain vs sharded) ---
+    let write_constructor = if is_sharded {
         quote! {
-            #var_name: TableWriter::new(
-                storage.index_dbs.get(#var_name_literal).cloned().ok_or_else(|| TableError::TableDoesNotExist(format!("Plain table '{}' not found", #var_name_literal)))?,
+            #var_ident: ShardedTableWriter::new(
+                Partitioning::by_key(#shards),
+                storage.fetch_sharded_dbs(#name_lit, Some(#shards))?,
                 PlainFactory::new(#table_name),
             )?
-        };
-
-    let write_begin = quote! {
-        let _ = &self.#var_name.begin()?
-    };
-
-    let write_flush = Some(quote! {
-        vec![self.#var_name.flush_async()?]
-    });
-
-    let write_shutdown = quote! {
-        self.#var_name.shutdown()?
-    };
-
-    let read_constructor =
+        }
+    } else {
         quote! {
-            #var_name: {
-                let index_db = storage.index_dbs.get(#var_name_literal).cloned().ok_or_else(|| TableError::TableDoesNotExist(format!("Plain table '{}' not found", #var_name_literal)))?;
-                let index_db_arc = index_db.upgrade().ok_or_else(|| AppError::Custom("database closed".to_string()))?;
-                let plain_tx = index_db_arc.begin_read()?;
-                plain_tx.open_table(#table_name)?
-            }
-        };
+            #var_ident: TableWriter::new(
+                storage.fetch_single_db(#name_lit)?,
+                PlainFactory::new(#table_name),
+            )?
+        }
+    };
 
-    TxContextItem { write_definition, write_constructor, write_begin, write_flush, write_shutdown, read_definition, read_constructor }
+    let read_constructor = if is_sharded {
+        quote! {
+            #var_ident: ShardedReadOnlyPlainTable::new(
+                BytesPartitioner::new(#shards),
+                storage.fetch_sharded_dbs(#name_lit, Some(#shards))?,
+                #table_name
+            )?
+        }
+    } else {
+        quote! {
+            #var_ident: ReadOnlyPlainTable::new(
+                storage.fetch_single_db(#name_lit)?,
+                #table_name
+            )?
+        }
+    };
+
+    // --- common ops (identical for both variants) ---
+    let write_begin = quote! { let _ = &self.#var_ident.begin()? };
+    let write_flush = Some(quote! { self.#var_ident.flush_async()? });
+    let write_shutdown = quote! { self.#var_ident.shutdown()? };
+
+    TxContextItem {
+        write_definition,
+        write_constructor,
+        write_begin,
+        write_flush,
+        write_shutdown,
+        read_definition,
+        read_constructor,
+    }
 }
 
-
 pub fn tx_context_index_item(defs: &IndexTableDefs) -> TxContextItem {
-    let var_name = &defs.var_name;
-    let var_name_literal = Literal::string(&var_name.to_string());
-    let key_type = &defs.key_type;
-    let value_type = &defs.value_type;
-    let index_by_pk_table_name = &defs.index_by_pk.name;
-    let pk_by_index_table_name = &defs.pk_by_index.name;
-    let lru_cache_size = defs.lru_cache_size;
+    let var_ident    = &defs.var_name;
+    let name_lit     = Literal::string(&var_ident.to_string());
+    let key_ty       = &defs.key_type;
+    let val_ty       = &defs.value_type;
+    let pk_by_index  = &defs.pk_by_index.name;
+    let index_by_pk  = &defs.index_by_pk.name;
+    let lru_cache    = defs.column_props.lru_cache_size;
+    let shards       = defs.column_props.shards;          // compile-time choice
+    let is_sharded   = shards >= 2;
 
-    let write_definition =
+    // --- type definitions (plain vs sharded) ---
+    let write_definition = if is_sharded {
         quote! {
-            pub #var_name: TableWriter<#key_type, #value_type, IndexFactory<#key_type, #value_type>>
-        };
-
-    let read_definition =
+            pub #var_ident: ShardedTableWriter<#key_ty, #val_ty, IndexFactory<#key_ty, #val_ty>, BytesPartitioner, Xxh3Partitioner>
+        }
+    } else {
         quote! {
-            pub #var_name: ReadOnlyIndexTable<#key_type, #value_type>
-        };
-
-    let write_constructor =
-        quote! {
-            #var_name: TableWriter::new(
-                storage.index_dbs.get(#var_name_literal).cloned().ok_or_else(|| TableError::TableDoesNotExist(format!("Index table '{}' not found", #var_name_literal)))?,
-                IndexFactory::new(
-                    #lru_cache_size,
-                    #pk_by_index_table_name,
-                    #index_by_pk_table_name,
-                ),
-            )?
-        };
-
-    let write_begin = quote! {
-        let _ = &self.#var_name.begin()?
+            pub #var_ident: TableWriter<#key_ty, #val_ty, IndexFactory<#key_ty, #val_ty>>
+        }
     };
 
-    let write_flush = Some(quote! {
-        vec![self.#var_name.flush_async()?]
-    });
-
-    let write_shutdown = quote! {
-        self.#var_name.shutdown()?
+    let read_definition = if is_sharded {
+        quote! {
+            pub #var_ident: ShardedReadOnlyIndexTable<#key_ty, #val_ty, BytesPartitioner>
+        }
+    } else {
+        quote! {
+            pub #var_ident: ReadOnlyIndexTable<#key_ty, #val_ty>
+        }
     };
 
-    let read_constructor =
+    // --- constructors (plain vs sharded) ---
+    let write_constructor = if is_sharded {
         quote! {
-            #var_name: ReadOnlyIndexTable::new(
-                storage.index_dbs.get(#var_name_literal).cloned().ok_or_else(|| TableError::TableDoesNotExist(format!("Index table '{}' not found", #var_name_literal)))?,
-                #pk_by_index_table_name,
-                #index_by_pk_table_name,
+            #var_ident: ShardedTableWriter::new(
+                Partitioning::by_key(#shards),
+                storage.fetch_sharded_dbs(#name_lit, Some(#shards))?,
+                IndexFactory::new(#lru_cache, #pk_by_index, #index_by_pk),
             )?
-        };
+        }
+    } else {
+        quote! {
+            #var_ident: TableWriter::new(
+                storage.fetch_single_db(#name_lit)?,
+                IndexFactory::new(#lru_cache, #pk_by_index, #index_by_pk),
+            )?
+        }
+    };
 
-    TxContextItem { write_definition, write_constructor, write_begin, write_flush, write_shutdown, read_definition, read_constructor }
+    let read_constructor = if is_sharded {
+        quote! {
+            #var_ident: ShardedReadOnlyIndexTable::new(
+                BytesPartitioner::new(#shards),
+                storage.fetch_sharded_dbs(#name_lit, Some(#shards))?,
+                #pk_by_index,
+                #index_by_pk,
+            )?
+        }
+    } else {
+        quote! {
+            #var_ident: ReadOnlyIndexTable::new(
+                storage.fetch_single_db(#name_lit)?,
+                #pk_by_index,
+                #index_by_pk,
+            )?
+        }
+    };
+
+    // --- common ops ---
+    let write_begin    = quote! { let _ = &self.#var_ident.begin()? };
+    let write_flush    = Some(quote! { self.#var_ident.flush_async()? });
+    let write_shutdown = quote! { self.#var_ident.shutdown()? };
+
+    TxContextItem {
+        write_definition,
+        write_constructor,
+        write_begin,
+        write_flush,
+        write_shutdown,
+        read_definition,
+        read_constructor,
+    }
 }
 
 pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
-    let var_name = &defs.var_name;
-    let var_name_literal = Literal::string(&var_name.to_string());
-    let key_type = &defs.key_type;
-    let value_type = &defs.value_type;
-    let dict_pk_to_ids_table_name = &defs.dict_pk_to_ids_table_def.name;
-    let value_by_dict_pk_table_name = &defs.value_by_dict_pk_table_def.name;
-    let value_to_dict_pk_table_name = &defs.value_to_dict_pk_table_def.name;
-    let dict_pk_by_pk_table_name = &defs.dict_pk_by_pk_table_def.name;
-    let non_zero_lru_cache_size = core::cmp::max(defs.lru_cache_size, 20_000);
+    let var_ident   = &defs.var_name;
+    let name_lit    = Literal::string(&var_ident.to_string());
+    let key_ty      = &defs.key_type;
+    let val_ty      = &defs.value_type;
 
-    let write_definition =
+    let dict_pk_to_ids = &defs.dict_pk_to_ids_table_def.name;
+    let value_by_dict  = &defs.value_by_dict_pk_table_def.name;
+    let value_to_dict  = &defs.value_to_dict_pk_table_def.name;
+    let dict_pk_by_pk  = &defs.dict_pk_by_pk_table_def.name;
+
+    // keep a sensible floor on LRU size
+    let lru_cache = core::cmp::max(defs.column_props.lru_cache_size, 20_000);
+
+    let shards     = defs.column_props.shards;
+    let is_sharded = shards >= 2;
+
+    // --- type definitions (plain vs sharded) ---
+    let write_definition = if is_sharded {
         quote! {
-            pub #var_name: TableWriter<#key_type, #value_type, DictFactory<#key_type, #value_type>>
-        };
-
-    let read_definition =
+            pub #var_ident: ShardedTableWriter<#key_ty, #val_ty, DictFactory<#key_ty, #val_ty>, BytesPartitioner, Xxh3Partitioner>
+        }
+    } else {
         quote! {
-            pub #var_name: ReadOnlyDictTable<#key_type, #value_type>
-        };
-
-    let write_constructor =
-        quote! {
-            #var_name: TableWriter::new(
-                storage.index_dbs.get(#var_name_literal).cloned().ok_or_else(|| TableError::TableDoesNotExist(format!("Dict table '{}' not found", #var_name_literal)))?,
-                DictFactory::new(
-                    #non_zero_lru_cache_size,
-                    #dict_pk_to_ids_table_name,
-                    #value_by_dict_pk_table_name,
-                    #value_to_dict_pk_table_name,
-                    #dict_pk_by_pk_table_name
-                ),
-            )?
-        };
-
-    let write_begin = quote! {
-        let _ = &self.#var_name.begin()?
+            pub #var_ident: TableWriter<#key_ty, #val_ty, DictFactory<#key_ty, #val_ty>>
+        }
     };
 
-    let write_flush = Some(quote! {
-        vec![self.#var_name.flush_async()?]
-    });
-
-    let write_shutdown = quote! {
-        self.#var_name.shutdown()?
+    let read_definition = if is_sharded {
+        quote! {
+            pub #var_ident: ShardedReadOnlyDictTable<#key_ty, #val_ty, Xxh3Partitioner>
+        }
+    } else {
+        quote! {
+            pub #var_ident: ReadOnlyDictTable<#key_ty, #val_ty>
+        }
     };
 
-    let read_constructor =
+    // --- constructors (plain vs sharded) ---
+    let write_constructor = if is_sharded {
         quote! {
-            #var_name: ReadOnlyDictTable::new(
-                storage.index_dbs.get(#var_name_literal).cloned().ok_or_else(|| TableError::TableDoesNotExist(format!("Dict table '{}' not found", #var_name_literal)))?,
-                #dict_pk_to_ids_table_name,
-                #value_by_dict_pk_table_name,
-                #value_to_dict_pk_table_name,
-                #dict_pk_by_pk_table_name
+            #var_ident: ShardedTableWriter::new(
+                Partitioning::by_value(#shards),
+                storage.fetch_sharded_dbs(#name_lit, Some(#shards))?,
+                DictFactory::new(#lru_cache, #dict_pk_to_ids, #value_by_dict, #value_to_dict, #dict_pk_by_pk),
             )?
-        };
+        }
+    } else {
+        quote! {
+            #var_ident: TableWriter::new(
+                storage.fetch_single_db(#name_lit)?,
+                DictFactory::new(#lru_cache, #dict_pk_to_ids, #value_by_dict, #value_to_dict, #dict_pk_by_pk),
+            )?
+        }
+    };
 
-    TxContextItem { write_definition, write_constructor, write_begin, write_flush, write_shutdown, read_definition, read_constructor }
-}
+    let read_constructor = if is_sharded {
+        quote! {
+            #var_ident: ShardedReadOnlyDictTable::new(
+                Xxh3Partitioner::new(#shards),
+                storage.fetch_sharded_dbs(#name_lit, Some(#shards))?,
+                #dict_pk_to_ids,
+                #value_by_dict,
+                #value_to_dict,
+                #dict_pk_by_pk
+            )?
+        }
+    } else {
+        quote! {
+            #var_ident: ReadOnlyDictTable::new(
+                storage.fetch_single_db(#name_lit)?,
+                #dict_pk_to_ids,
+                #value_by_dict,
+                #value_to_dict,
+                #dict_pk_by_pk
+            )?
+        }
+    };
 
-pub fn tx_context_items(table_defs: &[TableDef]) -> Vec<TxContextItem> {
-    table_defs
-        .iter()
-        .map(tx_context_plain_item)
-        .collect()
+    // --- common ops ---
+    let write_begin    = quote! { let _ = &self.#var_ident.begin()? };
+    let write_flush    = Some(quote! { self.#var_ident.flush_async()? });
+    let write_shutdown = quote! { self.#var_ident.shutdown()? };
+
+    TxContextItem {
+        write_definition,
+        write_constructor,
+        write_begin,
+        write_flush,
+        write_shutdown,
+        read_definition,
+        read_constructor,
+    }
 }
 
 pub fn begin_write_fn_def(tx_context_ty: &Type) -> FunctionDef {

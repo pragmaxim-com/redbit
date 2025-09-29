@@ -44,6 +44,12 @@ pub struct EntityDef {
 }
 
 impl EntityDef {
+    pub fn _fq_pk_name(&self) -> String {
+        format!("{}_{}", self.entity_name.to_string().to_lowercase(), self.key_def.field_def().name)
+    }
+}
+
+impl EntityDef {
     pub fn new(key_def: KeyDef, entity_name: Ident, entity_type: Type) -> Self {
         let query_type = query::filter_query_type(&entity_type);
         let read_ctx_type = context::entity_tx_context_type(&entity_type, TxType::Read);
@@ -75,9 +81,24 @@ impl KeyDef {
 }
 
 #[derive(Clone)]
+pub struct ColumnProps {
+    pub shards: usize,
+    pub db_cache_weight: usize,
+    pub lru_cache_size: usize,
+}
+
+impl ColumnProps {
+    pub fn for_pk(db_cache_weight: usize) -> Self {
+        ColumnProps { shards: 0, db_cache_weight, lru_cache_size: 0 }
+    }
+}
+
+#[derive(Clone)]
 pub enum IndexingType {
-    Off { db_cache_weight: usize, lru_cache_size: usize },
-    On { dictionary: bool, range: bool, db_cache_weight: usize, lru_cache_size: usize },
+    Off(ColumnProps),
+    Index(ColumnProps),
+    Range(ColumnProps),
+    Dict(ColumnProps),
 }
 
 #[derive(Clone)]
@@ -207,6 +228,7 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                     let field = FieldDef { name: column_name.clone(), tpe: column_type.clone() };
                     let mut db_cache_weight = 0;
                     let mut lru_cache_size = 0;
+                    let mut shards = 0;
                     let mut is_index = false;
                     let mut is_dictionary = false;
                     let mut is_range = false;
@@ -220,6 +242,9 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                         } else if nested.path.is_ident("lru_cache") {
                             let lit: syn::LitInt = nested.value()?.parse()?;
                             lru_cache_size = lit.base10_parse::<usize>()?;
+                        } else if nested.path.is_ident("shards") {
+                            let lit: syn::LitInt = nested.value()?.parse()?;
+                            shards = lit.base10_parse::<usize>()?;
                         } else if nested.path.is_ident("transient") {
                             is_transient = true;
                             let _ = nested.parse_nested_meta(|inner| {
@@ -245,17 +270,17 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                         }
                         Ok(())
                     });
-
+                    let column_props = ColumnProps { shards, db_cache_weight, lru_cache_size };
                     let column_def = if is_transient {
                         ColumnDef::Transient(field.clone(), read_from)
                     } else if is_dictionary {
-                        ColumnDef::Plain(field.clone(), IndexingType::On { dictionary: true, range: false, db_cache_weight, lru_cache_size })
+                        ColumnDef::Plain(field.clone(), IndexingType::Dict(column_props))
                     } else if is_range {
-                        ColumnDef::Plain(field.clone(), IndexingType::On { dictionary: false, range: true, db_cache_weight, lru_cache_size })
+                        ColumnDef::Plain(field.clone(), IndexingType::Range(column_props))
                     } else if is_index {
-                        ColumnDef::Plain(field.clone(), IndexingType::On { dictionary: false, range: false, db_cache_weight, lru_cache_size })
+                        ColumnDef::Plain(field.clone(), IndexingType::Index(column_props))
                     } else {
-                        ColumnDef::Plain(field.clone(), IndexingType::Off { db_cache_weight, lru_cache_size })
+                        ColumnDef::Plain(field.clone(), IndexingType::Off(column_props))
                     };
                     return Ok(column_def);
                 }

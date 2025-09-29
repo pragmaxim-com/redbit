@@ -3,24 +3,17 @@ use crate::{DbDef, DbDefWithCache};
 /// Weighted proportional allocation using largest remainder (Hamilton),
 /// operating purely in **MB**. Zero weights get 0 MB.
 /// Deterministic tie-breaking by original order.
+///
+/// NOTE: `db_cache_in_mb` in the *result* is **per-shard**. We first allocate
+/// per-column MB, then divide by `shards` (asserting shards >= 2).
 pub fn allocate_cache_mb(db_defs: &[DbDef], total_mb: u64) -> Vec<DbDefWithCache> {
     if db_defs.is_empty() || total_mb == 0 {
-        return db_defs.iter().map(|d| DbDefWithCache {
-            name: d.name.clone(),
-            db_cache_weight: d.db_cache_weight_or_zero,
-            lru_cache: d.lru_cache_size_or_zero,
-            db_cache_in_mb: 0,
-        }).collect();
+        return db_defs.iter().map(|d| DbDefWithCache::new(d.clone(), 0)).collect();
     }
 
     let sum_w = sum_positive_weights(db_defs);
     if sum_w == 0 {
-        return db_defs.iter().map(|d| DbDefWithCache {
-            name: d.name.clone(),
-            db_cache_weight: d.db_cache_weight_or_zero,
-            lru_cache: d.lru_cache_size_or_zero,
-            db_cache_in_mb: 0,
-        }).collect();
+        return db_defs.iter().map(|d| DbDefWithCache::new(d.clone(), 0)).collect();
     }
 
     let mut shares = compute_shares_mb(db_defs, total_mb, sum_w);
@@ -32,8 +25,6 @@ pub fn allocate_cache_mb(db_defs: &[DbDef], total_mb: u64) -> Vec<DbDefWithCache
 
     collect_allocations_mb(&shares, db_defs)
 }
-
-/* ========= helpers ========= */
 
 fn sum_positive_weights(db_defs: &[DbDef]) -> u64 {
     db_defs.iter().map(|d| d.db_cache_weight_or_zero as u64).filter(|&w| w > 0).sum()
@@ -77,11 +68,21 @@ fn distribute_remainder_mb(shares: &mut [Share], mut remainder: u64, db_defs: &[
 }
 
 fn collect_allocations_mb(shares: &[Share], db_defs: &[DbDef]) -> Vec<DbDefWithCache> {
-    shares.iter().map(|s| DbDefWithCache {
-        name: db_defs[s.idx].name.clone(),
-        db_cache_weight: db_defs[s.idx].db_cache_weight_or_zero,
-        db_cache_in_mb: cast_u64_to_usize(s.base_mb),
-        lru_cache: db_defs[s.idx].lru_cache_size_or_zero
+    shares.iter().map(|s| {
+        let def = &db_defs[s.idx];
+        let shards = def.shards;
+        assert!(shards == 0 || shards >= 2, "column `{}` must have at least 2 shards (got {shards})", def.name);
+
+        // `base_mb` is the column-level allocation. We convert to **per-shard** MB.
+        let per_shard_mb = if shards == 0 { 0 } else { s.base_mb / shards as u64 };
+
+        DbDefWithCache {
+            name: def.name.clone(),
+            db_cache_weight: def.db_cache_weight_or_zero,
+            db_cache_in_mb: cast_u64_to_usize(per_shard_mb),
+            lru_cache: def.lru_cache_size_or_zero,
+            shards,
+        }
     }).collect()
 }
 
@@ -90,15 +91,30 @@ fn cast_u64_to_usize(x: u64) -> usize {
     if x > (usize::MAX as u64) { usize::MAX } else { x as usize }
 }
 
-#[cfg(test)]
-mod cache_tests {
+#[cfg(all(test, not(feature = "integration")))]
+mod tests {
     use super::*;
 
-    fn defs(ws: &[usize]) -> Vec<DbDef> {
-        ws.iter().enumerate().map(|(i, &w)| DbDef { name: format!("db{i}"), db_cache_weight_or_zero: w, lru_cache_size_or_zero: 0 }).collect()
+    // Build DbDefs with a fixed shard count (must be ≥ 2 now).
+    fn defs(ws: &[usize], shards: usize) -> Vec<DbDef> {
+        assert!(shards == 0 || shards >= 2, "tests must use shards == 0 or shards >= 2");
+        ws.iter().enumerate().map(|(i, &w)| DbDef {
+            name: format!("db{i}"),
+            shards,
+            db_cache_weight_or_zero: w,
+            lru_cache_size_or_zero: 0,
+        }).collect()
     }
 
-    fn sum_mb(v: &[DbDefWithCache]) -> u64 {
+    // Sum of per-shard MB across ALL shards (i.e., column total)
+    fn sum_total_mb(v: &[DbDefWithCache]) -> u64 {
+        v.iter()
+            .map(|d| (d.db_cache_in_mb as u64) * (d.shards as u64))
+            .sum()
+    }
+
+    // For convenience, but remember this is PER-SHARD, not column total.
+    fn sum_per_shard_mb(v: &[DbDefWithCache]) -> u64 {
         v.iter().map(|d| d.db_cache_in_mb as u64).sum()
     }
 
@@ -107,65 +123,91 @@ mod cache_tests {
         let out = allocate_cache_mb(&[], 42);
         assert!(out.is_empty());
 
-        let out2 = allocate_cache_mb(&defs(&[1,2,3]), 0);
+        let out2 = allocate_cache_mb(&defs(&[1,2,3], 2), 0);
         assert_eq!(out2.len(), 3);
         assert!(out2.iter().all(|d| d.db_cache_in_mb == 0));
+        assert_eq!(sum_total_mb(&out2), 0);
     }
 
     #[test]
     fn all_zero_weights_all_zero() {
-        let out = allocate_cache_mb(&defs(&[0,0,0]), 10_000);
+        let out = allocate_cache_mb(&defs(&[0,0,0], 2), 10_000);
         assert_eq!(out.len(), 3);
         assert!(out.iter().all(|d| d.db_cache_in_mb == 0));
-        assert_eq!(sum_mb(&out), 0);
+        assert_eq!(sum_total_mb(&out), 0);
     }
 
     #[test]
     fn proportional_split_exact_sum_mb() {
         // total 10 GiB → 10240 MB; weights 10 and 5 → 2:1
+        // Column-level Hamilton gives 6827 and 3413 MB.
+        // With shards=2, per-shard becomes floor(6827/2)=3413 and floor(3413/2)=1706.
         let total_mb = 10_u64 * 1024;
-        let out = allocate_cache_mb(&defs(&[10, 5]), total_mb);
+        let out = allocate_cache_mb(&defs(&[10, 5], 2), total_mb);
         assert_eq!(out.len(), 2);
 
-        // Ideal: 6826.6.. and 3413.3..? No—since it's MB, it's exactly 10240 * (10/15) = 6826.(6)
-        // Largest remainder awards the extra MBs to the bigger remainder: 6827 and 3413 MB
-        assert_eq!(sum_mb(&out), total_mb);
-        assert_eq!(out[0].db_cache_in_mb as u64, 6827);
-        assert_eq!(out[1].db_cache_in_mb as u64, 3413);
+        // Check per-SHARD expectations (deterministic):
+        assert_eq!(out[0].db_cache_in_mb as u64, 3413);
+        assert_eq!(out[1].db_cache_in_mb as u64, 1706);
+
+        // Aggregated across shards we should be ≤ total (division drops remainders).
+        let agg = sum_total_mb(&out);
+        assert!(agg <= total_mb, "agg {} must be <= total {}", agg, total_mb);
+
+        // Here the drop is exactly 2 MB (one remainder per column).
+        assert_eq!(total_mb - agg, 2);
     }
 
     #[test]
     fn zero_weight_entries_get_zero_even_with_remainder() {
-        // total 5 MB; weights: 0,1,0,1 -> active share: 2 items
-        let out = allocate_cache_mb(&defs(&[0,1,0,1]), 5);
+        // total 5 MB; weights: 0,1,0,1; shards=2
+        // Active columns get 2 and 3 MB at the column level -> per-shard 1 and 1.
+        let out = allocate_cache_mb(&defs(&[0,1,0,1], 2), 5);
+        assert_eq!(out.len(), 4);
+
         assert_eq!(out[0].db_cache_in_mb, 0);
         assert_eq!(out[2].db_cache_in_mb, 0);
-        assert_eq!(out[1].db_cache_in_mb + out[3].db_cache_in_mb, 5);
+
+        // Both active columns should have per-shard = 1
+        assert_eq!(out[1].db_cache_in_mb, 1);
+        assert_eq!(out[3].db_cache_in_mb, 1);
+
+        // Aggregated across shards: 1*2 + 1*2 = 4 <= 5 (1 MB lost due to division by shards)
+        assert_eq!(sum_total_mb(&out), 4);
     }
 
     #[test]
     fn deterministic_ties_by_input_order() {
-        // 3 equal weights, total 5 MB -> bases 1 each, 2 remainder MB -> first two get them
-        let out = allocate_cache_mb(&defs(&[1,1,1]), 5);
-        let bytes: Vec<usize> = out.into_iter().map(|d| d.db_cache_in_mb).collect();
-        assert_eq!(bytes, vec![2,2,1]);
+        // 3 equal weights, total 5 MB -> column-level bases 1 each, 2 remainder MB -> first two get them
+        // Column totals: [2,2,1]
+        // With shards=2, per-shard: [1,1,0]
+        let out = allocate_cache_mb(&defs(&[1,1,1], 2), 5);
+        let bytes: Vec<usize> = out.iter().map(|d| d.db_cache_in_mb).collect();
+        assert_eq!(bytes, vec![1,1,0]);
+
+        // Aggregated across shards: (1+1+0)*2 = 4, so we lose 1 MB on division.
+        assert_eq!(sum_total_mb(&out), 4);
+        assert_eq!(sum_per_shard_mb(&out), 2); // 1+1+0
     }
 
     #[test]
     fn many_items_small_total_single_mb_assigned() {
+        // With shards=2 and total=1 MB, any column that gets 1 MB at column-level
+        // will end up with per-shard 0. So all per-shard are 0 and aggregated total is 0.
         let n = 37;
-        let out = allocate_cache_mb(&vec![DbDef { name: "x".into(), db_cache_weight_or_zero: 1, lru_cache_size_or_zero: 0 }; n], 1);
+        let out = allocate_cache_mb(
+            &vec![DbDef { name: "x".into(), shards: 2, db_cache_weight_or_zero: 1, lru_cache_size_or_zero: 0 }; n],
+            1
+        );
         assert_eq!(out.len(), n);
-        let ones = out.iter().filter(|d| d.db_cache_in_mb == 1).count();
-        let zeros = out.iter().filter(|d| d.db_cache_in_mb == 0).count();
-        assert_eq!(ones, 1);
-        assert_eq!(zeros, n - 1);
-        assert_eq!(sum_mb(&out), 1);
+        assert!(out.iter().all(|d| d.db_cache_in_mb == 0));
+        assert_eq!(sum_total_mb(&out), 0);
     }
 
     #[test]
     fn compute_shares_mb_basic_invariants() {
-        let defs = defs(&[2,3,5]);
+        // This exercises the pre-division Hamilton stage; unchanged by shards.
+        let defs = defs(&[2,3,5], 2);
         let total = 1_000u64; // MB
         let sum_w = sum_positive_weights(&defs);
         let shares = compute_shares_mb(&defs, total, sum_w);
@@ -177,7 +219,8 @@ mod cache_tests {
 
     #[test]
     fn distribute_remainder_mb_adds_exactly_r() {
-        let defs = defs(&[1,1,1,1]);
+        // Also pre-division; unchanged.
+        let defs = defs(&[1,1,1,1], 2);
         let total = 6u64; // MB; base=1 each (4), remainder=2
         let sum_w = sum_positive_weights(&defs);
         let mut shares = compute_shares_mb(&defs, total, sum_w);
@@ -194,8 +237,8 @@ mod cache_tests {
     #[test]
     fn cast_u64_to_usize_saturates_if_needed() {
         let big = u64::MAX;
-        let casted = super::cast_u64_to_usize(big);
-        if (usize::BITS as u32) == 64 {
+        let casted = cast_u64_to_usize(big);
+        if usize::BITS == 64 {
             assert_eq!(casted, usize::MAX);
         } else {
             assert_eq!(casted, usize::MAX);

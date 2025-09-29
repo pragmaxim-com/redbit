@@ -76,14 +76,7 @@ fn teardown<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext
     drop(storage_view);
     drop(chain);
     drop(syncer);
-
-    // optional tripwire: no extra strong Arcs to DBs
-    for (name, db_arc) in &storage_owner.index_dbs {
-        let sc = Arc::strong_count(db_arc);
-        if sc != 1 {
-            error!("Database {name} still has {sc} strong refs at shutdown");
-        }
-    }
+    storage_owner.assert_last_refs();
     drop(storage_owner);
     info!("Shutdown complete");
 }

@@ -1,4 +1,3 @@
-#[cfg(all(test, feature = "integration"))]
 mod chain_tests {
     use chain::api::BlockProvider;
     use chain::settings::AppConfig;
@@ -43,13 +42,7 @@ mod chain_tests {
         drop(storage);
         drop(chain);
         drop(syncer);
-
-        for (name, db_arc) in &storage_owner.index_dbs {
-            let sc = Arc::strong_count(db_arc);
-            if sc != 1 {
-                error!("Database {name} still has {sc} strong refs at shutdown");
-            }
-        }
+        storage_owner.assert_last_refs();
         drop(storage_owner);
     }
 
@@ -57,7 +50,8 @@ mod chain_tests {
     async fn chain_should_shutdown() {
         let target_height = 1000u32;
 
-        let (owner, storage) = StorageOwner::temp("chain_sync_shutdown_resume", 1, true).await.expect("Failed to open database");
+        let (storage_owner, storage) =
+            StorageOwner::temp("chain_sync_shutdown_resume", 1, true).await.expect("Failed to open database");
         let chain = BlockChain::new(Arc::clone(&storage));
         chain.init().expect("Failed to initialize chain");
         let config = AppConfig::new("config/settings").expect("Failed to load app config");
@@ -95,12 +89,7 @@ mod chain_tests {
         // teardown in correct order (weak-view first, then owner to trigger Database::drop)
         drop(storage);
         drop(chain);
-        for (name, db_arc) in &owner.index_dbs {
-            let sc = Arc::strong_count(db_arc);
-            if sc != 1 {
-                error!("Database {name} still has {sc} strong refs at shutdown");
-            }
-        }
-        drop(owner);
+        storage_owner.assert_last_refs();
+        drop(storage_owner);
     }
 }

@@ -21,6 +21,7 @@ pub use axum::http::StatusCode;
 pub use axum::response::IntoResponse;
 pub use axum::response::Response;
 pub use axum_streams;
+pub use bincode::{decode_from_slice, encode_to_vec, Decode, Encode};
 pub use chrono;
 pub use futures;
 pub use futures::stream::{self, StreamExt};
@@ -40,22 +41,22 @@ pub use once_cell;
 pub use query::*;
 pub use rand;
 pub use redb;
-pub use redb::MultimapTableDefinition;
+pub use redb::Database;
 pub use redb::MultimapTable;
-pub use redb::ReadableMultimapTable;
+pub use redb::MultimapTableDefinition;
 pub use redb::ReadOnlyMultimapTable;
 pub use redb::ReadOnlyTable;
 pub use redb::ReadTransaction;
-pub use redb::TransactionError;
-pub use redb::TableError;
-pub use redb::ReadableTableMetadata;
-pub use redb::ReadableTable;
 pub use redb::ReadableDatabase;
-pub use redb::TableDefinition;
+pub use redb::ReadableMultimapTable;
+pub use redb::ReadableTable;
+pub use redb::ReadableTableMetadata;
 pub use redb::Table;
-pub use redb::Database;
-pub use redb::WriteTransaction;
+pub use redb::TableDefinition;
+pub use redb::TableError;
 pub use redb::TableStats;
+pub use redb::TransactionError;
+pub use redb::WriteTransaction;
 pub use redb::{Key, TypeName, Value};
 pub use serde;
 pub use serde::Deserialize;
@@ -66,11 +67,31 @@ pub use serde_json;
 pub use serde_json::json;
 pub use serde_urlencoded;
 pub use serde_with;
+pub use std::any::type_name;
+pub use std::cmp::Ordering;
+pub use std::collections::HashMap;
 pub use std::collections::VecDeque;
+pub use std::fmt::Debug;
 pub use std::pin::Pin;
 pub use std::sync::Arc;
 pub use std::sync::Weak;
+pub use std::thread;
 pub use std::time::Duration;
+pub use storage::context::{ReadTxContext, WriteTxContext};
+pub use storage::partitioning::{Partitioning, BytesPartitioner, Xxh3Partitioner, KeyPartitioner, ValuePartitioner};
+pub use storage::table_dict_read::ReadOnlyDictTable;
+pub use storage::table_dict_read_sharded::ShardedReadOnlyDictTable;
+pub use storage::table_dict_write::{DictTable, DictFactory};
+pub use storage::table_index_read::ReadOnlyIndexTable;
+pub use storage::table_index_read_sharded::ShardedReadOnlyIndexTable;
+pub use storage::table_index_write::{IndexTable, IndexFactory};
+pub use storage::table_plain_read::ReadOnlyPlainTable;
+pub use storage::table_plain_read_sharded::ShardedReadOnlyPlainTable;
+pub use storage::table_plain_write::PlainFactory;
+pub use storage::table_writer::{TableWriter, FlushFuture};
+pub use storage::table_writer_sharded::ShardedTableWriter;
+pub use storage::Storage;
+pub use storage::StorageOwner;
 pub use urlencoding;
 pub use utoipa;
 pub use utoipa::openapi;
@@ -80,25 +101,6 @@ pub use utoipa::ToSchema;
 pub use utoipa_axum;
 pub use utoipa_axum::router::OpenApiRouter;
 pub use utoipa_swagger_ui;
-pub use storage::Storage;
-pub use storage::StorageOwner;
-pub use storage::ReadTxContext;
-pub use storage::WriteTxContext;
-pub use storage::table_writer::TableWriter;
-pub use storage::table_writer::FlushFuture;
-pub use storage::table_index_write::IndexFactory;
-pub use storage::table_dict_write::DictFactory;
-pub use storage::table_index_write::IndexTable;
-pub use storage::table_index_read::ReadOnlyIndexTable;
-pub use storage::table_dict_write::DictTable;
-pub use storage::table_plain_write::PlainFactory;
-pub use storage::table_dict_read::ReadOnlyDictTable;
-pub use bincode::{decode_from_slice, encode_to_vec, Decode, Encode};
-pub use std::any::type_name;
-pub use std::collections::HashMap;
-pub use std::cmp::Ordering;
-pub use std::fmt::Debug;
-pub use std::thread;
 
 use crate::axum::extract::rejection::JsonRejection;
 use crate::axum::extract::FromRequest;
@@ -107,10 +109,10 @@ use crate::utoipa::OpenApi;
 use crate::utoipa_swagger_ui::SwaggerUi;
 use axum::body::Bytes;
 use axum::extract::Request;
+use crossbeam::channel::RecvError;
 use serde::de::DeserializeOwned;
 use std::net::SocketAddr;
 use std::ops::Add;
-use crossbeam::channel::RecvError;
 use thiserror::Error;
 use tokio::net::TcpListener;
 use tokio::sync::watch;
@@ -188,9 +190,15 @@ pub trait UrlEncoded {
 }
 
 pub trait BinaryCodec {
-    fn from_bytes(bytes: &[u8]) -> Self;
-    fn as_bytes(&self) -> Vec<u8>;
+    fn from_le_bytes(bytes: &[u8]) -> Self;
+    fn as_le_bytes(&self) -> Vec<u8>;
     fn size() -> usize;
+    // NEW: zero-copy streaming encoder; default uses as_bytes() (alloc) for backwards compat.
+    #[inline]
+    fn encode_le_chunks<E: FnMut(&[u8])>(&self, emit: &mut E) {
+        let v = self.as_le_bytes(); // fallback
+        emit(&v);
+    }
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -377,9 +385,30 @@ pub struct RequestState {
 }
 
 #[derive(Clone, Debug)]
-pub struct DbDef { pub name: String, pub db_cache_weight_or_zero: usize, pub lru_cache_size_or_zero: usize }
+pub struct DbDef { pub name: String, pub shards: usize, pub db_cache_weight_or_zero: usize, pub lru_cache_size_or_zero: usize }
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DbDefWithCache { pub name: String, pub db_cache_weight: usize, pub db_cache_in_mb: usize, pub lru_cache: usize }
+pub struct DbDefWithCache { pub name: String, pub shards: usize, pub db_cache_weight: usize, pub db_cache_in_mb: usize, pub lru_cache: usize }
+impl DbDefWithCache {
+    pub fn new(dn_def: DbDef, db_cache_in_mb: usize) -> Self {
+        DbDefWithCache {
+            name: dn_def.name.clone(),
+            shards: dn_def.shards,
+            db_cache_weight: dn_def.db_cache_weight_or_zero,
+            lru_cache: dn_def.lru_cache_size_or_zero,
+            db_cache_in_mb,
+        }
+    }
+    pub fn validate(&self) -> Result<(), AppError> {
+        if self.shards == 1 {
+            Err(AppError::Custom(format!(
+                "column `{}`: shards == 1 is not supported; use 0 (single) or >= 2 (sharded)", self.name
+            )))
+        } else {
+            Ok(())
+        }
+    }
+}
+
 
 pub struct StructInfo {
     pub name: &'static str,

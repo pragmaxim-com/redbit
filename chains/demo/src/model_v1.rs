@@ -74,7 +74,7 @@ pub struct Utxo {
     pub id: TransactionPointer,
     #[column]
     pub amount: u64,
-    #[column(dictionary, db_cache = 10, lru_cache = 100_000)]
+    #[column(dictionary, shards = 2, db_cache = 10, lru_cache = 100_000)]
     pub address: Address,
     pub assets: Vec<Asset>,
 }

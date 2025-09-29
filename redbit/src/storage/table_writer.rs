@@ -77,7 +77,7 @@ impl<K, V, F> TableWriter<K, V, F>
 where
     K: Key + Send + 'static + Borrow<K::SelfType<'static>>,
     V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
-    F: TableFactory<K, V> + Send + 'static,
+    F: TableFactory<K, V> + Send + Clone + 'static,
     F::Table<'static, 'static>: Send,
 {
     fn step<T: WriteTableLike<K, V>>(table: &mut T, cmd: WriterCommand<K, V>) -> Result<Control, AppError> {
@@ -254,10 +254,10 @@ where
         ack_rx.recv()?
     }
 
-    pub fn flush_async(&self) -> redb::Result<FlushFuture, AppError> {
+    pub fn flush_async(&self) -> redb::Result<Vec<FlushFuture>, AppError> {
         let (ack_tx, ack_rx) = bounded::<redb::Result<(), AppError>>(1);
         Self::fast_send(&self.topic, WriterCommand::Flush(ack_tx))?;
-        Ok(FlushFuture { ack_rx })
+        Ok(vec![FlushFuture { ack_rx }])
     }
     // optional: graceful shutdown when you’re done with the writer forever
     pub fn shutdown(self) -> redb::Result<(), AppError> {

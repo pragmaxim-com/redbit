@@ -14,7 +14,7 @@ pub fn fn_def(entity_def: &EntityDef, table: &Ident) -> FunctionDef {
 
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: &#read_ctx_type, pk: #pk_type) -> Result<Option<#entity_type>, AppError> {
-            if tx_context.#table.get(pk)?.is_some() {
+            if tx_context.#table.get_value(pk)?.is_some() {
                 Ok(Some(Self::compose(&tx_context, pk)?))
             } else {
                 Ok(None)

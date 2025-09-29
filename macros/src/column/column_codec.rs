@@ -125,12 +125,12 @@ pub fn emit_pointer_redb_impls(pointer_type: &Type) -> TokenStream2 {
 
             fn from_bytes<'a>(data: &'a [u8]) -> #pointer_type
             where Self: 'a {
-                <#pointer_type as BinaryCodec>::from_bytes(data)
+                <#pointer_type as BinaryCodec>::from_le_bytes(data)
             }
 
             fn as_bytes<'a, 'b: 'a>(value: &'a Self::SelfType<'b>) -> Self::AsBytes<'a>
             where Self: 'a, Self: 'b {
-                std::borrow::Cow::Owned(value.as_bytes())
+                std::borrow::Cow::Owned(value.as_le_bytes())
             }
 
             fn type_name() -> redb::TypeName {
@@ -140,8 +140,8 @@ pub fn emit_pointer_redb_impls(pointer_type: &Type) -> TokenStream2 {
 
         impl redb::Key for #pointer_type {
             fn compare(data1: &[u8], data2: &[u8]) -> std::cmp::Ordering {
-                let a = <#pointer_type as BinaryCodec>::from_bytes(data1);
-                let b = <#pointer_type as BinaryCodec>::from_bytes(data2);
+                let a = <#pointer_type as BinaryCodec>::from_le_bytes(data1);
+                let b = <#pointer_type as BinaryCodec>::from_le_bytes(data2);
                 a.cmp(&b)
             }
         }

@@ -17,16 +17,16 @@ use crate::entity;
 use crate::entity::context;
 use crate::entity::context::TxContextItem;
 use crate::entity::query::{RangeQuery, FilterQueryItem};
-use crate::field_parser::{EntityDef, FieldDef, IndexingType, OneToManyParentDef};
+use crate::field_parser::{ColumnProps, EntityDef, FieldDef, IndexingType, OneToManyParentDef};
 use crate::rest::*;
-use crate::table::{DictTableDefs, IndexTableDefs, TableDef};
+use crate::table::{DictTableDefs, IndexTableDefs, PlainTableDef, TableDef};
 use proc_macro2::TokenStream;
 use crate::entity::info::TableInfoItem;
 
 pub struct DbColumnMacros {
     pub field_def: FieldDef,
     pub range_query: Option<RangeQuery>,
-    pub table_plain_definitions: Vec<TableDef>,
+    pub table_plain_definitions: Vec<PlainTableDef>,
     pub table_index_definition: Option<IndexTableDefs>,
     pub table_dict_definition: Option<DictTableDefs>,
     pub struct_init: TokenStream,
@@ -52,47 +52,44 @@ impl DbColumnMacros {
         parent_def: Option<OneToManyParentDef>,
     ) -> DbColumnMacros {
         match indexing_type {
-            IndexingType::Off { db_cache_weight, lru_cache_size}=> DbColumnMacros::plain(entity_def, col_field_def, db_cache_weight, lru_cache_size),
-            IndexingType::On { dictionary: false, range, db_cache_weight, lru_cache_size } => {
-                DbColumnMacros::index(entity_def, col_field_def, parent_def, range, db_cache_weight, lru_cache_size)
+            IndexingType::Off(column_props) => {
+                DbColumnMacros::plain(entity_def, col_field_def, column_props)
+            },
+            IndexingType::Index(column_props) => {
+                DbColumnMacros::index(entity_def, col_field_def, parent_def, false, column_props)
             }
-            IndexingType::On { dictionary: true, range: false, db_cache_weight, lru_cache_size } => {
-                DbColumnMacros::dictionary(entity_def, col_field_def, parent_def, db_cache_weight, lru_cache_size)
+            IndexingType::Range(column_props) => {
+                DbColumnMacros::index(entity_def, col_field_def, parent_def, true, column_props)
             }
-            IndexingType::On { dictionary: true, range: true, db_cache_weight: _, lru_cache_size: _ } => {
-                panic!("Range indexing on dictionary columns is not supported")
+            IndexingType::Dict(column_props) => {
+                DbColumnMacros::dictionary(entity_def, col_field_def, parent_def, column_props)
             }
         }
     }
 
-    pub fn plain(
-        entity_def: &EntityDef,
-        col_def: &FieldDef,
-        db_cache_weight: usize,
-        lru_cache_size: usize
-    ) -> DbColumnMacros {
+    pub fn plain(entity_def: &EntityDef, col_def: &FieldDef, column_props: ColumnProps) -> DbColumnMacros {
         let column_name = &col_def.name.clone();
         let column_type = &col_def.tpe.clone();
         let pk_name = &entity_def.key_def.field_def().name;
-        let table_def = TableDef::plain_table_def(entity_def, column_name, column_type, db_cache_weight, lru_cache_size);
-        let table_definitions = vec![table_def.clone()];
+        let table_def = TableDef::plain_table_def(entity_def, column_name, column_type);
+        let plain_table_def = PlainTableDef::new(table_def, column_props);
         DbColumnMacros {
             field_def: col_def.clone(),
             range_query: None,
             filter_query_init: query::filter_query_init(column_name, column_type),
-            tx_context_items: context::tx_context_items(&table_definitions),
-            table_info_item: info::plain_table_info(column_name, &table_def),
-            table_plain_definitions: table_definitions,
+            tx_context_items: vec![context::tx_context_plain_item(&plain_table_def)],
+            table_info_item: info::plain_table_info(column_name, &plain_table_def),
+            table_plain_definitions: vec![plain_table_def.clone()],
             table_index_definition: None,
             table_dict_definition: None,
-            struct_init: init::plain_init(column_name, &table_def.var_name),
-            struct_init_with_query: init::plain_init_with_query(column_name, &table_def.var_name),
+            struct_init: init::plain_init(column_name, &plain_table_def.var_name),
+            struct_init_with_query: init::plain_init_with_query(column_name, &plain_table_def.var_name),
             struct_default_init: init::default_init(column_name, column_type),
             struct_default_init_with_query: init::default_init_with_query(column_name, column_type),
-            store_statement: store::store_statement(pk_name, column_name, &table_def.var_name),
-            store_many_statement: store::store_statement(pk_name, column_name, &table_def.var_name),
-            delete_statement: delete::delete_statement(&table_def.var_name),
-            delete_many_statement: delete::delete_many_statement(&table_def.var_name),
+            store_statement: store::store_statement(pk_name, column_name, &plain_table_def.var_name),
+            store_many_statement: store::store_statement(pk_name, column_name, &plain_table_def.var_name),
+            delete_statement: delete::delete_statement(&plain_table_def.var_name),
+            delete_many_statement: delete::delete_many_statement(&plain_table_def.var_name),
             function_defs: vec![],
         }
     }
@@ -102,14 +99,13 @@ impl DbColumnMacros {
         col_field_def: &FieldDef,
         parent_def_opt: Option<OneToManyParentDef>,
         range: bool,
-        db_cache_weight: usize,
-        lru_cache_size: usize,
+        column_props: ColumnProps,
     ) -> DbColumnMacros {
         let column_name = &col_field_def.name.clone();
         let column_type = &col_field_def.tpe.clone();
         let pk_name = &entity_def.key_def.field_def().name;
 
-        let index_tables = IndexTableDefs::new(entity_def, column_name, column_type, db_cache_weight, lru_cache_size);
+        let index_tables = IndexTableDefs::new(entity_def, column_name, column_type, column_props);
 
         let mut function_defs: Vec<FunctionDef> = Vec::new();
         function_defs.push(get_by::get_by_index_def(entity_def, column_name, column_type, &index_tables.var_name));
@@ -153,14 +149,13 @@ impl DbColumnMacros {
         entity_def: &EntityDef,
         col_field_def: &FieldDef,
         parent_def_opt: Option<OneToManyParentDef>,
-        db_cache_weight: usize,
-        lru_cache_size: usize,
+        column_props: ColumnProps,
     ) -> DbColumnMacros {
         let column_name = &col_field_def.name.clone();
         let column_type = &col_field_def.tpe.clone();
         let pk_name = &entity_def.key_def.field_def().name;
 
-        let dict_tables = DictTableDefs::new(&entity_def, column_name, column_type, db_cache_weight, lru_cache_size);
+        let dict_tables = DictTableDefs::new(&entity_def, column_name, column_type, column_props);
 
         let mut function_defs: Vec<FunctionDef> = Vec::new();
 

@@ -1,17 +1,17 @@
 use crate::column::DbColumnMacros;
 use crate::entity::context::{TxContextItem, TxType};
-use crate::entity::query::{RangeQuery, FilterQueryItem};
+use crate::entity::info::TableInfoItem;
+use crate::entity::query::{FilterQueryItem, RangeQuery};
 use crate::entity::{context, query};
 use crate::field_parser;
 use crate::field_parser::{ColumnDef, EntityDef, FieldDef, KeyDef, Multiplicity, OneToManyParentDef};
 use crate::pk::DbPkMacros;
 use crate::relationship::DbRelationshipMacros;
 use crate::rest::FunctionDef;
-use crate::table::{DictTableDefs, IndexTableDefs, TableDef};
+use crate::table::{DictTableDefs, IndexTableDefs, PlainTableDef};
 use crate::transient::TransientMacros;
 use proc_macro2::{Ident, TokenStream};
 use syn::{ItemStruct, Type};
-use crate::entity::info::TableInfoItem;
 
 pub enum FieldMacros {
     Pk(DbPkMacros),
@@ -112,9 +112,9 @@ impl FieldMacros {
         }
     }
 
-    pub fn table_definitions(&self) -> Vec<TableDef> {
+    pub fn plain_table_definitions(&self) -> Vec<PlainTableDef> {
         match self {
-            FieldMacros::Pk(pk) => vec![pk.table_def.clone()],
+            FieldMacros::Pk(pk) => vec![pk.plain_table_def.clone()],
             FieldMacros::Plain(column) => column.table_plain_definitions.clone(),
             _ => vec![],
         }

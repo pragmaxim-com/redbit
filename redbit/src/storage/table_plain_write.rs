@@ -5,6 +5,7 @@ use redb::{Key, Table, WriteTransaction};
 use std::borrow::Borrow;
 use std::ops::RangeBounds;
 
+#[derive(Clone)]
 pub struct PlainFactory<K: Key + 'static, V: Key + 'static> {
     pub table_def: TableDefinition<'static, K, V>,
 }

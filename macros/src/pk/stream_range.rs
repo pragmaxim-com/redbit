@@ -16,7 +16,7 @@ pub fn fn_def(entity_def: &EntityDef, table: &Ident, range_query_ty: &Type, no_c
         quote! {
             pub fn #fn_name(tx_context: #read_ctx_type, from: #pk_type, until: #pk_type, query: Option<#query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#entity_type, AppError>> + Send>>, AppError> {
                 let range = from..until;
-                let iter_box = Box::new(tx_context.#table.range::<#pk_type>(range)?);
+                let iter_box = Box::new(tx_context.#table.underlying.range::<#pk_type>(range)?);
                 let stream = futures::stream::unfold(
                     (iter_box, tx_context, query),
                     |(mut iter, tx_context, query)| async move {
