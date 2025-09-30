@@ -2,7 +2,7 @@ use anyhow::Result;
 use redbit::*;
 use std::sync::Arc;
 use demo::model_v1::*;
-use redbit::storage::StorageOwner;
+use redbit::storage::init::StorageOwner;
 
 #[tokio::main]
 async fn main() -> Result<()> {

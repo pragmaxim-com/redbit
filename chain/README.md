@@ -26,8 +26,8 @@ If you identify a bottleneck column, just shard it so it is as fast as the other
 Here at height `362 544` of bitcoin, we have 2 shards for `transaction_hash_index` and 4 shards for `utxo_address_dict` and they have similar sizes :
 ```
 5.7G    /opt/.chain/main/btc/input_utxo_pointer_by_id.db
-5.0G     /opt/.chain/main/btc/transaction_hash_index-0.db
-5.0G     /opt/.chain/main/btc/transaction_hash_index-1.db
+5.0G    /opt/.chain/main/btc/transaction_hash_index-0.db
+5.0G    /opt/.chain/main/btc/transaction_hash_index-1.db
 5.2G    /opt/.chain/main/btc/utxo_address_dict-0.db
 5.1G    /opt/.chain/main/btc/utxo_address_dict-1.db
 5.2G    /opt/.chain/main/btc/utxo_address_dict-2.db
@@ -95,9 +95,9 @@ and higher blocks/s throughput.
 
 My throughput results after indexing whole bitcoin :
 
-- `2.0GHz` & `NVMe PCIe Gen3` & `DDR4 2100MHz 2Rx4` : `~ 30 000 Inputs+outputs / s`
-- `3.0GHz` & `NVMe PCIe Gen4` & `DDR4 3200MHz 4Rx4` : `~ 50 000 Inputs+outputs / s`
-- `3.5GHz` & `NVMe PCIe Gen5` & `DDR5 4800MHz 4RX8` : `~ 90 000 Inputs+outputs / s`
+- `2.0GHz` & `NVMe PCIe Gen3` & `DDR3 2100MHz 2Rx4` : `~ 70 000 Inputs+outputs / s`
+- `3.0GHz` & `NVMe PCIe Gen4` & `DDR4 3200MHz 4Rx4` : `~ 110 000 Inputs+outputs / s`
+- `3.5GHz` & `NVMe PCIe Gen5` & `DDR5 4800MHz 4RX8` : `~ 170 000 Inputs+outputs / s`
 
 
 The size of databases corresponds to bitcoin databases, note that I index both `address` and `script_hash` :

@@ -2,7 +2,7 @@
 mod entity_tests {
     use demo::model_v1::*;
     use std::collections::HashSet;
-    use redbit::storage::StorageOwner;
+    use redbit::storage::init::StorageOwner;
 
     async fn init_temp_storage(name: &str, db_cache_size_gb: u8) -> (Vec<Block>, StorageOwner, Arc<Storage>) {
         let (storage_owner, storage) = StorageOwner::temp(name, db_cache_size_gb, true).await.unwrap();

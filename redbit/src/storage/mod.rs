@@ -1,11 +1,3 @@
-use crate::*;
-use futures_util::future::try_join_all;
-use redb::{Database, DatabaseError};
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::{env, fs};
-
 pub mod table_dict_read;
 pub mod table_dict_write;
 pub mod table_index_read;
@@ -20,342 +12,332 @@ pub mod table_index_read_sharded;
 pub mod table_plain_read;
 pub mod table_plain_read_sharded;
 pub mod context;
+pub mod init;
+pub mod bench;
 
-#[derive(Clone)]
-pub enum DbSetOwned {
-    Single(Arc<Database>),
-    Sharded(Vec<Arc<Database>>),
-}
+#[cfg(all(test, not(feature = "integration")))]
+pub mod test_utils {
+    use redb::{Database, Key, TypeName, Value};
+    use std::cmp::Ordering;
+    use std::sync::{Arc, Weak};
 
-#[derive(Clone)]
-pub enum DbSetWeak {
-    Single(Weak<Database>),
-    Sharded(Vec<Weak<Database>>),
-}
-
-impl DbSetOwned {
-    pub fn new(name_index_dbs: Vec<(String, Option<usize>, Arc<Database>)>) -> HashMap<String, DbSetOwned> {
-        let mut singles: HashMap<String, Arc<Database>> = HashMap::new();
-        let mut shards:  HashMap<String, Vec<(usize, Arc<Database>)>> = HashMap::new();
-
-        for (name, idx_opt, db) in name_index_dbs {
-            match idx_opt {
-                None => {
-                    singles.insert(name, db);
-                }
-                Some(i) => {
-                    shards.entry(name).or_default().push((i, db));
-                }
-            }
+    #[derive(Debug, Clone)]
+    pub(crate)  struct Address(pub Vec<u8>);
+    impl Value for Address {
+        type SelfType<'a> = Address
+        where
+            Self: 'a;
+        type AsBytes<'a> = &'a [u8]
+        where
+            Self: 'a;
+        fn fixed_width() -> Option<usize> {
+            None
         }
-        let mut out = HashMap::with_capacity(singles.len() + shards.len());
-        for (name, db) in singles {
-            out.insert(name, DbSetOwned::Single(db));
+        fn from_bytes<'a>(data: &'a [u8]) -> Address
+        where
+            Self: 'a,
+        {
+            Address(data.to_vec())
         }
-        for (name, mut v) in shards {
-            v.sort_by_key(|(i, _)| *i);
-            out.insert(name, DbSetOwned::Sharded(v.into_iter().map(|(_, db)| db).collect()));
+        fn as_bytes<'a, 'b: 'a>(value: &'a Self::SelfType<'b>) -> &'a [u8]
+        where
+            Self: 'a,
+            Self: 'b,
+        {
+            value.0.as_ref()
         }
-        out
-    }
-
-    pub fn downgrade(&self) -> DbSetWeak {
-        match self {
-            DbSetOwned::Single(db) => DbSetWeak::Single(Arc::downgrade(db)),
-            DbSetOwned::Sharded(dbs) => DbSetWeak::Sharded(dbs.iter().map(Arc::downgrade).collect()),
+        fn type_name() -> TypeName {
+            TypeName::new("Vec<u8>")
         }
     }
-
-    pub fn assert_last_ref(&self, name: &str) {
-        match self {
-            DbSetOwned::Single(db) => {
-                let sc = Arc::strong_count(db);
-                if sc != 1 {
-                    error!("Database {name} still has {sc} strong refs at shutdown");
-                }
-            },
-            DbSetOwned::Sharded(dbs) => {
-                let sc: usize = dbs.iter().map(|db|Arc::strong_count(db)).sum();
-                if sc != dbs.len() {
-                    error!("DbSet for {name} still has {sc} strong refs at shutdown instead of {}", dbs.len());
-                }
-            },
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct Storage {
-    pub index_dbs: HashMap<String, DbSetWeak>,
-}
-
-impl Storage {
-    /// Fetch a *single* DB (clone the Weak). Errors if column missing or sharded.
-    #[inline]
-    pub fn fetch_single_db(&self, name: &str) -> Result<Weak<Database>, AppError> {
-        match self.index_dbs.get(name) {
-            Some(DbSetWeak::Single(w)) => Ok(w.clone()),
-            Some(DbSetWeak::Sharded(_)) => Err(AppError::Custom(format!(
-                "column `{}`: expected single DB, found sharded", name
-            ))),
-            None => Err(AppError::Custom(format!("column `{}`: not found", name))),
+    impl Key for Address {
+        fn compare(data1: &[u8], data2: &[u8]) -> Ordering {
+            data1.cmp(data2)
         }
     }
 
-    /// Fetch **all shards** (clone the Vec<Weak<_>>). Optionally enforce an expected shard count.
-    #[inline]
-    pub fn fetch_sharded_dbs(&self, name: &str, expected: Option<usize>) -> Result<Vec<Weak<Database>>, AppError> {
-        match self.index_dbs.get(name) {
-            Some(DbSetWeak::Sharded(v)) => {
-                let v = v.clone();
-                if let Some(exp) = expected {
-                    if v.len() != exp {
-                        return Err(AppError::Custom(format!(
-                            "column `{}`: shard count mismatch; expected {}, found {}",
-                            name, exp, v.len()
-                        )));
-                    }
-                }
-                Ok(v)
-            }
-            Some(DbSetWeak::Single(_)) => Err(AppError::Custom(format!(
-                "column `{}`: expected sharded DBs, found single", name
-            ))),
-            None => Err(AppError::Custom(format!("column `{}`: not found", name))),
-        }
-    }
-}
+    pub(crate) fn addr(bytes: &[u8]) -> Address { Address(bytes.to_vec()) }
 
-pub struct StorageOwner {
-    pub index_dbs: HashMap<String, DbSetOwned>,
-}
-
-impl StorageOwner {
-    pub fn new(index_dbs: HashMap<String, DbSetOwned>) -> Self {
-        Self { index_dbs }
+    pub(crate) fn mk_db(prefix: &str) -> (Arc<Database>, Weak<Database>) {
+        let path = std::env::temp_dir().join(format!("{}_{}", prefix, rand::random::<u64>()));
+        let db = Database::builder().create(path).expect("create db");
+        let owned = Arc::new(db);
+        let weak = Arc::downgrade(&owned);
+        (owned, weak)
     }
 
-    pub fn assert_last_refs(&self) {
-        for (name, db_arc) in &self.index_dbs {
-            db_arc.assert_last_ref(name);
+    pub(crate) fn mk_shard_dbs(n: usize, prefix: &str) -> (Vec<Arc<Database>>, Vec<Weak<Database>>) {
+        assert!(n >= 2);
+        let mut owned = Vec::with_capacity(n);
+        for i in 0..n {
+            let path = std::env::temp_dir().join(format!("{}_{}_{}", prefix, i, rand::random::<u64>()));
+            let db = Database::builder().create(path).expect("create db");
+            owned.push(Arc::new(db));
         }
+        let weak = owned.iter().map(Arc::downgrade).collect::<Vec<_>>();
+        (owned, weak)
     }
 
-    pub fn view(&self) -> Arc<Storage> {
-        let mut m = HashMap::with_capacity(self.index_dbs.len());
-        for (k, v) in &self.index_dbs {
-            m.insert(k.clone(), v.downgrade());
+    pub(crate) fn address_dataset(m_values: usize) -> Vec<Address> {
+        let mut vals = Vec::with_capacity(m_values);
+        for i in 0..m_values {
+            // 3–4 bytes is enough to exercise sharding without dominating clone costs
+            let v = addr(&[(i as u8).wrapping_mul(17), (i as u8).wrapping_add(3), (i as u8 ^ 0x5a)]);
+            vals.push(v);
         }
-        Arc::new(Storage { index_dbs: m })
-    }
-
-    pub async fn build_storage(db_dir: PathBuf, db_cache_size_gb: u8) -> redb::Result<(bool, StorageOwner, Arc<Storage>), AppError> {
-        let mut db_defs: Vec<DbDef> = Vec::new();
-        for info in inventory::iter::<StructInfo> {
-            db_defs.extend((info.db_defs)())
-        }
-        Self::init(db_dir, db_defs, db_cache_size_gb).await
-    }
-
-    pub async fn temp(name: &str, db_cache_size_gb: u8, random: bool) -> redb::Result<(StorageOwner, Arc<Storage>), AppError> {
-        let db_name = if random { format!("{}_{}", name, rand::random::<u64>()) } else { name.to_string() };
-        let db_path = env::temp_dir().join(format!("{}/{}", "redbit", db_name));
-        if random && db_path.exists() {
-            fs::remove_dir_all(&db_path)?;
-        }
-        let mut db_defs = Vec::new();
-        for info in inventory::iter::<StructInfo> {
-            db_defs.extend((info.db_defs)())
-        }
-        let (_, owner, view) = StorageOwner::init(db_path, db_defs, db_cache_size_gb).await?;
-        Ok((owner, view))
-    }
-
-    fn db_name_with_cache_table(db_defs: &[DbDefWithCache]) -> Vec<String> {
-        let name_width = db_defs.iter().map(|d| d.name.len()).max().unwrap_or(4); // at least "name"
-        let mut lines = Vec::new();
-        lines.push(format!("{:<name_width$}  {:>10}   {:>10}   {:>10}", "DB NAME", "weight", "size", "lru", name_width = name_width));
-        lines.extend(db_defs.iter().map(|d| {
-            format!(
-                "{:<name_width$}  {:>10}   {:>10}   {:>10}",
-                d.name, d.db_cache_weight, d.db_cache_in_mb, d.lru_cache,
-                name_width = name_width,
-            )
-        }));
-        lines
-    }
-
-    /// Create all DBs. `dbc.db_cache_in_mb` is already *per shard* for sharded, and
-    /// per *single* DB for `shards == 0`. Reject `shards == 1`.
-    fn build_owned_map_create(
-        db_dir: &Path,
-        defs: Vec<DbDefWithCache>,
-    ) -> redb::Result<HashMap<String, DbSetOwned>, AppError> {
-        let mut out = HashMap::with_capacity(defs.len());
-        for dbc in defs {
-            dbc.validate()?;
-            match dbc.shards {
-                0 => {
-                    let db = Database::builder()
-                        .set_cache_size(dbc.db_cache_in_mb)
-                        .create(Self::db_file_path(db_dir, &dbc.name, None))?;
-                    out.insert(dbc.name, DbSetOwned::Single(Arc::new(db)));
-                }
-                shards => {
-                    let mut v = Vec::with_capacity(shards);
-                    for shard_idx in 0..shards {
-                        let db = Database::builder()
-                            .set_cache_size(dbc.db_cache_in_mb)
-                            .create(Self::db_file_path(db_dir, &dbc.name, Some(shard_idx)))?;
-                        v.push(Arc::new(db));
-                    }
-                    out.insert(dbc.name, DbSetOwned::Sharded(v));
-                }
-            }
-        }
-        Ok(out)
-    }
-
-    /// Open all DBs in parallel. Reject `shards == 1`. Returns Single/Sharded depending on each definition.
-    async fn build_owned_map_open(
-        db_dir: &Path,
-        defs: Vec<DbDefWithCache>,
-    ) -> redb::Result<HashMap<String, DbSetOwned>, AppError> {
-        for dbc in &defs {
-            dbc.validate()?;
-        }
-        let db_opening_tasks = defs.into_iter().flat_map(|dbc| {
-            match dbc.shards {
-                0 => {
-                    let name = dbc.name.clone();
-                    let path = Self::db_file_path(db_dir, &name, None);
-                    vec![tokio::task::spawn_blocking(move ||
-                        -> redb::Result<(String, Option<usize>, Arc<Database>), DatabaseError> {
-                            let db = Database::open(path)?;
-                            Ok((name, None, Arc::new(db)))
-                        }
-                    )]
-                }
-                n => (0..n).map(move |i| {
-                    let name = dbc.name.clone();
-                    let path = Self::db_file_path(db_dir, &name, Some(i));
-                    tokio::task::spawn_blocking(move ||
-                        -> redb::Result<(String, Option<usize>, Arc<Database>), DatabaseError> {
-                            let db = Database::open(path)?;
-                            Ok((name, Some(i), Arc::new(db)))
-                        }
-                    )
-                }).collect::<Vec<_>>(),
-            }
-        });
-
-        let opened = try_join_all(db_opening_tasks)
-            .await?
-            .into_iter()
-            .collect::<redb::Result<Vec<(String, Option<usize>, Arc<Database>)>, DatabaseError>>()?;
-
-        Ok(DbSetOwned::new(opened))
-    }
-
-    fn db_file_path(dir: &Path, name: &str, shard_idx: Option<usize>) -> PathBuf {
-        match shard_idx {
-            Some(i) => dir.join(format!("{}-{}.db", name, i)),
-            None    => dir.join(format!("{}.db",    name)),
-        }
-    }
-
-    pub async fn init(db_dir: PathBuf, db_defs: Vec<DbDef>, total_cache_size_gb: u8) -> redb::Result<(bool, StorageOwner, Arc<Storage>), AppError> {
-        // allocator now outputs per-shard cache in MB + asserts shards >= 2
-        let defs_with_cache: Vec<DbDefWithCache> = cache::allocate_cache_mb(&db_defs, (total_cache_size_gb as u64) * 1024);
-
-        let db_name_with_cache_table = Self::db_name_with_cache_table(&defs_with_cache).join("\n");
-
-        if !db_dir.exists() {
-            fs::create_dir_all(&db_dir)?;
-            info!(
-            "Creating dbs at {:?} with total cache size {} GB:\n{}",
-            db_dir, total_cache_size_gb, db_name_with_cache_table
-        );
-            let index_dbs = Self::build_owned_map_create(&db_dir, defs_with_cache)?;
-            let owner = StorageOwner::new(index_dbs);
-            let view = owner.view();
-            Ok((true, owner, view))
-        } else {
-            info!(
-            "Opening existing dbs at {:?} with total cache size {} GB, it might take a while in case previous process was killed\n{}",
-            db_dir, total_cache_size_gb, db_name_with_cache_table
-        );
-            let index_dbs = Self::build_owned_map_open(&db_dir, defs_with_cache).await?;
-            let owner = StorageOwner::new(index_dbs);
-            let view = owner.view();
-            Ok((false, owner, view))
-        }
+        vals
     }
 }
 
 #[cfg(all(test, not(feature = "integration")))]
-mod tests {
-    use crate::storage::DbSetWeak;
-    use crate::{Storage, StorageOwner};
-    use std::sync::Arc;
+pub mod plain_test_utils {
+    use crate::storage::table_plain_write::PlainTable;
+    use crate::storage::test_utils::{addr, Address};
+    use crate::*;
+    use redb::{Database, TableDefinition, WriteTransaction};
 
-    fn count_weak_upgrades(storage: &Arc<Storage>) -> (usize, usize) {
-        let mut total = 0usize;
-        let mut alive = 0usize;
-
-        for group in storage.index_dbs.values() {
-            match group {
-                DbSetWeak::Single(w) => {
-                    total += 1;
-                    if w.upgrade().is_some() { alive += 1; }
-                }
-                DbSetWeak::Sharded(ws) => {
-                    total += ws.len();
-                    alive += ws.iter().filter(|w| w.upgrade().is_some()).count();
-                }
-            }
-        }
-        (total, alive)
+    pub(crate) fn mk_sharded_reader(n: usize, weak_dbs: Vec<Weak<Database>>, plain_def: TableDefinition<'static, u32, Address>) -> ShardedReadOnlyPlainTable<u32, Address, BytesPartitioner> {
+        ShardedReadOnlyPlainTable::new(
+            BytesPartitioner::new(n),
+            weak_dbs.clone(),
+            plain_def,
+        ).expect("reader")
     }
 
-    #[tokio::test]
-    async fn test_storage_weak_owner_drop() {
-        // NOTE: shards must be >= 2 now
-        let (owner, storage) = StorageOwner::temp("weak_drop_test", 2, true)
-            .await
-            .expect("temp storage");
+    pub(crate) fn mk_sharded_writer(n: usize, weak_dbs: Vec<Weak<Database>>) -> (ShardedTableWriter<u32, Address, PlainFactory<u32, Address>, BytesPartitioner, Xxh3Partitioner>, TableDefinition<'static, u32, Address>) {
+        let plain_def = TableDefinition::<u32, Address>::new("plain_underlying");
 
-        // While owner is alive, Weak<Database> should upgrade (if any exist)
-        let (total_before, alive_before) = count_weak_upgrades(&storage);
+        // Writer/Reader
+        let writer = ShardedTableWriter::new(
+            Partitioning::by_key(n),
+            weak_dbs.clone(),
+            PlainFactory::new(plain_def),
+        ).expect("writer");
 
-        // If the fixture created no DBs (empty schema), gracefully skip assertions.
-        if total_before == 0 {
-            eprintln!("no databases in temp storage; skipping drop assertions");
-            return;
-        }
-
-        assert_eq!(alive_before, total_before, "all dbs should be alive before drop");
-
-        // Drop owner -> all Weak must fail to upgrade
-        drop(owner);
-
-        let (_total_after, alive_after) = count_weak_upgrades(&storage);
-        assert_eq!(alive_after, 0, "all dbs must be dropped when owner is dropped");
+        (writer, plain_def)
     }
 
-    #[tokio::test]
-    async fn test_storage_groups_have_consistent_shape() {
-        let (_owner, storage) = StorageOwner::temp("shape_test", 1, true)
-            .await
-            .expect("temp storage");
+    pub(crate) fn setup_plain_defs() -> (
+        Database,
+        WriteTransaction,
+        TableDefinition<'static, u32, Address>,
+    ) {
+        let path = std::env::temp_dir().join(format!("redbit_plain_test_{}", rand::random::<u64>()));
+        let db   = Database::builder().create(path).expect("create db");
+        let tx   = db.begin_write().expect("begin write");
+        let tbl  = TableDefinition::<u32, Address>::new("plain_underlying");
+        (db, tx, tbl)
+    }
 
-        // Just verify we can iterate and see at least one weak in each group.
-        for (name, group) in &storage.index_dbs {
-            let weak_count = match group {
-                DbSetWeak::Single(w) => if w.upgrade().is_some() { 1 } else { 0 },
-                DbSetWeak::Sharded(ws) => ws.len(),
-            };
-            assert!(weak_count > 0, "column `{name}` must hold at least one weak ref");
+    pub(crate) fn mk_plain<'txn>(
+        tx: &'txn WriteTransaction,
+        underlying_def: TableDefinition<'static, u32, Address>,
+    ) -> PlainTable<'txn, u32, Address> {
+        // Construct directly; mirrors your struct shape.
+        PlainTable {
+            table: tx.open_table(underlying_def).expect("open plain table"),
         }
+    }
+
+    pub(crate) fn plain_insert(t: &mut PlainTable<'_, u32, Address>, k: u32, v: &[u8]) {
+        t.table.insert(&k, &addr(v)).expect("plain insert");
+    }
+
+    pub(crate) fn plain_get(t: &PlainTable<'_, u32, Address>, k: u32) -> Option<Vec<u8>> {
+        t.table.get(&k).expect("plain get").map(|g| g.value().0)
+    }
+
+    pub(crate) fn plain_len(t: &PlainTable<'_, u32, Address>) -> u64 {
+        t.table.len().expect("plain len")
+    }
+}
+
+#[cfg(all(test, not(feature = "integration")))]
+pub mod index_test_utils {
+    use crate::storage::test_utils;
+    use crate::storage::test_utils::{addr, Address};
+    use crate::*;
+    use lru::LruCache;
+    use redb::{
+        Database, MultimapTableDefinition, MultimapValue, TableDefinition,
+        WriteTransaction,
+    };
+    use std::num::NonZeroUsize;
+
+    pub(crate) fn mk_sharded_reader(n: usize, weak_dbs: Vec<Weak<Database>>, pk_by_index_def: MultimapTableDefinition<'static, Address, u32>, index_by_pk_def: TableDefinition<'static, u32, Address>) -> ShardedReadOnlyIndexTable<u32, Address, Xxh3Partitioner> {
+        ShardedReadOnlyIndexTable::new(
+            Xxh3Partitioner::new(n),
+            weak_dbs.clone(),
+            pk_by_index_def,
+            index_by_pk_def,
+        ).expect("reader")
+    }
+
+    pub(crate) fn mk_sharded_writer(n: usize, lru_cache: usize, weak_dbs: Vec<Weak<Database>>) -> (ShardedTableWriter<u32, Address, IndexFactory<u32, Address>, BytesPartitioner, Xxh3Partitioner>, MultimapTableDefinition<'static, Address, u32>, TableDefinition<'static, u32, Address>) {
+        let pk_by_index_def = MultimapTableDefinition::<Address, u32>::new("pk_by_index");
+        let index_by_pk_def = TableDefinition::<u32, Address>::new("index_by_pk");
+
+        let writer = ShardedTableWriter::new(
+            Partitioning::by_value(n),
+            weak_dbs.clone(),
+            IndexFactory::new(lru_cache, pk_by_index_def, index_by_pk_def, ),
+        ).expect("writer");
+
+        (writer, pk_by_index_def, index_by_pk_def)
+    }
+
+    pub(crate) fn setup_index_defs(lru_cap: usize) -> (
+        Arc<Database>,
+        Weak<Database>,
+        LruCache<Vec<u8>, Vec<u8>>,
+        MultimapTableDefinition<'static, Address, u32>, // pk_by_index
+        TableDefinition<'static, u32, Address>,         // index_by_pk
+    ) {
+        let (owner_db, weak_db)   = test_utils::mk_db("redbit_index_test");
+        let lru  = LruCache::new(NonZeroUsize::new(lru_cap).unwrap());
+
+        let pk_by_index   = MultimapTableDefinition::<Address, u32>::new("pk_by_index");
+        let index_by_pk   = TableDefinition::<u32, Address>::new("index_by_pk");
+        (owner_db, weak_db, lru, pk_by_index, index_by_pk)
+    }
+
+    pub(crate) fn mk_index<'txn, 'c>(
+        tx: &'txn WriteTransaction,
+        cache: &'c mut LruCache<Vec<u8>, Vec<u8>>,
+        pk_by_index_def: MultimapTableDefinition<'static, Address, u32>,
+        index_by_pk_def: TableDefinition<'static, u32, Address>,
+    ) -> IndexTable<'txn, 'c, u32, Address> {
+        // Construct directly; mirrors your struct shape.
+        IndexTable {
+            pk_by_index: tx.open_multimap_table(pk_by_index_def).expect("open pk_by_index"),
+            index_by_pk: tx.open_table(index_by_pk_def).expect("open index_by_pk"),
+            cache: Some(cache),
+        }
+    }
+
+    /// Insert mapping pk -> index AND index -> pk (bidirectional index maintenance).
+    pub(crate) fn index_insert(t: &mut IndexTable<'_, '_, u32, Address>, pk: u32, index_bytes: &[u8]) {
+        let idx = addr(index_bytes);
+        t.index_by_pk.insert(&pk, &idx).expect("index_by_pk.insert");
+        t.pk_by_index.insert(&idx, &pk).expect("pk_by_index.insert");
+    }
+
+    pub(crate) fn index_get_value_by_pk(t: &IndexTable<'_, '_, u32, Address>, pk: u32) -> Option<Vec<u8>> {
+        t.index_by_pk.get(&pk).expect("get value").map(|g| g.value().0)
+    }
+
+    pub(crate) fn index_get_keys_by_index(t: &IndexTable<'_, '_, u32, Address>, index_bytes: &[u8]) -> Vec<u32> {
+        let mv: MultimapValue<'_, u32> = t.pk_by_index.get(&addr(index_bytes)).expect("mm get");
+        mv.into_iter().map(|g| g.unwrap().value()).collect()
+    }
+
+    pub(crate) fn index_len_pk_by_index(t: &IndexTable<'_, '_, u32, Address>) -> u64 {
+        t.pk_by_index.len().expect("mm len")
+    }
+
+    pub(crate) fn index_len_index_by_pk(t: &IndexTable<'_, '_, u32, Address>) -> u64 {
+        t.index_by_pk.len().expect("tbl len")
+    }
+}
+
+#[cfg(all(test, not(feature = "integration")))]
+pub mod dict_test_utils {
+    use crate::storage::test_utils::{addr, Address};
+    use crate::*;
+    use lru::LruCache;
+    use std::num::NonZeroUsize;
+
+    pub (crate) fn mk_sharder_reader(n: usize, weak_dbs: Vec<Weak<Database>>, dict_pk_to_ids: MultimapTableDefinition<'static, u32, u32>, value_by_dict_pk: TableDefinition<'static, u32, Address>, value_to_dict_pk: TableDefinition<'static, Address, u32>, dict_pk_by_id: TableDefinition<'static, u32, u32>) -> ShardedReadOnlyDictTable<u32, Address, Xxh3Partitioner> {
+        ShardedReadOnlyDictTable::new(
+            Xxh3Partitioner::new(n),
+            weak_dbs.clone(),
+            dict_pk_to_ids,
+            value_by_dict_pk,
+            value_to_dict_pk,
+            dict_pk_by_id,
+        ).expect("reader")
+    }
+
+    pub(crate) fn mk_sharded_writer(n: usize, weak_dbs: Vec<Weak<Database>>) -> (ShardedTableWriter<u32, Address, DictFactory<u32, Address>, BytesPartitioner, Xxh3Partitioner>, MultimapTableDefinition<'static, u32, u32>, TableDefinition<'static, u32, Address>, TableDefinition<'static, Address, u32>, TableDefinition<'static, u32, u32>) {
+        // Table defs
+        let dict_pk_to_ids   = MultimapTableDefinition::<u32, u32>::new("dict_pk_to_ids");
+        let value_by_dict_pk = TableDefinition::<u32, Address>::new("value_by_dict_pk");
+        let value_to_dict_pk = TableDefinition::<Address, u32>::new("value_to_dict_pk");
+        let dict_pk_by_id    = TableDefinition::<u32, u32>::new("dict_pk_by_id");
+
+        // Writer by value (so identical values go to the same shard):
+        let writer = ShardedTableWriter::new(
+            Partitioning::by_value(n),
+            weak_dbs.clone(),
+            DictFactory::new(
+                8192, // LRU cap
+                dict_pk_to_ids,
+                value_by_dict_pk,
+                value_to_dict_pk,
+                dict_pk_by_id,
+            ),
+        ).expect("writer");
+
+        (writer, dict_pk_to_ids, value_by_dict_pk, value_to_dict_pk, dict_pk_by_id)
+    }
+
+    pub(crate) fn setup_dict_defs(cap: usize) -> (
+        Database,
+        WriteTransaction,
+        LruCache<Vec<u8>, Vec<u8>>,
+        MultimapTableDefinition<'static, u32, u32>,
+        TableDefinition<'static, u32, Address>,
+        TableDefinition<'static, Address, u32>,
+        TableDefinition<'static, u32, u32>,
+    ) {
+        let random_db_path = std::env::temp_dir().join(format!("redbit_test_{}", rand::random::<u64>()));
+        let random_db = Database::builder().create(random_db_path).expect("Failed to create test db");
+        let write_tx = random_db.begin_write().expect("Failed to begin write tx");
+        let lru_cache = LruCache::new(NonZeroUsize::new(cap).unwrap());
+
+        let dict_pk_to_ids: MultimapTableDefinition<'static, u32, u32> = MultimapTableDefinition::new("dict_pk_to_ids");
+        let value_by_dict_pk: TableDefinition<'static, u32, Address> = TableDefinition::new("value_by_dict_pk");
+        let value_to_dict_pk: TableDefinition<'static, Address, u32> = TableDefinition::new("value_to_dict_pk");
+        let dict_pk_by_id: TableDefinition<'static, u32, u32> = TableDefinition::new("dict_pk_by_id");
+
+        (random_db, write_tx, lru_cache, dict_pk_to_ids, value_by_dict_pk, value_to_dict_pk, dict_pk_by_id)
+    }
+
+    pub(crate) fn mk_dict<'txn, 'c>(
+        tx: &'txn WriteTransaction,
+        cache: &'c mut LruCache<Vec<u8>, Vec<u8>>,
+        dict_pk_to_ids: MultimapTableDefinition<'static, u32, u32>,
+        value_by_dict_pk: TableDefinition<'static, u32, Address>,
+        value_to_dict_pk: TableDefinition<'static, Address, u32>,
+        dict_pk_by_id: TableDefinition<'static, u32, u32>,
+    ) -> DictTable<'txn, 'c, u32, Address> {
+        DictTable::new(tx, cache, dict_pk_to_ids, value_by_dict_pk, value_to_dict_pk, dict_pk_by_id).expect("Failed to create DictTable")
+    }
+
+    /// Insert a pair (id, value bytes).
+    pub(crate) fn dict_insert(dict: &mut DictTable<'_, '_, u32, Address>, id: u32, v: &[u8]) {
+        dict.insert_kv(&id, &addr(v)).expect("insert_kv");
+    }
+
+    /// Read the birth id for a given external id.
+    pub(crate) fn birth_id_of(dict: &DictTable<'_, '_, u32, Address>, id: u32) -> u32 {
+        dict.dict_pk_by_id.get(&id).expect("get").expect("missing").value()
+    }
+
+    /// Read the stored value under a birth id.
+    pub(crate) fn value_of_birth(dict: &DictTable<'_, '_, u32, Address>, b: u32) -> Vec<u8> {
+        dict.value_by_dict_pk.get(&b).expect("get").expect("missing").value().0
+    }
+
+    /// Reverse lookup birth id from a value (value_to_dict_pk).
+    pub(crate) fn reverse_birth_of(dict: &DictTable<'_, '_, u32, Address>, v: &[u8]) -> u32 {
+        dict.value_to_dict_pk.get(&addr(v)).expect("get").expect("missing").value()
+    }
+
+    /// Assert two ids share (or don’t share) birth ids.
+    pub(crate) fn assert_same_birth(dict: &DictTable<'_, '_, u32, Address>, lhs: u32, rhs: u32, expect_same: bool) {
+        let bl = birth_id_of(dict, lhs);
+        let br = birth_id_of(dict, rhs);
+        if expect_same { assert_eq!(bl, br, "ids {lhs} and {rhs} should share a birth id"); } else { assert_ne!(bl, br, "ids {lhs} and {rhs} should not share a birth id"); }
     }
 }

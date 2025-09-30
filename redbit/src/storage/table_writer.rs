@@ -9,11 +9,11 @@ use std::thread;
 use std::thread::JoinHandle;
 
 pub struct FlushFuture {
-    ack_rx: Receiver<redb::Result<(), AppError>>,
+    ack_rx: Receiver<Result<(), AppError>>,
 }
 
 impl FlushFuture {
-    pub fn wait(self) -> redb::Result<(), AppError> {
+    pub fn wait(self) -> Result<(), AppError> {
         self.ack_rx.recv()?
     }
 }
@@ -30,10 +30,10 @@ impl<V: Value> ValueBuf<V> {
 }
 
 pub trait WriteTableLike<K: Key + 'static, V: Key + 'static> {
-    fn insert_kv<'k, 'v>(&mut self, key: impl Borrow<K::SelfType<'k>>, value: impl Borrow<V::SelfType<'v>>) -> redb::Result<(), AppError>;
-    fn delete_kv<'k>(&mut self, key: impl Borrow<K::SelfType<'k>>) -> redb::Result<bool, AppError>;
-    fn get_head_by_index<'v>(&mut self, value: impl Borrow<V::SelfType<'v>>) -> redb::Result<Option<ValueBuf<K>>>;
-    fn range<'a, KR: Borrow<K::SelfType<'a>> + 'a>(&self, range: impl RangeBounds<KR> + 'a) -> redb::Result<Vec<(ValueBuf<K>, ValueBuf<V>)>>;
+    fn insert_kv<'k, 'v>(&mut self, key: impl Borrow<K::SelfType<'k>>, value: impl Borrow<V::SelfType<'v>>) -> Result<(), AppError>;
+    fn delete_kv<'k>(&mut self, key: impl Borrow<K::SelfType<'k>>) -> Result<bool, AppError>;
+    fn get_any_for_index<'v>(&mut self, value: impl Borrow<V::SelfType<'v>>) -> Result<Option<ValueBuf<K>>, AppError>;
+    fn range<'a, KR: Borrow<K::SelfType<'a>> + 'a>(&self, range: impl RangeBounds<KR> + 'a) -> Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>;
 
     fn key_buf(g: AccessGuard<'_, K>) -> ValueBuf<K> {
         ValueBuf::<K>::new(K::as_bytes(&g.value()).as_ref().to_vec())
@@ -52,20 +52,20 @@ pub trait TableFactory<K: Key + 'static, V: Key + 'static> {
 }
 
 pub enum WriterCommand<K: Key + Send + 'static, V: Key + Send + 'static> {
-    Begin(Sender<redb::Result<(), AppError>>),              // start new WriteTransaction + open table
+    Begin(Sender<Result<(), AppError>>),              // start new WriteTransaction + open table
     Insert(K, V),
-    Remove(K, Sender<redb::Result<bool, AppError>>),
-    HeadForIndex(Vec<V>, Sender<redb::Result<Vec<Option<ValueBuf<K>>>, AppError>>),
-    HeadForIndexTagged(Vec<(usize, V)>, Sender<redb::Result<Vec<(usize, Option<ValueBuf<K>>)>, AppError>>),
-    Range(K, K, Sender<redb::Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>>),
-    Flush(Sender<redb::Result<(), AppError>>),              // commit current tx, stay alive (idle)
-    Shutdown(Sender<redb::Result<(), AppError>>),           // graceful stop (no commit)
+    Remove(K, Sender<Result<bool, AppError>>),
+    AnyForIndex(Vec<V>, Sender<Result<Vec<Option<ValueBuf<K>>>, AppError>>),
+    AnyForIndexTagged(Vec<(usize, V)>, Sender<Result<Vec<(usize, Option<ValueBuf<K>>)>, AppError>>),
+    Range(K, K, Sender<Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>>),
+    Flush(Sender<Result<(), AppError>>),              // commit current tx, stay alive (idle)
+    Shutdown(Sender<Result<(), AppError>>),           // graceful stop (no commit)
 }
 
 enum Control {
     Continue,
-    Flush(Sender<redb::Result<(), AppError>>),
-    Shutdown(Sender<redb::Result<(), AppError>>),
+    Flush(Sender<Result<(), AppError>>),
+    Shutdown(Sender<Result<(), AppError>>),
 }
 
 pub struct TableWriter<K: Key + Send + 'static, V: Key + Send + 'static, F> {
@@ -92,19 +92,19 @@ where
                 let _ = ack.send(Ok(r));
                 Ok(Control::Continue)
             }
-            WriterCommand::HeadForIndex(values, ack) => {
+            WriterCommand::AnyForIndex(values, ack) => {
                 let mut out = Vec::with_capacity(values.len());
                 for v in values {
-                    out.push(table.get_head_by_index(v)?);
+                    out.push(table.get_any_for_index(v)?);
                 }
                 let _ = ack.send(Ok(out));
                 Ok(Control::Continue)
             }
-            WriterCommand::HeadForIndexTagged(pairs, ack) => {
+            WriterCommand::AnyForIndexTagged(pairs, ack) => {
                 let mut out = Vec::with_capacity(pairs.len());
                 for (pos, v) in pairs {
-                    let head = table.get_head_by_index(v)?;
-                    out.push((pos, head));
+                    let any = table.get_any_for_index(v)?;
+                    out.push((pos, any));
                 }
                 let _ = ack.send(Ok(out));
                 Ok(Control::Continue)
@@ -137,7 +137,7 @@ where
         Ok(ctrl)
     }
 
-    pub fn new(db_weak: Weak<Database>, factory: F) -> redb::Result<Self, AppError> {
+    pub fn new(db_weak: Weak<Database>, factory: F) -> Result<Self, AppError> {
         let (topic, receiver): (Sender<WriterCommand<K, V>>, Receiver<WriterCommand<K, V>>) = unbounded();
         let handle = thread::spawn(move || {
             let mut cache = factory.new_cache();
@@ -170,7 +170,7 @@ where
                             Err(e) => { let _ = ack.send(Err(e)); continue 'outer; }
                         };
                         // 3) process commands until a Flush arrives
-                        let mut flush_ack: Option<Sender<redb::Result<(), AppError>>> = None;
+                        let mut flush_ack: Option<Sender<Result<(), AppError>>> = None;
                         let mut write_error: Option<Result<(), AppError>> = None;
 
                         'in_tx: loop {
@@ -227,8 +227,8 @@ where
     }
 
     // ---- new API to (re)begin a transaction ----
-    pub fn begin(&self) -> redb::Result<(), AppError> {
-        let (ack_tx, ack_rx) = bounded::<redb::Result<(), AppError>>(1);
+    pub fn begin(&self) -> Result<(), AppError> {
+        let (ack_tx, ack_rx) = bounded::<Result<(), AppError>>(1);
         self.fast_send(WriterCommand::Begin(ack_tx))?;
         ack_rx.recv()?
     }
@@ -238,45 +238,45 @@ where
         self.fast_send(WriterCommand::Insert(key, value))
     }
 
-    pub fn get_head_for_index_tagged(&self, pairs: Vec<(usize, V)>) -> redb::Result<Vec<(usize, Option<ValueBuf<K>>)>, AppError> {
+    pub fn get_any_for_index_tagged(&self, pairs: Vec<(usize, V)>) -> Result<Vec<(usize, Option<ValueBuf<K>>)>, AppError> {
         let (ack_tx, ack_rx) = bounded(1);
-        self.fast_send(WriterCommand::HeadForIndexTagged(pairs, ack_tx))?;
+        self.fast_send(WriterCommand::AnyForIndexTagged(pairs, ack_tx))?;
         ack_rx.recv()?
     }
 
-    pub fn get_head_for_index(&self, values: Vec<V>) -> redb::Result<Vec<Option<ValueBuf<K>>>, AppError> {
-        let (ack_tx, ack_rx) = bounded::<redb::Result<Vec<Option<ValueBuf<K>>>, AppError>>(1);
-        self.fast_send(WriterCommand::HeadForIndex(values, ack_tx))?;
+    pub fn get_any_for_index(&self, values: Vec<V>) -> Result<Vec<Option<ValueBuf<K>>>, AppError> {
+        let (ack_tx, ack_rx) = bounded::<Result<Vec<Option<ValueBuf<K>>>, AppError>>(1);
+        self.fast_send(WriterCommand::AnyForIndex(values, ack_tx))?;
         ack_rx.recv()?
     }
 
-    pub fn range(&self, from: K, until: K) -> redb::Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError> {
-        let (ack_tx, ack_rx) = bounded::<redb::Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>>(1);
+    pub fn range(&self, from: K, until: K) -> Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError> {
+        let (ack_tx, ack_rx) = bounded::<Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>>(1);
         self.fast_send(WriterCommand::Range(from, until, ack_tx))?;
         ack_rx.recv()?
     }
 
-    pub fn delete_kv(&self, key: K) -> redb::Result<bool, AppError> {
-        let (ack_tx, ack_rx) = bounded::<redb::Result<bool, AppError>>(1);
+    pub fn delete_kv(&self, key: K) -> Result<bool, AppError> {
+        let (ack_tx, ack_rx) = bounded::<Result<bool, AppError>>(1);
         self.fast_send(WriterCommand::Remove(key, ack_tx))?;
         ack_rx.recv()?
     }
 
     // commit current tx but KEEP worker alive (idle); you can call begin() again
-    pub fn flush(&self) -> redb::Result<(), AppError> {
-        let (ack_tx, ack_rx) = bounded::<redb::Result<(), AppError>>(1);
+    pub fn flush(&self) -> Result<(), AppError> {
+        let (ack_tx, ack_rx) = bounded::<Result<(), AppError>>(1);
         self.fast_send(WriterCommand::Flush(ack_tx))?;
         ack_rx.recv()?
     }
 
-    pub fn flush_async(&self) -> redb::Result<Vec<FlushFuture>, AppError> {
-        let (ack_tx, ack_rx) = bounded::<redb::Result<(), AppError>>(1);
+    pub fn flush_async(&self) -> Result<Vec<FlushFuture>, AppError> {
+        let (ack_tx, ack_rx) = bounded::<Result<(), AppError>>(1);
         self.fast_send(WriterCommand::Flush(ack_tx))?;
         Ok(vec![FlushFuture { ack_rx }])
     }
     // optional: graceful shutdown when you’re done with the writer forever
-    pub fn shutdown(self) -> redb::Result<(), AppError> {
-        let (ack_tx, ack_rx) = bounded::<redb::Result<(), AppError>>(1);
+    pub fn shutdown(self) -> Result<(), AppError> {
+        let (ack_tx, ack_rx) = bounded::<Result<(), AppError>>(1);
         self.fast_send(WriterCommand::Shutdown(ack_tx))?;
         ack_rx.recv()??;
         self.handle.join().map_err(|_| AppError::Custom("Write table join failed".to_string()))?;

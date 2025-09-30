@@ -1,10 +1,5 @@
-//! redbit reads struct annotations and derives code necessary for persisting and querying structured data into/from
-//! [Redb](https://github.com/cberner/redb) using secondary indexes and dictionaries.
-//!
-//! It leverages the `redb` crate for storage, with custom implementations for serializing and deserializing data using `bincode`.
-//! The library provides methods for storing, retrieving, and deleting entities based on primary keys (PKs) and secondary indexes,
-//! supporting one-to-one and one-to-many relationships.
-//!
+#![feature(test)]
+extern crate test;
 
 pub mod query;
 pub mod utf8_serde_enc;
@@ -88,10 +83,10 @@ pub use storage::table_index_write::{IndexTable, IndexFactory};
 pub use storage::table_plain_read::ReadOnlyPlainTable;
 pub use storage::table_plain_read_sharded::ShardedReadOnlyPlainTable;
 pub use storage::table_plain_write::PlainFactory;
-pub use storage::table_writer::{TableWriter, FlushFuture};
+pub use storage::table_writer::{TableWriter, FlushFuture, WriteTableLike};
 pub use storage::table_writer_sharded::ShardedTableWriter;
-pub use storage::Storage;
-pub use storage::StorageOwner;
+pub use storage::init::Storage;
+pub use storage::init::StorageOwner;
 pub use urlencoding;
 pub use utoipa;
 pub use utoipa::openapi;

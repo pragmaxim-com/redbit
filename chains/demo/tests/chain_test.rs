@@ -1,3 +1,4 @@
+#[cfg(all(test, feature = "integration"))]
 mod chain_tests {
     use chain::api::BlockProvider;
     use chain::settings::AppConfig;
