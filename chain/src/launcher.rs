@@ -3,7 +3,7 @@ use crate::scheduler::Scheduler;
 use crate::settings::{AppConfig, DbCacheSize, HttpSettings, IndexerSettings};
 use crate::{combine, ChainError};
 use futures::future::ready;
-use redbit::storage::{Storage, StorageOwner};
+use redbit::storage::init::{Storage, StorageOwner};
 use redbit::{error, info, serve, AppError, OpenApiRouter, RequestState, WriteTxContext};
 use std::env;
 use std::sync::Arc;

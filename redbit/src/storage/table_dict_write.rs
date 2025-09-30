@@ -52,10 +52,10 @@ impl<K: Key + 'static, V: Key + 'static> TableFactory<K, V> for DictFactory<K, V
     }
 }
 pub struct DictTable<'txn, 'c, K: Key + 'static, V: Key + 'static> {
-    dict_pk_to_ids: MultimapTable<'txn, K, K>,
-    value_by_dict_pk: Table<'txn, K, V>,
-    value_to_dict_pk: Table<'txn, V, K>,
-    dict_pk_by_id: Table<'txn, K, K>,
+    pub(crate) dict_pk_to_ids: MultimapTable<'txn, K, K>,
+    pub(crate) value_by_dict_pk: Table<'txn, K, V>,
+    pub(crate) value_to_dict_pk: Table<'txn, V, K>,
+    pub(crate) dict_pk_by_id: Table<'txn, K, K>,
     cache: &'c mut LruCache<Vec<u8>, Vec<u8>>,
 }
 
@@ -130,121 +130,27 @@ impl<'txn, 'c, K: Key + 'static, V: Key + 'static> WriteTableLike<K, V> for Dict
         }
     }
 
-    fn get_head_by_index<'v>(&mut self, _value: impl Borrow<V::SelfType<'v>>) -> Result<Option<ValueBuf<K>>>  {
+    fn get_any_for_index<'v>(&mut self, _value: impl Borrow<V::SelfType<'v>>) -> Result<Option<ValueBuf<K>>, AppError>  {
         unimplemented!()
     }
 
-    fn range<'a, KR: Borrow<K::SelfType<'a>> + 'a>(&self, _range: impl RangeBounds<KR> + 'a) -> Result<Vec<(ValueBuf<K>, ValueBuf<V>)>> {
+    fn range<'a, KR: Borrow<K::SelfType<'a>> + 'a>(&self, _range: impl RangeBounds<KR> + 'a) -> Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError> {
         unimplemented!()
     }
 }
 
 #[cfg(all(test, not(feature = "integration")))]
 mod tests {
-    use super::*;
-    use lru::LruCache;
-
-    #[derive(Debug)]
-    pub struct Address(pub Vec<u8>);
-    impl Value for Address {
-        type SelfType<'a> = Address where Self: 'a;
-        type AsBytes<'a> = &'a [u8] where Self: 'a;
-        fn fixed_width() -> Option<usize> {
-            None
-        }
-        fn from_bytes<'a>(data: &'a [u8]) -> Address
-        where
-            Self: 'a,
-        {
-            Address(data.to_vec())
-        }
-        fn as_bytes<'a, 'b: 'a>(value: &'a Self::SelfType<'b>) -> &'a [u8]
-        where
-            Self: 'a,
-            Self: 'b,
-        {
-            value.0.as_ref()
-        }
-        fn type_name() -> TypeName {
-            TypeName::new("Vec<u8>")
-        }
-    }
-    impl Key for Address {
-        fn compare(data1: &[u8], data2: &[u8]) -> std::cmp::Ordering {
-            data1.cmp(data2)
-        }
-    }
-
-    fn addr(bytes: &[u8]) -> Address { Address(bytes.to_vec()) }
-
-    fn setup_defs(cap: usize) -> (
-        Database,
-        WriteTransaction,
-        LruCache<Vec<u8>, Vec<u8>>,
-        MultimapTableDefinition<'static, u32, u32>,
-        TableDefinition<'static, u32, Address>,
-        TableDefinition<'static, Address, u32>,
-        TableDefinition<'static, u32, u32>,
-    ) {
-        let random_db_path = std::env::temp_dir().join(format!("redbit_test_{}", rand::random::<u64>()));
-        let random_db = Database::builder().create(random_db_path).expect("Failed to create test db");
-        let write_tx = random_db.begin_write().expect("Failed to begin write tx");
-        let lru_cache = LruCache::new(NonZeroUsize::new(cap).unwrap());
-
-        let dict_pk_to_ids: MultimapTableDefinition<'static, u32, u32> = MultimapTableDefinition::new("dict_pk_to_ids");
-        let value_by_dict_pk: TableDefinition<'static, u32, Address> = TableDefinition::new("value_by_dict_pk");
-        let value_to_dict_pk: TableDefinition<'static, Address, u32> = TableDefinition::new("value_to_dict_pk");
-        let dict_pk_by_id: TableDefinition<'static, u32, u32> = TableDefinition::new("dict_pk_by_id");
-
-        (random_db, write_tx, lru_cache, dict_pk_to_ids, value_by_dict_pk, value_to_dict_pk, dict_pk_by_id)
-    }
-
-    fn mk_dict<'txn, 'c>(
-        tx: &'txn WriteTransaction,
-        cache: &'c mut LruCache<Vec<u8>, Vec<u8>>,
-        dict_pk_to_ids: MultimapTableDefinition<'static, u32, u32>,
-        value_by_dict_pk: TableDefinition<'static, u32, Address>,
-        value_to_dict_pk: TableDefinition<'static, Address, u32>,
-        dict_pk_by_id: TableDefinition<'static, u32, u32>,
-    ) -> DictTable<'txn, 'c, u32, Address> {
-        DictTable::new(tx, cache, dict_pk_to_ids, value_by_dict_pk, value_to_dict_pk, dict_pk_by_id).expect("Failed to create DictTable")
-    }
-
-    /// Insert a pair (id, value bytes).
-    fn insert(dict: &mut DictTable<'_, '_, u32, Address>, id: u32, v: &[u8]) {
-        dict.insert_kv(&id, &addr(v)).expect("insert_kv");
-    }
-
-    /// Read the birth id for a given external id.
-    fn birth_id_of(dict: &DictTable<'_, '_, u32, Address>, id: u32) -> u32 {
-        dict.dict_pk_by_id.get(&id).expect("get").expect("missing").value()
-    }
-
-    /// Read the stored value under a birth id.
-    fn value_of_birth(dict: &DictTable<'_, '_, u32, Address>, b: u32) -> Vec<u8> {
-        dict.value_by_dict_pk.get(&b).expect("get").expect("missing").value().0
-    }
-
-    /// Reverse lookup birth id from a value (value_to_dict_pk).
-    fn reverse_birth_of(dict: &DictTable<'_, '_, u32, Address>, v: &[u8]) -> u32 {
-        dict.value_to_dict_pk.get(&addr(v)).expect("get").expect("missing").value()
-    }
-
-    /// Assert two ids share (or don’t share) birth ids.
-    fn assert_same_birth(dict: &DictTable<'_, '_, u32, Address>, lhs: u32, rhs: u32, expect_same: bool) {
-        let bl = birth_id_of(dict, lhs);
-        let br = birth_id_of(dict, rhs);
-        if expect_same { assert_eq!(bl, br, "ids {lhs} and {rhs} should share a birth id"); }
-        else { assert_ne!(bl, br, "ids {lhs} and {rhs} should not share a birth id"); }
-    }
+    use redb::{MultimapTable, ReadableMultimapTable, ReadableTableMetadata};
+    use crate::storage::dict_test_utils::*;
 
     #[tokio::test]
     async fn dict_table_dedups_same_value_for_two_ids() {
-        let (_db, tx, mut cache, t1, t2, t3, t4) = setup_defs(1000);
+        let (_db, tx, mut cache, t1, t2, t3, t4) = setup_dict_defs(1000);
         let mut dict = mk_dict(&tx, &mut cache, t1, t2, t3, t4);
 
-        insert(&mut dict, 1, &[0xaa, 0xbb, 0xcc]);
-        insert(&mut dict, 2, &[0xaa, 0xbb, 0xcc]);
+        dict_insert(&mut dict, 1, &[0xaa, 0xbb, 0xcc]);
+        dict_insert(&mut dict, 2, &[0xaa, 0xbb, 0xcc]);
 
         assert_same_birth(&dict, 1, 2, true);
 
@@ -256,11 +162,11 @@ mod tests {
 
     #[tokio::test]
     async fn dict_table_distinct_values_produce_distinct_birth_ids() {
-        let (_db, tx, mut cache, t1, t2, t3, t4) = setup_defs(1000);
+        let (_db, tx, mut cache, t1, t2, t3, t4) = setup_dict_defs(1000);
         let mut dict = mk_dict(&tx, &mut cache, t1, t2, t3, t4);
 
-        insert(&mut dict, 10, &[0x01, 0x02]);
-        insert(&mut dict, 11, &[0x01, 0x03]);
+        dict_insert(&mut dict, 10, &[0x01, 0x02]);
+        dict_insert(&mut dict, 11, &[0x01, 0x03]);
 
         assert_same_birth(&dict, 10, 11, false);
 
@@ -275,19 +181,19 @@ mod tests {
 
     #[tokio::test]
     async fn dict_table_cache_reuse_on_duplicate_value() {
-        let (_db, tx, mut cache, t1, t2, t3, t4) = setup_defs(1000);
+        let (_db, tx, mut cache, t1, t2, t3, t4) = setup_dict_defs(1000);
 
         assert_eq!(cache.len(), 0, "cache starts empty");
         {
             let mut dict = mk_dict(&tx, &mut cache, t1, t2, t3, t4);
-            insert(&mut dict, 100, &[0xde, 0xad, 0xbe, 0xef]);
+            dict_insert(&mut dict, 100, &[0xde, 0xad, 0xbe, 0xef]);
         }
         let after_first = cache.len();
         assert_eq!(after_first, 1, "cache should hold (value → birth_id) after first insert");
 
         {
             let mut dict = mk_dict(&tx, &mut cache, t1, t2, t3, t4);
-            insert(&mut dict, 101, &[0xde, 0xad, 0xbe, 0xef]);
+            dict_insert(&mut dict, 101, &[0xde, 0xad, 0xbe, 0xef]);
             assert_same_birth(&dict, 100, 101, true);
         }
         assert_eq!(cache.len(), after_first, "cache should not grow for duplicate value");
@@ -295,12 +201,12 @@ mod tests {
 
     #[tokio::test]
     async fn dict_table_birth_id_is_first_inserter() {
-        let (_db, tx, mut cache, t1, t2, t3, t4) = setup_defs(1000);
+        let (_db, tx, mut cache, t1, t2, t3, t4) = setup_dict_defs(1000);
         {
             let mut dict = mk_dict(&tx, &mut cache, t1, t2, t3, t4);
 
-            insert(&mut dict, 42, &[1,2,3]);        // first time this value appears
-            insert(&mut dict, 1000, &[1,2,3]);      // duplicate with a different id
+            dict_insert(&mut dict, 42, &[1,2,3]);        // first time this value appears
+            dict_insert(&mut dict, 1000, &[1,2,3]);      // duplicate with a different id
 
             let b42 = birth_id_of(&dict, 42);
             let b1000 = birth_id_of(&dict, 1000);
@@ -311,14 +217,14 @@ mod tests {
 
     #[tokio::test]
     async fn dict_table_order_independence_many_ids_same_value() {
-        let (_db, tx, mut cache, t1, t2, t3, t4) = setup_defs(1000);
+        let (_db, tx, mut cache, t1, t2, t3, t4) = setup_dict_defs(1000);
         {
             let mut dict = mk_dict(&tx, &mut cache, t1, t2, t3, t4);
 
             // non-monotonic insertion order
             let ids = [7u32, 1, 9, 3, 2, 5, 4, 6, 8];
             for id in ids {
-                insert(&mut dict, id, &[0xab, 0xcd]);
+                dict_insert(&mut dict, id, &[0xab, 0xcd]);
             }
 
             let birth = birth_id_of(&dict, 7); // first inserted among these
@@ -333,15 +239,15 @@ mod tests {
 
     #[tokio::test]
     async fn dict_table_idempotent_same_id_same_value() {
-        let (_db, tx, mut cache, t1, t2, t3, t4) = setup_defs(1000);
+        let (_db, tx, mut cache, t1, t2, t3, t4) = setup_dict_defs(1000);
         {
             let mut dict = mk_dict(&tx, &mut cache, t1, t2, t3, t4);
 
-            insert(&mut dict, 500, &[0x11, 0x22]);
+            dict_insert(&mut dict, 500, &[0x11, 0x22]);
             let b1 = birth_id_of(&dict, 500);
 
             // repeat exact insert; should be a no-op semantically
-            insert(&mut dict, 500, &[0x11, 0x22]);
+            dict_insert(&mut dict, 500, &[0x11, 0x22]);
             let b2 = birth_id_of(&dict, 500);
 
             assert_eq!(b1, b2, "re-inserting same (id,value) must not change birth id");
@@ -355,11 +261,11 @@ mod tests {
     #[tokio::test]
     async fn dict_table_table_hit_when_cache_evicted() {
         // Force eviction so the second insert must take the table path, not cache
-        let (_db, tx, mut cache, t1, t2, t3, t4) = setup_defs(1);
+        let (_db, tx, mut cache, t1, t2, t3, t4) = setup_dict_defs(1);
         // phase 1: first insert populates cache
         {
             let mut dict = mk_dict(&tx, &mut cache, t1, t2, t3, t4);
-            insert(&mut dict, 1, &[0xaa]); // value A
+            dict_insert(&mut dict, 1, &[0xaa]); // value A
             // dict drops at end of block → releases &mut cache
         }
         assert_eq!(cache.len(), 1, "cache should have one entry after first insert");
@@ -367,15 +273,15 @@ mod tests {
         // phase 2: evict by inserting unrelated values (B and C)
         {
             let mut dict = mk_dict(&tx, &mut cache, t1, t2, t3, t4);
-            insert(&mut dict, 2, &[0xbb]); // value B
-            insert(&mut dict, 3, &[0xcc]); // value C
+            dict_insert(&mut dict, 2, &[0xbb]); // value B
+            dict_insert(&mut dict, 3, &[0xcc]); // value C
         }
         assert!(cache.len() <= 1, "tiny cache must have evicted older entries");
 
         // phase 3: insert same value A again; cache likely misses, but table must dedup
         {
             let mut dict = mk_dict(&tx, &mut cache, t1, t2, t3, t4);
-            insert(&mut dict, 4, &[0xaa]); // same value A
+            dict_insert(&mut dict, 4, &[0xaa]); // same value A
 
             let b1 = birth_id_of(&dict, 1);
             let b4 = birth_id_of(&dict, 4);
@@ -386,21 +292,21 @@ mod tests {
 
     #[tokio::test]
     async fn dict_table_zero_length_and_long_values_roundtrip() {
-        let (_db, tx, mut cache, t1, t2, t3, t4) = setup_defs(1000);
+        let (_db, tx, mut cache, t1, t2, t3, t4) = setup_dict_defs(1000);
         {
             let mut dict = mk_dict(&tx, &mut cache, t1, t2, t3, t4);
 
             // zero-length
-            insert(&mut dict, 10, &[]);
-            insert(&mut dict, 11, &[]);
+            dict_insert(&mut dict, 10, &[]);
+            dict_insert(&mut dict, 11, &[]);
             assert_same_birth(&dict, 10, 11, true);
             let b0 = birth_id_of(&dict, 10);
             assert_eq!(value_of_birth(&dict, b0), Vec::<u8>::new());
 
             // long value
             let big = vec![0u8; 4096];
-            insert(&mut dict, 20, &big);
-            insert(&mut dict, 21, &big);
+            dict_insert(&mut dict, 20, &big);
+            dict_insert(&mut dict, 21, &big);
             assert_same_birth(&dict, 20, 21, true);
             let b_big = birth_id_of(&dict, 20);
             assert_eq!(value_of_birth(&dict, b_big), big);
@@ -409,7 +315,7 @@ mod tests {
 
     #[tokio::test]
     async fn dict_table_many_unique_values_have_unique_birth_ids() {
-        let (_db, tx, mut cache, t1, t2, t3, t4) = setup_defs(1000);
+        let (_db, tx, mut cache, t1, t2, t3, t4) = setup_dict_defs(1000);
         {
             let mut dict = mk_dict(&tx, &mut cache, t1, t2, t3, t4);
 
@@ -419,7 +325,7 @@ mod tests {
             for i in 0..n {
                 let id = i as u32 + 1000;
                 let v = vec![i as u8, (i * 7) as u8];
-                insert(&mut dict, id, &v);
+                dict_insert(&mut dict, id, &v);
                 let b = birth_id_of(&dict, id);
                 births.insert(b);
                 assert_eq!(value_of_birth(&dict, b), v);
@@ -431,7 +337,7 @@ mod tests {
 
     #[tokio::test]
     async fn multimap_len_semantics_pairs_vs_keys() {
-        let (_db, tx, mut cache, t1, t2, t3, t4) = setup_defs(1000);
+        let (_db, tx, mut cache, t1, t2, t3, t4) = setup_dict_defs(1000);
 
         // helpers
         fn distinct_keys_len(mm: &MultimapTable<'_, u32, u32>) -> usize {
@@ -457,9 +363,9 @@ mod tests {
         {
             let mut dict = mk_dict(&tx, &mut cache, t1, t2, t3, t4);
 
-            insert(&mut dict, 1, &[0xaa]); // birth 1
-            insert(&mut dict, 2, &[0xaa]); // duplicate of 1
-            insert(&mut dict, 3, &[0xbb]); // birth 3
+            dict_insert(&mut dict, 1, &[0xaa]); // birth 1
+            dict_insert(&mut dict, 2, &[0xaa]); // duplicate of 1
+            dict_insert(&mut dict, 3, &[0xbb]); // birth 3
 
             // what the structure actually is
             let distinct = distinct_keys_len(&dict.dict_pk_to_ids); // expect 2

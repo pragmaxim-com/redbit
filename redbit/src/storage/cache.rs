@@ -73,8 +73,7 @@ fn collect_allocations_mb(shares: &[Share], db_defs: &[DbDef]) -> Vec<DbDefWithC
         let shards = def.shards;
         assert!(shards == 0 || shards >= 2, "column `{}` must have at least 2 shards (got {shards})", def.name);
 
-        // `base_mb` is the column-level allocation. We convert to **per-shard** MB.
-        let per_shard_mb = if shards == 0 { 0 } else { s.base_mb / shards as u64 };
+        let per_shard_mb = if shards == 0 { s.base_mb } else { s.base_mb / shards as u64 };
 
         DbDefWithCache {
             name: def.name.clone(),
