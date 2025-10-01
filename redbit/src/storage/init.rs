@@ -160,11 +160,11 @@ impl StorageOwner {
     fn db_name_with_cache_table(db_defs: &[DbDefWithCache]) -> Vec<String> {
         let name_width = db_defs.iter().map(|d| d.name.len()).max().unwrap_or(4); // at least "name"
         let mut lines = Vec::new();
-        lines.push(format!("{:<name_width$}  {:>10}   {:>10}   {:>10}", "DB NAME", "weight", "size", "lru", name_width = name_width));
+        lines.push(format!("{:<name_width$}  {:>10}   {:>10}   {:>10}   {:>10}", "DB NAME", "weight", "size", "lru", "per shards", name_width = name_width));
         lines.extend(db_defs.iter().map(|d| {
             format!(
-                "{:<name_width$}  {:>10}   {:>10}   {:>10}",
-                d.name, d.db_cache_weight, d.db_cache_in_mb, d.lru_cache,
+                "{:<name_width$}  {:>10}   {:>10}   {:>10}   {:>10}",
+                d.name, d.db_cache_weight, d.db_cache_in_mb, d.lru_cache, d.shards
                 name_width = name_width,
             )
         }));
