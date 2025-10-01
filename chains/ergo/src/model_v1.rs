@@ -62,13 +62,13 @@ pub struct Utxo {
     pub id: TransactionPointer,
     #[column(db_cache = 1)]
     pub amount: u64,
-    #[column(index, db_cache = 5, lru_cache = 50_000)]
+    #[column(index, shards = 4, db_cache = 3, lru_cache = 2_500_000)]
     pub box_id: BoxId,
-    #[column(dictionary, db_cache = 10, lru_cache = 50_000)]
+    #[column(dictionary, shards = 4, db_cache = 5, lru_cache = 500_000)]
     pub address: Address,
-    #[column(dictionary, db_cache = 10, lru_cache = 50_000)]
+    #[column(dictionary, shards = 4, db_cache = 5, lru_cache = 500_000)]
     pub tree: Tree,
-    #[column(dictionary, db_cache = 2)]
+    #[column(dictionary, shards = 4, db_cache = 5, lru_cache = 500_000)]
     pub tree_template: TreeTemplate,
     pub assets: Vec<Asset>,
 }
@@ -79,10 +79,10 @@ pub struct Asset {
     pub id: UtxoPointer,
     #[column(db_cache = 1)]
     pub amount: u64,
-    #[column(dictionary, db_cache = 2, lru_cache = 50_000)]
-    pub name: AssetName,
-    #[column(index, db_cache = 1)]
+    #[column(index, shards = 3, db_cache = 2)]
     pub asset_action: AssetAction,
+    #[column(dictionary, shards = 4, db_cache = 2, lru_cache = 500_000)]
+    pub name: AssetName,
 }
 
 #[entity]

@@ -62,7 +62,7 @@ where
     }
 
     /// Aggregate stats: sum len() across shards, use shard 0's stats() as representative.
-    pub fn stats(&self) -> redb::Result<Vec<TableInfo>, AppError> {
+    pub fn stats(&self) -> redb::Result<Vec<TableInfo>> {
         debug_assert!(!self.shards.is_empty());
         let mut total: u64 = 0;
         for s in &self.shards {

@@ -20,7 +20,7 @@ impl<K: Key + 'static, V: Key + 'static> ReadOnlyPlainTable<K, V> {
         self.underlying.get(key.borrow())
     }
 
-    pub fn stats(&self) -> redb::Result<TableInfo> {
-        Ok(TableInfo::from_stats("underlying", self.underlying.len()?, self.underlying.stats()?))
+    pub fn stats(&self) -> redb::Result<Vec<TableInfo>> {
+        Ok(vec![TableInfo::from_stats("underlying", self.underlying.len()?, self.underlying.stats()?)])
     }
 }

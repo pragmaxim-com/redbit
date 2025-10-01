@@ -73,7 +73,6 @@ pub fn table_info_struct(table_info_ty: &Type, table_info_items: &[TableInfoItem
         }
         impl #table_info_ty {
             pub fn new_table_info(storage: &Arc<Storage>) -> Result<#table_info_ty, AppError> {
-                let index_dbs = &storage.index_dbs;
                 Ok(
                     Self {
                         #(#inits),*
