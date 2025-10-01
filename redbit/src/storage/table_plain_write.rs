@@ -71,7 +71,6 @@ impl<'txn, K: Key + 'static, V: Key + 'static> WriteTableLike<K, V> for PlainTab
 #[cfg(all(test, not(feature = "integration")))]
 mod plain_write_table_tests {
     use super::*;
-    use redb::Value as _;
     use crate::WriteTableLike;
     use crate::storage::test_utils::{addr, Address};
     use crate::storage::plain_test_utils::{setup_plain_defs, mk_plain};
@@ -127,7 +126,6 @@ mod plain_write_table_tests {
         assert!(v.is_empty(), "half-open with equal bounds must be empty");
 
         // Verify values align with keys we inserted
-        for (kb, vb) in v /* last v is empty */ {}
         let v_all = tbl.range(1u32..=8u32).expect("range full");
         for (kb, vb) in v_all {
             let k = <u32 as redb::Value>::from_bytes(kb.as_bytes());

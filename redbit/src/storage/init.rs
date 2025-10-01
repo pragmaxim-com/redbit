@@ -164,8 +164,7 @@ impl StorageOwner {
         lines.extend(db_defs.iter().map(|d| {
             format!(
                 "{:<name_width$}  {:>10}   {:>10}   {:>10}   {:>10}",
-                d.name, d.db_cache_weight, d.db_cache_in_mb, d.lru_cache, d.shards
-                name_width = name_width,
+                d.name, d.db_cache_weight, d.db_cache_in_mb, d.lru_cache, d.shards, name_width = name_width,
             )
         }));
         lines

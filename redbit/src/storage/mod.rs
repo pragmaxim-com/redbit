@@ -92,7 +92,7 @@ pub mod test_utils {
 #[cfg(all(test, not(feature = "integration")))]
 pub mod plain_test_utils {
     use crate::storage::table_plain_write::PlainTable;
-    use crate::storage::test_utils::{addr, Address};
+    use crate::storage::test_utils::Address;
     use crate::*;
     use redb::{Database, TableDefinition, WriteTransaction};
 
@@ -138,28 +138,16 @@ pub mod plain_test_utils {
             table: tx.open_table(underlying_def).expect("open plain table"),
         }
     }
-
-    pub(crate) fn plain_insert(t: &mut PlainTable<'_, u32, Address>, k: u32, v: &[u8]) {
-        t.table.insert(&k, &addr(v)).expect("plain insert");
-    }
-
-    pub(crate) fn plain_get(t: &PlainTable<'_, u32, Address>, k: u32) -> Option<Vec<u8>> {
-        t.table.get(&k).expect("plain get").map(|g| g.value().0)
-    }
-
-    pub(crate) fn plain_len(t: &PlainTable<'_, u32, Address>) -> u64 {
-        t.table.len().expect("plain len")
-    }
 }
 
 #[cfg(all(test, not(feature = "integration")))]
 pub mod index_test_utils {
     use crate::storage::test_utils;
-    use crate::storage::test_utils::{addr, Address};
+    use crate::storage::test_utils::Address;
     use crate::*;
     use lru::LruCache;
     use redb::{
-        Database, MultimapTableDefinition, MultimapValue, TableDefinition,
+        Database, MultimapTableDefinition, TableDefinition,
         WriteTransaction,
     };
     use std::num::NonZeroUsize;
@@ -215,29 +203,6 @@ pub mod index_test_utils {
         }
     }
 
-    /// Insert mapping pk -> index AND index -> pk (bidirectional index maintenance).
-    pub(crate) fn index_insert(t: &mut IndexTable<'_, '_, u32, Address>, pk: u32, index_bytes: &[u8]) {
-        let idx = addr(index_bytes);
-        t.index_by_pk.insert(&pk, &idx).expect("index_by_pk.insert");
-        t.pk_by_index.insert(&idx, &pk).expect("pk_by_index.insert");
-    }
-
-    pub(crate) fn index_get_value_by_pk(t: &IndexTable<'_, '_, u32, Address>, pk: u32) -> Option<Vec<u8>> {
-        t.index_by_pk.get(&pk).expect("get value").map(|g| g.value().0)
-    }
-
-    pub(crate) fn index_get_keys_by_index(t: &IndexTable<'_, '_, u32, Address>, index_bytes: &[u8]) -> Vec<u32> {
-        let mv: MultimapValue<'_, u32> = t.pk_by_index.get(&addr(index_bytes)).expect("mm get");
-        mv.into_iter().map(|g| g.unwrap().value()).collect()
-    }
-
-    pub(crate) fn index_len_pk_by_index(t: &IndexTable<'_, '_, u32, Address>) -> u64 {
-        t.pk_by_index.len().expect("mm len")
-    }
-
-    pub(crate) fn index_len_index_by_pk(t: &IndexTable<'_, '_, u32, Address>) -> u64 {
-        t.index_by_pk.len().expect("tbl len")
-    }
 }
 
 #[cfg(all(test, not(feature = "integration")))]

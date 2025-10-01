@@ -3,7 +3,6 @@ use crate::storage::table_writer::{TableFactory, ValueBuf, WriterCommand};
 use crate::{AppError, FlushFuture, TableWriter};
 use redb::{Database, Key};
 use std::borrow::Borrow;
-use std::cell::RefCell;
 use std::{marker::PhantomData, sync::Weak};
 
 pub struct ShardedTableWriter<
@@ -16,7 +15,6 @@ pub struct ShardedTableWriter<
 {
     partitioner: Partitioning<KP, VP>,
     shards: Vec<TableWriter<K, V, F>>,
-    buckets_scratch: RefCell<Vec<Vec<(usize, V)>>>,
     _pd: PhantomData<(K,V)>,
 }
 
@@ -39,8 +37,7 @@ where
         for db_weak in dbs.into_iter() {
             shards.push(TableWriter::<K,V,F>::new(db_weak, factory.clone())?);
         }
-        let buckets: Vec<Vec<(usize, V)>> = (0..shards_count).map(|_| Vec::new()).collect();
-        Ok(Self { partitioner: partitioning, shards, buckets_scratch: RefCell::new(buckets), _pd: PhantomData })
+        Ok(Self { partitioner: partitioning, shards, _pd: PhantomData })
     }
 
     pub fn begin(&self) -> Result<(), AppError> {
