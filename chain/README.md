@@ -86,7 +86,7 @@ If throughput does not reach your expectations, check that `buffer` is high enou
 ```
 
 1. If it is close to `0`, it means your block fetching or processing is too slow and persistence tasks are idling.
-2. If Indexing is under 50 000 inputs+outputs/s with full `buffer`, it means you need more RAM or better SSD.
+2. If indexing is under 50 000 inputs+outputs/s with full `buffer`, it means you need more RAM or better SSD.
 
 Hand-made criterion benchmarks [deployed](https://pragmaxim-com.github.io/redbit/report/index.html).
 

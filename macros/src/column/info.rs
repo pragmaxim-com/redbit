@@ -4,7 +4,7 @@ use proc_macro2::{Ident, Literal};
 use quote::quote;
 
 pub fn plain_table_info(column_name: &Ident, table_def: &PlainTableDef) -> TableInfoItem {
-    let definition = quote! { pub #column_name: TableInfo };
+    let definition = quote! { pub #column_name: Vec<TableInfo> };
     let name_lit   = Literal::string(&table_def.var_name.to_string());
     let table_name = &table_def.underlying.name;
     let shards     = table_def.column_props.shards;
