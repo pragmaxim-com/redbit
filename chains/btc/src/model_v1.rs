@@ -53,7 +53,7 @@ pub struct Header {
 pub struct Transaction {
     #[fk(one2many, db_cache = 1)]
     pub id: BlockPointer,
-    #[column(index, shards = 4, db_cache = 5, lru_cache = 2_500_000)]
+    #[column(index, db_cache = 10, lru_cache = 10_000_000)]
     pub hash: TxHash,
     pub utxos: Vec<Utxo>,
     #[write_from(input_refs)]
@@ -70,7 +70,7 @@ pub struct Utxo {
     pub id: TransactionPointer,
     #[column(db_cache = 1)]
     pub amount: u64,
-    #[column(dictionary, shards = 5, db_cache = 10, lru_cache = 2_500_000)]
+    #[column(dictionary, shards = 4, db_cache = 10, lru_cache = 2_500_000)]
     pub script_hash: ScriptHash,
     #[column(dictionary, shards = 4, db_cache = 10, lru_cache = 2_500_000)]
     pub address: Address,
