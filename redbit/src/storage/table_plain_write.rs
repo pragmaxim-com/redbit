@@ -1,9 +1,10 @@
-use crate::storage::table_writer::{TableFactory, ValueBuf, WriteTableLike};
+use crate::storage::table_writer::{TableFactory, WriteTableLike};
 use crate::AppError;
 use redb::*;
 use redb::{Key, Table, WriteTransaction};
 use std::borrow::Borrow;
 use std::ops::RangeBounds;
+use crate::storage::async_boundary::{CopyOwnedValue, ValueBuf, ValueOwned};
 
 #[derive(Clone)]
 pub struct PlainFactory<K: Key + 'static, V: Key + 'static> {
@@ -32,7 +33,7 @@ impl<'txn, K: Key + 'static, V: Key + 'static> PlainTable<'txn, K, V> {
     }
 }
 
-impl<K: Key + 'static, V: Key + 'static> TableFactory<K, V> for PlainFactory<K, V> {
+impl<K: Key + CopyOwnedValue + 'static, V: Key + 'static> TableFactory<K, V> for PlainFactory<K, V> {
     type CacheCtx = ();
     type Table<'txn, 'c> = PlainTable<'txn, K, V>;
 
@@ -48,7 +49,7 @@ impl<K: Key + 'static, V: Key + 'static> TableFactory<K, V> for PlainFactory<K, 
     }
 }
 
-impl<'txn, K: Key + 'static, V: Key + 'static> WriteTableLike<K, V> for PlainTable<'txn, K, V> {
+impl<'txn, K: Key + CopyOwnedValue + 'static, V: Key + 'static> WriteTableLike<K, V> for PlainTable<'txn, K, V> {
     fn insert_kv<'k, 'v>(&mut self, key: impl Borrow<K::SelfType<'k>>, value: impl Borrow<V::SelfType<'v>>) -> Result<(), AppError>  {
         self.table.insert(key, value)?;
         Ok(())
@@ -59,7 +60,7 @@ impl<'txn, K: Key + 'static, V: Key + 'static> WriteTableLike<K, V> for PlainTab
         Ok(removed.is_some())
     }
 
-    fn get_any_for_index<'v>(&mut self, _value: impl Borrow<V::SelfType<'v>>) -> Result<Option<ValueBuf<K>>, AppError>  {
+    fn get_any_for_index<'v>(&mut self, _value: impl Borrow<V::SelfType<'v>>) -> Result<Option<ValueOwned<K>>, AppError>  {
         unimplemented!()
     }
 

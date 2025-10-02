@@ -55,6 +55,27 @@ pub fn new(struct_name: &Ident, parent_field: Field, index_field: Field) -> Toke
             }
         }
 
+        impl CopyOwnedValue for #struct_name
+        where
+            <#struct_name as redb::Value>::SelfType<'static>: Copy + Send + 'static,
+        {
+            type Unit = <#struct_name as redb::Value>::SelfType<'static>;
+
+            fn to_unit<'a>(v: <#struct_name as redb::Value>::SelfType<'a>) -> Self::Unit
+            where
+                Self: 'a,
+            {
+                v
+            }
+
+            fn from_unit<'a>(u: Self::Unit) -> <#struct_name as redb::Value>::SelfType<'a>
+            where
+                Self: 'a,
+            {
+                u
+            }
+        }
+
         impl Into<String> for #struct_name {
             fn into(self) -> String {
                 self.url_encode()

@@ -1,4 +1,4 @@
-use crate::storage::table_writer::{TableFactory, ValueBuf, WriteTableLike};
+use crate::storage::table_writer::{TableFactory, WriteTableLike};
 use crate::AppError;
 use redb::*;
 use redb::{Key, Table, WriteTransaction};
@@ -6,6 +6,7 @@ use std::borrow::Borrow;
 use std::num::NonZeroUsize;
 use std::ops::RangeBounds;
 use lru::LruCache;
+use crate::storage::async_boundary::{CopyOwnedValue, ValueBuf, ValueOwned};
 
 #[derive(Clone)]
 pub struct IndexFactory<K: Key + 'static, V: Key + 'static> {
@@ -48,7 +49,7 @@ impl<'txn, 'c, K: Key + 'static, V: Key + 'static> IndexTable<'txn, 'c, K, V> {
     }
 }
 
-impl<K: Key + 'static, V: Key + 'static> TableFactory<K, V> for IndexFactory<K, V> {
+impl<K: Key + CopyOwnedValue + 'static, V: Key + 'static> TableFactory<K, V> for IndexFactory<K, V> {
     type CacheCtx = Option<LruCache<Vec<u8>, Vec<u8>>>;
     type Table<'txn, 'c> = IndexTable<'txn, 'c, K, V>;
 
@@ -74,7 +75,7 @@ impl<K: Key + 'static, V: Key + 'static> TableFactory<K, V> for IndexFactory<K, 
     }
 }
 
-impl<'txn, 'c, K: Key + 'static, V: Key + 'static> WriteTableLike<K, V> for IndexTable<'txn, 'c, K, V> {
+impl<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: Key + 'static> WriteTableLike<K, V> for IndexTable<'txn, 'c, K, V> {
     fn insert_kv<'k, 'v>(&mut self, key: impl Borrow<K::SelfType<'k>>, value: impl Borrow<V::SelfType<'v>>) -> Result<(), AppError>  {
         let key_ref: &K::SelfType<'k> = key.borrow();
         let val_ref: &V::SelfType<'v> = value.borrow();
@@ -104,22 +105,21 @@ impl<'txn, 'c, K: Key + 'static, V: Key + 'static> WriteTableLike<K, V> for Inde
         }
     }
 
-    fn get_any_for_index<'v>(&mut self, value: impl Borrow<V::SelfType<'v>>) -> Result<Option<ValueBuf<K>>, AppError> {
-        // 1) cache fast path
+    fn get_any_for_index<'v>(&mut self, value: impl Borrow<V::SelfType<'v>>) -> Result<Option<ValueOwned<K>>, AppError> {
         if let Some(c) = self.cache.as_mut() {
             let v_bytes_key = V::as_bytes(value.borrow());
             if let Some(k_bytes) = c.get(v_bytes_key.as_ref()) {
-                return Ok(Some(ValueBuf::<K>::new(k_bytes.clone())));
+                return Ok(Some(Self::owned_key_from_bytes(k_bytes)));
             }
         }
-        let mut result = self.pk_by_index.get(value)?;
-        if let Some(guard) = result.next() {
-            Ok(Some(Self::key_buf(guard?)))
+
+        let mut it = self.pk_by_index.get(value)?;
+        if let Some(g) = it.next() {
+            Ok(Some(Self::owned_key_from_guard(g?)))
         } else {
             Ok(None)
         }
     }
-
     fn range<'a, KR: Borrow<K::SelfType<'a>> + 'a>(&self, _range: impl RangeBounds<KR> + 'a) -> Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError> {
         unimplemented!()
     }
@@ -147,12 +147,7 @@ mod index_write_table_tests {
 
         // Head is the smallest K (u32)
         let head = tbl.get_any_for_index(&addr1).expect("get_head").expect("expected Some");
-        let k: u32 = {
-            // ValueBuf<K> -> K via K::from_bytes
-            let got = <u32 as Value>::from_bytes(head.as_bytes());
-            got
-        };
-        assert_eq!(k, 3, "head must be the smallest PK for a given index value");
+        assert_eq!(head.as_value(), 3, "head must be the smallest PK for a given index value");
     }
 
     // Deleting one PK keeps the other; deleting the last removes the mapping.
@@ -171,14 +166,12 @@ mod index_write_table_tests {
 
         // Head is the smallest among {10,7} => 7
         let head_before = tbl.get_any_for_index(&addr1).unwrap().unwrap();
-        let k_before: u32 = <u32 as Value>::from_bytes(head_before.as_bytes());
-        assert_eq!(k_before, 7);
+        assert_eq!(head_before.as_value(), 7);
 
         // Delete the head (7) — 10 should remain as the new head
         assert!(tbl.delete_kv(&7u32).expect("delete 7"));
         let head_after = tbl.get_any_for_index(&addr1).unwrap().unwrap();
-        let k_after: u32 = <u32 as Value>::from_bytes(head_after.as_bytes());
-        assert_eq!(k_after, 10);
+        assert_eq!(head_after.as_value(), 10);
 
         // Delete the last (10) — mapping should disappear
         assert!(tbl.delete_kv(&10u32).expect("delete 10"));
@@ -214,8 +207,7 @@ mod index_write_table_tests {
 
         // No table inserts; get_any_for_index should return from cache
         let any = tbl.get_any_for_index(&value_addr).expect("cache path").expect("Some");
-        let got_k: u32 = <u32 as Value>::from_bytes(any.as_bytes());
-        assert_eq!(got_k, k, "cache fast path must return the cached head key");
+        assert_eq!(any.as_value(), k, "cache fast path must return the cached head key");
 
         // Sanity: the tables still don't have this mapping; deleting should return false.
         assert!(!tbl.delete_kv(&k).expect("delete_kv on non-existent table row should be false"));

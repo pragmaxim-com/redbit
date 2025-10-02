@@ -1,12 +1,13 @@
 use crate::storage::partitioning::{KeyPartitioner, Partitioning, ValuePartitioner};
-use crate::storage::table_writer::{TaskResult, TableFactory, ValueBuf, WriterCommand};
+use crate::storage::table_writer::{TableFactory, TaskResult, WriterCommand};
 use crate::{AppError, FlushFuture, TableWriter};
 use redb::{Database, Key};
 use std::borrow::Borrow;
 use std::{marker::PhantomData, sync::Weak};
+use crate::storage::async_boundary::{CopyOwnedValue, ValueOwned};
 
 pub struct ShardedTableWriter<
-    K: Key + Send + Copy + 'static + Borrow<K::SelfType<'static>>,
+    K: Key + Send + CopyOwnedValue + 'static + Borrow<K::SelfType<'static>>,
     V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
     F: TableFactory<K, V>,
     KP: KeyPartitioner<K>,
@@ -18,7 +19,7 @@ pub struct ShardedTableWriter<
 }
 
 impl<
-    K: Key + Send + Copy + 'static + Borrow<K::SelfType<'static>>,
+    K: Key + Send + CopyOwnedValue + 'static + Borrow<K::SelfType<'static>>,
     V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
     F: TableFactory<K, V> + Send + Clone + 'static,
     KP: KeyPartitioner<K>,
@@ -41,7 +42,7 @@ impl<
         Ok(())
     }
 
-    pub fn get_any_for_index(&self, values: Vec<V>) -> Result<Vec<Option<ValueBuf<K>>>, AppError> {
+    pub fn get_any_for_index(&self, values: Vec<V>) -> Result<Vec<Option<ValueOwned<K>>>, AppError> {
         match &self.partitioner {
             Partitioning::ByKey(_) => {
                 Err(AppError::Custom("ShardedTableWriter: get_any_for_index not supported with key partitioning".into()))
@@ -59,7 +60,7 @@ impl<
                     buckets[sid].push((pos, v));
                 }
 
-                let mut out: Vec<Option<ValueBuf<K>>> = Vec::with_capacity(values_count);
+                let mut out: Vec<Option<ValueOwned<K>>> = Vec::with_capacity(values_count);
                 out.resize_with(values_count, || None);
 
                 let mut acks = Vec::with_capacity(shards_count);
@@ -132,9 +133,39 @@ impl<
 
 #[cfg(all(test, not(feature = "integration")))]
 mod plain_sharded {
+    use crate::storage::async_boundary::CopyOwnedValue;
     use crate::storage::test_utils::addr;
     use crate::storage::{plain_test_utils, test_utils};
 
+    #[macro_export]
+    macro_rules! impl_copy_owned_value_identity {
+        ($t:ty) => {
+            impl CopyOwnedValue for $t
+            where
+                // ensure the `'static instantiation` is actually Copy + Send
+                <$t as redb::Value>::SelfType<'static>: Copy + Send + 'static,
+            {
+                type Unit = <$t as redb::Value>::SelfType<'static>;
+
+                #[inline]
+                fn to_unit<'a>(v: <$t as redb::Value>::SelfType<'a>) -> Self::Unit
+                where
+                    Self: 'a,
+                {
+                    v
+                }
+
+                #[inline]
+                fn from_unit<'a>(u: Self::Unit) -> <$t as redb::Value>::SelfType<'a>
+                where
+                    Self: 'a,
+                {
+                    u
+                }
+            }
+        };
+    }
+    impl_copy_owned_value_identity!(u32);
     // insert-only integrity
     #[test]
     fn sharded_plain_insert_read_all() {
@@ -192,7 +223,6 @@ mod plain_sharded {
 
 #[cfg(all(test, not(feature = "integration")))]
 mod index_sharded {
-    use super::*;
     use crate::storage::test_utils::addr;
     use crate::storage::{index_test_utils, test_utils};
 
@@ -220,17 +250,16 @@ mod index_sharded {
         writer.insert_kv(4u32,   a3.clone()).expect("ins");
 
         // heads before delete
-        let decode_u32 = |buf: &ValueBuf<u32>| -> u32 { <u32 as redb::Value>::from_bytes(buf.as_bytes()) };
         let heads_before = writer.get_any_for_index(vec![a1.clone(), a2.clone(), a3.clone()]).expect("heads");
-        assert_eq!(heads_before[0].as_ref().map(decode_u32), Some(3));
-        assert_eq!(heads_before[1].as_ref().map(decode_u32), Some(7));
-        assert_eq!(heads_before[2].as_ref().map(decode_u32), Some(4));
+        assert_eq!(heads_before[0].as_ref().map(|v|v.as_value()), Some(3));
+        assert_eq!(heads_before[1].as_ref().map(|v|v.as_value()), Some(7));
+        assert_eq!(heads_before[2].as_ref().map(|v|v.as_value()), Some(4));
 
         // delete current head for a3 (4) and re-check
         assert!(writer.delete_kv(4u32).expect("del 4"));
 
         let heads_after = writer.get_any_for_index(vec![a3.clone()]).expect("head a3 after");
-        assert_eq!(heads_after[0].as_ref().map(decode_u32), Some(80));
+        assert_eq!(heads_after[0].as_ref().map(|v|v.as_value()), Some(80));
 
         writer.flush().expect("flush");
 

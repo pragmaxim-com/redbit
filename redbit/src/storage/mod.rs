@@ -14,6 +14,7 @@ pub mod table_plain_read_sharded;
 pub mod context;
 pub mod init;
 pub mod bench;
+pub mod async_boundary;
 
 #[cfg(all(test, not(feature = "integration")))]
 pub mod test_utils {

@@ -10,6 +10,7 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::thread::JoinHandle;
 use std::time::Instant;
+use crate::storage::async_boundary::{CopyOwnedValue, ValueBuf, ValueOwned};
 
 #[derive(Clone, Debug)]
 pub struct TaskResult {
@@ -61,21 +62,10 @@ impl FlushFuture {
     }
 }
 
-pub struct ValueBuf<V: Value> {
-    pub buf: Vec<u8>,
-    _pd: PhantomData<V>,
-}
-
-impl<V: Value> ValueBuf<V> {
-    pub fn new(buf: Vec<u8>) -> Self { Self { buf, _pd: PhantomData } }
-    pub fn as_value(&self) -> V::SelfType<'_> { V::from_bytes(&self.buf) }
-    pub fn as_bytes(&self) -> &[u8] { &self.buf }
-}
-
-pub trait WriteTableLike<K: Key + 'static, V: Key + 'static> {
+pub trait WriteTableLike<K: Key + CopyOwnedValue + 'static, V: Key + 'static> {
     fn insert_kv<'k, 'v>(&mut self, key: impl Borrow<K::SelfType<'k>>, value: impl Borrow<V::SelfType<'v>>) -> Result<(), AppError>;
     fn delete_kv<'k>(&mut self, key: impl Borrow<K::SelfType<'k>>) -> Result<bool, AppError>;
-    fn get_any_for_index<'v>(&mut self, value: impl Borrow<V::SelfType<'v>>) -> Result<Option<ValueBuf<K>>, AppError>;
+    fn get_any_for_index<'v>(&mut self, value: impl Borrow<V::SelfType<'v>>) -> Result<Option<ValueOwned<K>>, AppError>;
     fn range<'a, KR: Borrow<K::SelfType<'a>> + 'a>(&self, range: impl RangeBounds<KR> + 'a) -> Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>;
 
     fn key_buf(g: AccessGuard<'_, K>) -> ValueBuf<K> {
@@ -84,9 +74,16 @@ pub trait WriteTableLike<K: Key + 'static, V: Key + 'static> {
     fn value_buf(g: AccessGuard<'_, V>) -> ValueBuf<V> {
         ValueBuf::<V>::new(V::as_bytes(&g.value()).as_ref().to_vec())
     }
+    fn owned_key_from_bytes(bytes: &[u8]) -> ValueOwned<K> {
+        let k_view: K::SelfType<'_> = <K as Value>::from_bytes(bytes);
+        ValueOwned::<K>::from_value(k_view)
+    }
+    fn owned_key_from_guard(g: AccessGuard<'_, K>) -> ValueOwned<K> {
+        ValueOwned::<K>::from_guard(g)
+    }
 }
 
-pub trait TableFactory<K: Key + 'static, V: Key + 'static> {
+pub trait TableFactory<K: Key + CopyOwnedValue + 'static, V: Key + 'static> {
     type CacheCtx;
     type Table<'txn, 'c>: WriteTableLike<K, V>;
     fn name(&self) -> String;
@@ -94,12 +91,12 @@ pub trait TableFactory<K: Key + 'static, V: Key + 'static> {
     fn open<'txn, 'c>(&self, tx: &'txn WriteTransaction, cache: &'c mut Self::CacheCtx) -> Result<Self::Table<'txn, 'c>, AppError>;
 }
 
-pub enum WriterCommand<K: Key + Send + 'static, V: Key + Send + 'static> {
+pub enum WriterCommand<K: Key + Send + CopyOwnedValue + 'static, V: Key + Send + 'static> {
     Begin(Sender<Result<(), AppError>>),              // start new WriteTransaction + open table
     Insert(K, V),
     Remove(K, Sender<Result<bool, AppError>>),
-    AnyForIndex(Vec<V>, Sender<Result<Vec<Option<ValueBuf<K>>>, AppError>>),
-    AnyForIndexTagged(Vec<(usize, V)>, Sender<Result<Vec<(usize, Option<ValueBuf<K>>)>, AppError>>),
+    AnyForIndex(Vec<V>, Sender<Result<Vec<Option<ValueOwned<K>>>, AppError>>),
+    AnyForIndexTagged(Vec<(usize, V)>, Sender<Result<Vec<(usize, Option<ValueOwned<K>>)>, AppError>>),
     Range(K, K, Sender<Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>>),
     Flush(Sender<Result<TaskResult, AppError>>),              // commit current tx, stay alive (idle)
     Shutdown(Sender<Result<(), AppError>>),           // graceful stop (no commit)
@@ -111,7 +108,7 @@ enum Control {
     Shutdown(Sender<Result<(), AppError>>),
 }
 
-pub struct TableWriter<K: Key + Send + 'static, V: Key + Send + 'static, F> {
+pub struct TableWriter<K: Key + Send + CopyOwnedValue + 'static, V: Key + Send + 'static, F> {
     topic: Sender<WriterCommand<K, V>>,
     handle: JoinHandle<()>,
     _marker: PhantomData<F>,
@@ -119,7 +116,7 @@ pub struct TableWriter<K: Key + Send + 'static, V: Key + Send + 'static, F> {
 
 impl<K, V, F> TableWriter<K, V, F>
 where
-    K: Key + Send + 'static + Borrow<K::SelfType<'static>>,
+    K: Key + Send + CopyOwnedValue + 'static + Borrow<K::SelfType<'static>>,
     V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
     F: TableFactory<K, V> + Send + Clone + 'static,
 {
@@ -286,14 +283,14 @@ where
         self.fast_send(WriterCommand::Insert(key, value))
     }
 
-    pub fn get_any_for_index_tagged(&self, pairs: Vec<(usize, V)>) -> Result<Vec<(usize, Option<ValueBuf<K>>)>, AppError> {
+    pub fn get_any_for_index_tagged(&self, pairs: Vec<(usize, V)>) -> Result<Vec<(usize, Option<ValueOwned<K>>)>, AppError> {
         let (ack_tx, ack_rx) = bounded(1);
         self.fast_send(WriterCommand::AnyForIndexTagged(pairs, ack_tx))?;
         ack_rx.recv()?
     }
 
-    pub fn get_any_for_index(&self, values: Vec<V>) -> Result<Vec<Option<ValueBuf<K>>>, AppError> {
-        let (ack_tx, ack_rx) = bounded::<Result<Vec<Option<ValueBuf<K>>>, AppError>>(1);
+    pub fn get_any_for_index(&self, values: Vec<V>) -> Result<Vec<Option<ValueOwned<K>>>, AppError> {
+        let (ack_tx, ack_rx) = bounded::<Result<Vec<Option<ValueOwned<K>>>, AppError>>(1);
         self.fast_send(WriterCommand::AnyForIndex(values, ack_tx))?;
         ack_rx.recv()?
     }
