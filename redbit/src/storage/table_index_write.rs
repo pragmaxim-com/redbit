@@ -9,13 +9,14 @@ use lru::LruCache;
 
 #[derive(Clone)]
 pub struct IndexFactory<K: Key + 'static, V: Key + 'static> {
-    pub pk_by_index_def: MultimapTableDefinition<'static, V, K>,
-    pub index_by_pk_def: TableDefinition<'static, K, V>,
-    pub lru_capacity: Option<usize>,
+    pub(crate) name: String,
+    pub(crate) pk_by_index_def: MultimapTableDefinition<'static, V, K>,
+    pub(crate) index_by_pk_def: TableDefinition<'static, K, V>,
+    pub(crate) lru_capacity: Option<usize>,
 }
 
 impl<K: Key + 'static, V: Key + 'static> IndexFactory<K, V> {
-    pub fn new(lru_capacity: usize, pk_by_index_def: MultimapTableDefinition<'static, V, K>, index_by_pk_def: TableDefinition<'static, K, V>) -> Self {
+    pub fn new(name: &str, lru_capacity: usize, pk_by_index_def: MultimapTableDefinition<'static, V, K>, index_by_pk_def: TableDefinition<'static, K, V>) -> Self {
         let lru_cache_size_opt =
             if lru_capacity < 1 {
                 None
@@ -23,6 +24,7 @@ impl<K: Key + 'static, V: Key + 'static> IndexFactory<K, V> {
                 Some(lru_capacity)
             };
         Self {
+            name: name.to_string(),
             pk_by_index_def,
             index_by_pk_def,
             lru_capacity: lru_cache_size_opt
@@ -52,6 +54,10 @@ impl<K: Key + 'static, V: Key + 'static> TableFactory<K, V> for IndexFactory<K, 
 
     fn new_cache(&self) -> Self::CacheCtx {
         self.lru_capacity.map(|cap| LruCache::new(NonZeroUsize::new(cap).expect("lru_capacity for index must be > 0")))
+    }
+
+    fn name(&self) -> String {
+        self.name.clone()
     }
 
     fn open<'txn, 'c>(

@@ -5,6 +5,7 @@ version.workspace = true
 
 [features]
 tracing = ["console-subscriber"]
+integration = []
 
 [lib]
 name = "chain"

@@ -5,16 +5,59 @@ use std::borrow::Borrow;
 use std::marker::PhantomData;
 use std::ops::RangeBounds;
 use std::sync::Weak;
-use std::thread;
+use std::{fmt, thread};
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::thread::JoinHandle;
+use std::time::Instant;
+
+#[derive(Clone, Debug)]
+pub struct TaskResult {
+    pub name: String,
+    pub took: u128,
+}
+
+impl fmt::Display for TaskResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} : {} ms", self.name, self.took)
+    }
+}
+
+impl TaskResult {
+    pub fn new(name: &str, took: u128) -> Self {
+        Self { name: name.to_string(), took }
+    }
+    pub fn master(took: u128) -> Self {
+        Self { name: "MASTER".to_string(), took }
+    }
+    pub fn commit(took: u128) -> Self {
+        Self { name: "COMMIT".to_string(), took }
+    }
+}
 
 pub struct FlushFuture {
-    ack_rx: Receiver<Result<(), AppError>>,
+    ack_rx: Receiver<Result<TaskResult, AppError>>,
 }
 
 impl FlushFuture {
-    pub fn wait(self) -> Result<(), AppError> {
+    pub fn wait(self) -> Result<TaskResult, AppError> {
         self.ack_rx.recv()?
+    }
+
+    pub fn dedup_tasks_keep_slowest(futs: Vec<FlushFuture>) -> Result<HashMap<String, TaskResult>, AppError> {
+        let mut by_name: HashMap<String, TaskResult> = HashMap::with_capacity(futs.len());
+        for f in futs {
+            let res = f.wait()?;
+            match by_name.entry(res.name.clone()) {
+                Entry::Vacant(e) => { e.insert(res); }
+                Entry::Occupied(mut e) => {
+                    if res.took > e.get().took {
+                        e.insert(res); // keep the slowest per name
+                    }
+                }
+            }
+        }
+        Ok(by_name)
     }
 }
 
@@ -46,7 +89,7 @@ pub trait WriteTableLike<K: Key + 'static, V: Key + 'static> {
 pub trait TableFactory<K: Key + 'static, V: Key + 'static> {
     type CacheCtx;
     type Table<'txn, 'c>: WriteTableLike<K, V>;
-
+    fn name(&self) -> String;
     fn new_cache(&self) -> Self::CacheCtx;
     fn open<'txn, 'c>(&self, tx: &'txn WriteTransaction, cache: &'c mut Self::CacheCtx) -> Result<Self::Table<'txn, 'c>, AppError>;
 }
@@ -58,13 +101,13 @@ pub enum WriterCommand<K: Key + Send + 'static, V: Key + Send + 'static> {
     AnyForIndex(Vec<V>, Sender<Result<Vec<Option<ValueBuf<K>>>, AppError>>),
     AnyForIndexTagged(Vec<(usize, V)>, Sender<Result<Vec<(usize, Option<ValueBuf<K>>)>, AppError>>),
     Range(K, K, Sender<Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>>),
-    Flush(Sender<Result<(), AppError>>),              // commit current tx, stay alive (idle)
+    Flush(Sender<Result<TaskResult, AppError>>),              // commit current tx, stay alive (idle)
     Shutdown(Sender<Result<(), AppError>>),           // graceful stop (no commit)
 }
 
 enum Control {
     Continue,
-    Flush(Sender<Result<(), AppError>>),
+    Flush(Sender<Result<TaskResult, AppError>>),
     Shutdown(Sender<Result<(), AppError>>),
 }
 
@@ -141,6 +184,7 @@ where
         let (topic, receiver): (Sender<WriterCommand<K, V>>, Receiver<WriterCommand<K, V>>) = unbounded();
         let handle = thread::spawn(move || {
             let mut cache = factory.new_cache();
+            let name = factory.name();
             'outer: loop {
                 // wait until someone asks us to begin a write tx
                 let cmd = match receiver.recv() {
@@ -170,8 +214,9 @@ where
                             Err(e) => { let _ = ack.send(Err(e)); continue 'outer; }
                         };
                         // 3) process commands until a Flush arrives
-                        let mut flush_ack: Option<Sender<Result<(), AppError>>> = None;
+                        let mut flush_ack: Option<Sender<Result<TaskResult, AppError>>> = None;
                         let mut write_error: Option<Result<(), AppError>> = None;
+                        let t0 = Instant::now();
 
                         'in_tx: loop {
                             match Self::drain_batch(&mut table, &receiver) {
@@ -195,7 +240,11 @@ where
                         if let Some(ack) = flush_ack {
                             let _ = match write_error {
                                 Some(Err(e)) => ack.send(Err(e)),
-                                _ => ack.send(tx.commit().map_err(AppError::from)),
+                                _ => {
+                                    let _ = tx.commit().map_err(AppError::from);
+                                    let took = t0.elapsed().as_millis();
+                                    ack.send(Ok(TaskResult::new(&name, took)))
+                                },
                             };
                         } else {
                            error!("Transaction ended without Flush or Shutdown, it can never happen");
@@ -263,14 +312,14 @@ where
     }
 
     // commit current tx but KEEP worker alive (idle); you can call begin() again
-    pub fn flush(&self) -> Result<(), AppError> {
-        let (ack_tx, ack_rx) = bounded::<Result<(), AppError>>(1);
+    pub fn flush(&self) -> Result<TaskResult, AppError> {
+        let (ack_tx, ack_rx) = bounded::<Result<TaskResult, AppError>>(1);
         self.fast_send(WriterCommand::Flush(ack_tx))?;
         ack_rx.recv()?
     }
 
     pub fn flush_async(&self) -> Result<Vec<FlushFuture>, AppError> {
-        let (ack_tx, ack_rx) = bounded::<Result<(), AppError>>(1);
+        let (ack_tx, ack_rx) = bounded::<Result<TaskResult, AppError>>(1);
         self.fast_send(WriterCommand::Flush(ack_tx))?;
         Ok(vec![FlushFuture { ack_rx }])
     }

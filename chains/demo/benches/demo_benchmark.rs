@@ -40,7 +40,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         bencher.iter(|| {
                 let ctx = chain.new_indexing_ctx().expect("Failed to create indexing context");
                 ctx.begin_writing().unwrap();
-                ctx.commit_and_close_ctx().unwrap();
+                ctx.two_phase_commit_and_close().unwrap();
             }
         );
     });

@@ -104,14 +104,14 @@ pub mod plain_test_utils {
         ).expect("reader")
     }
 
-    pub(crate) fn mk_sharded_writer(n: usize, weak_dbs: Vec<Weak<Database>>) -> (ShardedTableWriter<u32, Address, PlainFactory<u32, Address>, BytesPartitioner, Xxh3Partitioner>, TableDefinition<'static, u32, Address>) {
+    pub(crate) fn mk_sharded_writer(name: &str, n: usize, weak_dbs: Vec<Weak<Database>>) -> (ShardedTableWriter<u32, Address, PlainFactory<u32, Address>, BytesPartitioner, Xxh3Partitioner>, TableDefinition<'static, u32, Address>) {
         let plain_def = TableDefinition::<u32, Address>::new("plain_underlying");
 
         // Writer/Reader
         let writer = ShardedTableWriter::new(
             Partitioning::by_key(n),
             weak_dbs.clone(),
-            PlainFactory::new(plain_def),
+            PlainFactory::new(name, plain_def),
         ).expect("writer");
 
         (writer, plain_def)
@@ -161,14 +161,14 @@ pub mod index_test_utils {
         ).expect("reader")
     }
 
-    pub(crate) fn mk_sharded_writer(n: usize, lru_cache: usize, weak_dbs: Vec<Weak<Database>>) -> (ShardedTableWriter<u32, Address, IndexFactory<u32, Address>, BytesPartitioner, Xxh3Partitioner>, MultimapTableDefinition<'static, Address, u32>, TableDefinition<'static, u32, Address>) {
+    pub(crate) fn mk_sharded_writer(name: &str, n: usize, lru_cache: usize, weak_dbs: Vec<Weak<Database>>) -> (ShardedTableWriter<u32, Address, IndexFactory<u32, Address>, BytesPartitioner, Xxh3Partitioner>, MultimapTableDefinition<'static, Address, u32>, TableDefinition<'static, u32, Address>) {
         let pk_by_index_def = MultimapTableDefinition::<Address, u32>::new("pk_by_index");
         let index_by_pk_def = TableDefinition::<u32, Address>::new("index_by_pk");
 
         let writer = ShardedTableWriter::new(
             Partitioning::by_value(n),
             weak_dbs.clone(),
-            IndexFactory::new(lru_cache, pk_by_index_def, index_by_pk_def, ),
+            IndexFactory::new(name, lru_cache, pk_by_index_def, index_by_pk_def, ),
         ).expect("writer");
 
         (writer, pk_by_index_def, index_by_pk_def)
@@ -223,7 +223,7 @@ pub mod dict_test_utils {
         ).expect("reader")
     }
 
-    pub(crate) fn mk_sharded_writer(n: usize, weak_dbs: Vec<Weak<Database>>) -> (ShardedTableWriter<u32, Address, DictFactory<u32, Address>, BytesPartitioner, Xxh3Partitioner>, MultimapTableDefinition<'static, u32, u32>, TableDefinition<'static, u32, Address>, TableDefinition<'static, Address, u32>, TableDefinition<'static, u32, u32>) {
+    pub(crate) fn mk_sharded_writer(name: &str, n: usize, weak_dbs: Vec<Weak<Database>>) -> (ShardedTableWriter<u32, Address, DictFactory<u32, Address>, BytesPartitioner, Xxh3Partitioner>, MultimapTableDefinition<'static, u32, u32>, TableDefinition<'static, u32, Address>, TableDefinition<'static, Address, u32>, TableDefinition<'static, u32, u32>) {
         // Table defs
         let dict_pk_to_ids   = MultimapTableDefinition::<u32, u32>::new("dict_pk_to_ids");
         let value_by_dict_pk = TableDefinition::<u32, Address>::new("value_by_dict_pk");
@@ -235,6 +235,7 @@ pub mod dict_test_utils {
             Partitioning::by_value(n),
             weak_dbs.clone(),
             DictFactory::new(
+                name,
                 8192, // LRU cap
                 dict_pk_to_ids,
                 value_by_dict_pk,

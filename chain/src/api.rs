@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt::Display;
 use async_trait::async_trait;
 use futures::Stream;
@@ -7,6 +8,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use redb::StorageError;
 use tokio::task::JoinError;
+use redbit::storage::table_writer::TaskResult;
 use crate::batcher::SyncMode;
 
 #[derive(Debug, thiserror::Error)]
@@ -73,8 +75,8 @@ pub trait BlockChainLike<B: BlockLike, CTX: WriteTxContext>: Send + Sync {
     fn delete(&self) -> Result<(), ChainError>;
     fn get_last_header(&self) -> Result<Option<B::Header>, ChainError>;
     fn get_header_by_hash(&self, hash: <B::Header as BlockHeaderLike>::Hash) -> Result<Vec<B::Header>, ChainError>;
-    fn store_blocks(&self, indexing_context: &CTX, blocks: Vec<B>) -> Result<(), ChainError>;
-    fn update_blocks(&self, indexing_context: &CTX, blocks: Vec<B>) -> Result<(), ChainError>;
+    fn store_blocks(&self, indexing_context: &CTX, blocks: Vec<B>) -> Result<HashMap<String, TaskResult>, ChainError>;
+    fn update_blocks(&self, indexing_context: &CTX, blocks: Vec<B>) -> Result<HashMap<String, TaskResult>, ChainError>;
     async fn validate_chain(&self, validation_from_height: u32) -> Result<Vec<B::Header>, ChainError>;
 }
 

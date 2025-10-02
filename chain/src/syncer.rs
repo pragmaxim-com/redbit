@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use crate::api::{BlockHeaderLike, SizeLike};
 use crate::api::{BlockChainLike, BlockLike};
 use crate::api::{BlockProvider, ChainError};
@@ -11,6 +12,7 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, watch};
 use tokio::sync::mpsc::error::TryRecvError;
 use tokio_stream::wrappers::ReceiverStream;
+use redbit::storage::table_writer::TaskResult;
 use crate::combine::ShutdownReason;
 
 pub struct ChainSyncer<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext> {
@@ -196,6 +198,7 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
         let mut persist_handle = {
             let block_provider = Arc::clone(&block_provider);
             let chain = Arc::clone(&chain);
+            let monitor = Arc::clone(&self.monitor);
             let shutdown = shutdown.clone();
             task::spawn_blocking_named("persist", move || {
                 if let Ok(index_context) = chain.new_indexing_ctx() {
@@ -207,15 +210,20 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
                         } else {
                             match sort_rx.try_recv() {
                                 Ok(batch) => {
-                                    if let Err(e) = Self::persist_or_link(
+                                    match Self::persist_or_link(
                                         &index_context,
                                         batch,
                                         fork_detection_height,
                                         Arc::clone(&block_provider),
                                         Arc::clone(&chain),
                                     ) {
-                                        error!("persist: persist_blocks returned error {e}");
-                                        return;
+                                        Ok(tasks) => {
+                                            monitor.log_task_results(tasks, sort_rx.len());
+                                        }
+                                        Err(e) => {
+                                            error!("persist: persist_or_link returned error {e}");
+                                            return;
+                                        }
                                     }
                                 }
                                 Err(TryRecvError::Empty) => {
@@ -304,22 +312,23 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
         }
     }
 
-    pub fn persist_or_link(indexing_context: &CTX, mut blocks: Vec<TB>, fork_detection_height: u32, block_provider: Arc<dyn BlockProvider<FB, TB>>, block_chain: Arc<dyn BlockChainLike<TB, CTX>>) -> Result<(), ChainError> {
+    pub fn persist_or_link(indexing_context: &CTX, mut blocks: Vec<TB>, fork_detection_height: u32, block_provider: Arc<dyn BlockProvider<FB, TB>>, block_chain: Arc<dyn BlockChainLike<TB, CTX>>) -> Result<HashMap<String, TaskResult>, ChainError> {
         if blocks.is_empty() {
             error!("Received empty block batch, nothing to persist");
-            Ok(())
+            Ok(HashMap::new())
         } else if blocks.last().is_some_and(|b| b.header().height() <= fork_detection_height) {
             block_chain.store_blocks(indexing_context, blocks)
         } else {
+            let mut last_tasks: HashMap<String, TaskResult> = HashMap::new();
             for block in blocks.drain(..) {
                 let chain = Self::chain_link(block, Arc::clone(&block_provider), Arc::clone(&block_chain))?;
                 match chain.len() {
                     0 => (),
-                    1 => block_chain.store_blocks(indexing_context, chain)?,
-                    _ => block_chain.update_blocks(indexing_context, chain)?,
+                    1 => { last_tasks = block_chain.store_blocks(indexing_context, chain)? },
+                    _ => { last_tasks = block_chain.update_blocks(indexing_context, chain)? },
                 }
             }
-            Ok(())
+            Ok(last_tasks)
         }
 
     }

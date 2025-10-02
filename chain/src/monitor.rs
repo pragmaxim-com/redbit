@@ -1,8 +1,10 @@
-use std::{time::Instant};
-
-use std::sync::Mutex;
-use redbit::{info, warn};
 use crate::{BlockHeaderLike, BlockLike};
+use redbit::storage::table_writer::TaskResult;
+use redbit::{info, warn};
+use std::collections::HashMap;
+use std::sync::Mutex;
+use std::time::Instant;
+use crate::stats::TaskStats;
 
 pub type BatchWeight = usize;
 pub type BoxWeight = usize;
@@ -10,6 +12,7 @@ pub type BoxWeight = usize;
 pub struct ProgressMonitor<B: BlockLike> {
     min_weight_report: usize,
     start_time: Instant,
+    task_stats: Mutex<TaskStats>,
     total_and_last_report_weight: Mutex<(usize, usize)>,
     phantom: std::marker::PhantomData<B>,
 }
@@ -19,6 +22,7 @@ impl<B: BlockLike> ProgressMonitor<B> {
         ProgressMonitor {
             min_weight_report: min_tx_count_report,
             start_time: Instant::now(),
+            task_stats: Mutex::new(TaskStats::default()),
             total_and_last_report_weight: Mutex::new((0, 0)),
             phantom: std::marker::PhantomData,
         }
@@ -49,6 +53,19 @@ impl<B: BlockLike> ProgressMonitor<B> {
             } else {
                 *total_weight = (new_total_weight, total_weight.1);
             }
+        }
+    }
+
+    pub fn log_task_results(&self, tasks_by_name: HashMap<String, TaskResult>, buffer_size: usize) {
+        let mut s = self.task_stats.lock().expect("stats poisoned");
+        s.update(&tasks_by_name);
+
+        if s.iters % 10 != 0 {
+            return;
+        } else {
+            let mut report = s.build_report(&tasks_by_name);
+            let report = report.printable(buffer_size, 30, /*sort_by_last_desc=*/ true);
+            info!("{}", report);
         }
     }
 }

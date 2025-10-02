@@ -1,5 +1,5 @@
 use crate::storage::partitioning::{KeyPartitioner, Partitioning, ValuePartitioner};
-use crate::storage::table_writer::{TableFactory, ValueBuf, WriterCommand};
+use crate::storage::table_writer::{TaskResult, TableFactory, ValueBuf, WriterCommand};
 use crate::{AppError, FlushFuture, TableWriter};
 use redb::{Database, Key};
 use std::borrow::Borrow;
@@ -110,15 +110,16 @@ where
         }
     }
 
-    pub fn flush(&self) -> redb::Result<(), AppError> {
+    pub fn flush(&self) -> redb::Result<TaskResult, AppError> {
         let mut acks = Vec::with_capacity(self.shards.len());
         for w in &self.shards {
             acks.extend(w.flush_async()?);
         }
+        let mut tasks = Vec::with_capacity(acks.len());
         for fut in acks {
-            fut.wait()?;
+            tasks.push(fut.wait()?);
         }
-        Ok(())
+        Ok(tasks.into_iter().max_by_key(|t| t.took).unwrap())
     }
 
     pub fn flush_async(&self) -> Result<Vec<FlushFuture>, AppError> {
@@ -142,8 +143,9 @@ mod plain_sharded {
     #[test]
     fn sharded_plain_insert_read_all() {
         let n = 3usize;
-        let (_owned, weak_dbs) = test_utils::mk_shard_dbs(n, "plain_sharded_insert");
-        let (writer, plain_def) = plain_test_utils::mk_sharded_writer(n, weak_dbs.clone());
+        let name = "plain_sharded_insert";
+        let (_owned, weak_dbs) = test_utils::mk_shard_dbs(n, name);
+        let (writer, plain_def) = plain_test_utils::mk_sharded_writer(name, n, weak_dbs.clone());
 
         writer.begin().expect("begin");
         for k in 1u32..=24 {
@@ -165,8 +167,9 @@ mod plain_sharded {
     #[test]
     fn sharded_plain_delete_every_third() {
         let n = 3usize;
-        let (_owned, weak_dbs) = test_utils::mk_shard_dbs(n, "plain_sharded_delete");
-        let (writer, plain_def) = plain_test_utils::mk_sharded_writer(n, weak_dbs.clone());
+        let name = "plain_sharded_delete";
+        let (_owned, weak_dbs) = test_utils::mk_shard_dbs(n, name);
+        let (writer, plain_def) = plain_test_utils::mk_sharded_writer(name, n, weak_dbs.clone());
 
         writer.begin().expect("begin");
         for k in 1u32..=40 {
@@ -200,8 +203,9 @@ mod index_sharded {
     #[test]
     fn sharded_index_heads_and_delete_in_one_tx() {
         let n = 3usize;
-        let (_owned, weak_dbs) = test_utils::mk_shard_dbs(n, "index_sharded_heads");
-        let (writer, pk_by_index_def, index_by_pk_def) = index_test_utils::mk_sharded_writer(n, 1000, weak_dbs.clone());
+        let name = "index_sharded_heads";
+        let (_owned, weak_dbs) = test_utils::mk_shard_dbs(n, name);
+        let (writer, pk_by_index_def, index_by_pk_def) = index_test_utils::mk_sharded_writer(name, n, 1000, weak_dbs.clone());
 
         // write + validate heads + delete + validate again — all before flush
         let a1 = addr(&[1, 2, 3, 4]);
@@ -246,8 +250,9 @@ mod index_sharded {
     #[test]
     fn sharded_index_delete_nonexistent_false() {
         let n = 3usize;
-        let (_owned, weak_dbs) = test_utils::mk_shard_dbs(n, "index_sharded_del_absent");
-        let (writer, _, _) = index_test_utils::mk_sharded_writer(n, 1000, weak_dbs.clone());
+        let name = "index_sharded_del_absent";
+        let (_owned, weak_dbs) = test_utils::mk_shard_dbs(n, name);
+        let (writer, _, _) = index_test_utils::mk_sharded_writer(name, n, 1000, weak_dbs.clone());
 
         writer.begin().expect("begin");
         // no inserts; delete should be false
@@ -266,8 +271,9 @@ mod dict_sharded {
     #[test]
     fn sharded_dict_two_ids_same_value_share_after_flush() {
         let n = 4usize;
-        let (_owned, weak_dbs) = test_utils::mk_shard_dbs(n, "dict_sharded_share");
-        let (writer, dict_pk_to_ids, value_by_dict_pk, value_to_dict_pk, dict_pk_by_id) = dict_test_utils::mk_sharded_writer(n, weak_dbs.clone());
+        let name = "dict_sharded_share";
+        let (_owned, weak_dbs) = test_utils::mk_shard_dbs(n, name);
+        let (writer, dict_pk_to_ids, value_by_dict_pk, value_to_dict_pk, dict_pk_by_id) = dict_test_utils::mk_sharded_writer(name, n, weak_dbs.clone());
 
         let id1 = 10u32;
         let id2 = 11u32;
@@ -297,8 +303,9 @@ mod dict_sharded {
     #[test]
     fn sharded_dict_delete_one_id_keeps_other() {
         let n = 4usize;
-        let (_owned, weak_dbs) = test_utils::mk_shard_dbs(n, "dict_sharded_delete");
-        let (writer, dict_pk_to_ids, value_by_dict_pk, value_to_dict_pk, dict_pk_by_id) = dict_test_utils::mk_sharded_writer(n, weak_dbs.clone());
+        let name = "dict_sharded_delete";
+        let (_owned, weak_dbs) = test_utils::mk_shard_dbs(n, name);
+        let (writer, dict_pk_to_ids, value_by_dict_pk, value_to_dict_pk, dict_pk_by_id) = dict_test_utils::mk_sharded_writer(name, n, weak_dbs.clone());
 
         let id1 = 21u32;
         let id2 = 22u32;

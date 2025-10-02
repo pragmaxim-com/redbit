@@ -69,16 +69,10 @@ pub fn write_tx_context(entity_tx_context_ty: &Type, tx_contexts: &[TxContextIte
             }
            fn commit_ctx_async(&self) -> Result<Vec<FlushFuture>, AppError> {
                 let mut futures: Vec<FlushFuture> = Vec::new();
-                #( futures.extend(#all_flushes); )*
+                #( futures.extend(#tail_flushes); )*
+                futures.extend(#pk_flush);
                 Ok(futures)
            }
-           fn two_phase_commit(&self) -> Result<(), AppError> {
-                let mut futures = Vec::new();
-                #( futures.extend(#tail_flushes); )*
-                let _ = futures.into_iter().map(|f| f.wait()).collect::<Result<Vec<_>, _>>()?;
-                #pk_flush.into_iter().try_for_each(|f| f.wait())?;
-                Ok(())
-            }
         }
     }
 }
@@ -145,14 +139,14 @@ pub fn tx_context_plain_item(def: &PlainTableDef) -> TxContextItem {
             #var_ident: ShardedTableWriter::new(
                 Partitioning::by_key(#shards),
                 storage.fetch_sharded_dbs(#name_lit, Some(#shards))?,
-                PlainFactory::new(#table_name),
+                PlainFactory::new(#name_lit, #table_name),
             )?
         }
     } else {
         quote! {
             #var_ident: TableWriter::new(
                 storage.fetch_single_db(#name_lit)?,
-                PlainFactory::new(#table_name),
+                PlainFactory::new(#name_lit, #table_name),
             )?
         }
     };
@@ -228,14 +222,14 @@ pub fn tx_context_index_item(defs: &IndexTableDefs) -> TxContextItem {
             #var_ident: ShardedTableWriter::new(
                 Partitioning::by_value(#shards),
                 storage.fetch_sharded_dbs(#name_lit, Some(#shards))?,
-                IndexFactory::new(#lru_cache, #pk_by_index, #index_by_pk),
+                IndexFactory::new(#name_lit, #lru_cache, #pk_by_index, #index_by_pk),
             )?
         }
     } else {
         quote! {
             #var_ident: TableWriter::new(
                 storage.fetch_single_db(#name_lit)?,
-                IndexFactory::new(#lru_cache, #pk_by_index, #index_by_pk),
+                IndexFactory::new(#name_lit, #lru_cache, #pk_by_index, #index_by_pk),
             )?
         }
     };
@@ -319,14 +313,14 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
             #var_ident: ShardedTableWriter::new(
                 Partitioning::by_value(#shards),
                 storage.fetch_sharded_dbs(#name_lit, Some(#shards))?,
-                DictFactory::new(#lru_cache, #dict_pk_to_ids, #value_by_dict, #value_to_dict, #dict_pk_by_pk),
+                DictFactory::new(#name_lit, #lru_cache, #dict_pk_to_ids, #value_by_dict, #value_to_dict, #dict_pk_by_pk),
             )?
         }
     } else {
         quote! {
             #var_ident: TableWriter::new(
                 storage.fetch_single_db(#name_lit)?,
-                DictFactory::new(#lru_cache, #dict_pk_to_ids, #value_by_dict, #value_to_dict, #dict_pk_by_pk),
+                DictFactory::new(#name_lit, #lru_cache, #dict_pk_to_ids, #value_by_dict, #value_to_dict, #dict_pk_by_pk),
             )?
         }
     };

@@ -6,8 +6,9 @@ mod bench_index_any_for_value {
 
     /// Baseline: single writer (non-sharded).
     fn bench_any_for_index_writer(m_values: usize, lru_cache: usize, b: &mut Bencher) {
+        let name = format!("bench_idx_any_m{m_values}_c{lru_cache}");
         let (_owner_db, weak_db, _cache, pk_by_index, index_by_pk) = index_test_utils::setup_index_defs(1000);
-        let writer = TableWriter::new(weak_db, IndexFactory::new(lru_cache, pk_by_index, index_by_pk))
+        let writer = TableWriter::new(weak_db, IndexFactory::new(&name, lru_cache, pk_by_index, index_by_pk))
             .expect("new writer");
 
         let addrs = test_utils::address_dataset(m_values);
@@ -32,8 +33,9 @@ mod bench_index_any_for_value {
     /// ShardedWriter: shards × values × cache.
     fn bench_any_for_index_sharded(shards: usize, m_values: usize, lru_cache: usize, b: &mut Bencher) {
         assert!(shards >= 2);
-        let (_owned, weak_dbs) = test_utils::mk_shard_dbs(shards, &format!("bench_idx_any_s{shards}_m{m_values}_c{lru_cache}"));
-        let (s_writer_writer, _vp, _defs) = index_test_utils::mk_sharded_writer(shards, lru_cache, weak_dbs);
+        let prefix = format!("bench_idx_any_s{shards}_m{m_values}_c{lru_cache}");
+        let (_owned, weak_dbs) = test_utils::mk_shard_dbs(shards, &prefix);
+        let (s_writer_writer, _vp, _defs) = index_test_utils::mk_sharded_writer(&prefix, shards, lru_cache, weak_dbs);
 
         let addrs = test_utils::address_dataset(m_values);
 

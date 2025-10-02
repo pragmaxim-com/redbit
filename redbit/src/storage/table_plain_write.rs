@@ -7,12 +7,14 @@ use std::ops::RangeBounds;
 
 #[derive(Clone)]
 pub struct PlainFactory<K: Key + 'static, V: Key + 'static> {
-    pub table_def: TableDefinition<'static, K, V>,
+    pub(crate) name: String,
+    pub(crate) table_def: TableDefinition<'static, K, V>,
 }
 
 impl<K: Key + 'static, V: Key + 'static> PlainFactory<K, V> {
-    pub fn new(table_def: TableDefinition<'static, K, V>) -> Self {
+    pub fn new(name: &str, table_def: TableDefinition<'static, K, V>) -> Self {
         Self {
+            name: name.to_string(),
             table_def,
         }
     }
@@ -35,6 +37,11 @@ impl<K: Key + 'static, V: Key + 'static> TableFactory<K, V> for PlainFactory<K, 
     type Table<'txn, 'c> = PlainTable<'txn, K, V>;
 
     fn new_cache(&self) -> Self::CacheCtx { }
+
+
+    fn name(&self) -> String {
+        self.name.clone()
+    }
 
     fn open<'txn, 'c>(&self, tx: &'txn WriteTransaction, _cache: &'c mut Self::CacheCtx) -> Result<Self::Table<'txn, 'c>, AppError> {
         PlainTable::new(tx, self.table_def)

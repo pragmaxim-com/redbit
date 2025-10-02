@@ -32,7 +32,7 @@ pub fn fn_def(entity_def: &EntityDef, table_var: &Ident) -> FunctionDef {
             let pks = {
                 let tx_context = #entity_name::begin_write_ctx(&storage).unwrap();
                 let pks = #entity_name::#fn_name(&tx_context, from_value, until_value).expect("Failed to get PKs in range");
-                tx_context.commit_and_close_ctx().expect("Failed to flush transaction context");
+                tx_context.two_phase_commit_and_close().expect("Failed to flush transaction context");
                 pks
             };
             let test_pks: Vec<#pk_type> = #entity_type::sample_many(entity_count).iter().map(|e| e.#pk_name).collect();

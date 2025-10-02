@@ -9,6 +9,7 @@ use lru::LruCache;
 
 #[derive(Clone)]
 pub struct DictFactory<K: Key + 'static, V: Key + 'static> {
+    pub name: String,
     pub dict_pk_to_ids_def: MultimapTableDefinition<'static, K, K>,
     pub value_by_dict_pk_def: TableDefinition<'static, K, V>,
     pub value_to_dict_pk_def: TableDefinition<'static, V, K>,
@@ -17,8 +18,9 @@ pub struct DictFactory<K: Key + 'static, V: Key + 'static> {
 }
 
 impl<K: Key + 'static, V: Key + 'static> DictFactory<K, V> {
-    pub fn new( lru_capacity: usize, dict_pk_to_ids_def: MultimapTableDefinition<'static, K, K>, value_by_dict_pk_def: TableDefinition<'static, K, V>, value_to_dict_pk_def: TableDefinition<'static, V, K>, dict_pk_by_id_def: TableDefinition<'static, K, K>) -> Self {
+    pub fn new( name: &str, lru_capacity: usize, dict_pk_to_ids_def: MultimapTableDefinition<'static, K, K>, value_by_dict_pk_def: TableDefinition<'static, K, V>, value_to_dict_pk_def: TableDefinition<'static, V, K>, dict_pk_by_id_def: TableDefinition<'static, K, K>) -> Self {
         Self {
+            name: name.to_string(),
             dict_pk_to_ids_def,
             value_by_dict_pk_def,
             value_to_dict_pk_def,
@@ -31,6 +33,10 @@ impl<K: Key + 'static, V: Key + 'static> DictFactory<K, V> {
 impl<K: Key + 'static, V: Key + 'static> TableFactory<K, V> for DictFactory<K, V> {
     type CacheCtx = LruCache<Vec<u8>, Vec<u8>>;
     type Table<'txn, 'c> = DictTable<'txn, 'c, K, V>;
+
+    fn name(&self) -> String {
+        self.name.clone()
+    }
 
     fn new_cache(&self) -> Self::CacheCtx {
         LruCache::new(NonZeroUsize::new(self.lru_capacity).expect("lru_capacity for dictionary must be > 0"))

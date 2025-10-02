@@ -140,7 +140,7 @@ pub fn block_like(block_type: Type, pk_name: &Ident, pk_type: &Type, field_defs:
                     let tx_context = #block_type::begin_write_ctx(&self.storage)?;
                     let pks = #pk_type::from_many(&(0..=tip_header.#pk_name.0).collect::<Vec<u32>>());
                     #block_type::delete_many(&tx_context, &pks)?;
-                    tx_context.commit_and_close_ctx()?;
+                    tx_context.two_phase_commit_and_close()?;
                 }
                 Ok(())
             }
@@ -157,23 +157,32 @@ pub fn block_like(block_type: Type, pk_name: &Ident, pk_type: &Type, field_defs:
                 Ok(header)
             }
 
-            fn store_blocks(&self, indexing_context: &#write_tx_context, blocks: Vec<#block_type>) -> Result<(), chain::ChainError> {
+            fn store_blocks(&self, indexing_context: &#write_tx_context, blocks: Vec<#block_type>) -> Result<HashMap<String, TaskResult>, chain::ChainError> {
                 let _ = indexing_context.begin_writing()?;
+                let master_start = Instant::now();
                 for block in blocks.into_iter() {
                     #block_type::store(&indexing_context, block)?;
                 }
-                let _ = indexing_context.two_phase_commit()?;
-                Ok(())
+                let master_took = master_start.elapsed().as_millis();
+                let commit_start = Instant::now();
+                let mut tasks = indexing_context.two_phase_commit()?;
+                let commit_took = commit_start.elapsed().as_millis();
+
+                let master_task = TaskResult::master(master_took);
+                let commit_task = TaskResult::commit(commit_took);
+                tasks.insert(master_task.name.clone(), master_task);
+                tasks.insert(commit_task.name.clone(), commit_task);
+                Ok(tasks)
             }
 
-            fn update_blocks(&self, indexing_context: &#write_tx_context, blocks: Vec<#block_type>) -> Result<(), chain::ChainError> {
+            fn update_blocks(&self, indexing_context: &#write_tx_context, blocks: Vec<#block_type>) -> Result<HashMap<String, TaskResult>, chain::ChainError> {
                 let _ = indexing_context.begin_writing()?;
                 for block in &blocks {
                     #block_type::delete(&indexing_context, block.#pk_name)?;
                 }
                 let _ = indexing_context.two_phase_commit()?;
-                self.store_blocks(indexing_context, blocks)?;
-                Ok(())
+                let result = self.store_blocks(indexing_context, blocks)?;
+                Ok(result)
             }
 
             async fn validate_chain(&self, validation_from_height: u32) -> Result<Vec<#header_type>, chain::ChainError> {
