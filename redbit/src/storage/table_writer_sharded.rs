@@ -8,11 +8,10 @@ use std::{marker::PhantomData, sync::Weak};
 pub struct ShardedTableWriter<
     K: Key + Send + Copy + 'static + Borrow<K::SelfType<'static>>,
     V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
-    F: TableFactory<K, V> + Send + Clone + 'static,
-    KP: KeyPartitioner<K> + Send + Sync + 'static,
-    VP: ValuePartitioner<V> + Send + Sync + 'static,
-> where F::Table<'static,'static>: Send
-{
+    F: TableFactory<K, V>,
+    KP: KeyPartitioner<K>,
+    VP: ValuePartitioner<V>,
+> {
     partitioner: Partitioning<KP, VP>,
     shards: Vec<TableWriter<K, V, F>>,
     _pd: PhantomData<(K,V)>,
@@ -22,12 +21,9 @@ impl<
     K: Key + Send + Copy + 'static + Borrow<K::SelfType<'static>>,
     V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
     F: TableFactory<K, V> + Send + Clone + 'static,
-    KP: KeyPartitioner<K> + Send + Sync + 'static,
-    VP: ValuePartitioner<V> + Send + Sync + 'static,
-> ShardedTableWriter<K,V,F, KP, VP>
-where
-    F::Table<'static,'static>: Send,
-{
+    KP: KeyPartitioner<K>,
+    VP: ValuePartitioner<V>,
+> ShardedTableWriter<K,V,F, KP, VP> {
     pub fn new(partitioning: Partitioning<KP, VP>, dbs: Vec<Weak<Database>>, factory: F) -> Result<Self, AppError> {
         let shards_count = dbs.len();
         if shards_count < 2 {

@@ -122,7 +122,6 @@ where
     K: Key + Send + 'static + Borrow<K::SelfType<'static>>,
     V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
     F: TableFactory<K, V> + Send + Clone + 'static,
-    F::Table<'static, 'static>: Send,
 {
     fn step<T: WriteTableLike<K, V>>(table: &mut T, cmd: WriterCommand<K, V>) -> Result<Control, AppError> {
         match cmd {
