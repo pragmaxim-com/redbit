@@ -22,7 +22,8 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          key: rust-cache-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          shared-key: ${{ runner.os }}-ci
+          cache-on-failure: true
 
       - name: Run tests
         run: |
@@ -41,7 +42,8 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          key: rust-cache-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          shared-key: ${{ runner.os }}-ci
+          cache-on-failure: true
 
       - name: Run tests
         run: |
@@ -63,7 +65,8 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          key: rust-cache-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          shared-key: ${{ runner.os }}-ci
+          cache-on-failure: true
 
       - name: Run Built-in Rust Benchmarks and Extract Metrics
         run: |
@@ -153,7 +156,8 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          key: rust-cache-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          shared-key: ${{ runner.os }}-ci
+          cache-on-failure: true
 
       - name: Run benchmarks
         run: |
