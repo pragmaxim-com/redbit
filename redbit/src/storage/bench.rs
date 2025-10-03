@@ -1,8 +1,8 @@
-#[cfg(all(test, not(feature = "integration")))]
+#[cfg(all(test, feature = "bench"))]
 mod bench_index_any_for_value {
     use test::{Bencher, black_box};
-    use crate::{IndexFactory, TableWriter};
     use crate::storage::{test_utils, index_test_utils};
+    use crate::{IndexFactory, TableWriter};
 
     /// Baseline: single writer (non-sharded).
     fn bench_any_for_index_writer(m_values: usize, lru_cache: usize, b: &mut Bencher) {

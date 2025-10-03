@@ -8,6 +8,7 @@ pub fn test_suite(entity_def: &EntityDef, parent_def: Option<OneToManyParentDef>
     let parent_entity = parent_def.clone().map(|p|p.parent_ident);
     let entity_tests = format_ident!("{}", entity_name.to_string().to_lowercase());
     let entity_integration_tests = format_ident!("{}_integration", entity_name.to_string().to_lowercase());
+    let entity_benches = format_ident!("{}_bench", entity_name.to_string().to_lowercase());
     let entity_literal = Literal::string(&entity_name.to_string());
     let http_tests = fn_defs.iter().filter_map(|f| f.endpoint.clone().map(|e| e.tests)).flatten().collect::<Vec<_>>();
     let unit_tests = fn_defs.iter().filter_map(|f| f.test_stream.clone()).collect::<Vec<_>>();
@@ -18,6 +19,14 @@ pub fn test_suite(entity_def: &EntityDef, parent_def: Option<OneToManyParentDef>
             Some(parent) => (1usize, parent),
             None => (3usize, entity_name.clone()),
         };
+
+    let lazy_storage = quote! {
+        static STORAGE: Lazy<(StorageOwner, Arc<Storage>)> = Lazy::new(|| {
+            let (storage_owner, storage) = random_storage();
+            initialize_storage(Arc::clone(&storage));
+            (storage_owner, Arc::clone(&storage))
+        });
+    };
 
     let db_init = quote! {
         fn random_storage() -> (StorageOwner, Arc<Storage>) {
@@ -44,14 +53,20 @@ pub fn test_suite(entity_def: &EntityDef, parent_def: Option<OneToManyParentDef>
             use tokio::runtime::Runtime;
 
             #db_init
-            
-            static STORAGE: Lazy<(StorageOwner, Arc<Storage>)> = Lazy::new(|| {
-                let (storage_owner, storage) = random_storage();
-                initialize_storage(Arc::clone(&storage));
-                (storage_owner, Arc::clone(&storage))
-            });
+            #lazy_storage
 
             #(#unit_tests)*
+        }
+
+        #[cfg(all(test, feature = "bench"))]
+        mod #entity_benches {
+            use super::*;
+            use once_cell::sync::Lazy;
+            use test::Bencher;
+            use tokio::runtime::Runtime;
+
+            #db_init
+            #lazy_storage
 
             #(#benches)*
         }

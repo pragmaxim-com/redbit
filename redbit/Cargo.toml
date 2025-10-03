@@ -6,6 +6,7 @@ version.workspace = true
 [features]
 default = ["chain"]
 integration = []
+bench = []
 chain = ["macros/chain"]  # forward feature to libC
 
 [lib]

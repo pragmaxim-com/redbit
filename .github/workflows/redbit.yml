@@ -73,7 +73,7 @@ jobs:
             CSV_FILE="${PACKAGE}_benchmarks.csv"
 
             echo "Running benchmarks for $PACKAGE ..."
-            cargo bench --package "$PACKAGE" -- --nocapture | tee "$OUT_FILE"
+            cargo bench --package "$PACKAGE" --features bench -- --nocapture | tee "$OUT_FILE"
 
             # Extract and process lines with `bench:`
             grep 'bench:' "$OUT_FILE" | while read -r line; do
