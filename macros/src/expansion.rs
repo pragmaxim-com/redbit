@@ -34,7 +34,7 @@ fn write_to_local_file(lines: Vec<String>, module_name: &str, dir_name: &str, fi
     }
 }
 
-#[cfg(feature = "expansion_disabled")]
+#[cfg(not(feature = "expansion_structured"))]
 fn write_to_local_file(_: Vec<String>, _: &str, _: &str, _: &str) {
     // do nothing
 }

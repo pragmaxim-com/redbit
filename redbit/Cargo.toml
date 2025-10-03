@@ -7,6 +7,7 @@ version.workspace = true
 default = ["chain"]
 integration = []
 bench = []
+expansion_structured = ["macros/expansion_structured"]
 chain = ["macros/chain"]  # forward feature to libC
 
 [lib]

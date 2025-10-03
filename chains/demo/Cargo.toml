@@ -4,12 +4,13 @@ name = "demo"
 version.workspace = true
 
 [features]
-default = ["chain"]
+default = ["chain", "expansion_structured"]
 integration = []
 bench = []
 ci = []
 chain = ["redbit/chain"]
 tracing = ["chain/tracing"]
+expansion_structured = ["redbit/expansion_structured"]
 
 [[bin]]
 name = "demo"

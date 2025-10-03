@@ -8,6 +8,7 @@ ci = []
 integration = []
 bench = []
 chain = ["redbit/chain"]
+expansion_structured = ["redbit/expansion_structured"]
 
 [workspace.package]
 version = "1.0.7"
