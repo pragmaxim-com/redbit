@@ -60,12 +60,12 @@ impl<B: BlockLike> ProgressMonitor<B> {
         let mut s = self.task_stats.lock().expect("stats poisoned");
         s.update(&tasks_by_name);
 
-        if s.iters % 10 != 0 {
+        if s.iters % 100 != 0 {
             return;
         } else {
             let mut report = s.build_report(&tasks_by_name);
-            let report = report.printable(buffer_size, 30, /*sort_by_last_desc=*/ true);
-            info!("{}", report);
+            let report = report.printable(buffer_size, 30);
+            info!("Task report:\n{}", report);
         }
     }
 }

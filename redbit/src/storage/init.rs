@@ -138,7 +138,7 @@ impl StorageOwner {
         for info in inventory::iter::<StructInfo> {
             db_defs.extend((info.db_defs)())
         }
-        Self::init(db_dir, db_defs, db_cache_size_gb).await
+        Self::init(db_dir, db_defs, db_cache_size_gb, true).await
     }
 
     pub async fn temp(name: &str, db_cache_size_gb: u8, random: bool) -> redb::Result<(StorageOwner, Arc<Storage>), AppError> {
@@ -151,11 +151,11 @@ impl StorageOwner {
         for info in inventory::iter::<StructInfo> {
             db_defs.extend((info.db_defs)())
         }
-        let (_, owner, view) = StorageOwner::init(db_path, db_defs, db_cache_size_gb).await?;
+        let (_, owner, view) = StorageOwner::init(db_path, db_defs, db_cache_size_gb, false).await?;
         Ok((owner, view))
     }
 
-    fn db_name_with_cache_table(db_defs: &[DbDefWithCache]) -> Vec<String> {
+    fn log_name_with_cache_table(db_defs: &[DbDefWithCache]) -> Vec<String> {
         let name_width = db_defs.iter().map(|d| d.name.len()).max().unwrap_or(4); // at least "name"
         let mut lines = Vec::new();
         lines.push(format!("{:<name_width$}  {:>10}   {:>10}   {:>10}   {:>10}", "DB NAME", "weight", "size", "lru", "per shards", name_width = name_width));
@@ -170,10 +170,7 @@ impl StorageOwner {
 
     /// Create all DBs. `dbc.db_cache_in_mb` is already *per shard* for sharded, and
     /// per *single* DB for `shards == 0`. Reject `shards == 1`.
-    fn build_owned_map_create(
-        db_dir: &Path,
-        defs: Vec<DbDefWithCache>,
-    ) -> redb::Result<HashMap<String, DbSetOwned>, AppError> {
+    fn build_owned_map_create(db_dir: &Path, defs: &[DbDefWithCache]) -> redb::Result<HashMap<String, DbSetOwned>, AppError> {
         let mut out = HashMap::with_capacity(defs.len());
         for dbc in defs {
             dbc.validate()?;
@@ -182,7 +179,7 @@ impl StorageOwner {
                     let db = Database::builder()
                         .set_cache_size(dbc.db_cache_in_mb)
                         .create(Self::db_file_path(db_dir, &dbc.name, None))?;
-                    out.insert(dbc.name, DbSetOwned::Single(Arc::new(db)));
+                    out.insert(dbc.name.clone(), DbSetOwned::Single(Arc::new(db)));
                 }
                 shards => {
                     let mut v = Vec::with_capacity(shards);
@@ -192,7 +189,7 @@ impl StorageOwner {
                             .create(Self::db_file_path(db_dir, &dbc.name, Some(shard_idx)))?;
                         v.push(Arc::new(db));
                     }
-                    out.insert(dbc.name, DbSetOwned::Sharded(v));
+                    out.insert(dbc.name.clone(), DbSetOwned::Sharded(v));
                 }
             }
         }
@@ -200,11 +197,8 @@ impl StorageOwner {
     }
 
     /// Open all DBs in parallel. Reject `shards == 1`. Returns Single/Sharded depending on each definition.
-    async fn build_owned_map_open(
-        db_dir: &Path,
-        defs: Vec<DbDefWithCache>,
-    ) -> redb::Result<HashMap<String, DbSetOwned>, AppError> {
-        for dbc in &defs {
+    async fn build_owned_map_open(db_dir: &Path, defs: &[DbDefWithCache]) -> redb::Result<HashMap<String, DbSetOwned>, AppError> {
+        for dbc in defs {
             dbc.validate()?;
         }
         let db_opening_tasks = defs.into_iter().flat_map(|dbc| {
@@ -247,32 +241,32 @@ impl StorageOwner {
         }
     }
 
-    pub async fn init(db_dir: PathBuf, db_defs: Vec<DbDef>, total_cache_size_gb: u8) -> redb::Result<(bool, StorageOwner, Arc<Storage>), AppError> {
+    pub async fn init(db_dir: PathBuf, db_defs: Vec<DbDef>, total_cache_size_gb: u8, log_info: bool) -> redb::Result<(bool, StorageOwner, Arc<Storage>), AppError> {
         // allocator now outputs per-shard cache in MB + asserts shards >= 2
         let defs_with_cache: Vec<DbDefWithCache> = cache::allocate_cache_mb(&db_defs, (total_cache_size_gb as u64) * 1024);
 
-        let db_name_with_cache_table = Self::db_name_with_cache_table(&defs_with_cache).join("\n");
-
-        if !db_dir.exists() {
-            fs::create_dir_all(&db_dir)?;
-            info!(
-            "Creating dbs at {:?} with total cache size {} GB:\n{}",
-            db_dir, total_cache_size_gb, db_name_with_cache_table
-        );
-            let index_dbs = Self::build_owned_map_create(&db_dir, defs_with_cache)?;
-            let owner = StorageOwner::new(index_dbs);
-            let view = owner.view();
-            Ok((true, owner, view))
-        } else {
-            info!(
-            "Opening existing dbs at {:?} with total cache size {} GB, it might take a while in case previous process was killed\n{}",
-            db_dir, total_cache_size_gb, db_name_with_cache_table
-        );
-            let index_dbs = Self::build_owned_map_open(&db_dir, defs_with_cache).await?;
-            let owner = StorageOwner::new(index_dbs);
-            let view = owner.view();
-            Ok((false, owner, view))
+        let result =
+            if !db_dir.exists() {
+                fs::create_dir_all(&db_dir)?;
+                info!("Creating dbs at {:?} with total cache size {} GB", db_dir, total_cache_size_gb);
+                let index_dbs = Self::build_owned_map_create(&db_dir, &defs_with_cache)?;
+                let owner = StorageOwner::new(index_dbs);
+                let view = owner.view();
+                Ok((true, owner, view))
+            } else {
+                info!(
+                    "Opening existing dbs at {:?} with total cache size {} GB, it might take a while in case previous process was killed",
+                    db_dir, total_cache_size_gb
+                );
+                let index_dbs = Self::build_owned_map_open(&db_dir, &defs_with_cache).await?;
+                let owner = StorageOwner::new(index_dbs);
+                let view = owner.view();
+                Ok((false, owner, view))
+            };
+        if log_info {
+            info!("DB report:\n{}", Self::log_name_with_cache_table(&defs_with_cache).join("\n"));
         }
+        result
     }
 }
 

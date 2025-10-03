@@ -78,16 +78,6 @@ pub mod test_utils {
         let weak = owned.iter().map(Arc::downgrade).collect::<Vec<_>>();
         (owned, weak)
     }
-
-    pub(crate) fn address_dataset(m_values: usize) -> Vec<Address> {
-        let mut vals = Vec::with_capacity(m_values);
-        for i in 0..m_values {
-            // 3–4 bytes is enough to exercise sharding without dominating clone costs
-            let v = addr(&[(i as u8).wrapping_mul(17), (i as u8).wrapping_add(3), i as u8 ^ 0x5a]);
-            vals.push(v);
-        }
-        vals
-    }
 }
 
 #[cfg(all(test, not(feature = "integration")))]

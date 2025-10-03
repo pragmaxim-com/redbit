@@ -3,6 +3,17 @@ mod bench_index_any_for_value {
     use test::{Bencher, black_box};
     use crate::storage::{test_utils, index_test_utils};
     use crate::{IndexFactory, TableWriter};
+    use crate::storage::test_utils::{addr, Address};
+
+    pub(crate) fn address_dataset(m_values: usize) -> Vec<Address> {
+        let mut vals = Vec::with_capacity(m_values);
+        for i in 0..m_values {
+            // 3–4 bytes is enough to exercise sharding without dominating clone costs
+            let v = addr(&[(i as u8).wrapping_mul(17), (i as u8).wrapping_add(3), i as u8 ^ 0x5a]);
+            vals.push(v);
+        }
+        vals
+    }
 
     /// Baseline: single writer (non-sharded).
     fn bench_any_for_index_writer(m_values: usize, lru_cache: usize, b: &mut Bencher) {
@@ -11,7 +22,7 @@ mod bench_index_any_for_value {
         let writer = TableWriter::new(weak_db, IndexFactory::new(&name, lru_cache, pk_by_index, index_by_pk))
             .expect("new writer");
 
-        let addrs = test_utils::address_dataset(m_values);
+        let addrs = address_dataset(m_values);
 
         writer.begin().expect("begin");
         for (i, v) in addrs.iter().cloned().enumerate() {
@@ -37,7 +48,7 @@ mod bench_index_any_for_value {
         let (_owned, weak_dbs) = test_utils::mk_shard_dbs(shards, &prefix);
         let (s_writer_writer, _vp, _defs) = index_test_utils::mk_sharded_writer(&prefix, shards, lru_cache, weak_dbs);
 
-        let addrs = test_utils::address_dataset(m_values);
+        let addrs = address_dataset(m_values);
 
         s_writer_writer.begin().expect("begin");
         for (i, v) in addrs.iter().cloned().enumerate() {

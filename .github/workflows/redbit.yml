@@ -52,8 +52,37 @@ jobs:
           cargo test --package cardano --features integration,ci
           cargo test --package ergo --features integration,ci
 
-  bench:
+  criterion:
     needs: integration
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: setup | rust
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ runner.os }}-ci
+          cache-on-failure: true
+
+      - name: Run benchmarks
+        run: |
+          cargo bench --package demo --bench demo_benchmark -- --quiet
+          cargo bench --package btc --bench btc_benchmark  -- --quiet
+          cargo bench --package cardano --bench cardano_benchmark -- --quiet
+          cargo bench --package ergo --bench ergo_benchmark  -- --quiet
+
+      - name: Upload Criterion report to Pages artifact
+        id: deployment
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: target/criterion/
+
+  bench:
+    needs: criterion
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -143,37 +172,8 @@ jobs:
           git config --global user.email "github-actions@users.noreply.github.com"
           git diff --quiet || (git add README.md && git commit -m "Auto-update README with example code" && git push)
 
-  criterion:
-    needs: bench
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: setup | rust
-        uses: dtolnay/rust-toolchain@nightly
-
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: ${{ runner.os }}-ci
-          cache-on-failure: true
-
-      - name: Run benchmarks
-        run: |
-          cargo bench --package demo --bench demo_benchmark -- --quiet
-          cargo bench --package btc --bench btc_benchmark  -- --quiet
-          cargo bench --package cardano --bench cardano_benchmark -- --quiet
-          cargo bench --package ergo --bench ergo_benchmark  -- --quiet
-
-      - name: Upload Criterion report to Pages artifact
-        id: deployment
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: target/criterion/
-
   deploy:
-    needs: criterion
+    needs: bench
     runs-on: ubuntu-latest
     permissions:
       pages: write

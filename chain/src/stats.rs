@@ -15,13 +15,8 @@ pub struct ReportRow {
 pub struct Report(pub Vec<ReportRow>);
 
 impl Report {
-    pub fn printable(&mut self, buffer_size: usize, name_width: usize, sort_by_last_desc: bool) -> String {
-        if sort_by_last_desc {
-            self.0.sort_by(|a, b| b.last.cmp(&a.last));
-        } else {
-            self.0.sort_by(|a, b| a.name.cmp(&b.name));
-        }
-
+    pub fn printable(&mut self, buffer_size: usize, name_width: usize) -> String {
+        self.0.sort_by(|a, b| b.last.cmp(&a.last));
         let mut lines = Vec::with_capacity(self.0.len() + 1);
         lines.push(format!(
             "{:<name_width$}  {:>10}  {:>10}  {:>10}  {:>7}",
@@ -34,7 +29,6 @@ impl Report {
                 r.name, r.last, r.avg, r.dev, r.cv, name_width = name_width
             ));
         }
-
         format!("Persist_buffer {} and writing task performance :\n{}", buffer_size, lines.join("\n"))
     }
 }
@@ -171,7 +165,7 @@ mod tests {
         s.update(&b); // iters=1
 
         let mut report = s.build_report(&b);
-        let text = report.printable(42, 12, true);
+        let text = report.printable(42, 12);
         assert!(text.contains("Persist_buffer 42"));
         // sorted by last desc: z(30), m(10), a(5)
         let zpos = text.find("\nz").unwrap_or(usize::MAX);

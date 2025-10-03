@@ -1,6 +1,6 @@
 use redb::{Key, Value};
 use std::borrow::Borrow;
-use xxhash_rust::xxh3::xxh3_64_with_seed;
+use xxhash_rust::xxh3::{xxh3_64};
 
 /*
 use wyhash::wyhash;
@@ -50,22 +50,17 @@ pub trait ValuePartitioner<V: Key + 'static + Borrow<V::SelfType<'static>>> {
 #[derive(Clone)]
 pub struct Xxh3Partitioner {
     n: usize,
-    seed: u64,
 }
 
 impl Xxh3Partitioner {
     pub fn new(n: usize) -> Self {
         assert!(n > 0, "shard count must be > 0");
-        let seed = 0xDEAD_BEEF_CAFE_BABEu64;
-        Self { n, seed }
+        Self { n }
     }
 
-    /// Optional convenience when you already have a contiguous byte slice.
     #[inline]
     pub fn partition_bytes(&self, bytes: &[u8]) -> usize {
-        if self.n == 1 { return 0; }
-        let h = xxh3_64_with_seed(bytes, self.seed);
-        (h % (self.n as u64)) as usize
+        (xxh3_64(bytes) % (self.n as u64)) as usize
     }
 }
 
@@ -75,7 +70,6 @@ where
 {
     #[inline]
     fn partition_value<'v>(&self, value: impl Borrow<V::SelfType<'v>>) -> usize {
-        if self.n == 1 { return 0; }
         let bytes_view = <V as Value>::as_bytes(value.borrow());
         self.partition_bytes(bytes_view.as_ref())
     }
@@ -127,7 +121,6 @@ pub fn partition_key_redb<K: Key>(n: usize, key: &K::SelfType<'_>) -> usize {
 /// Partition directly from a contiguous little-endian byte slice.
 #[inline]
 pub fn partition_bytes_le(n: usize, bytes: &[u8]) -> usize {
-    assert!(n > 0, "shard count must be > 0");
     let m = n as u128;
     if m == 1 { return 0; }
     let mut pow = 1u128;
