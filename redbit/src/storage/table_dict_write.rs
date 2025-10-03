@@ -32,7 +32,7 @@ impl<K: Key + CopyOwnedValue + 'static, V: Key + 'static> DictFactory<K, V> {
 }
 
 impl<K: Key + CopyOwnedValue + 'static, V: Key + 'static> TableFactory<K, V> for DictFactory<K, V> {
-    type CacheCtx = LruCache<Vec<u8>, Vec<u8>>;
+    type CacheCtx = LruCache<Vec<u8>, <K as CopyOwnedValue>::Unit>;
     type Table<'txn, 'c> = DictTable<'txn, 'c, K, V>;
 
     fn name(&self) -> String {
@@ -58,18 +58,18 @@ impl<K: Key + CopyOwnedValue + 'static, V: Key + 'static> TableFactory<K, V> for
         )
     }
 }
-pub struct DictTable<'txn, 'c, K: Key + 'static, V: Key + 'static> {
+pub struct DictTable<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: Key + 'static> {
     pub(crate) dict_pk_to_ids: MultimapTable<'txn, K, K>,
     pub(crate) value_by_dict_pk: Table<'txn, K, V>,
     pub(crate) value_to_dict_pk: Table<'txn, V, K>,
     pub(crate) dict_pk_by_id: Table<'txn, K, K>,
-    cache: &'c mut LruCache<Vec<u8>, Vec<u8>>,
+    cache: &'c mut LruCache<Vec<u8>, <K as CopyOwnedValue>::Unit>,
 }
 
-impl<'txn, 'c, K: Key + 'static, V: Key + 'static> DictTable<'txn, 'c, K, V> {
+impl<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: Key + 'static> DictTable<'txn, 'c, K, V> {
     pub fn new(
         write_tx: &'txn WriteTransaction,
-        cache: &'c mut LruCache<Vec<u8>, Vec<u8>>,
+        cache: &'c mut LruCache<Vec<u8>, <K as CopyOwnedValue>::Unit>,
         dict_pk_to_ids_def: MultimapTableDefinition<K, K>,
         value_by_dict_pk_def: TableDefinition<K, V>,
         value_to_dict_pk_def: TableDefinition<V, K>,
@@ -90,20 +90,19 @@ impl<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: Key + 'static> WriteTableLi
         let val_ref: &V::SelfType<'v> = value.borrow();
 
         let v_bytes_key = V::as_bytes(val_ref);
-        if let Some(k_bytes) = self.cache.get(v_bytes_key.as_ref()) {
-            let birth_id = K::from_bytes(k_bytes);
-            self.dict_pk_by_id.insert(key_ref, &birth_id)?;
-            self.dict_pk_to_ids.insert(birth_id, key_ref)?;
+        if let Some(&k) = self.cache.get(v_bytes_key.as_ref()) {
+            let birth_id = Self::owned_from_unit(k);
+            self.dict_pk_by_id.insert(key_ref, birth_id.as_value())?;
+            self.dict_pk_to_ids.insert(birth_id.as_value(), key_ref)?;
             Ok(())
         } else {
             if let Some(birth_id_guard) = self.value_to_dict_pk.get(val_ref)? {
-                let birth_id = birth_id_guard.value();
+                let birth_id = Self::owned_key_from_guard(birth_id_guard);
                 let v_bytes = v_bytes_key.as_ref().to_vec();
-                let k_bytes = K::as_bytes(&birth_id).as_ref().to_vec();
-                self.cache.put(v_bytes, k_bytes);
+                self.cache.put(v_bytes, birth_id.into_unit());
 
-                self.dict_pk_by_id.insert(key_ref, &birth_id)?;
-                self.dict_pk_to_ids.insert(birth_id, key_ref)?;
+                self.dict_pk_by_id.insert(key_ref, birth_id.as_value())?;
+                self.dict_pk_to_ids.insert(birth_id.as_value(), key_ref)?;
             } else {
                 self.value_to_dict_pk.insert(val_ref, key_ref)?;
                 self.value_by_dict_pk.insert(key_ref, val_ref)?;
@@ -111,8 +110,7 @@ impl<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: Key + 'static> WriteTableLi
                 self.dict_pk_to_ids.insert(key_ref, key_ref)?;
 
                 let v_bytes = v_bytes_key.as_ref().to_vec();
-                let k_bytes = K::as_bytes(key_ref).as_ref().to_vec();
-                self.cache.put(v_bytes, k_bytes);
+                self.cache.put(v_bytes, Self::unit_from_key(key_ref));
             }
             Ok(())
         }

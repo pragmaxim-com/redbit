@@ -33,14 +33,14 @@ impl<K: Key + 'static, V: Key + 'static> IndexFactory<K, V> {
     }
 }
 
-pub struct IndexTable<'txn, 'c, K: Key + 'static, V: Key + 'static> {
+pub struct IndexTable<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: Key + 'static> {
     pub(crate) pk_by_index: MultimapTable<'txn, V, K>,
     pub(crate) index_by_pk: Table<'txn, K, V>,
-    pub(crate) cache: Option<&'c mut LruCache<Vec<u8>, Vec<u8>>>,
+    pub(crate) cache: Option<&'c mut LruCache<Vec<u8>, <K as CopyOwnedValue>::Unit>>,
 }
 
-impl<'txn, 'c, K: Key + 'static, V: Key + 'static> IndexTable<'txn, 'c, K, V> {
-    pub fn new(write_tx: &'txn WriteTransaction, cache: Option<&'c mut LruCache<Vec<u8>, Vec<u8>>>, pk_by_index_def: MultimapTableDefinition<'static, V, K>, index_by_pk_def: TableDefinition<'static, K, V>) -> Result<Self, AppError> {
+impl<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: Key + 'static> IndexTable<'txn, 'c, K, V> {
+    pub fn new(write_tx: &'txn WriteTransaction, cache: Option<&'c mut LruCache<Vec<u8>, <K as CopyOwnedValue>::Unit>>, pk_by_index_def: MultimapTableDefinition<'static, V, K>, index_by_pk_def: TableDefinition<'static, K, V>) -> Result<Self, AppError> {
         Ok(Self {
             pk_by_index: write_tx.open_multimap_table(pk_by_index_def)?,
             index_by_pk: write_tx.open_table(index_by_pk_def)?,
@@ -50,7 +50,7 @@ impl<'txn, 'c, K: Key + 'static, V: Key + 'static> IndexTable<'txn, 'c, K, V> {
 }
 
 impl<K: Key + CopyOwnedValue + 'static, V: Key + 'static> TableFactory<K, V> for IndexFactory<K, V> {
-    type CacheCtx = Option<LruCache<Vec<u8>, Vec<u8>>>;
+    type CacheCtx = Option<LruCache<Vec<u8>, <K as CopyOwnedValue>::Unit>>;
     type Table<'txn, 'c> = IndexTable<'txn, 'c, K, V>;
 
     fn new_cache(&self) -> Self::CacheCtx {
@@ -84,8 +84,7 @@ impl<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: Key + 'static> WriteTableLi
 
         if let Some(c) = self.cache.as_mut() {
             let v_bytes = V::as_bytes(val_ref).as_ref().to_vec();
-            let k_bytes = K::as_bytes(key_ref).as_ref().to_vec();
-            c.put(v_bytes, k_bytes);
+            c.put(v_bytes, Self::unit_from_key(key_ref));
         }
         Ok(())
     }
@@ -108,8 +107,8 @@ impl<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: Key + 'static> WriteTableLi
     fn get_any_for_index<'v>(&mut self, value: impl Borrow<V::SelfType<'v>>) -> Result<Option<ValueOwned<K>>, AppError> {
         if let Some(c) = self.cache.as_mut() {
             let v_bytes_key = V::as_bytes(value.borrow());
-            if let Some(k_bytes) = c.get(v_bytes_key.as_ref()) {
-                return Ok(Some(Self::owned_key_from_bytes(k_bytes)));
+            if let Some(&k) = c.get(v_bytes_key.as_ref()) {
+                return Ok(Some(Self::owned_from_unit(k)));
             }
         }
 
@@ -194,12 +193,11 @@ mod index_write_table_tests {
         let value_addr = addr(&[0xAA, 0xBB, 0xCC, 0xDD]);
         let k: u32 = 12345;
         let v_bytes = <Address as Value>::as_bytes(&value_addr).as_ref().to_vec();
-        let k_bytes = <u32 as Value>::as_bytes(&k).as_ref().to_vec();
 
         // Manually seed cache (value -> key) so get_any_for_index hits the fast path
         {
             assert!(cache.cap().get() >= 1);
-            cache.put(v_bytes.clone(), k_bytes.clone());
+            cache.put(v_bytes.clone(), k);
         }
 
         let mut tbl: IndexTable<'_, '_, u32, Address> =

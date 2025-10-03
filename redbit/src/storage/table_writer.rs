@@ -68,18 +68,35 @@ pub trait WriteTableLike<K: Key + CopyOwnedValue + 'static, V: Key + 'static> {
     fn get_any_for_index<'v>(&mut self, value: impl Borrow<V::SelfType<'v>>) -> Result<Option<ValueOwned<K>>, AppError>;
     fn range<'a, KR: Borrow<K::SelfType<'a>> + 'a>(&self, range: impl RangeBounds<KR> + 'a) -> Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>;
 
+    #[inline]
     fn key_buf(g: AccessGuard<'_, K>) -> ValueBuf<K> {
         ValueBuf::<K>::new(K::as_bytes(&g.value()).as_ref().to_vec())
     }
+    #[inline]
     fn value_buf(g: AccessGuard<'_, V>) -> ValueBuf<V> {
         ValueBuf::<V>::new(V::as_bytes(&g.value()).as_ref().to_vec())
     }
+    #[inline]
     fn owned_key_from_bytes(bytes: &[u8]) -> ValueOwned<K> {
         let k_view: K::SelfType<'_> = <K as Value>::from_bytes(bytes);
         ValueOwned::<K>::from_value(k_view)
     }
+    #[inline]
     fn owned_key_from_guard(g: AccessGuard<'_, K>) -> ValueOwned<K> {
         ValueOwned::<K>::from_guard(g)
+    }
+
+    #[inline]
+    fn unit_from_key<'k>(k: &K::SelfType<'k>) -> <K as CopyOwnedValue>::Unit
+    where
+        K: 'k,
+    {
+        <K as CopyOwnedValue>::to_unit_ref(k)
+    }
+
+    #[inline]
+    fn owned_from_unit(u: <K as CopyOwnedValue>::Unit) -> ValueOwned<K> {
+        ValueOwned::<K>::from_unit(u)
     }
 }
 

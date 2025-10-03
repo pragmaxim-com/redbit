@@ -4,6 +4,15 @@ use redb::Value;
 pub trait CopyOwnedValue: Value + Copy {
     type Unit: Copy + Send + 'static;
 
+    /// Convert from a borrowed view to the copyable unit (no move).
+    fn to_unit_ref<'a>(v: &Self::SelfType<'a>) -> Self::Unit
+    where
+        Self: 'a;
+
+    fn as_value_from_unit<'a>(u: &'a Self::Unit) -> Self::SelfType<'a>
+    where
+        Self: 'a;
+
     fn to_unit<'a>(v: Self::SelfType<'a>) -> Self::Unit
     where
         Self: 'a;
@@ -27,7 +36,9 @@ impl<V: CopyOwnedValue> Copy for ValueOwned<V> {}
 impl<V: CopyOwnedValue> ValueOwned<V> {
     #[inline]
     pub fn from_guard(g: redb::AccessGuard<'_, V>) -> Self {
-        Self { unit: V::to_unit(g.value()), _pd: PhantomData }
+        let v = g.value();
+        let u = V::to_unit_ref(&v);
+        Self { unit: u, _pd: PhantomData }
     }
 
     #[inline]
@@ -35,7 +46,13 @@ impl<V: CopyOwnedValue> ValueOwned<V> {
     where
         V: 'a,
     {
-        Self { unit: V::to_unit(v), _pd: PhantomData }
+        let u = V::to_unit_ref(&v);
+        Self { unit: u, _pd: PhantomData }
+    }
+
+    #[inline]
+    pub fn from_unit(u: V::Unit) -> Self {
+        Self { unit: u, _pd: PhantomData }
     }
 
     #[inline]
@@ -43,7 +60,7 @@ impl<V: CopyOwnedValue> ValueOwned<V> {
     where
         V: 'a,
     {
-        V::from_unit(self.unit)
+        V::as_value_from_unit(&self.unit)
     }
 
     #[inline]

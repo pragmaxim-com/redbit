@@ -83,7 +83,7 @@ pub mod test_utils {
         let mut vals = Vec::with_capacity(m_values);
         for i in 0..m_values {
             // 3–4 bytes is enough to exercise sharding without dominating clone costs
-            let v = addr(&[(i as u8).wrapping_mul(17), (i as u8).wrapping_add(3), (i as u8 ^ 0x5a)]);
+            let v = addr(&[(i as u8).wrapping_mul(17), (i as u8).wrapping_add(3), i as u8 ^ 0x5a]);
             vals.push(v);
         }
         vals
@@ -178,7 +178,7 @@ pub mod index_test_utils {
     pub(crate) fn setup_index_defs(lru_cap: usize) -> (
         Arc<Database>,
         Weak<Database>,
-        LruCache<Vec<u8>, Vec<u8>>,
+        LruCache<Vec<u8>, <u32 as CopyOwnedValue>::Unit>,
         MultimapTableDefinition<'static, Address, u32>, // pk_by_index
         TableDefinition<'static, u32, Address>,         // index_by_pk
     ) {
@@ -192,7 +192,7 @@ pub mod index_test_utils {
 
     pub(crate) fn mk_index<'txn, 'c>(
         tx: &'txn WriteTransaction,
-        cache: &'c mut LruCache<Vec<u8>, Vec<u8>>,
+        cache: &'c mut LruCache<Vec<u8>, <u32 as CopyOwnedValue>::Unit>,
         pk_by_index_def: MultimapTableDefinition<'static, Address, u32>,
         index_by_pk_def: TableDefinition<'static, u32, Address>,
     ) -> IndexTable<'txn, 'c, u32, Address> {
@@ -251,7 +251,7 @@ pub mod dict_test_utils {
     pub(crate) fn setup_dict_defs(cap: usize) -> (
         Database,
         WriteTransaction,
-        LruCache<Vec<u8>, Vec<u8>>,
+        LruCache<Vec<u8>, <u32 as CopyOwnedValue>::Unit>,
         MultimapTableDefinition<'static, u32, u32>,
         TableDefinition<'static, u32, Address>,
         TableDefinition<'static, Address, u32>,
@@ -272,7 +272,7 @@ pub mod dict_test_utils {
 
     pub(crate) fn mk_dict<'txn, 'c>(
         tx: &'txn WriteTransaction,
-        cache: &'c mut LruCache<Vec<u8>, Vec<u8>>,
+        cache: &'c mut LruCache<Vec<u8>, <u32 as CopyOwnedValue>::Unit>,
         dict_pk_to_ids: MultimapTableDefinition<'static, u32, u32>,
         value_by_dict_pk: TableDefinition<'static, u32, Address>,
         value_to_dict_pk: TableDefinition<'static, Address, u32>,

@@ -125,7 +125,7 @@ pub fn pointer_key(attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     let stream = quote! {
-        #[derive(PointerKey, Copy, Clone, Debug, Default, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
+        #[derive(PointerKey, Copy, Clone, Debug, Default, Hash, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
         #[serde(into = "String", try_from = "String")]
         #vis struct #struct_ident {
             pub parent: #parent_type,

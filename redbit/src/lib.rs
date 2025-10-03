@@ -182,6 +182,46 @@ macro_rules! impl_iterable_column_for_primitive {
 
 impl_iterable_column_for_primitive!(u8, u16, u32, u64, usize, i8, i16, i32, i64, isize);
 
+#[macro_export]
+macro_rules! impl_copy_owned_value_identity {
+        ($t:ty) => {
+            impl CopyOwnedValue for $t
+            where
+                <$t as redb::Value>::SelfType<'static>: Copy + Send + 'static,
+            {
+                type Unit = <$t as redb::Value>::SelfType<'static>;
+                #[inline]
+                fn to_unit<'a>(v: <$t as redb::Value>::SelfType<'a>) -> Self::Unit
+                where
+                    Self: 'a,
+                {
+                    v
+                }
+                #[inline]
+                fn from_unit<'a>(u: Self::Unit) -> <$t as redb::Value>::SelfType<'a>
+                where
+                    Self: 'a,
+                {
+                    u
+                }
+                #[inline]
+                fn to_unit_ref<'a>(v: &<$t as redb::Value>::SelfType<'a>) -> Self::Unit
+                where
+                    Self: 'a,
+                {
+                    *v
+                }
+                #[inline]
+                fn as_value_from_unit<'a>(u: &'a Self::Unit) -> <$t as redb::Value>::SelfType<'a>
+                where
+                    Self: 'a,
+                {
+                    *u
+                }
+            }
+        };
+    }
+
 pub trait UrlEncoded {
     fn url_encode(&self) -> String;
 }

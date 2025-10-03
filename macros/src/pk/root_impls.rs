@@ -52,26 +52,7 @@ pub fn new(struct_name: &Ident, index_field: Field) -> TokenStream {
             }
         }
 
-        impl CopyOwnedValue for #struct_name
-        where
-            <#struct_name as redb::Value>::SelfType<'static>: Copy + Send + 'static,
-        {
-            type Unit = <#struct_name as redb::Value>::SelfType<'static>;
-
-            fn to_unit<'a>(v: <#struct_name as redb::Value>::SelfType<'a>) -> Self::Unit
-            where
-                Self: 'a,
-            {
-                v
-            }
-
-            fn from_unit<'a>(u: Self::Unit) -> <#struct_name as redb::Value>::SelfType<'a>
-            where
-                Self: 'a,
-            {
-                u
-            }
-        }
+        impl_copy_owned_value_identity!(#struct_name);
 
         impl UrlEncoded for #struct_name {
             fn url_encode(&self) -> String {

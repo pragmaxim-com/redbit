@@ -133,38 +133,11 @@ impl<
 
 #[cfg(all(test, not(feature = "integration")))]
 mod plain_sharded {
+    use crate::impl_copy_owned_value_identity;
     use crate::storage::async_boundary::CopyOwnedValue;
     use crate::storage::test_utils::addr;
     use crate::storage::{plain_test_utils, test_utils};
 
-    #[macro_export]
-    macro_rules! impl_copy_owned_value_identity {
-        ($t:ty) => {
-            impl CopyOwnedValue for $t
-            where
-                // ensure the `'static instantiation` is actually Copy + Send
-                <$t as redb::Value>::SelfType<'static>: Copy + Send + 'static,
-            {
-                type Unit = <$t as redb::Value>::SelfType<'static>;
-
-                #[inline]
-                fn to_unit<'a>(v: <$t as redb::Value>::SelfType<'a>) -> Self::Unit
-                where
-                    Self: 'a,
-                {
-                    v
-                }
-
-                #[inline]
-                fn from_unit<'a>(u: Self::Unit) -> <$t as redb::Value>::SelfType<'a>
-                where
-                    Self: 'a,
-                {
-                    u
-                }
-            }
-        };
-    }
     impl_copy_owned_value_identity!(u32);
     // insert-only integrity
     #[test]
