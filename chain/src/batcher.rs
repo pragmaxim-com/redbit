@@ -195,7 +195,6 @@ impl<TB> Batcher<TB> {
         }
     }
 
-    #[inline]
     fn take_inner(&mut self) -> Vec<TB> {
         self.weight = 0;
         std::mem::take(&mut self.buf)
@@ -228,11 +227,9 @@ mod tests {
         fn weight(&self) -> usize { self.w }
     }
 
-    #[inline]
     fn mb(h: u32, w: usize) -> MockBlock { MockBlock(MockHeader { h, w }) }
 
     /// Push one item into the batcher; if a batch is produced, append its heights.
-    #[inline]
     fn push_collect_heights(
         b: &mut Batcher<MockBlock>,
         item: MockBlock,
@@ -244,7 +241,6 @@ mod tests {
     }
 
     /// Feed a sequence of ready blocks into the batcher and append produced heights.
-    #[inline]
     fn feed_ready<I: IntoIterator<Item = MockBlock>>(
         b: &mut Batcher<MockBlock>,
         ready: I,
@@ -254,19 +250,16 @@ mod tests {
     }
 
     /// Flush the batcher and append produced heights (if any).
-    #[inline]
     fn flush_collect(b: &mut Batcher<MockBlock>, out: &mut Vec<u32>) {
         if let Some(tail) = b.flush() { out.extend(heights(&tail)); }
     }
 
     /// Collect heights from a slice/vec of blocks.
-    #[inline]
     fn heights(blocks: &[MockBlock]) -> Vec<u32> {
         blocks.iter().map(|b| b.header().height()).collect()
     }
 
     /// Convenience for inclusive range -> Vec<u32>
-    #[inline]
     fn range_vec(lo: u32, hi: u32) -> Vec<u32> {
         (lo..=hi).collect()
     }

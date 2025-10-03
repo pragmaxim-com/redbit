@@ -86,7 +86,6 @@ impl BtcBlockProvider {
     /// - Other       : [TAG_NON_ADDR]
     ///
     /// Complexity: O(1) control + one O(n) copy where n ∈ {20,32}.
-    #[inline]
     pub fn spk_to_address_bytes_or_tag(spk: &bitcoin::Script) -> Vec<u8> {
         use bitcoin::blockdata::script::witness_version::WitnessVersion;
         // Single load of script bytes; all branches reuse it.
@@ -237,7 +236,6 @@ mod btc_address_tests {
     const WSH_S:   &str = "bc1qwqdg6squsna38e46795at95yu9atm8azzmyvckulcc7kytlcckxswvvzej"; // v0, 32
     const TR_S:    &str = "bc1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr"; // v1, 32
 
-    #[inline]
     fn addr(s: &str) -> Address {
         Address::from_str(s).unwrap().require_network(Network::Bitcoin).unwrap()
     }

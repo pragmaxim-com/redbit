@@ -3,17 +3,3 @@ error: One2many field must be named like a snake_case plural of the underlying e
    |
 11 |     foo_entities: Vec<Foo> // should be foos: Vec<Foo>
    |     ^^^^^^^^^^^^^^^^^^^^^^
-
-warning: unexpected `cfg` condition value: `chain`
-  --> tests/failing/invalid_one2many_name.rs:14:1
-   |
-14 | #[entity]
-   | ^^^^^^^^^
-   |
-   = note: expected values for `feature` are: `ci` and `integration`
-   = note: using a cfg inside a derive macro will use the cfgs from the destination crate and not the ones from the defining crate
-   = help: try referring to `Entity` crate for guidance on how handle this unexpected cfg
-   = help: the derive macro `Entity` may come from an old version of the `macros` crate, try updating your dependency with `cargo update -p macros`
-   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
-   = note: `#[warn(unexpected_cfgs)]` on by default
-   = note: this warning originates in the derive macro `Entity` (in Nightly builds, run with -Z macro-backtrace for more info)

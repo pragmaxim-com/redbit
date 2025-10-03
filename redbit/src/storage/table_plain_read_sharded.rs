@@ -8,7 +8,6 @@ struct ReadOnlyPlainTableShard<K: Key + 'static, V: Key + 'static> {
 }
 
 impl<K: Key + 'static, V: Key + 'static> ReadOnlyPlainTableShard<K, V> {
-    #[inline]
     fn open(db_weak: &Weak<Database>, underlying_def: TableDefinition<K, V>) -> Result<Self, AppError> {
         let db_arc = db_weak.upgrade().ok_or_else(|| AppError::Custom("database closed".to_string()))?;
         let tx = db_arc.begin_read()?;

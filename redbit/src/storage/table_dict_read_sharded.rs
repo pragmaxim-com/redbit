@@ -13,7 +13,6 @@ struct ReadOnlyDictTableShard<K: Key + 'static, V: Key + 'static> {
 }
 
 impl<K: Key + 'static, V: Key + 'static> ReadOnlyDictTableShard<K, V> {
-    #[inline]
     fn open(
         db_weak: &Weak<Database>,
         dict_pk_to_ids_def: MultimapTableDefinition<K, K>,

@@ -131,10 +131,8 @@ pub const TAG_OP_RETURN: u8 = 0xF0;
 pub const TAG_NON_ADDR: u8 = 0xFF;
 
 
-#[inline]
 fn ascii_eq_icase(a: u8, b: u8) -> bool { a == b || a ^ 0x20 == b } // ASCII only.
 
-#[inline]
 fn has_prefix_icase(s: &str, p: &[u8]) -> bool {
     let b = s.as_bytes();
     if b.len() < p.len() { return false; }
@@ -144,13 +142,11 @@ fn has_prefix_icase(s: &str, p: &[u8]) -> bool {
     true
 }
 
-#[inline]
 fn looks_bech32_addr(s: &str) -> bool {
     // Accept bc1 / tb1 / bcrt1 (case-insensitive)
     has_prefix_icase(s, b"bc1") || has_prefix_icase(s, b"tb1") || has_prefix_icase(s, b"bcrt1")
 }
 
-#[inline]
 fn encode_tagged_segwit<S: Serializer>(src: &[u8], ser: S) -> Result<S::Ok, S::Error> {
     // src = [TAG_SEGWIT, ver, program...]
     let ver = src[1];
@@ -168,7 +164,6 @@ fn encode_tagged_segwit<S: Serializer>(src: &[u8], ser: S) -> Result<S::Ok, S::E
     ser.serialize_str(&enc)
 }
 
-#[inline]
 fn base58_serialize<S: Serializer>(src: &[u8], ser: S) -> Result<S::Ok, S::Error> {
     // src = [0x00|0x05 || 20B]
     match src.first() {
@@ -311,12 +306,10 @@ mod tests {
 
     use crate::codec::TAG_SEGWIT;
 
-    #[inline]
     fn mk_program(len: usize, fill: u8) -> Vec<u8> {
         vec![fill; len]
     }
 
-    #[inline]
     fn mk_btc_bytes(ver: u8, program: &[u8]) -> Vec<u8> {
         // Tagged explicit segwit bytes: [TAG_SEGWIT, ver, program...]
         let mut v = Vec::with_capacity(2 + program.len());
@@ -327,7 +320,6 @@ mod tests {
     }
 
     // Bech32Wrap encodes 20->v0, 32->v1. Only these cases match BtcWrap’s string.
-    #[inline]
     fn expect_same_bech32_text(ver: u8, prog_len: usize) -> bool {
         (ver == 0 && prog_len == 20) || (ver == 1 && prog_len == 32)
     }

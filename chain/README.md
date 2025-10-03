@@ -88,6 +88,32 @@ If throughput does not reach your expectations, check that `buffer` is high enou
 1. If it is close to `0`, it means your block fetching or processing is too slow and persistence tasks are idling.
 2. If indexing is under 50 000 inputs+outputs/s with full `buffer`, it means you need more RAM or better SSD.
 
+Watch indexing tasks reports in logs : 
+ - `COMMIT` - flushing-to-disk-time, of all threads (running in parallel) 
+ - `MASTER` - base time, everything above are indexing threads behind the master thread, queue is still not empty
+
+Here you can see that `transaction_hash_index` is the slowest column, so it can be fixed by sharding it or increase db_cache or lru_cache.
+
+```
+TASK                               last ms      avg ms      dev ms     cv %
+transaction_hash_index                 416         366         139     38.0
+utxo_script_hash_dict                  394         342         129     37.8
+utxo_address_dict                      393         341         130     38.0
+header_prev_hash_index                 349         312         116     37.1
+header_hash_index                      348         312         116     37.1
+utxo_id                                348         310         117     37.6
+header_merkle_root_index               348         311         116     37.1
+transaction_id                         348         310         117     37.7
+header_timestamp_index                 348         310         117     37.7
+header_height                          348         310         117     37.7
+utxo_amount_by_id                      348         310         117     37.6
+block_height                           348         310         117     37.7
+input_id                               347         309         117     37.8
+input_utxo_pointer_by_id               347         309         117     37.8
+MASTER                                 345         306         116     38.0
+COMMIT                                  69          59          28     46.9
+```
+
 Hand-made criterion benchmarks [deployed](https://pragmaxim-com.github.io/redbit/report/index.html).
 
 Indexing speed in logs is the **average**, for example, the first ~ 50k **bitcoin** blocks with few Txs have lower in+out/s indexing throughput

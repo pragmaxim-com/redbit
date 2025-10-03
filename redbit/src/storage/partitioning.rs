@@ -54,7 +54,6 @@ pub struct Xxh3Partitioner {
 }
 
 impl Xxh3Partitioner {
-    #[inline]
     pub fn new(n: usize) -> Self {
         assert!(n > 0, "shard count must be > 0");
         let seed = 0xDEAD_BEEF_CAFE_BABEu64;
@@ -94,7 +93,6 @@ pub struct BytesPartitioner {
 }
 
 impl BytesPartitioner {
-    #[inline]
     pub fn new(n: usize) -> Self {
         assert!(n > 0, "shard count must be > 0");
         Self { n }

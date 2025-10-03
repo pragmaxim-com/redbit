@@ -6,6 +6,8 @@ edition = "2024"
 [features]
 ci = []
 integration = []
+bench = []
+chain = ["redbit/chain"]
 
 [workspace.package]
 version = "1.0.7"

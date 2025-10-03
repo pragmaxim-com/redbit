@@ -77,7 +77,6 @@ pub struct Storage {
 
 impl Storage {
     /// Fetch a *single* DB (clone the Weak). Errors if column missing or sharded.
-    #[inline]
     pub fn fetch_single_db(&self, name: &str) -> Result<Weak<Database>, AppError> {
         match self.index_dbs.get(name) {
             Some(DbSetWeak::Single(w)) => Ok(w.clone()),
@@ -89,7 +88,6 @@ impl Storage {
     }
 
     /// Fetch **all shards** (clone the Vec<Weak<_>>). Optionally enforce an expected shard count.
-    #[inline]
     pub fn fetch_sharded_dbs(&self, name: &str, expected: Option<usize>) -> Result<Vec<Weak<Database>>, AppError> {
         match self.index_dbs.get(name) {
             Some(DbSetWeak::Sharded(v)) => {

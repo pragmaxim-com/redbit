@@ -85,7 +85,6 @@ fn collect_allocations_mb(shares: &[Share], db_defs: &[DbDef]) -> Vec<DbDefWithC
     }).collect()
 }
 
-#[inline]
 fn cast_u64_to_usize(x: u64) -> usize {
     if x > (usize::MAX as u64) { usize::MAX } else { x as usize }
 }
