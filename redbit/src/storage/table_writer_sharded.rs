@@ -1,13 +1,13 @@
+use crate::storage::async_boundary::{CopyOwnedValue, ValueOwned};
 use crate::storage::partitioning::{KeyPartitioner, Partitioning, ValuePartitioner};
 use crate::storage::table_writer::{TableFactory, TaskResult, WriterCommand};
 use crate::{AppError, FlushFuture, TableWriter};
 use redb::{Database, Key};
 use std::borrow::Borrow;
 use std::{marker::PhantomData, sync::Weak};
-use crate::storage::async_boundary::{CopyOwnedValue, ValueOwned};
 
 pub struct ShardedTableWriter<
-    K: Key + Send + CopyOwnedValue + 'static + Borrow<K::SelfType<'static>>,
+    K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
     V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
     F: TableFactory<K, V>,
     KP: KeyPartitioner<K>,
@@ -19,7 +19,7 @@ pub struct ShardedTableWriter<
 }
 
 impl<
-    K: Key + Send + CopyOwnedValue + 'static + Borrow<K::SelfType<'static>>,
+    K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
     V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
     F: TableFactory<K, V> + Send + Clone + 'static,
     KP: KeyPartitioner<K>,

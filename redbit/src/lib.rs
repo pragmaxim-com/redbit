@@ -67,6 +67,7 @@ pub use std::cmp::Ordering;
 pub use std::collections::HashMap;
 pub use std::collections::VecDeque;
 pub use std::fmt::Debug;
+use std::hash::Hash;
 pub use std::time::Instant;
 pub use std::pin::Pin;
 pub use std::sync::Arc;
@@ -226,16 +227,17 @@ pub trait UrlEncoded {
     fn url_encode(&self) -> String;
 }
 
+pub trait CacheKey: Key {
+    type CK: Eq + Hash + Clone;
+    fn cache_key<'a>(v: &Self::SelfType<'a>) -> Self::CK
+    where
+        Self: 'a;
+}
+
 pub trait BinaryCodec {
     fn from_le_bytes(bytes: &[u8]) -> Self;
     fn as_le_bytes(&self) -> Vec<u8>;
     fn size() -> usize;
-    // NEW: zero-copy streaming encoder; default uses as_bytes() (alloc) for backwards compat.
-    #[inline]
-    fn encode_le_chunks<E: FnMut(&[u8])>(&self, emit: &mut E) {
-        let v = self.as_le_bytes(); // fallback
-        emit(&v);
-    }
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, ToSchema)]

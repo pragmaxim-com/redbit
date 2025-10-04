@@ -23,6 +23,7 @@ pub fn generate_column_impls(
     let mut url_encoded_code = quote! { format!("{}", self.0) };
     let mut iterable_code = quote! { compile_error!("IterableColumn::next is not supported for this type.") };
     let mut custom_db_codec = quote! {};
+    let mut cache_key_codec = quote! {};
 
     match kind {
         InnerKind::ByteArray(len) => {
@@ -44,6 +45,7 @@ pub fn generate_column_impls(
             url_encoded_code = quote! { serde_json::to_string(&self).unwrap().trim_matches('"').to_string() };
             extra_derive_impls.push(syn::parse_quote!(Copy));
             custom_db_codec = emit_newtype_byte_array_impls(new_type, len);
+            cache_key_codec = emit_cachekey_byte_array_impls(new_type, len);
             iterable_code = quote! {
                 let mut arr = self.0;
                 for i in (0..#len).rev() {
@@ -71,6 +73,7 @@ pub fn generate_column_impls(
             struct_attr = Some(syn::parse_quote! { #[serde_as(as = #binary_encoding_literal)] });
             url_encoded_code = quote! { serde_json::to_string(&self).unwrap().trim_matches('"').to_string() };
             custom_db_codec = emit_newtype_byte_vec_impls(new_type);
+            cache_key_codec = emit_cachekey_byte_vec_impls(new_type);
             iterable_code = quote! {
                 Self(<#ty as ByteVecColumnSerde>::next_value(&self.0))
             };
@@ -80,7 +83,8 @@ pub fn generate_column_impls(
             iterable_code = quote! { Self(self.0.wrapping_add(1)) };
             schema_example = quote! { vec![Some(0)] };
             extra_derive_impls.push(syn::parse_quote![Copy]);
-            custom_db_codec = emit_newtype_integer_impls(new_type, int_type);
+            custom_db_codec = emit_newtype_integer_impls(new_type, &int_type);
+            cache_key_codec = emit_cachekey_integer_impls(new_type, &int_type);
         }
         InnerKind::String => {
             default_code = quote! { Self("a".to_string()) };
@@ -94,6 +98,7 @@ pub fn generate_column_impls(
                 Self(String::from_utf8(bytes).expect("Invalid UTF-8"))
             };
             custom_db_codec = emit_newtype_bincode_impls(new_type);
+            cache_key_codec = emit_cachekey_bincode_impls(new_type);
         }
         InnerKind::Bool => {
             schema_type = quote! { SchemaType::Type(Type::Boolean) };
@@ -102,6 +107,7 @@ pub fn generate_column_impls(
             iterable_code = quote! { Self(!self.0) };
             extra_derive_impls.push(syn::parse_quote!(Copy));
             custom_db_codec = emit_newtype_bincode_impls(new_type);
+            cache_key_codec = emit_cachekey_bincode_impls(new_type);
         }
         InnerKind::Uuid => {
             default_code = quote! { Self(uuid::Uuid::nil()) };
@@ -119,6 +125,7 @@ pub fn generate_column_impls(
                 Self(uuid::Uuid::from_bytes(bytes))
             };
             custom_db_codec = emit_newtype_bincode_impls(new_type);
+            cache_key_codec = emit_cachekey_bincode_impls(new_type);
         }
 /*        InnerKind::UtcDateTime => {
             struct_attr = Some(syn::parse_quote! { #[serde_as(as = "serde_with::TimestampMilliSeconds<i64>")] });
@@ -137,6 +144,7 @@ pub fn generate_column_impls(
             schema_example = quote! { vec![Some(0)] };
             iterable_code = quote! { Self(self.0 + std::time::Duration::from_millis(1)) };
             custom_db_codec = emit_newtype_bincode_impls(new_type);
+            cache_key_codec = emit_cachekey_bincode_impls(new_type);
         }
 /*        InnerKind::EnumReprU8 => {
             struct_attr = Some(syn::parse_quote! { #[serde_as(as = "serde_with::DisplayFromStr")] }, );
@@ -154,6 +162,7 @@ pub fn generate_column_impls(
 
     let impls = quote! {
         #custom_db_codec
+        #cache_key_codec
 
         impl ColInnerType for #struct_ident {
             type Repr = #inner_type;

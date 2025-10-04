@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
-use redb::Value;
+use redb::{Key, Value};
 
-pub trait CopyOwnedValue: Value + Copy {
+pub trait CopyOwnedValue: Key + Copy {
     type Unit: Copy + Send + 'static;
 
     /// Convert from a borrowed view to the copyable unit (no move).

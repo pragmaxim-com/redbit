@@ -1,5 +1,5 @@
 use crate::storage::table_writer::{TableFactory, WriteTableLike};
-use crate::AppError;
+use crate::{AppError, CacheKey};
 use redb::*;
 use redb::{Key, Table, WriteTransaction};
 use std::borrow::Borrow;
@@ -33,14 +33,14 @@ impl<K: Key + 'static, V: Key + 'static> IndexFactory<K, V> {
     }
 }
 
-pub struct IndexTable<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: Key + 'static> {
+pub struct IndexTable<'txn, 'c, K: CopyOwnedValue + 'static, V: CacheKey + 'static> {
     pub(crate) pk_by_index: MultimapTable<'txn, V, K>,
     pub(crate) index_by_pk: Table<'txn, K, V>,
-    pub(crate) cache: Option<&'c mut LruCache<Vec<u8>, <K as CopyOwnedValue>::Unit>>,
+    pub(crate) cache: Option<&'c mut LruCache<<V as CacheKey>::CK, <K as CopyOwnedValue>::Unit>>,
 }
 
-impl<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: Key + 'static> IndexTable<'txn, 'c, K, V> {
-    pub fn new(write_tx: &'txn WriteTransaction, cache: Option<&'c mut LruCache<Vec<u8>, <K as CopyOwnedValue>::Unit>>, pk_by_index_def: MultimapTableDefinition<'static, V, K>, index_by_pk_def: TableDefinition<'static, K, V>) -> Result<Self, AppError> {
+impl<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: CacheKey + 'static> IndexTable<'txn, 'c, K, V> {
+    pub fn new(write_tx: &'txn WriteTransaction, cache: Option<&'c mut LruCache<<V as CacheKey>::CK, <K as CopyOwnedValue>::Unit>>, pk_by_index_def: MultimapTableDefinition<'static, V, K>, index_by_pk_def: TableDefinition<'static, K, V>) -> Result<Self, AppError> {
         Ok(Self {
             pk_by_index: write_tx.open_multimap_table(pk_by_index_def)?,
             index_by_pk: write_tx.open_table(index_by_pk_def)?,
@@ -49,8 +49,8 @@ impl<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: Key + 'static> IndexTable<'
     }
 }
 
-impl<K: Key + CopyOwnedValue + 'static, V: Key + 'static> TableFactory<K, V> for IndexFactory<K, V> {
-    type CacheCtx = Option<LruCache<Vec<u8>, <K as CopyOwnedValue>::Unit>>;
+impl<K: Key + CopyOwnedValue + 'static, V: CacheKey + 'static> TableFactory<K, V> for IndexFactory<K, V> {
+    type CacheCtx = Option<LruCache<<V as CacheKey>::CK, <K as CopyOwnedValue>::Unit>>;
     type Table<'txn, 'c> = IndexTable<'txn, 'c, K, V>;
 
     fn new_cache(&self) -> Self::CacheCtx {
@@ -75,7 +75,7 @@ impl<K: Key + CopyOwnedValue + 'static, V: Key + 'static> TableFactory<K, V> for
     }
 }
 
-impl<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: Key + 'static> WriteTableLike<K, V> for IndexTable<'txn, 'c, K, V> {
+impl<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: CacheKey + 'static> WriteTableLike<K, V> for IndexTable<'txn, 'c, K, V> {
     fn insert_kv<'k, 'v>(&mut self, key: impl Borrow<K::SelfType<'k>>, value: impl Borrow<V::SelfType<'v>>) -> Result<(), AppError>  {
         let key_ref: &K::SelfType<'k> = key.borrow();
         let val_ref: &V::SelfType<'v> = value.borrow();
@@ -83,8 +83,7 @@ impl<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: Key + 'static> WriteTableLi
         self.pk_by_index.insert(val_ref, key_ref)?;
 
         if let Some(c) = self.cache.as_mut() {
-            let v_bytes = V::as_bytes(val_ref).as_ref().to_vec();
-            c.put(v_bytes, Self::unit_from_key(key_ref));
+            c.put(V::cache_key(val_ref), Self::unit_from_key(key_ref));
         }
         Ok(())
     }
@@ -95,8 +94,7 @@ impl<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: Key + 'static> WriteTableLi
             let value = value_guard.value();
             let removed = self.pk_by_index.remove(&value, key_ref)?;
             if removed && let Some(c) = self.cache.as_mut() {
-                let v_bytes = V::as_bytes(&value).as_ref().to_vec();
-                let _ = c.pop(&v_bytes);
+                let _ = c.pop(&V::cache_key(&value));
             }
             Ok(removed)
         } else {
@@ -106,8 +104,7 @@ impl<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: Key + 'static> WriteTableLi
 
     fn get_any_for_index<'v>(&mut self, value: impl Borrow<V::SelfType<'v>>) -> Result<Option<ValueOwned<K>>, AppError> {
         if let Some(c) = self.cache.as_mut() {
-            let v_bytes_key = V::as_bytes(value.borrow());
-            if let Some(&k) = c.get(v_bytes_key.as_ref()) {
+            if let Some(&k) = c.get(&V::cache_key(value.borrow())) {
                 return Ok(Some(Self::owned_from_unit(k)));
             }
         }

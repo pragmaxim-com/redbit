@@ -1,15 +1,15 @@
+use crate::storage::async_boundary::{CopyOwnedValue, ValueBuf, ValueOwned};
 use crate::storage::table_writer::{TableFactory, WriteTableLike};
-use crate::{AppError};
+use crate::{AppError, CacheKey};
+use lru::LruCache;
 use redb::*;
-use redb::{Key, Table, WriteTransaction};
+use redb::{Table, WriteTransaction};
 use std::borrow::Borrow;
 use std::num::NonZeroUsize;
 use std::ops::RangeBounds;
-use lru::LruCache;
-use crate::storage::async_boundary::{CopyOwnedValue, ValueBuf, ValueOwned};
 
 #[derive(Clone)]
-pub struct DictFactory<K: Key + CopyOwnedValue + 'static, V: Key + 'static> {
+pub struct DictFactory<K: CopyOwnedValue + 'static, V: CacheKey + 'static> {
     pub name: String,
     pub dict_pk_to_ids_def: MultimapTableDefinition<'static, K, K>,
     pub value_by_dict_pk_def: TableDefinition<'static, K, V>,
@@ -18,7 +18,7 @@ pub struct DictFactory<K: Key + CopyOwnedValue + 'static, V: Key + 'static> {
     pub lru_capacity: usize,
 }
 
-impl<K: Key + CopyOwnedValue + 'static, V: Key + 'static> DictFactory<K, V> {
+impl<K: CopyOwnedValue + 'static, V: CacheKey + 'static> DictFactory<K, V> {
     pub fn new( name: &str, lru_capacity: usize, dict_pk_to_ids_def: MultimapTableDefinition<'static, K, K>, value_by_dict_pk_def: TableDefinition<'static, K, V>, value_to_dict_pk_def: TableDefinition<'static, V, K>, dict_pk_by_id_def: TableDefinition<'static, K, K>) -> Self {
         Self {
             name: name.to_string(),
@@ -31,8 +31,8 @@ impl<K: Key + CopyOwnedValue + 'static, V: Key + 'static> DictFactory<K, V> {
     }
 }
 
-impl<K: Key + CopyOwnedValue + 'static, V: Key + 'static> TableFactory<K, V> for DictFactory<K, V> {
-    type CacheCtx = LruCache<Vec<u8>, <K as CopyOwnedValue>::Unit>;
+impl<K: CopyOwnedValue + 'static, V: CacheKey + 'static> TableFactory<K, V> for DictFactory<K, V> {
+    type CacheCtx = LruCache<<V as CacheKey>::CK, <K as CopyOwnedValue>::Unit>;
     type Table<'txn, 'c> = DictTable<'txn, 'c, K, V>;
 
     fn name(&self) -> String {
@@ -58,18 +58,18 @@ impl<K: Key + CopyOwnedValue + 'static, V: Key + 'static> TableFactory<K, V> for
         )
     }
 }
-pub struct DictTable<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: Key + 'static> {
+pub struct DictTable<'txn, 'c, K: CopyOwnedValue + 'static, V: CacheKey + 'static> {
     pub(crate) dict_pk_to_ids: MultimapTable<'txn, K, K>,
     pub(crate) value_by_dict_pk: Table<'txn, K, V>,
     pub(crate) value_to_dict_pk: Table<'txn, V, K>,
     pub(crate) dict_pk_by_id: Table<'txn, K, K>,
-    cache: &'c mut LruCache<Vec<u8>, <K as CopyOwnedValue>::Unit>,
+    cache: &'c mut LruCache<<V as CacheKey>::CK, <K as CopyOwnedValue>::Unit>,
 }
 
-impl<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: Key + 'static> DictTable<'txn, 'c, K, V> {
+impl<'txn, 'c, K: CopyOwnedValue + 'static, V: CacheKey + 'static> DictTable<'txn, 'c, K, V> {
     pub fn new(
         write_tx: &'txn WriteTransaction,
-        cache: &'c mut LruCache<Vec<u8>, <K as CopyOwnedValue>::Unit>,
+        cache: &'c mut LruCache<<V as CacheKey>::CK, <K as CopyOwnedValue>::Unit>,
         dict_pk_to_ids_def: MultimapTableDefinition<K, K>,
         value_by_dict_pk_def: TableDefinition<K, V>,
         value_to_dict_pk_def: TableDefinition<V, K>,
@@ -84,13 +84,13 @@ impl<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: Key + 'static> DictTable<'t
         })
     }
 }
-impl<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: Key + 'static> WriteTableLike<K, V> for DictTable<'txn, 'c, K, V> {
+impl<'txn, 'c, K: CopyOwnedValue + 'static, V: CacheKey + 'static> WriteTableLike<K, V> for DictTable<'txn, 'c, K, V> {
     fn insert_kv<'k, 'v>(&mut self, key: impl Borrow<K::SelfType<'k>>, value: impl Borrow<V::SelfType<'v>>) -> Result<(), AppError>  {
         let key_ref: &K::SelfType<'k> = key.borrow();
         let val_ref: &V::SelfType<'v> = value.borrow();
+        let cache_key: <V as CacheKey>::CK = V::cache_key(val_ref);
 
-        let v_bytes_key = V::as_bytes(val_ref);
-        if let Some(&k) = self.cache.get(v_bytes_key.as_ref()) {
+        if let Some(&k) = self.cache.get(&cache_key) {
             let birth_id = Self::owned_from_unit(k);
             self.dict_pk_by_id.insert(key_ref, birth_id.as_value())?;
             self.dict_pk_to_ids.insert(birth_id.as_value(), key_ref)?;
@@ -98,8 +98,7 @@ impl<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: Key + 'static> WriteTableLi
         } else {
             if let Some(birth_id_guard) = self.value_to_dict_pk.get(val_ref)? {
                 let birth_id = Self::owned_key_from_guard(birth_id_guard);
-                let v_bytes = v_bytes_key.as_ref().to_vec();
-                self.cache.put(v_bytes, birth_id.into_unit());
+                self.cache.put(cache_key, birth_id.into_unit());
 
                 self.dict_pk_by_id.insert(key_ref, birth_id.as_value())?;
                 self.dict_pk_to_ids.insert(birth_id.as_value(), key_ref)?;
@@ -109,8 +108,7 @@ impl<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: Key + 'static> WriteTableLi
                 self.dict_pk_by_id.insert(key_ref, key_ref)?;
                 self.dict_pk_to_ids.insert(key_ref, key_ref)?;
 
-                let v_bytes = v_bytes_key.as_ref().to_vec();
-                self.cache.put(v_bytes, Self::unit_from_key(key_ref));
+                self.cache.put(cache_key, Self::unit_from_key(key_ref));
             }
             Ok(())
         }
@@ -124,10 +122,7 @@ impl<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: Key + 'static> WriteTableLi
             if self.dict_pk_to_ids.get(&birth_id)?.is_empty() && let Some(value_guard) = self.value_by_dict_pk.remove(&birth_id)? {
                 let value = value_guard.value();
                 self.value_to_dict_pk.remove(&value)?;
-
-                // evict from cache (value -> dict_pk)
-                let v_bytes = V::as_bytes(&value).as_ref().to_vec();
-                let _ = self.cache.pop(&v_bytes);
+                let _ = self.cache.pop(&V::cache_key(&value));
             }
             Ok(was_removed)
         } else {
@@ -146,8 +141,8 @@ impl<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: Key + 'static> WriteTableLi
 
 #[cfg(all(test, not(feature = "integration")))]
 mod tests {
-    use redb::{MultimapTable, ReadableMultimapTable, ReadableTableMetadata};
     use crate::storage::dict_test_utils::*;
+    use redb::{MultimapTable, ReadableMultimapTable, ReadableTableMetadata};
 
     #[tokio::test]
     async fn dict_table_dedups_same_value_for_two_ids() {

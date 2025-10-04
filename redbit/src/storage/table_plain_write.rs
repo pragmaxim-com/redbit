@@ -33,23 +33,22 @@ impl<'txn, K: Key + 'static, V: Key + 'static> PlainTable<'txn, K, V> {
     }
 }
 
-impl<K: Key + CopyOwnedValue + 'static, V: Key + 'static> TableFactory<K, V> for PlainFactory<K, V> {
+impl<K: CopyOwnedValue + 'static, V: Key + 'static> TableFactory<K, V> for PlainFactory<K, V> {
     type CacheCtx = ();
     type Table<'txn, 'c> = PlainTable<'txn, K, V>;
-
-    fn new_cache(&self) -> Self::CacheCtx { }
-
 
     fn name(&self) -> String {
         self.name.clone()
     }
+
+    fn new_cache(&self) -> Self::CacheCtx { }
 
     fn open<'txn, 'c>(&self, tx: &'txn WriteTransaction, _cache: &'c mut Self::CacheCtx) -> Result<Self::Table<'txn, 'c>, AppError> {
         PlainTable::new(tx, self.table_def)
     }
 }
 
-impl<'txn, K: Key + CopyOwnedValue + 'static, V: Key + 'static> WriteTableLike<K, V> for PlainTable<'txn, K, V> {
+impl<'txn, K: CopyOwnedValue + 'static, V: Key + 'static> WriteTableLike<K, V> for PlainTable<'txn, K, V> {
     fn insert_kv<'k, 'v>(&mut self, key: impl Borrow<K::SelfType<'k>>, value: impl Borrow<V::SelfType<'v>>) -> Result<(), AppError>  {
         self.table.insert(key, value)?;
         Ok(())

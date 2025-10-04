@@ -1,7 +1,7 @@
+use crate::column::column_codec;
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::{parse_str, Field, Type};
-use crate::column::column_codec;
 
 pub fn new(struct_name: &Ident, parent_field: Field, index_field: Field) -> TokenStream {
     let parent_name = &parent_field.ident;
@@ -10,8 +10,10 @@ pub fn new(struct_name: &Ident, parent_field: Field, index_field: Field) -> Toke
     let index_type = &index_field.ty;
     let struct_type: Type = parse_str(&format!("{}", struct_name)).expect("Invalid Struct type");
     let custom_db_codec = column_codec::emit_pointer_redb_impls(&struct_type);
+    let cache_key_codec = column_codec::emit_cachekey_pointer_binarycodec_impls(&struct_type);
     quote! {
         #custom_db_codec
+        #cache_key_codec
         impl IndexedPointer for #struct_name {
             type Index = #index_type;
             fn index(&self) -> Self::Index { self.#index_name }
@@ -46,12 +48,6 @@ pub fn new(struct_name: &Ident, parent_field: Field, index_field: Field) -> Toke
             }
             fn size() -> usize {
                 <#parent_type as BinaryCodec>::size() + std::mem::size_of::<#index_type>()
-            }
-            // NEW: stream parent first, then our own index bytes
-            fn encode_le_chunks<E: FnMut(&[u8])>(&self, emit: &mut E) {
-                self.#parent_name.encode_le_chunks(emit);
-                let arr = self.#index_name.to_le_bytes();
-                emit(&arr);
             }
         }
 

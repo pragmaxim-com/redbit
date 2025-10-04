@@ -21,6 +21,7 @@ pub mod test_utils {
     use redb::{Database, Key, TypeName, Value};
     use std::cmp::Ordering;
     use std::sync::{Arc, Weak};
+    use crate::CacheKey;
 
     #[derive(Debug, Clone)]
     pub(crate)  struct Address(pub Vec<u8>);
@@ -54,6 +55,17 @@ pub mod test_utils {
     impl Key for Address {
         fn compare(data1: &[u8], data2: &[u8]) -> Ordering {
             data1.cmp(data2)
+        }
+    }
+    impl CacheKey for Address {
+        type CK = Vec<u8>;
+
+        #[inline]
+        fn cache_key<'a>(v: &<Address as Value>::SelfType<'a>) -> Self::CK
+        where
+            Address: 'a,
+        {
+            v.0.clone()
         }
     }
 

@@ -1,16 +1,16 @@
+use crate::storage::async_boundary::{CopyOwnedValue, ValueBuf, ValueOwned};
 use crate::{error, AppError};
 use crossbeam::channel::{bounded, unbounded, Receiver, Sender, TrySendError};
 use redb::{AccessGuard, Database, Key, Value, WriteTransaction};
 use std::borrow::Borrow;
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::ops::RangeBounds;
 use std::sync::Weak;
-use std::{fmt, thread};
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
 use std::thread::JoinHandle;
 use std::time::Instant;
-use crate::storage::async_boundary::{CopyOwnedValue, ValueBuf, ValueOwned};
+use std::{fmt, thread};
 
 #[derive(Clone, Debug)]
 pub struct TaskResult {
@@ -62,7 +62,7 @@ impl FlushFuture {
     }
 }
 
-pub trait WriteTableLike<K: Key + CopyOwnedValue + 'static, V: Key + 'static> {
+pub trait WriteTableLike<K: CopyOwnedValue + 'static, V: Key + 'static> {
     fn insert_kv<'k, 'v>(&mut self, key: impl Borrow<K::SelfType<'k>>, value: impl Borrow<V::SelfType<'v>>) -> Result<(), AppError>;
     fn delete_kv<'k>(&mut self, key: impl Borrow<K::SelfType<'k>>) -> Result<bool, AppError>;
     fn get_any_for_index<'v>(&mut self, value: impl Borrow<V::SelfType<'v>>) -> Result<Option<ValueOwned<K>>, AppError>;
@@ -100,7 +100,7 @@ pub trait WriteTableLike<K: Key + CopyOwnedValue + 'static, V: Key + 'static> {
     }
 }
 
-pub trait TableFactory<K: Key + CopyOwnedValue + 'static, V: Key + 'static> {
+pub trait TableFactory<K: CopyOwnedValue + 'static, V: Key + 'static> {
     type CacheCtx;
     type Table<'txn, 'c>: WriteTableLike<K, V>;
     fn name(&self) -> String;
@@ -108,7 +108,7 @@ pub trait TableFactory<K: Key + CopyOwnedValue + 'static, V: Key + 'static> {
     fn open<'txn, 'c>(&self, tx: &'txn WriteTransaction, cache: &'c mut Self::CacheCtx) -> Result<Self::Table<'txn, 'c>, AppError>;
 }
 
-pub enum WriterCommand<K: Key + Send + CopyOwnedValue + 'static, V: Key + Send + 'static> {
+pub enum WriterCommand<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static> {
     Begin(Sender<Result<(), AppError>>),              // start new WriteTransaction + open table
     Insert(K, V),
     Remove(K, Sender<Result<bool, AppError>>),
@@ -125,7 +125,7 @@ enum Control {
     Shutdown(Sender<Result<(), AppError>>),
 }
 
-pub struct TableWriter<K: Key + Send + CopyOwnedValue + 'static, V: Key + Send + 'static, F> {
+pub struct TableWriter<K: CopyOwnedValue + Send +  'static, V: Key + Send + 'static, F> {
     topic: Sender<WriterCommand<K, V>>,
     handle: JoinHandle<()>,
     _marker: PhantomData<F>,
@@ -133,7 +133,7 @@ pub struct TableWriter<K: Key + Send + CopyOwnedValue + 'static, V: Key + Send +
 
 impl<K, V, F> TableWriter<K, V, F>
 where
-    K: Key + Send + CopyOwnedValue + 'static + Borrow<K::SelfType<'static>>,
+    K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
     V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
     F: TableFactory<K, V> + Send + Clone + 'static,
 {

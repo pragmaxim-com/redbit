@@ -88,6 +88,9 @@ pub struct ColumnProps {
 }
 
 impl ColumnProps {
+    pub fn new(shards: usize, db_cache_weight: usize, lru_cache_size_m: usize) -> Self {
+        ColumnProps { shards, db_cache_weight, lru_cache_size: lru_cache_size_m * 1_000_000 }
+    }
     pub fn for_pk(db_cache_weight: usize) -> Self {
         ColumnProps { shards: 0, db_cache_weight, lru_cache_size: 0 }
     }
@@ -227,7 +230,7 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                 } else if attr.path().is_ident("column") {
                     let field = FieldDef { name: column_name.clone(), tpe: column_type.clone() };
                     let mut db_cache_weight = 0;
-                    let mut lru_cache_size = 0;
+                    let mut lru_cache_size_mil = 0;
                     let mut shards = 0;
                     let mut is_index = false;
                     let mut is_dictionary = false;
@@ -241,7 +244,7 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                             db_cache_weight = lit.base10_parse::<usize>()?;
                         } else if nested.path.is_ident("lru_cache") {
                             let lit: syn::LitInt = nested.value()?.parse()?;
-                            lru_cache_size = lit.base10_parse::<usize>()?;
+                            lru_cache_size_mil = lit.base10_parse::<usize>()?;
                         } else if nested.path.is_ident("shards") {
                             let lit: syn::LitInt = nested.value()?.parse()?;
                             shards = lit.base10_parse::<usize>()?;
@@ -270,7 +273,7 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                         }
                         Ok(())
                     });
-                    let column_props = ColumnProps { shards, db_cache_weight, lru_cache_size };
+                    let column_props = ColumnProps::new(shards, db_cache_weight, lru_cache_size_mil);
                     let column_def = if is_transient {
                         ColumnDef::Transient(field.clone(), read_from)
                     } else if is_dictionary {

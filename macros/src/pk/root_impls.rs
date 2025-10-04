@@ -1,7 +1,7 @@
+use crate::column::column_codec;
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::{parse_str, Field, Type};
-use crate::column::column_codec;
 
 /// Generates trait implementations for **Root Pointers** (IndexedPointer + RootPointer)
 /// and also derives Display, FromStr, Serialize, and Deserialize based on a dash-separated format.
@@ -9,8 +9,10 @@ pub fn new(struct_name: &Ident, index_field: Field) -> TokenStream {
     let index_type = &index_field.ty;
     let struct_type: Type = parse_str(&format!("{}", struct_name)).expect("Invalid Struct type");
     let custom_db_codec = column_codec::emit_pointer_redb_impls(&struct_type);
+    let cache_key_codec = column_codec::emit_cachekey_pointer_binarycodec_impls(&struct_type);
     quote! {
         #custom_db_codec
+        #cache_key_codec
         impl ColInnerType for #struct_name {
             type Repr = #index_type;
         }
@@ -43,12 +45,6 @@ pub fn new(struct_name: &Ident, index_field: Field) -> TokenStream {
 
             fn size() -> usize {
                 std::mem::size_of::<#index_type>()
-            }
-
-            // NEW: emit stack array without allocating
-            fn encode_le_chunks<E: FnMut(&[u8])>(&self, emit: &mut E) {
-                let arr = self.0.to_le_bytes();
-                emit(&arr);
             }
         }
 
