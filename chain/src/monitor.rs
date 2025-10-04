@@ -10,7 +10,7 @@ pub type BatchWeight = usize;
 pub type BoxWeight = usize;
 
 pub struct ProgressMonitor<B: BlockLike> {
-    min_weight_report: usize,
+    weight_report_interval: usize,
     start_time: Instant,
     task_stats: Mutex<TaskStats>,
     total_and_last_report_weight: Mutex<(usize, usize)>,
@@ -18,9 +18,9 @@ pub struct ProgressMonitor<B: BlockLike> {
 }
 
 impl<B: BlockLike> ProgressMonitor<B> {
-    pub fn new(min_tx_count_report: usize) -> Self {
+    pub fn new(weight_report_interval: usize) -> Self {
         ProgressMonitor {
-            min_weight_report: min_tx_count_report,
+            weight_report_interval,
             start_time: Instant::now(),
             task_stats: Mutex::new(TaskStats::default()),
             total_and_last_report_weight: Mutex::new((0, 0)),
@@ -38,7 +38,7 @@ impl<B: BlockLike> ProgressMonitor<B> {
             let lh = first.header();
             let mut total_weight = self.total_and_last_report_weight.lock().unwrap();
             let new_total_weight = total_weight.0 + batch_weight;
-            if new_total_weight > total_weight.1 + self.min_weight_report {
+            if new_total_weight > total_weight.1 + self.weight_report_interval {
                 let height = lh.height();
                 let timestamp = &lh.timestamp().to_string();
                 let hash = &lh.hash().to_string();

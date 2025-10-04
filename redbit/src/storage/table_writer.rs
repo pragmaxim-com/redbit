@@ -87,15 +87,15 @@ pub trait WriteTableLike<K: CopyOwnedValue + 'static, V: Key + 'static> {
     }
 
     #[inline]
-    fn unit_from_key<'k>(k: &K::SelfType<'k>) -> <K as CopyOwnedValue>::Unit
+    fn unit_from_key<'k>(k: &K::SelfType<'k>) -> K::Unit
     where
         K: 'k,
     {
-        <K as CopyOwnedValue>::to_unit_ref(k)
+        K::to_unit_ref(k)
     }
 
     #[inline]
-    fn owned_from_unit(u: <K as CopyOwnedValue>::Unit) -> ValueOwned<K> {
+    fn owned_from_unit(u: K::Unit) -> ValueOwned<K> {
         ValueOwned::<K>::from_unit(u)
     }
 }

@@ -23,7 +23,7 @@ pub struct ChainSyncer<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: Wri
 
 impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'static> ChainSyncer<FB, TB, CTX> {
     pub fn new(block_provider: Arc<dyn BlockProvider<FB, TB>>, chain: Arc<dyn BlockChainLike<TB, CTX>>) -> Self {
-        Self { block_provider, chain, monitor: Arc::new(ProgressMonitor::new(1000)) }
+        Self { block_provider, chain, monitor: Arc::new(ProgressMonitor::new(5000)) }
     }
 
     pub async fn sync(&self, indexer_conf: &IndexerSettings, last_header: Option<TB::Header>, shutdown: watch::Receiver<bool>) -> Result<(), ChainError> {

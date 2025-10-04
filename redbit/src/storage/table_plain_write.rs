@@ -76,7 +76,7 @@ impl<'txn, K: CopyOwnedValue + 'static, V: Key + 'static> WriteTableLike<K, V> f
 
 
 #[cfg(all(test, not(feature = "integration")))]
-mod plain_write_table_tests {
+mod tests {
     use super::*;
     use crate::WriteTableLike;
     use crate::storage::test_utils::{addr, Address};

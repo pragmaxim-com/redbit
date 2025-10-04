@@ -196,7 +196,7 @@ mod plain_sharded {
 
 #[cfg(all(test, not(feature = "integration")))]
 mod index_sharded {
-    use crate::storage::test_utils::addr;
+    use crate::storage::test_utils::{addr, Address};
     use crate::storage::{index_test_utils, test_utils};
 
     #[test]
@@ -204,7 +204,7 @@ mod index_sharded {
         let n = 3usize;
         let name = "index_sharded_heads";
         let (_owned, weak_dbs) = test_utils::mk_shard_dbs(n, name);
-        let (writer, pk_by_index_def, index_by_pk_def) = index_test_utils::mk_sharded_writer(name, n, 1000, weak_dbs.clone());
+        let (writer, pk_by_index_def, index_by_pk_def) = index_test_utils::mk_sharded_writer::<Address>(name, n, 1000, weak_dbs.clone());
 
         // write + validate heads + delete + validate again — all before flush
         let a1 = addr(&[1, 2, 3, 4]);
@@ -236,7 +236,7 @@ mod index_sharded {
 
         writer.flush().expect("flush");
 
-        let reader = index_test_utils::mk_sharded_reader(n, weak_dbs, pk_by_index_def, index_by_pk_def);
+        let reader = index_test_utils::mk_sharded_reader::<Address>(n, weak_dbs, pk_by_index_def, index_by_pk_def);
         let keys_iter = reader.get_keys(&a3).expect("get_keys a3");
         let mut keys: Vec<u32> = keys_iter.into_iter().map(|g| g.unwrap().value()).collect();
         keys.sort();
@@ -250,7 +250,7 @@ mod index_sharded {
         let n = 3usize;
         let name = "index_sharded_del_absent";
         let (_owned, weak_dbs) = test_utils::mk_shard_dbs(n, name);
-        let (writer, _, _) = index_test_utils::mk_sharded_writer(name, n, 1000, weak_dbs.clone());
+        let (writer, _, _) = index_test_utils::mk_sharded_writer::<Address>(name, n, 1000, weak_dbs.clone());
 
         writer.begin().expect("begin");
         // no inserts; delete should be false
