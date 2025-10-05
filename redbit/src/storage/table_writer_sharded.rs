@@ -5,6 +5,7 @@ use crate::{AppError, FlushFuture, TableWriter};
 use redb::{Database, Key};
 use std::borrow::Borrow;
 use std::{marker::PhantomData, sync::Weak};
+use std::sync::Arc;
 
 pub struct ShardedTableWriter<
     K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
@@ -42,7 +43,8 @@ impl<
         Ok(())
     }
 
-    pub fn get_any_for_index(&self, values: Vec<V>) -> Result<Vec<Option<ValueOwned<K>>>, AppError> {
+    pub fn get_any_for_index<FN>(&self, values: Vec<V>, then: FN) -> Result<(), AppError>
+    where FN: Fn(Vec<(usize, Option<ValueOwned<K>>)>) + Send + Sync + 'static {
         match &self.partitioner {
             Partitioning::ByKey(_) => {
                 Err(AppError::Custom("ShardedTableWriter: get_any_for_index not supported with key partitioning".into()))
@@ -50,7 +52,7 @@ impl<
             Partitioning::ByValue(vp) => {
                 let shards_count = self.shards.len();
                 let values_count = values.len();
-                if values_count == 0 { return Ok(Vec::new()); }
+                if values_count == 0 { return Ok(()); }
 
                 let shard_cap = values_count / shards_count;
                 let mut buckets: Vec<Vec<(usize, V)>> = (0..shards_count).map(|_| Vec::with_capacity(shard_cap)).collect();
@@ -63,20 +65,12 @@ impl<
                 let mut out: Vec<Option<ValueOwned<K>>> = Vec::with_capacity(values_count);
                 out.resize_with(values_count, || None);
 
-                let mut acks = Vec::with_capacity(shards_count);
-                for (sid, bucket) in buckets.into_iter().enumerate() {
-                    if bucket.is_empty() { continue; }
-                    let (ack_tx, ack_rx) = crossbeam::channel::bounded(1);
-                    let _ = &self.shards[sid].fast_send(WriterCommand::AnyForIndexTagged(bucket, ack_tx))?;
-                    acks.push(ack_rx);
+                let then = Arc::new(then);
+                for (sid, values) in buckets.into_iter().enumerate() {
+                    if values.is_empty() { continue; }
+                    let _ = &self.shards[sid].fast_send(WriterCommand::AnyForIndexBucket { values, then: then.clone() })?;
                 }
-
-                for rx in acks {
-                    for (pos, head) in rx.recv()?? {
-                        out[pos] = head;
-                    }
-                }
-                Ok(out)
+                Ok(())
             }
         }
     }
@@ -198,6 +192,9 @@ mod plain_sharded {
 mod index_sharded {
     use crate::storage::test_utils::{addr, Address};
     use crate::storage::{index_test_utils, test_utils};
+    use crate::storage::async_boundary::ValueOwned;
+    use crossbeam::channel;
+    use std::time::Duration;
 
     #[test]
     fn sharded_index_heads_and_delete_in_one_tx() {
@@ -222,17 +219,57 @@ mod index_sharded {
         writer.insert_kv(80u32,  a3.clone()).expect("ins");
         writer.insert_kv(4u32,   a3.clone()).expect("ins");
 
-        // heads before delete
-        let heads_before = writer.get_any_for_index(vec![a1.clone(), a2.clone(), a3.clone()]).expect("heads");
-        assert_eq!(heads_before[0].as_ref().map(|v|v.as_value()), Some(3));
-        assert_eq!(heads_before[1].as_ref().map(|v|v.as_value()), Some(7));
-        assert_eq!(heads_before[2].as_ref().map(|v|v.as_value()), Some(4));
+        // ----- heads before delete -----
+        {
+            let want = 3usize; // querying [a1, a2, a3]
+            let (tx, rx) = channel::unbounded::<Vec<(usize, Option<ValueOwned<u32>>)>>();
+
+            writer.get_any_for_index(vec![a1.clone(), a2.clone(), a3.clone()], move |batch| {
+                // non-blocking: just forward the shard batch
+                let _ = tx.send(batch);
+            }).expect("enqueue heads_before");
+
+            let mut acc: Vec<Option<ValueOwned<u32>>> = vec![None; want];
+            let mut filled = 0usize;
+
+            while filled < want {
+                let batch = rx.recv_timeout(Duration::from_secs(2)).expect("timeout heads_before");
+                for (pos, opt) in batch {
+                    if acc[pos].is_none() { filled += 1; }
+                    acc[pos] = opt;
+                }
+            }
+
+            assert_eq!(acc[0].as_ref().map(|v| v.as_value()), Some(3u32));
+            assert_eq!(acc[1].as_ref().map(|v| v.as_value()), Some(7u32));
+            assert_eq!(acc[2].as_ref().map(|v| v.as_value()), Some(4u32));
+        }
 
         // delete current head for a3 (4) and re-check
         assert!(writer.delete_kv(4u32).expect("del 4"));
 
-        let heads_after = writer.get_any_for_index(vec![a3.clone()]).expect("head a3 after");
-        assert_eq!(heads_after[0].as_ref().map(|v|v.as_value()), Some(80));
+        // ----- head after delete (only a3) -----
+        {
+            let want = 1usize;
+            let (tx, rx) = channel::unbounded::<Vec<(usize, Option<ValueOwned<u32>>)>>();
+
+            writer.get_any_for_index(vec![a3.clone()], move |batch| {
+                let _ = tx.send(batch);
+            }).expect("enqueue head_after");
+
+            let mut acc: Vec<Option<ValueOwned<u32>>> = vec![None; want];
+            let mut filled = 0usize;
+
+            while filled < want {
+                let batch = rx.recv_timeout(Duration::from_secs(2)).expect("timeout head_after");
+                for (pos, opt) in batch {
+                    if acc[pos].is_none() { filled += 1; }
+                    acc[pos] = opt;
+                }
+            }
+
+            assert_eq!(acc[0].as_ref().map(|v| v.as_value()), Some(80u32));
+        }
 
         writer.flush().expect("flush");
 

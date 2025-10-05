@@ -7,7 +7,7 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::ops::RangeBounds;
-use std::sync::Weak;
+use std::sync::{Arc, Weak};
 use std::thread::JoinHandle;
 use std::time::Instant;
 use std::{fmt, thread};
@@ -109,9 +109,10 @@ pub trait TableFactory<K: CopyOwnedValue + 'static, V: Key + 'static> {
 pub enum WriterCommand<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static> {
     Begin(Sender<Result<(), AppError>>),              // start new WriteTransaction + open table
     Insert(K, V),
+    InsertMany(Vec<(K, V)>),
     Remove(K, Sender<Result<bool, AppError>>),
-    AnyForIndex(Vec<V>, Sender<Result<Vec<Option<ValueOwned<K>>>, AppError>>),
-    AnyForIndexTagged(Vec<(usize, V)>, Sender<Result<Vec<(usize, Option<ValueOwned<K>>)>, AppError>>),
+    AnyForIndex { values: Vec<V>, then: Arc<dyn Fn(Vec<(usize, Option<ValueOwned<K>>)>) + Send + Sync + 'static> },
+    AnyForIndexBucket { values: Vec<(usize, V)>, then: Arc<dyn Fn(Vec<(usize, Option<ValueOwned<K>>)>) + Send + Sync + 'static> },
     Range(K, K, Sender<Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>>),
     Flush(Sender<Result<TaskResult, AppError>>),              // commit current tx, stay alive (idle)
     Shutdown(Sender<Result<(), AppError>>),           // graceful stop (no commit)
@@ -141,26 +142,31 @@ where
                 table.insert_kv(k, v)?;
                 Ok(Control::Continue)
             }
+            WriterCommand::InsertMany(kvs) => {
+                for (k, v) in kvs {
+                    table.insert_kv(k, v)?;
+                }
+                Ok(Control::Continue)
+            }
             WriterCommand::Remove(k, ack) => {
                 let r = table.delete_kv(k)?;
                 let _ = ack.send(Ok(r));
                 Ok(Control::Continue)
             }
-            WriterCommand::AnyForIndex(values, ack) => {
+            WriterCommand::AnyForIndex { values, then } => {
                 let mut out = Vec::with_capacity(values.len());
-                for v in values {
-                    out.push(table.get_any_for_index(v)?);
+                for (idx, v) in values.into_iter().enumerate() {
+                    out.push((idx, table.get_any_for_index(v)?));
                 }
-                let _ = ack.send(Ok(out));
+                then(out); // todo check error handling
                 Ok(Control::Continue)
             }
-            WriterCommand::AnyForIndexTagged(pairs, ack) => {
-                let mut out = Vec::with_capacity(pairs.len());
-                for (pos, v) in pairs {
-                    let any = table.get_any_for_index(v)?;
-                    out.push((pos, any));
+            WriterCommand::AnyForIndexBucket { values, then } => {
+                let mut out = Vec::with_capacity(values.len());
+                for (idx, v) in values.into_iter() {
+                    out.push((idx, table.get_any_for_index(v)?));
                 }
-                let _ = ack.send(Ok(out));
+                then(out); // todo check error handling
                 Ok(Control::Continue)
             }
             WriterCommand::Range(from, until, ack) => {
@@ -280,6 +286,10 @@ where
         Ok(Self { topic, handle, _marker: PhantomData })
     }
 
+    pub fn sender(&self) -> Sender<WriterCommand<K, V>> {
+        self.topic.clone()
+    }
+
     pub fn fast_send(&self,  msg: WriterCommand<K, V>) -> Result<(), AppError> {
         match self.topic.try_send(msg) {
             Ok(()) => Ok(()),
@@ -300,16 +310,9 @@ where
         self.fast_send(WriterCommand::Insert(key, value))
     }
 
-    pub fn get_any_for_index_tagged(&self, pairs: Vec<(usize, V)>) -> Result<Vec<(usize, Option<ValueOwned<K>>)>, AppError> {
-        let (ack_tx, ack_rx) = bounded(1);
-        self.fast_send(WriterCommand::AnyForIndexTagged(pairs, ack_tx))?;
-        ack_rx.recv()?
-    }
-
-    pub fn get_any_for_index(&self, values: Vec<V>) -> Result<Vec<Option<ValueOwned<K>>>, AppError> {
-        let (ack_tx, ack_rx) = bounded::<Result<Vec<Option<ValueOwned<K>>>, AppError>>(1);
-        self.fast_send(WriterCommand::AnyForIndex(values, ack_tx))?;
-        ack_rx.recv()?
+    pub fn get_any_for_index<FN>(&self, values: Vec<V>, then: FN) -> Result<(), AppError>
+    where FN: Fn(Vec<(usize, Option<ValueOwned<K>>)>) + Send + Sync + 'static {
+        self.fast_send(WriterCommand::AnyForIndex { values, then: Arc::new(then) })
     }
 
     pub fn range(&self, from: K, until: K) -> Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError> {
