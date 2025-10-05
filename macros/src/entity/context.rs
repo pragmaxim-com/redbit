@@ -31,10 +31,12 @@ pub fn entity_tx_context_type(entity_type: &Type, tx_type: TxType) -> Type {
 
 #[derive(Clone)]
 pub struct TxContextItem {
+    pub root_pk: bool,
     pub write_definition: TokenStream,
     pub write_constructor: TokenStream,
     pub write_begin: TokenStream,
-    pub write_flush: Option<TokenStream>,
+    pub async_flush: Option<TokenStream>,
+    pub deferred_flush: Option<TokenStream>,
     pub write_shutdown: TokenStream,
     pub read_definition: TokenStream,
     pub read_constructor: TokenStream,
@@ -45,9 +47,9 @@ pub fn write_tx_context(entity_tx_context_ty: &Type, tx_contexts: &[TxContextIte
     let constructors: Vec<TokenStream> = tx_contexts.iter().map(|item| item.write_constructor.clone()).collect();
     let begins: Vec<TokenStream> = tx_contexts.iter().map(|item| item.write_begin.clone()).collect();
     let shutdowns: Vec<TokenStream> = tx_contexts.iter().map(|item| item.write_shutdown.clone()).collect();
-    let all_flushes: Vec<TokenStream> = tx_contexts.iter().flat_map(|item| item.write_flush.clone()).collect();
-    let pk_flush = all_flushes.first().unwrap();
-    let tail_flushes: Vec<TokenStream> = all_flushes.clone().into_iter().skip(1).collect();
+    let pk_flush: TokenStream = tx_contexts.iter().find(|ctx| ctx.root_pk).map(|item| item.deferred_flush.clone()).flatten().unwrap_or_else(|| quote! { vec![] });
+    let async_flushes: Vec<TokenStream> = tx_contexts.iter().filter(|ctx| !ctx.root_pk).flat_map(|item| item.async_flush.clone()).collect();
+    let deferred_flushes: Vec<TokenStream> = tx_contexts.iter().filter(|ctx| !ctx.root_pk).flat_map(|item| item.deferred_flush.clone()).collect();
     let write_tx_context_name = tx_context_name(TxType::Write);
     quote! {
         pub struct #entity_tx_context_ty {
@@ -69,9 +71,15 @@ pub fn write_tx_context(entity_tx_context_ty: &Type, tx_contexts: &[TxContextIte
             }
            fn commit_ctx_async(&self) -> Result<Vec<FlushFuture>, AppError> {
                 let mut futures: Vec<FlushFuture> = Vec::new();
-                #( futures.extend(#tail_flushes); )*
+                #( futures.extend(#async_flushes); )*
                 futures.extend(#pk_flush);
                 Ok(futures)
+           }
+           fn commit_ctx_deferred(&self) -> Vec<FlushFuture> {
+                let mut futures: Vec<FlushFuture> = Vec::new();
+                #( futures.extend(#deferred_flushes); )*
+                futures.extend(#pk_flush);
+                futures
            }
         }
     }
@@ -104,7 +112,7 @@ pub fn tx_context(write_tx_context_ty: &Type, read_tx_context_ty: &Type, tx_cont
     }
 }
 
-pub fn tx_context_plain_item(def: &PlainTableDef) -> TxContextItem {
+pub fn tx_context_plain_item(def: &PlainTableDef, root_pk: bool) -> TxContextItem {
     let var_ident   = &def.var_name;
     let name_lit    = Literal::string(&var_ident.to_string());
     let key_ty      = &def.key_type;
@@ -170,14 +178,17 @@ pub fn tx_context_plain_item(def: &PlainTableDef) -> TxContextItem {
 
     // --- common ops (identical for both variants) ---
     let write_begin = quote! { let _ = &self.#var_ident.begin()? };
-    let write_flush = Some(quote! { self.#var_ident.flush_async()? });
+    let async_flush = Some(quote! { self.#var_ident.flush_async()? });
+    let deferred_flush = Some(quote! { self.#var_ident.flush_deferred() });
     let write_shutdown = quote! { self.#var_ident.shutdown()? };
 
     TxContextItem {
+        root_pk,
         write_definition,
         write_constructor,
         write_begin,
-        write_flush,
+        async_flush,
+        deferred_flush,
         write_shutdown,
         read_definition,
         read_constructor,
@@ -255,14 +266,17 @@ pub fn tx_context_index_item(defs: &IndexTableDefs) -> TxContextItem {
 
     // --- common ops ---
     let write_begin    = quote! { let _ = &self.#var_ident.begin()? };
-    let write_flush    = Some(quote! { self.#var_ident.flush_async()? });
+    let async_flush    = Some(quote! { self.#var_ident.flush_async()? });
+    let deferred_flush    = Some(quote! { self.#var_ident.flush_deferred() });
     let write_shutdown = quote! { self.#var_ident.shutdown()? };
 
     TxContextItem {
+        root_pk: false,
         write_definition,
         write_constructor,
         write_begin,
-        write_flush,
+        async_flush,
+        deferred_flush,
         write_shutdown,
         read_definition,
         read_constructor,
@@ -350,14 +364,17 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
 
     // --- common ops ---
     let write_begin    = quote! { let _ = &self.#var_ident.begin()? };
-    let write_flush    = Some(quote! { self.#var_ident.flush_async()? });
+    let async_flush    = Some(quote! { self.#var_ident.flush_async()? });
+    let deferred_flush    = Some(quote! { self.#var_ident.flush_deferred() });
     let write_shutdown = quote! { self.#var_ident.shutdown()? };
 
     TxContextItem {
+        root_pk: false,
         write_definition,
         write_constructor,
         write_begin,
-        write_flush,
+        async_flush,
+        deferred_flush,
         write_shutdown,
         read_definition,
         read_constructor,

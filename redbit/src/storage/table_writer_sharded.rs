@@ -119,6 +119,12 @@ impl<
         Ok(v)
     }
 
+    pub fn flush_deferred(&self) -> Vec<FlushFuture> {
+        let mut v = Vec::with_capacity(self.shards.len());
+        for w in &self.shards { v.extend(w.flush_deferred()) }
+        v
+    }
+
     pub fn shutdown(self) -> Result<(), AppError> {
         for w in self.shards { w.shutdown()?; }
         Ok(())

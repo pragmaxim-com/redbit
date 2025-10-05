@@ -8,6 +8,7 @@ pub trait WriteTxContext {
     fn begin_writing(&self) -> redb::Result<(), AppError>;
     fn stop_writing(self) -> redb::Result<(), AppError> where Self: Sized;
     fn commit_ctx_async(&self) -> Result<Vec<FlushFuture>, AppError>;
+    fn commit_ctx_deferred(&self) -> Vec<FlushFuture>;
     fn begin_write_ctx(storage: &Arc<Storage>) -> redb::Result<Self, AppError> where Self: Sized {
         let ctx = Self::new_write_ctx(storage)?;
         ctx.begin_writing()?;

@@ -77,7 +77,7 @@ impl DbColumnMacros {
             field_def: col_def.clone(),
             range_query: None,
             filter_query_init: query::filter_query_init(column_name, column_type),
-            tx_context_items: vec![context::tx_context_plain_item(&plain_table_def)],
+            tx_context_items: vec![context::tx_context_plain_item(&plain_table_def, false)],
             table_info_item: info::plain_table_info(column_name, &plain_table_def),
             table_plain_definitions: vec![plain_table_def.clone()],
             table_index_definition: None,

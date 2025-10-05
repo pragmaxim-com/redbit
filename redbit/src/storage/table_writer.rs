@@ -34,14 +34,38 @@ impl TaskResult {
     }
 }
 
-pub struct FlushFuture {
-    ack_rx: Receiver<Result<TaskResult, AppError>>,
+pub enum FlushFuture {
+    /// Flush already sent; just wait for the ack
+    Eager(Receiver<Result<TaskResult, AppError>>),
+
+    /// Flush will be sent when `wait()` is called
+    Lazy(Box<dyn FnOnce() -> Result<Receiver<Result<TaskResult, AppError>>, AppError> + Send>),
 }
 
 impl FlushFuture {
     pub fn wait(self) -> Result<TaskResult, AppError> {
-        self.ack_rx.recv()?
+        match self {
+            FlushFuture::Eager(rx) => rx.recv()?,
+            FlushFuture::Lazy(fire) => {
+                let rx = fire()?;
+                rx.recv()?
+            }
+        }
     }
+
+    pub fn eager(rx: Receiver<Result<TaskResult, AppError>>) -> Self {
+        FlushFuture::Eager(rx)
+    }
+
+    pub fn lazy<F>(f: F) -> Self
+    where
+        F: FnOnce() -> Result<Receiver<Result<TaskResult, AppError>>, AppError> + Send + 'static,
+    {
+        FlushFuture::Lazy(Box::new(f))
+    }
+}
+
+impl FlushFuture {
 
     pub fn dedup_tasks_keep_slowest(futs: Vec<FlushFuture>) -> Result<HashMap<String, TaskResult>, AppError> {
         let mut by_name: HashMap<String, TaskResult> = HashMap::with_capacity(futs.len());
@@ -290,7 +314,7 @@ where
         self.topic.clone()
     }
 
-    pub fn fast_send(&self,  msg: WriterCommand<K, V>) -> Result<(), AppError> {
+    pub fn fast_send(&self, msg: WriterCommand<K, V>) -> Result<(), AppError> {
         match self.topic.try_send(msg) {
             Ok(()) => Ok(()),
             Err(TrySendError::Full(v)) => self.topic.send(v).map_err(|e| AppError::Custom(e.to_string())),
@@ -337,7 +361,18 @@ where
     pub fn flush_async(&self) -> Result<Vec<FlushFuture>, AppError> {
         let (ack_tx, ack_rx) = bounded::<Result<TaskResult, AppError>>(1);
         self.fast_send(WriterCommand::Flush(ack_tx))?;
-        Ok(vec![FlushFuture { ack_rx }])
+        Ok(vec![FlushFuture::eager(ack_rx)])
+    }
+
+    pub fn flush_deferred(&self) -> Vec<FlushFuture> {
+        let tx = self.sender();
+        vec![FlushFuture::lazy(move || {
+            let (ack_tx, ack_rx) = bounded::<Result<TaskResult, AppError>>(1);
+            match tx.send(WriterCommand::Flush(ack_tx)) {
+                Ok(()) => Ok(ack_rx),
+                Err(e) => Err(AppError::Custom(e.to_string())),
+            }
+        })]
     }
     // optional: graceful shutdown when you’re done with the writer forever
     pub fn shutdown(self) -> Result<(), AppError> {

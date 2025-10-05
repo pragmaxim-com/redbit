@@ -80,7 +80,7 @@ impl DbPkMacros {
             struct_init_with_query: pk_init.clone(),
             struct_default_init: pk_init.clone(),
             struct_default_init_with_query: pk_init.clone(),
-            tx_context_item: context::tx_context_plain_item(&plain_table_def),
+            tx_context_item: context::tx_context_plain_item(&plain_table_def, entity_def.key_def.is_root()),
             table_info_item: column::info::plain_table_info(pk_name, &plain_table_def),
             range_query,
             store_statement: store::store_statement(pk_name, &plain_table_def.var_name),
