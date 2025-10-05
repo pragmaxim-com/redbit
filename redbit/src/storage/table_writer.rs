@@ -15,24 +15,22 @@ use std::{fmt, thread};
 #[derive(Clone, Debug)]
 pub struct TaskResult {
     pub name: String,
-    pub took: u128,
+    pub write_took: u128,
+    pub commit_took: u128,
 }
 
 impl fmt::Display for TaskResult {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} : {} ms", self.name, self.took)
+        write!(f, "{} : {} ms", self.name, self.write_took)
     }
 }
 
 impl TaskResult {
-    pub fn new(name: &str, took: u128) -> Self {
-        Self { name: name.to_string(), took }
+    pub fn new(name: &str, write_took: u128, commit_took: u128) -> Self {
+        Self { name: name.to_string(), write_took, commit_took }
     }
-    pub fn master(took: u128) -> Self {
-        Self { name: "MASTER".to_string(), took }
-    }
-    pub fn commit(took: u128) -> Self {
-        Self { name: "COMMIT".to_string(), took }
+    pub fn master(write_took: u128, commit_took: u128) -> Self {
+        Self { name: "MASTER".to_string(), write_took, commit_took }
     }
 }
 
@@ -52,7 +50,7 @@ impl FlushFuture {
             match by_name.entry(res.name.clone()) {
                 Entry::Vacant(e) => { e.insert(res); }
                 Entry::Occupied(mut e) => {
-                    if res.took > e.get().took {
+                    if res.write_took > e.get().write_took {
                         e.insert(res); // keep the slowest per name
                     }
                 }
@@ -229,7 +227,7 @@ where
                         // 3) process commands until a Flush arrives
                         let mut flush_ack: Option<Sender<Result<TaskResult, AppError>>> = None;
                         let mut write_error: Option<Result<(), AppError>> = None;
-                        let t0 = Instant::now();
+                        let write_start = Instant::now();
 
                         'in_tx: loop {
                             match Self::drain_batch(&mut table, &receiver) {
@@ -254,9 +252,11 @@ where
                             let _ = match write_error {
                                 Some(Err(e)) => ack.send(Err(e)),
                                 _ => {
+                                    let write_took = write_start.elapsed().as_millis();
+                                    let commit_start = Instant::now();
                                     let _ = tx.commit().map_err(AppError::from);
-                                    let took = t0.elapsed().as_millis();
-                                    ack.send(Ok(TaskResult::new(&name, took)))
+                                    let commit_took = commit_start.elapsed().as_millis();
+                                    ack.send(Ok(TaskResult::new(&name, write_took, commit_took)))
                                 },
                             };
                         } else {

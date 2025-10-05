@@ -116,7 +116,7 @@ impl<
         for fut in acks {
             tasks.push(fut.wait()?);
         }
-        Ok(tasks.into_iter().max_by_key(|t| t.took).unwrap())
+        Ok(tasks.into_iter().max_by_key(|t| t.write_took).unwrap())
     }
 
     pub fn flush_async(&self) -> Result<Vec<FlushFuture>, AppError> {

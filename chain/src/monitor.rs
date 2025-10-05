@@ -64,7 +64,7 @@ impl<B: BlockLike> ProgressMonitor<B> {
             return;
         } else {
             let mut report = s.build_report(&tasks_by_name);
-            let report = report.printable(buffer_size, 30);
+            let report = report.printable(buffer_size);
             info!("Task report:\n{}", report);
         }
     }
