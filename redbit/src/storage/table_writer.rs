@@ -206,7 +206,7 @@ where
                 // wait until someone asks us to begin a write tx
                 let cmd = match receiver.recv() {
                     Ok(c) => c,
-                    Err(e) => { error!("writer terminated: {}", e.to_string()); break; }
+                    Err(e) => { error!("writer {} terminated: {}", name, e.to_string()); break; }
                 };
 
                 match cmd {
@@ -226,15 +226,15 @@ where
                         // 1) drop the strong Arc immediately; owner keeps DB alive
                         drop(db_arc);
                         // 2) open typed table bound to &tx
+                        let mut flush_ack: Option<Sender<Result<TaskResult, AppError>>> = None;
+                        let mut write_error: Option<Result<(), AppError>> = None;
+                        let write_start = Instant::now();
                         let mut table = match factory.open(&tx, &mut cache) {
                             Ok(t) => { let _ = ack.send(Ok(())); t },
                             Err(e) => { let _ = ack.send(Err(e)); continue 'outer; }
                         };
-                        // 3) process commands until a Flush arrives
-                        let mut flush_ack: Option<Sender<Result<TaskResult, AppError>>> = None;
-                        let mut write_error: Option<Result<(), AppError>> = None;
-                        let write_start = Instant::now();
 
+                        // 3) process commands until a Flush arrives
                         'in_tx: loop {
                             match Self::drain_batch(&mut table, &receiver) {
                                 Ok(Control::Continue) => continue,
@@ -266,7 +266,7 @@ where
                                 },
                             };
                         } else {
-                           error!("Transaction ended without Flush or Shutdown, it can never happen");
+                           error!("Transaction of {} ended without Flush or Shutdown, it can never happen", name);
                         }
                         // go back to idle and wait for next Begin
                     }
@@ -278,7 +278,7 @@ where
                     }
 
                     other => {
-                        error!("received {:?} before Begin; ignoring", std::mem::discriminant(&other));
+                        error!("{} received {:?} before Begin; ignoring", name, std::mem::discriminant(&other));
                     }
                 }
             }
