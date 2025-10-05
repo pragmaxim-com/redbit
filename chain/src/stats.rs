@@ -22,11 +22,11 @@ pub struct Report(pub Vec<ReportRow>);
 
 impl Report {
     pub fn printable(&mut self, buffer_size: usize) -> String {
-        self.0.sort_by(|a, b| b.write.last.cmp(&a.write.last));
+        self.0.sort_by(|a, b| b.commit.last.cmp(&a.commit.last));
         let mut lines = Vec::with_capacity(self.0.len() + 1);
         lines.push(format!(
             "{:<name_width$}  {:>16}  {:>16}  {:>16}  {:>14}",
-            "TASK write/commit", "last ms", "avg ms", "dev ms", "cv %", name_width = 30
+            "TASK commit/write", "last ms", "avg ms", "dev ms", "cv %", name_width = 30
         ));
 
         fn slash_fmt(a: u128, b: u128) -> String {
@@ -37,10 +37,10 @@ impl Report {
             lines.push(format!(
                 "{:<name_width$}  {:>16}  {:>16}  {:>16}  {:>14}",
                 r.name,
-                slash_fmt(r.write.last, r.commit.last),
-                slash_fmt(r.write.avg, r.commit.avg),
-                slash_fmt(r.write.dev, r.commit.dev),
-                format!("{}/{}", r.write.cv, r.commit.cv),
+                slash_fmt(r.commit.last, r.write.last),
+                slash_fmt(r.commit.avg, r.write.avg),
+                slash_fmt(r.commit.dev, r.write.dev),
+                slash_fmt(r.commit.cv.round() as u128, r.write.cv.round() as u128),
                 name_width = 30
             ));
         }
@@ -119,7 +119,7 @@ mod tests {
     fn batch(pairs: &[(&str, u128)]) -> HashMap<String, TaskResult> {
         let mut m = HashMap::with_capacity(pairs.len());
         for (n, t) in pairs {
-            m.insert((*n).to_string(), tr(n, *t, 0));
+            m.insert((*n).to_string(), tr(n, *t, *t));
         }
         m
     }
