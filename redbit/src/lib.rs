@@ -85,7 +85,7 @@ pub use storage::table_index_write::{IndexTable, IndexFactory};
 pub use storage::table_plain_read::ReadOnlyPlainTable;
 pub use storage::table_plain_read_sharded::ShardedReadOnlyPlainTable;
 pub use storage::table_plain_write::PlainFactory;
-pub use storage::table_writer::{TableWriter, TaskResult, FlushFuture, WriteTableLike};
+pub use storage::table_writer::{TableWriter, StartFuture, StopFuture, TaskResult, FlushFuture, WriteTableLike};
 pub use storage::async_boundary::CopyOwnedValue;
 pub use storage::table_writer_sharded::ShardedTableWriter;
 pub use storage::init::Storage;

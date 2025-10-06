@@ -164,11 +164,9 @@ pub fn block_like(block_type: Type, pk_name: &Ident, pk_type: &Type, field_defs:
                     #block_type::store(&indexing_context, block)?;
                 }
                 let master_took = master_start.elapsed().as_millis();
-                let commit_start = Instant::now();
                 let mut tasks = indexing_context.two_phase_commit()?;
-                let commit_took = commit_start.elapsed().as_millis();
 
-                let master_task = TaskResult::master(master_took, commit_took);
+                let master_task = TaskResult::master(master_took);
                 tasks.insert(master_task.name.clone(), master_task);
                 Ok(tasks)
             }

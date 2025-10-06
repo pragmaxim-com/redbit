@@ -1,7 +1,7 @@
 use crate::storage::async_boundary::{CopyOwnedValue, ValueOwned};
 use crate::storage::partitioning::{KeyPartitioner, Partitioning, ValuePartitioner};
-use crate::storage::table_writer::{TableFactory, TaskResult, WriterCommand};
-use crate::{AppError, FlushFuture, TableWriter};
+use crate::storage::table_writer::{StopFuture, TableFactory, TaskResult, WriterCommand};
+use crate::{AppError, StartFuture, FlushFuture, TableWriter};
 use redb::{Database, Key};
 use std::borrow::Borrow;
 use std::{marker::PhantomData, sync::Weak};
@@ -41,6 +41,12 @@ impl<
     pub fn begin(&self) -> Result<(), AppError> {
         for w in &self.shards { w.begin()?; }
         Ok(())
+    }
+
+    pub fn begin_async(&self) -> Result<Vec<StartFuture>, AppError> {
+        let mut v = Vec::with_capacity(self.shards.len());
+        for w in &self.shards { v.extend(w.begin_async()?); }
+        Ok(v)
     }
 
     pub fn get_any_for_index<FN>(&self, values: Vec<V>, then: FN) -> Result<(), AppError>
@@ -128,6 +134,11 @@ impl<
     pub fn shutdown(self) -> Result<(), AppError> {
         for w in self.shards { w.shutdown()?; }
         Ok(())
+    }
+    pub fn shutdown_async(self) -> Result<Vec<StopFuture>, AppError> {
+        let mut v = Vec::with_capacity(self.shards.len());
+        for w in self.shards { v.extend(w.shutdown_async()?); }
+        Ok(v)
     }
 }
 

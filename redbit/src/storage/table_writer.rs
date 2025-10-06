@@ -29,8 +29,27 @@ impl TaskResult {
     pub fn new(name: &str, write_took: u128, commit_took: u128) -> Self {
         Self { name: name.to_string(), write_took, commit_took }
     }
-    pub fn master(write_took: u128, commit_took: u128) -> Self {
-        Self { name: "MASTER".to_string(), write_took, commit_took }
+    pub fn master(write_took: u128) -> Self {
+        Self { name: "MASTER".to_string(), write_took, commit_took: 0}
+    }
+}
+
+pub struct StartFuture(Receiver<Result<(), AppError>>);
+impl StartFuture {
+    pub fn wait(self) -> Result<(), AppError> {
+        self.0.recv()?
+    }
+}
+
+pub struct StopFuture {
+    pub(crate) ack: Receiver<Result<(), AppError>>,
+    pub(crate) handle: JoinHandle<()>,
+}
+impl StopFuture {
+    pub fn wait(self) -> Result<(), AppError> {
+        self.ack.recv()??;
+        self.handle.join().map_err(|_| AppError::Custom("Write table join failed".to_string()))?;
+        Ok(())
     }
 }
 
@@ -249,10 +268,11 @@ where
                         };
                         // 1) drop the strong Arc immediately; owner keeps DB alive
                         drop(db_arc);
-                        // 2) open typed table bound to &tx
                         let mut flush_ack: Option<Sender<Result<TaskResult, AppError>>> = None;
                         let mut write_error: Option<Result<(), AppError>> = None;
                         let write_start = Instant::now();
+
+                        // 2) open typed table bound to &tx
                         let mut table = match factory.open(&tx, &mut cache) {
                             Ok(t) => { let _ = ack.send(Ok(())); t },
                             Err(e) => { let _ = ack.send(Err(e)); continue 'outer; }
@@ -322,14 +342,18 @@ where
         }
     }
 
-    // ---- new API to (re)begin a transaction ----
     pub fn begin(&self) -> Result<(), AppError> {
         let (ack_tx, ack_rx) = bounded::<Result<(), AppError>>(1);
         self.fast_send(WriterCommand::Begin(ack_tx))?;
         ack_rx.recv()?
     }
 
-    // your existing ops now must be called after begin()
+    pub fn begin_async(&self) -> Result<Vec<StartFuture>, AppError> {
+        let (ack_tx, ack_rx) = bounded::<Result<(), AppError>>(1);
+        self.fast_send(WriterCommand::Begin(ack_tx))?;
+        Ok(vec![StartFuture(ack_rx)])
+    }
+
     pub fn insert_kv(&self, key: K, value: V) -> Result<(), AppError> {
         self.fast_send(WriterCommand::Insert(key, value))
     }
@@ -351,7 +375,6 @@ where
         ack_rx.recv()?
     }
 
-    // commit current tx but KEEP worker alive (idle); you can call begin() again
     pub fn flush(&self) -> Result<TaskResult, AppError> {
         let (ack_tx, ack_rx) = bounded::<Result<TaskResult, AppError>>(1);
         self.fast_send(WriterCommand::Flush(ack_tx))?;
@@ -381,5 +404,11 @@ where
         ack_rx.recv()??;
         self.handle.join().map_err(|_| AppError::Custom("Write table join failed".to_string()))?;
         Ok(())
+    }
+
+    pub fn shutdown_async(self) -> Result<Vec<StopFuture>, AppError> {
+        let (ack_tx, ack_rx) = bounded::<Result<(), AppError>>(1);
+        self.fast_send(WriterCommand::Shutdown(ack_tx))?;
+        Ok(vec![StopFuture { ack: ack_rx, handle: self.handle }])
     }
 }
