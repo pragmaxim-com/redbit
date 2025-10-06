@@ -28,8 +28,8 @@ make them catch up with others even if they are HOT, see [chain](chain/README.md
   ```
 ✅ LRU cache for hot indexes and dictionaries (building dictionary requires a db read) :
   ```rust
-  #[column(index, lru_cache = 300_000)]
-  #[column(dictionary, lru_cache = 300_000)]
+  #[column(index, lru_cache = 3)]
+  #[column(dictionary, lru_cache = 3)]
   ```
 ✅ `One-to-One` / `One-to-Option` / `One-to-Many` entities with cascade read/write/delete \
 ✅ All goodies including intuitive data ordering without writing custom codecs \
