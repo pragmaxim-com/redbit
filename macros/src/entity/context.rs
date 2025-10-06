@@ -61,14 +61,16 @@ pub fn write_tx_context(entity_tx_context_ty: &Type, tx_contexts: &[TxContextIte
                     #(#constructors),*
                 })
             }
-           fn begin_writing(&self) -> Result<(), AppError> {
-                #(#begins;)*
-                Ok(())
+           fn begin_writing_async(&self) -> Result<Vec<StartFuture>, AppError> {
+                let mut futures: Vec<StartFuture> = Vec::new();
+                #( futures.extend(#begins); )*
+                Ok(futures)
             }
-           fn stop_writing(self) -> Result<(), AppError> {
-                #(#shutdowns;)*
-                Ok(())
-            }
+           fn stop_writing_async(self) -> Result<Vec<StopFuture>, AppError> {
+                let mut futures: Vec<StopFuture> = Vec::new();
+                #( futures.extend(#shutdowns); )*
+                Ok(futures)
+           }
            fn commit_ctx_async(&self) -> Result<Vec<FlushFuture>, AppError> {
                 let mut futures: Vec<FlushFuture> = Vec::new();
                 #( futures.extend(#async_flushes); )*
@@ -176,11 +178,10 @@ pub fn tx_context_plain_item(def: &PlainTableDef, root_pk: bool) -> TxContextIte
         }
     };
 
-    // --- common ops (identical for both variants) ---
-    let write_begin = quote! { let _ = &self.#var_ident.begin()? };
+    let write_begin = quote! { self.#var_ident.begin_async()? };
     let async_flush = Some(quote! { self.#var_ident.flush_async()? });
     let deferred_flush = Some(quote! { self.#var_ident.flush_deferred() });
-    let write_shutdown = quote! { self.#var_ident.shutdown()? };
+    let write_shutdown = quote! { self.#var_ident.shutdown_async()? };
 
     TxContextItem {
         root_pk,
@@ -264,11 +265,10 @@ pub fn tx_context_index_item(defs: &IndexTableDefs) -> TxContextItem {
         }
     };
 
-    // --- common ops ---
-    let write_begin    = quote! { let _ = &self.#var_ident.begin()? };
+    let write_begin    = quote! { self.#var_ident.begin_async()? };
     let async_flush    = Some(quote! { self.#var_ident.flush_async()? });
     let deferred_flush    = Some(quote! { self.#var_ident.flush_deferred() });
-    let write_shutdown = quote! { self.#var_ident.shutdown()? };
+    let write_shutdown = quote! { self.#var_ident.shutdown_async()? };
 
     TxContextItem {
         root_pk: false,
@@ -362,11 +362,10 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
         }
     };
 
-    // --- common ops ---
-    let write_begin    = quote! { let _ = &self.#var_ident.begin()? };
+    let write_begin    = quote! { self.#var_ident.begin_async()? };
     let async_flush    = Some(quote! { self.#var_ident.flush_async()? });
     let deferred_flush    = Some(quote! { self.#var_ident.flush_deferred() });
-    let write_shutdown = quote! { self.#var_ident.shutdown()? };
+    let write_shutdown = quote! { self.#var_ident.shutdown_async()? };
 
     TxContextItem {
         root_pk: false,

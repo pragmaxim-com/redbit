@@ -22,23 +22,26 @@ pub struct Report(pub Vec<ReportRow>);
 
 impl Report {
     pub fn printable(&mut self, buffer_size: usize) -> String {
-        self.0.sort_by(|a, b| b.commit.last.cmp(&a.commit.last));
+        self.0.sort_by(|a, b| (b.commit.last + b.write.last).cmp(&(a.commit.last + a.write.last)));
         let mut lines = Vec::with_capacity(self.0.len() + 1);
         lines.push(format!(
             "{:<name_width$}  {:>16}  {:>16}  {:>16}  {:>14}",
-            "TASK commit/write", "last ms", "avg ms", "dev ms", "cv %", name_width = 30
+            "TASK (c)commit, (w)rite", "c+w= last ms", "c+w= avg ms", "c/w dev ms", "c/w coefov %", name_width = 30
         ));
 
         fn slash_fmt(a: u128, b: u128) -> String {
             format!("{}/{}", a, b)
+        }
+        fn slash_eq_fmt(a: u128, b: u128) -> String {
+            format!("{}+{}={}", a, b, a + b)
         }
 
         for r in self.0.iter() {
             lines.push(format!(
                 "{:<name_width$}  {:>16}  {:>16}  {:>16}  {:>14}",
                 r.name,
-                slash_fmt(r.commit.last, r.write.last),
-                slash_fmt(r.commit.avg, r.write.avg),
+                slash_eq_fmt(r.commit.last, r.write.last),
+                slash_eq_fmt(r.commit.avg, r.write.avg),
                 slash_fmt(r.commit.dev, r.write.dev),
                 slash_fmt(r.commit.cv.round() as u128, r.write.cv.round() as u128),
                 name_width = 30
