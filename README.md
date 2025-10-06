@@ -4,6 +4,10 @@ while offering rich querying capabilities, e.g. bitcoin/blockchain data.
 Redbit reads struct annotations and derives code necessary for persisting and querying structured data into/from
 [Redb](https://github.com/cberner/redb) using secondary indexes and dictionaries, served by [axum](https://github.com/tokio-rs/axum) through auto-generated REST API.
 
+Databases are data volume/quantity agnostic, it is up to developer to index and query data reasonably.
+Redbit is designed with this in mind and developer sets # of shards, db cache and lru cache for HOT columns to
+make them catch up with others even if they are HOT, see [chain](chain/README.md) to see how it performs on blockchain data.
+
 ### Major Out-of-the-Box Features
 
 ✅ Parallel persistence, there is a long-running write thread spawned for each entity column (no blocking) \
@@ -64,7 +68,7 @@ To use redbit in your project:
 
 ```toml
 [dependencies]
-redbit = "1.0.6"
+redbit = "1.0.8"
 ```
 
 ```

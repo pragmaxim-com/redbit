@@ -198,6 +198,6 @@ mod tests {
         let apos = text.find("\na").unwrap_or(usize::MAX);
         assert!(zpos < mpos && mpos < apos, "rows not sorted by last desc:\n{}", text);
         // header columns present
-        assert!(text.contains("TASK") && text.contains("last ms") && text.contains("avg ms") && text.contains("dev ms") && text.contains("cv %"));
+        assert!(text.contains("TASK") && text.contains("last ms") && text.contains("avg ms") && text.contains("dev ms") && text.contains("coef"));
     }
 }

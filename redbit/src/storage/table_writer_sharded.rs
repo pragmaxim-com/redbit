@@ -243,7 +243,8 @@ mod index_sharded {
 
             writer.get_any_for_index(vec![a1.clone(), a2.clone(), a3.clone()], move |batch| {
                 // non-blocking: just forward the shard batch
-                let _ = tx.send(batch);
+                tx.send(batch)?;
+                Ok(())
             }).expect("enqueue heads_before");
 
             let mut acc: Vec<Option<ValueOwned<u32>>> = vec![None; want];
@@ -271,7 +272,8 @@ mod index_sharded {
             let (tx, rx) = channel::unbounded::<Vec<(usize, Option<ValueOwned<u32>>)>>();
 
             writer.get_any_for_index(vec![a3.clone()], move |batch| {
-                let _ = tx.send(batch);
+                tx.send(batch)?;
+                Ok(())
             }).expect("enqueue head_after");
 
             let mut acc: Vec<Option<ValueOwned<u32>>> = vec![None; want];
