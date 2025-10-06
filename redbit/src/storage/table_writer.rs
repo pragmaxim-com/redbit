@@ -154,8 +154,8 @@ pub enum WriterCommand<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'stat
     Insert(K, V),
     InsertMany(Vec<(K, V)>),
     Remove(K, Sender<Result<bool, AppError>>),
-    AnyForIndex { values: Vec<V>, then: Arc<dyn Fn(Vec<(usize, Option<ValueOwned<K>>)>) + Send + Sync + 'static> },
-    AnyForIndexBucket { values: Vec<(usize, V)>, then: Arc<dyn Fn(Vec<(usize, Option<ValueOwned<K>>)>) + Send + Sync + 'static> },
+    AnyForIndex { values: Vec<V>, then: Arc<dyn Fn(Vec<(usize, Option<ValueOwned<K>>)>) -> Result<(), AppError> + Send + Sync + 'static> },
+    AnyForIndexBucket { values: Vec<(usize, V)>, then: Arc<dyn Fn(Vec<(usize, Option<ValueOwned<K>>)>) -> Result<(), AppError> + Send + Sync + 'static> },
     Range(K, K, Sender<Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>>),
     Flush(Sender<Result<TaskResult, AppError>>),              // commit current tx, stay alive (idle)
     Shutdown(Sender<Result<(), AppError>>),           // graceful stop (no commit)
@@ -193,7 +193,7 @@ where
             }
             WriterCommand::Remove(k, ack) => {
                 let r = table.delete_kv(k)?;
-                let _ = ack.send(Ok(r));
+                ack.send(Ok(r))?;
                 Ok(Control::Continue)
             }
             WriterCommand::AnyForIndex { values, then } => {
@@ -201,7 +201,7 @@ where
                 for (idx, v) in values.into_iter().enumerate() {
                     out.push((idx, table.get_any_for_index(v)?));
                 }
-                then(out); // todo check error handling
+                then(out)?;
                 Ok(Control::Continue)
             }
             WriterCommand::AnyForIndexBucket { values, then } => {
@@ -209,12 +209,12 @@ where
                 for (idx, v) in values.into_iter() {
                     out.push((idx, table.get_any_for_index(v)?));
                 }
-                then(out); // todo check error handling
+                then(out)?;
                 Ok(Control::Continue)
             }
             WriterCommand::Range(from, until, ack) => {
                 let r = table.range(from..until)?;
-                let _ = ack.send(Ok(r));
+                ack.send(Ok(r))?;
                 Ok(Control::Continue)
             }
             WriterCommand::Flush(ack) => Ok(Control::Flush(ack)),
@@ -359,7 +359,7 @@ where
     }
 
     pub fn get_any_for_index<FN>(&self, values: Vec<V>, then: FN) -> Result<(), AppError>
-    where FN: Fn(Vec<(usize, Option<ValueOwned<K>>)>) + Send + Sync + 'static {
+    where FN: Fn(Vec<(usize, Option<ValueOwned<K>>)>) -> Result<(), AppError> + Send + Sync + 'static {
         self.fast_send(WriterCommand::AnyForIndex { values, then: Arc::new(then) })
     }
 

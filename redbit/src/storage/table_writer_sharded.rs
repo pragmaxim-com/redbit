@@ -50,7 +50,7 @@ impl<
     }
 
     pub fn get_any_for_index<FN>(&self, values: Vec<V>, then: FN) -> Result<(), AppError>
-    where FN: Fn(Vec<(usize, Option<ValueOwned<K>>)>) + Send + Sync + 'static {
+    where FN: Fn(Vec<(usize, Option<ValueOwned<K>>)>) -> Result<(), AppError> + Send + Sync + 'static {
         match &self.partitioner {
             Partitioning::ByKey(_) => {
                 Err(AppError::Custom("ShardedTableWriter: get_any_for_index not supported with key partitioning".into()))
