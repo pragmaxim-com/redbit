@@ -107,7 +107,7 @@ use crate::utoipa::OpenApi;
 use crate::utoipa_swagger_ui::SwaggerUi;
 use axum::body::Bytes;
 use axum::extract::Request;
-use crossbeam::channel::RecvError;
+use crossbeam::channel::{RecvError, SendError};
 use serde::de::DeserializeOwned;
 use std::net::SocketAddr;
 use std::ops::Add;
@@ -341,6 +341,13 @@ impl AppError {
             AppError::JsonRejection(r) => r.status(),
             _                          => StatusCode::INTERNAL_SERVER_ERROR,
         }
+    }
+}
+
+impl<T> From<SendError<T>> for AppError
+{
+    fn from(e: SendError<T>) -> Self {
+        AppError::Custom(format!("send error: {:?}", e.to_string()))
     }
 }
 

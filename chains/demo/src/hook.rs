@@ -26,7 +26,8 @@ pub(crate) fn write_from_input_refs(tx_context: &TransactionWriteTxContext, pare
                 },
             }
         }
-        let _ = ids_sender.send(WriterCommand::InsertMany(ids));
-        let _ = utxo_pointer_sender.send(WriterCommand::InsertMany(pointers));
+        ids_sender.send(WriterCommand::InsertMany(ids))?;
+        utxo_pointer_sender.send(WriterCommand::InsertMany(pointers))?;
+        Ok(())
     })
 }
