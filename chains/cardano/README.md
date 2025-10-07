@@ -8,6 +8,10 @@ Cardano explorer on top of [redbit](../../redbit) and [chain](../../chain)
 sudo apt-get install rustup
 ```
 
+### Requirements
+
+With current [setup](src/model_v1.rs) you need at least 16 cores CPU and 32GB RAM to run both Cardano Node and Redbit without crashing.
+
 ### Usage
 
 Run cardano node locally, api at port 3001 can be change in `config/cardano.toml`, for example :

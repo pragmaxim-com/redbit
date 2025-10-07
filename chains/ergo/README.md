@@ -8,6 +8,10 @@ Ergo explorer on top of [redbit](../../redbit) and [chain](../../chain)
 sudo apt-get install rustup
 ```
 
+### Requirements
+
+With current [setup](src/model_v1.rs) you need at least 8 cores CPU and 16GB RAM to run both Ergo Node and Redbit without crashing.
+
 ### Usage
 
 ```

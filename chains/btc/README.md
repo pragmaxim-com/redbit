@@ -8,6 +8,10 @@ Bitcoin explorer on top of [redbit](../../redbit) and [chain](../../chain)
 sudo apt-get install rustup
 ```
 
+### Requirements
+
+With current [setup](src/model_v1.rs) you need at least 16 cores CPU and 32GB RAM to run both BTC Node and Redbit without crashing. 
+
 ### Usage
 
 Run bitcoin node locally and enable -rest api which is under port 8332 by default and can be changed in `config/btc.toml`, for example:
