@@ -1,5 +1,5 @@
 use crate::{BlockHeaderLike, BlockLike};
-use redbit::storage::table_writer::TaskResult;
+use redbit::storage::table_writer_api::TaskResult;
 use redbit::{info, warn};
 use std::collections::HashMap;
 use std::sync::Mutex;

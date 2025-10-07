@@ -1,175 +1,20 @@
-use crate::storage::async_boundary::{CopyOwnedValue, ValueBuf, ValueOwned};
+use crate::storage::async_boundary::CopyOwnedValue;
+use crate::storage::router::{Router, PlainRouter};
+use crate::storage::table_writer_api::*;
 use crate::{error, AppError};
-use crossbeam::channel::{bounded, unbounded, Receiver, Sender, TrySendError};
-use redb::{AccessGuard, Database, Key, Value, WriteTransaction};
+use crossbeam::channel::{bounded, unbounded, Receiver, Sender};
+use redb::{Database, Key};
 use std::borrow::Borrow;
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
 use std::marker::PhantomData;
-use std::ops::RangeBounds;
 use std::sync::{Arc, Weak};
+use std::thread;
 use std::thread::JoinHandle;
 use std::time::Instant;
-use std::{fmt, thread};
-
-#[derive(Clone, Debug)]
-pub struct TaskResult {
-    pub name: String,
-    pub write_took: u128,
-    pub commit_took: u128,
-}
-
-impl fmt::Display for TaskResult {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} : {} ms", self.name, self.write_took)
-    }
-}
-
-impl TaskResult {
-    pub fn new(name: &str, write_took: u128, commit_took: u128) -> Self {
-        Self { name: name.to_string(), write_took, commit_took }
-    }
-    pub fn master(write_took: u128) -> Self {
-        Self { name: "MASTER".to_string(), write_took, commit_took: 0}
-    }
-}
-
-pub struct StartFuture(Receiver<Result<(), AppError>>);
-impl StartFuture {
-    pub fn wait(self) -> Result<(), AppError> {
-        self.0.recv()?
-    }
-}
-
-pub struct StopFuture {
-    pub(crate) ack: Receiver<Result<(), AppError>>,
-    pub(crate) handle: JoinHandle<()>,
-}
-impl StopFuture {
-    pub fn wait(self) -> Result<(), AppError> {
-        self.ack.recv()??;
-        self.handle.join().map_err(|_| AppError::Custom("Write table join failed".to_string()))?;
-        Ok(())
-    }
-}
-
-pub enum FlushFuture {
-    /// Flush already sent; just wait for the ack
-    Eager(Receiver<Result<TaskResult, AppError>>),
-
-    /// Flush will be sent when `wait()` is called
-    Lazy(Box<dyn FnOnce() -> Result<Receiver<Result<TaskResult, AppError>>, AppError> + Send>),
-}
-
-impl FlushFuture {
-    pub fn wait(self) -> Result<TaskResult, AppError> {
-        match self {
-            FlushFuture::Eager(rx) => rx.recv()?,
-            FlushFuture::Lazy(fire) => {
-                let rx = fire()?;
-                rx.recv()?
-            }
-        }
-    }
-
-    pub fn eager(rx: Receiver<Result<TaskResult, AppError>>) -> Self {
-        FlushFuture::Eager(rx)
-    }
-
-    pub fn lazy<F>(f: F) -> Self
-    where
-        F: FnOnce() -> Result<Receiver<Result<TaskResult, AppError>>, AppError> + Send + 'static,
-    {
-        FlushFuture::Lazy(Box::new(f))
-    }
-}
-
-impl FlushFuture {
-
-    pub fn dedup_tasks_keep_slowest(futs: Vec<FlushFuture>) -> Result<HashMap<String, TaskResult>, AppError> {
-        let mut by_name: HashMap<String, TaskResult> = HashMap::with_capacity(futs.len());
-        for f in futs {
-            let res = f.wait()?;
-            match by_name.entry(res.name.clone()) {
-                Entry::Vacant(e) => { e.insert(res); }
-                Entry::Occupied(mut e) => {
-                    if res.write_took > e.get().write_took {
-                        e.insert(res); // keep the slowest per name
-                    }
-                }
-            }
-        }
-        Ok(by_name)
-    }
-}
-
-pub trait WriteTableLike<K: CopyOwnedValue + 'static, V: Key + 'static> {
-    fn insert_kv<'k, 'v>(&mut self, key: impl Borrow<K::SelfType<'k>>, value: impl Borrow<V::SelfType<'v>>) -> Result<(), AppError>;
-    fn delete_kv<'k>(&mut self, key: impl Borrow<K::SelfType<'k>>) -> Result<bool, AppError>;
-    fn get_any_for_index<'v>(&mut self, value: impl Borrow<V::SelfType<'v>>) -> Result<Option<ValueOwned<K>>, AppError>;
-    fn range<'a, KR: Borrow<K::SelfType<'a>> + 'a>(&self, range: impl RangeBounds<KR> + 'a) -> Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>;
-
-    #[inline]
-    fn key_buf(g: AccessGuard<'_, K>) -> ValueBuf<K> {
-        ValueBuf::<K>::new(K::as_bytes(&g.value()).as_ref().to_vec())
-    }
-    #[inline]
-    fn value_buf(g: AccessGuard<'_, V>) -> ValueBuf<V> {
-        ValueBuf::<V>::new(V::as_bytes(&g.value()).as_ref().to_vec())
-    }
-    #[inline]
-    fn owned_key_from_bytes(bytes: &[u8]) -> ValueOwned<K> {
-        let k_view: K::SelfType<'_> = <K as Value>::from_bytes(bytes);
-        ValueOwned::<K>::from_value(k_view)
-    }
-    #[inline]
-    fn owned_key_from_guard(g: AccessGuard<'_, K>) -> ValueOwned<K> {
-        ValueOwned::<K>::from_guard(g)
-    }
-
-    #[inline]
-    fn unit_from_key<'k>(k: &K::SelfType<'k>) -> K::Unit
-    where
-        K: 'k,
-    {
-        K::to_unit_ref(k)
-    }
-
-    #[inline]
-    fn owned_from_unit(u: K::Unit) -> ValueOwned<K> {
-        ValueOwned::<K>::from_unit(u)
-    }
-}
-
-pub trait TableFactory<K: CopyOwnedValue + 'static, V: Key + 'static> {
-    type CacheCtx;
-    type Table<'txn, 'c>: WriteTableLike<K, V>;
-    fn name(&self) -> String;
-    fn new_cache(&self) -> Self::CacheCtx;
-    fn open<'txn, 'c>(&self, tx: &'txn WriteTransaction, cache: &'c mut Self::CacheCtx) -> Result<Self::Table<'txn, 'c>, AppError>;
-}
-
-pub enum WriterCommand<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static> {
-    Begin(Sender<Result<(), AppError>>),              // start new WriteTransaction + open table
-    Insert(K, V),
-    InsertMany(Vec<(K, V)>),
-    Remove(K, Sender<Result<bool, AppError>>),
-    AnyForIndex { values: Vec<V>, then: Arc<dyn Fn(Vec<(usize, Option<ValueOwned<K>>)>) -> Result<(), AppError> + Send + Sync + 'static> },
-    AnyForIndexBucket { values: Vec<(usize, V)>, then: Arc<dyn Fn(Vec<(usize, Option<ValueOwned<K>>)>) -> Result<(), AppError> + Send + Sync + 'static> },
-    Range(K, K, Sender<Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>>),
-    Flush(Sender<Result<TaskResult, AppError>>),              // commit current tx, stay alive (idle)
-    Shutdown(Sender<Result<(), AppError>>),           // graceful stop (no commit)
-}
-
-enum Control {
-    Continue,
-    Flush(Sender<Result<TaskResult, AppError>>),
-    Shutdown(Sender<Result<(), AppError>>),
-}
 
 pub struct TableWriter<K: CopyOwnedValue + Send +  'static, V: Key + Send + 'static, F> {
     topic: Sender<WriterCommand<K, V>>,
     handle: JoinHandle<()>,
+    pub router: Arc<dyn Router<K, V>>,
     _marker: PhantomData<F>,
 }
 
@@ -196,20 +41,20 @@ where
                 ack.send(Ok(r))?;
                 Ok(Control::Continue)
             }
-            WriterCommand::AnyForIndex { values, then } => {
+            WriterCommand::QueryAndWrite { values, sink } => {
                 let mut out = Vec::with_capacity(values.len());
                 for (idx, v) in values.into_iter().enumerate() {
                     out.push((idx, table.get_any_for_index(v)?));
                 }
-                then(out)?;
+                sink(out)?;
                 Ok(Control::Continue)
             }
-            WriterCommand::AnyForIndexBucket { values, then } => {
+            WriterCommand::QueryAndWriteBucket { values, sink } => {
                 let mut out = Vec::with_capacity(values.len());
                 for (idx, v) in values.into_iter() {
                     out.push((idx, table.get_any_for_index(v)?));
                 }
-                then(out)?;
+                sink(out)?;
                 Ok(Control::Continue)
             }
             WriterCommand::Range(from, until, ack) => {
@@ -327,67 +172,50 @@ where
                 }
             }
         });
-        Ok(Self { topic, handle, _marker: PhantomData })
+        let router = Arc::new(PlainRouter::new(topic.clone()));
+        Ok(Self { topic, router, handle, _marker: PhantomData })
     }
 
     pub fn sender(&self) -> Sender<WriterCommand<K, V>> {
         self.topic.clone()
     }
+}
 
-    pub fn fast_send(&self, msg: WriterCommand<K, V>) -> Result<(), AppError> {
-        match self.topic.try_send(msg) {
-            Ok(()) => Ok(()),
-            Err(TrySendError::Full(v)) => self.topic.send(v).map_err(|e| AppError::Custom(e.to_string())),
-            Err(e) => Err(AppError::Custom(e.to_string())),
-        }
+impl<K, V, F> WriterLike<K, V> for TableWriter<K, V, F>
+where
+    K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
+    V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
+    F: TableFactory<K, V> + Send + Clone + 'static,
+{
+    fn router(&self) -> Arc<dyn Router<K, V>> {
+        self.router.clone()
     }
 
-    pub fn begin(&self) -> Result<(), AppError> {
+    fn begin(&self) -> Result<(), AppError> {
         let (ack_tx, ack_rx) = bounded::<Result<(), AppError>>(1);
-        self.fast_send(WriterCommand::Begin(ack_tx))?;
+        self.topic.send(WriterCommand::Begin(ack_tx))?;
         ack_rx.recv()?
     }
 
-    pub fn begin_async(&self) -> Result<Vec<StartFuture>, AppError> {
+    fn begin_async(&self) -> Result<Vec<StartFuture>, AppError> {
         let (ack_tx, ack_rx) = bounded::<Result<(), AppError>>(1);
-        self.fast_send(WriterCommand::Begin(ack_tx))?;
+        self.topic.send(WriterCommand::Begin(ack_tx))?;
         Ok(vec![StartFuture(ack_rx)])
     }
 
-    pub fn insert_kv(&self, key: K, value: V) -> Result<(), AppError> {
-        self.fast_send(WriterCommand::Insert(key, value))
-    }
-
-    pub fn get_any_for_index<FN>(&self, values: Vec<V>, then: FN) -> Result<(), AppError>
-    where FN: Fn(Vec<(usize, Option<ValueOwned<K>>)>) -> Result<(), AppError> + Send + Sync + 'static {
-        self.fast_send(WriterCommand::AnyForIndex { values, then: Arc::new(then) })
-    }
-
-    pub fn range(&self, from: K, until: K) -> Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError> {
-        let (ack_tx, ack_rx) = bounded::<Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>>(1);
-        self.fast_send(WriterCommand::Range(from, until, ack_tx))?;
-        ack_rx.recv()?
-    }
-
-    pub fn delete_kv(&self, key: K) -> Result<bool, AppError> {
-        let (ack_tx, ack_rx) = bounded::<Result<bool, AppError>>(1);
-        self.fast_send(WriterCommand::Remove(key, ack_tx))?;
-        ack_rx.recv()?
-    }
-
-    pub fn flush(&self) -> Result<TaskResult, AppError> {
+    fn flush(&self) -> Result<TaskResult, AppError> {
         let (ack_tx, ack_rx) = bounded::<Result<TaskResult, AppError>>(1);
-        self.fast_send(WriterCommand::Flush(ack_tx))?;
+        self.topic.send(WriterCommand::Flush(ack_tx))?;
         ack_rx.recv()?
     }
 
-    pub fn flush_async(&self) -> Result<Vec<FlushFuture>, AppError> {
+    fn flush_async(&self) -> Result<Vec<FlushFuture>, AppError> {
         let (ack_tx, ack_rx) = bounded::<Result<TaskResult, AppError>>(1);
-        self.fast_send(WriterCommand::Flush(ack_tx))?;
+        self.topic.send(WriterCommand::Flush(ack_tx))?;
         Ok(vec![FlushFuture::eager(ack_rx)])
     }
 
-    pub fn flush_deferred(&self) -> Vec<FlushFuture> {
+    fn flush_deferred(&self) -> Vec<FlushFuture> {
         let tx = self.sender();
         vec![FlushFuture::lazy(move || {
             let (ack_tx, ack_rx) = bounded::<Result<TaskResult, AppError>>(1);
@@ -397,18 +225,18 @@ where
             }
         })]
     }
-    // optional: graceful shutdown when you’re done with the writer forever
-    pub fn shutdown(self) -> Result<(), AppError> {
+
+    fn shutdown(self) -> Result<(), AppError> {
         let (ack_tx, ack_rx) = bounded::<Result<(), AppError>>(1);
-        self.fast_send(WriterCommand::Shutdown(ack_tx))?;
+        self.topic.send(WriterCommand::Shutdown(ack_tx))?;
         ack_rx.recv()??;
         self.handle.join().map_err(|_| AppError::Custom("Write table join failed".to_string()))?;
         Ok(())
     }
 
-    pub fn shutdown_async(self) -> Result<Vec<StopFuture>, AppError> {
+    fn shutdown_async(self) -> Result<Vec<StopFuture>, AppError> {
         let (ack_tx, ack_rx) = bounded::<Result<(), AppError>>(1);
-        self.fast_send(WriterCommand::Shutdown(ack_tx))?;
+        self.topic.send(WriterCommand::Shutdown(ack_tx))?;
         Ok(vec![StopFuture { ack: ack_rx, handle: self.handle }])
     }
 }

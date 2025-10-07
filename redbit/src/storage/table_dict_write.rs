@@ -1,5 +1,5 @@
 use crate::storage::async_boundary::{CopyOwnedValue, ValueBuf, ValueOwned};
-use crate::storage::table_writer::{TableFactory, WriteTableLike};
+use crate::storage::table_writer_api::{TableFactory, WriteTableLike};
 use crate::{AppError, CacheKey};
 use lru::LruCache;
 use redb::*;
@@ -143,7 +143,8 @@ impl<'txn, 'c, K: CopyOwnedValue + 'static, V: CacheKey + 'static> WriteTableLik
 mod tests {
     use crate::storage::dict_test_utils::*;
     use redb::{MultimapTable, ReadableMultimapTable, ReadableTable, ReadableTableMetadata};
-    use crate::{DictTable, WriteTableLike};
+    use crate::DictTable;
+    use crate::storage::table_writer_api::WriteTableLike;
     use crate::storage::test_utils::{addr, Address};
 
     /// Read the birth id for a given external id.

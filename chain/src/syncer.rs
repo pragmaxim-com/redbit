@@ -12,7 +12,7 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, watch};
 use tokio::sync::mpsc::error::TryRecvError;
 use tokio_stream::wrappers::ReceiverStream;
-use redbit::storage::table_writer::TaskResult;
+use redbit::storage::table_writer_api::TaskResult;
 use crate::combine::ShutdownReason;
 
 pub struct ChainSyncer<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext> {

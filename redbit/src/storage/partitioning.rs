@@ -48,19 +48,17 @@ pub trait ValuePartitioner<V: Key + 'static + Borrow<V::SelfType<'static>>> {
 /// Fast, deterministic partitioner for arbitrary byte values.
 /// O(len), no allocations; stable across runs with a fixed `seed`.
 #[derive(Clone)]
-pub struct Xxh3Partitioner {
-    n: usize,
-}
+pub struct Xxh3Partitioner(usize);
 
 impl Xxh3Partitioner {
     pub fn new(n: usize) -> Self {
         assert!(n > 0, "shard count must be > 0");
-        Self { n }
+        Self(n)
     }
 
     #[inline]
     pub fn partition_bytes(&self, bytes: &[u8]) -> usize {
-        (xxh3_64(bytes) % (self.n as u64)) as usize
+        (xxh3_64(bytes) % (self.0 as u64)) as usize
     }
 }
 
@@ -82,19 +80,17 @@ pub trait KeyPartitioner<K: Key + 'static + Borrow<K::SelfType<'static>>> {
 
 // ---------- Struct adapter (kept) ----------
 #[derive(Clone)]
-pub struct BytesPartitioner {
-    n: usize,
-}
+pub struct BytesPartitioner(usize);
 
 impl BytesPartitioner {
     pub fn new(n: usize) -> Self {
         assert!(n > 0, "shard count must be > 0");
-        Self { n }
+        Self(n)
     }
 
     #[inline]
     pub fn partition_bytes(&self, bytes: &[u8]) -> usize {
-        partition_bytes_le(self.n, bytes)
+        partition_bytes_le(self.0, bytes)
     }
 }
 
@@ -104,7 +100,7 @@ where
 {
     #[inline]
     fn partition_key<'k>(&self, key: impl Borrow<K::SelfType<'k>>) -> usize {
-        partition_key_redb::<K>(self.n, key.borrow())
+        partition_key_redb::<K>(self.0, key.borrow())
     }
 }
 

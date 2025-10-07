@@ -1,11 +1,12 @@
-use crate::storage::async_boundary::{CopyOwnedValue, ValueOwned};
+use crate::storage::async_boundary::CopyOwnedValue;
 use crate::storage::partitioning::{KeyPartitioner, Partitioning, ValuePartitioner};
-use crate::storage::table_writer::{StopFuture, TableFactory, TaskResult, WriterCommand};
-use crate::{AppError, StartFuture, FlushFuture, TableWriter};
+use crate::storage::router::{Router, ShardedRouter};
 use redb::{Database, Key};
 use std::borrow::Borrow;
-use std::{marker::PhantomData, sync::Weak};
 use std::sync::Arc;
+use std::{marker::PhantomData, sync::Weak};
+use crate::storage::table_writer_api::*;
+use crate::{AppError, TableWriter};
 
 pub struct ShardedTableWriter<
     K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
@@ -14,17 +15,17 @@ pub struct ShardedTableWriter<
     KP: KeyPartitioner<K>,
     VP: ValuePartitioner<V>,
 > {
-    partitioner: Partitioning<KP, VP>,
     shards: Vec<TableWriter<K, V, F>>,
-    _pd: PhantomData<(K,V)>,
+    pub router: Arc<dyn Router<K, V>>,
+    _pd: PhantomData<(KP,VP)>,
 }
 
 impl<
     K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
     V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
     F: TableFactory<K, V> + Send + Clone + 'static,
-    KP: KeyPartitioner<K>,
-    VP: ValuePartitioner<V>,
+    KP: KeyPartitioner<K> + Sync + Send + Clone + 'static,
+    VP: ValuePartitioner<V> + Sync + Send + Clone + 'static,
 > ShardedTableWriter<K,V,F, KP, VP> {
     pub fn new(partitioning: Partitioning<KP, VP>, dbs: Vec<Weak<Database>>, factory: F) -> Result<Self, AppError> {
         let shards_count = dbs.len();
@@ -35,79 +36,37 @@ impl<
         for db_weak in dbs.into_iter() {
             shards.push(TableWriter::<K,V,F>::new(db_weak, factory.clone())?);
         }
-        Ok(Self { partitioner: partitioning, shards, _pd: PhantomData })
+        let senders: Vec<_> = shards.iter().map(|w| w.sender()).collect();
+        let router = Arc::new(ShardedRouter::new(partitioning.clone(), senders));
+        Ok(Self { router, shards, _pd: PhantomData })
+    }
+}
+
+impl<K, V, F, KP, VP> WriterLike<K, V> for ShardedTableWriter<K, V, F, KP, VP>
+where
+    K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
+    V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
+    F: TableFactory<K, V> + Send + Clone + 'static,
+    KP: KeyPartitioner<K> + Sync + Send + Clone + 'static,
+    VP: ValuePartitioner<V> + Sync + Send + Clone + 'static,
+{
+
+    fn router(&self) -> Arc<dyn Router<K, V>> {
+        self.router.clone()
     }
 
-    pub fn begin(&self) -> Result<(), AppError> {
+    fn begin(&self) -> Result<(), AppError> {
         for w in &self.shards { w.begin()?; }
         Ok(())
     }
 
-    pub fn begin_async(&self) -> Result<Vec<StartFuture>, AppError> {
+    fn begin_async(&self) -> Result<Vec<StartFuture>, AppError> {
         let mut v = Vec::with_capacity(self.shards.len());
         for w in &self.shards { v.extend(w.begin_async()?); }
         Ok(v)
     }
 
-    pub fn get_any_for_index<FN>(&self, values: Vec<V>, then: FN) -> Result<(), AppError>
-    where FN: Fn(Vec<(usize, Option<ValueOwned<K>>)>) -> Result<(), AppError> + Send + Sync + 'static {
-        match &self.partitioner {
-            Partitioning::ByKey(_) => {
-                Err(AppError::Custom("ShardedTableWriter: get_any_for_index not supported with key partitioning".into()))
-            }
-            Partitioning::ByValue(vp) => {
-                let shards_count = self.shards.len();
-                let values_count = values.len();
-                if values_count == 0 { return Ok(()); }
-
-                let shard_cap = values_count / shards_count;
-                let mut buckets: Vec<Vec<(usize, V)>> = (0..shards_count).map(|_| Vec::with_capacity(shard_cap)).collect();
-
-                for (pos, v) in values.into_iter().enumerate() {
-                    let sid = vp.partition_value(v.borrow());
-                    buckets[sid].push((pos, v));
-                }
-
-                let mut out: Vec<Option<ValueOwned<K>>> = Vec::with_capacity(values_count);
-                out.resize_with(values_count, || None);
-
-                let then = Arc::new(then);
-                for (sid, values) in buckets.into_iter().enumerate() {
-                    if values.is_empty() { continue; }
-                    let _ = &self.shards[sid].fast_send(WriterCommand::AnyForIndexBucket { values, then: then.clone() })?;
-                }
-                Ok(())
-            }
-        }
-    }
-
-    pub fn insert_kv(&self, key: K, value: V) -> Result<(), AppError> {
-        let sid =
-            match &self.partitioner {
-                Partitioning::ByKey(kp) => kp.partition_key(key.borrow()),
-                Partitioning::ByValue(vp) => vp.partition_value(value.borrow()),
-            };
-        self.shards[sid].insert_kv(key, value)
-    }
-
-    pub fn delete_kv(&self, key: K) -> Result<bool, AppError> {
-        match &self.partitioner {
-            Partitioning::ByKey(kp) => {
-                let sid = kp.partition_key(key.borrow());
-                self.shards[sid].delete_kv(key)
-            },
-            Partitioning::ByValue(_) => {
-                for w in &self.shards {
-                    if w.delete_kv(key.clone())? {
-                        return Ok(true);
-                    }
-                }
-                Ok(false)
-            },
-        }
-    }
-
-    pub fn flush(&self) -> redb::Result<TaskResult, AppError> {
+    fn flush(&self) -> redb::Result<TaskResult, AppError> {
         let mut acks = Vec::with_capacity(self.shards.len());
         for w in &self.shards {
             acks.extend(w.flush_async()?);
@@ -119,27 +78,28 @@ impl<
         Ok(tasks.into_iter().max_by_key(|t| t.write_took).unwrap())
     }
 
-    pub fn flush_async(&self) -> Result<Vec<FlushFuture>, AppError> {
+    fn flush_async(&self) -> Result<Vec<FlushFuture>, AppError> {
         let mut v = Vec::with_capacity(self.shards.len());
         for w in &self.shards { v.extend(w.flush_async()?) }
         Ok(v)
     }
 
-    pub fn flush_deferred(&self) -> Vec<FlushFuture> {
+    fn flush_deferred(&self) -> Vec<FlushFuture> {
         let mut v = Vec::with_capacity(self.shards.len());
         for w in &self.shards { v.extend(w.flush_deferred()) }
         v
     }
 
-    pub fn shutdown(self) -> Result<(), AppError> {
+    fn shutdown(self) -> Result<(), AppError> {
         for w in self.shards { w.shutdown()?; }
         Ok(())
     }
-    pub fn shutdown_async(self) -> Result<Vec<StopFuture>, AppError> {
+    fn shutdown_async(self) -> Result<Vec<StopFuture>, AppError> {
         let mut v = Vec::with_capacity(self.shards.len());
         for w in self.shards { v.extend(w.shutdown_async()?); }
         Ok(v)
     }
+
 }
 
 #[cfg(all(test, not(feature = "integration")))]
@@ -148,6 +108,7 @@ mod plain_sharded {
     use crate::storage::async_boundary::CopyOwnedValue;
     use crate::storage::test_utils::addr;
     use crate::storage::{plain_test_utils, test_utils};
+    use crate::storage::table_writer_api::WriterLike;
 
     impl_copy_owned_value_identity!(u32);
     // insert-only integrity
@@ -161,7 +122,7 @@ mod plain_sharded {
         writer.begin().expect("begin");
         for k in 1u32..=24 {
             let v = addr(&[k as u8, (k + 1) as u8, (k * 3) as u8]);
-            writer.insert_kv(k, v).expect("insert");
+            writer.router.insert_kv(k, v).expect("insert");
         }
         writer.flush().expect("flush");
 
@@ -184,10 +145,10 @@ mod plain_sharded {
 
         writer.begin().expect("begin");
         for k in 1u32..=40 {
-            writer.insert_kv(k, addr(&[k as u8])).expect("insert");
+            writer.router.insert_kv(k, addr(&[k as u8])).expect("insert");
         }
         for k in (3u32..=40).step_by(3) {
-            assert!(writer.delete_kv(k).expect("delete"));
+            assert!(writer.router.delete_kv(k).expect("delete"));
         }
         writer.flush().expect("flush");
 
@@ -207,10 +168,12 @@ mod plain_sharded {
 
 #[cfg(all(test, not(feature = "integration")))]
 mod index_sharded {
+    use crate::storage::async_boundary::ValueOwned;
     use crate::storage::test_utils::{addr, Address};
     use crate::storage::{index_test_utils, test_utils};
-    use crate::storage::async_boundary::ValueOwned;
+    use crate::storage::table_writer_api::WriterLike;
     use crossbeam::channel;
+    use std::sync::Arc;
     use std::time::Duration;
 
     #[test]
@@ -227,25 +190,25 @@ mod index_sharded {
 
         writer.begin().expect("begin");
         // a1 -> {10, 3}
-        writer.insert_kv(10u32, a1.clone()).expect("ins");
-        writer.insert_kv(3u32,  a1.clone()).expect("ins");
+        writer.router.insert_kv(10u32, a1.clone()).expect("ins");
+        writer.router.insert_kv(3u32,  a1.clone()).expect("ins");
         // a2 -> {7}
-        writer.insert_kv(7u32,  a2.clone()).expect("ins");
+        writer.router.insert_kv(7u32,  a2.clone()).expect("ins");
         // a3 -> {100, 4, 80}
-        writer.insert_kv(100u32, a3.clone()).expect("ins");
-        writer.insert_kv(80u32,  a3.clone()).expect("ins");
-        writer.insert_kv(4u32,   a3.clone()).expect("ins");
+        writer.router.insert_kv(100u32, a3.clone()).expect("ins");
+        writer.router.insert_kv(80u32,  a3.clone()).expect("ins");
+        writer.router.insert_kv(4u32,   a3.clone()).expect("ins");
 
         // ----- heads before delete -----
         {
             let want = 3usize; // querying [a1, a2, a3]
             let (tx, rx) = channel::unbounded::<Vec<(usize, Option<ValueOwned<u32>>)>>();
 
-            writer.get_any_for_index(vec![a1.clone(), a2.clone(), a3.clone()], move |batch| {
+            writer.router.query_and_write(vec![a1.clone(), a2.clone(), a3.clone()], Arc::new(move |batch| {
                 // non-blocking: just forward the shard batch
                 tx.send(batch)?;
                 Ok(())
-            }).expect("enqueue heads_before");
+            })).expect("enqueue heads_before");
 
             let mut acc: Vec<Option<ValueOwned<u32>>> = vec![None; want];
             let mut filled = 0usize;
@@ -264,17 +227,17 @@ mod index_sharded {
         }
 
         // delete current head for a3 (4) and re-check
-        assert!(writer.delete_kv(4u32).expect("del 4"));
+        assert!(writer.router.delete_kv(4u32).expect("del 4"));
 
         // ----- head after delete (only a3) -----
         {
             let want = 1usize;
             let (tx, rx) = channel::unbounded::<Vec<(usize, Option<ValueOwned<u32>>)>>();
 
-            writer.get_any_for_index(vec![a3.clone()], move |batch| {
+            writer.router.query_and_write(vec![a3.clone()], Arc::new(move |batch| {
                 tx.send(batch)?;
                 Ok(())
-            }).expect("enqueue head_after");
+            })).expect("enqueue head_after");
 
             let mut acc: Vec<Option<ValueOwned<u32>>> = vec![None; want];
             let mut filled = 0usize;
@@ -310,7 +273,7 @@ mod index_sharded {
 
         writer.begin().expect("begin");
         // no inserts; delete should be false
-        assert!(!writer.delete_kv(123456u32).expect("delete absent"));
+        assert!(!writer.router.delete_kv(123456u32).expect("delete absent"));
         writer.flush().expect("flush");
         writer.shutdown().expect("shutdown");
     }
@@ -321,6 +284,7 @@ mod index_sharded {
 mod dict_sharded {
     use crate::storage::test_utils::addr;
     use crate::storage::{dict_test_utils, test_utils};
+    use crate::storage::table_writer_api::WriterLike;
 
     #[test]
     fn sharded_dict_two_ids_same_value_share_after_flush() {
@@ -334,9 +298,9 @@ mod dict_sharded {
         let val = addr(&[0xDE, 0xAD, 0xBE, 0xEF]);
 
         writer.begin().expect("begin");
-        writer.insert_kv(id1, val.clone()).expect("insert id1");
-        writer.insert_kv(id2, val.clone()).expect("insert id2");
-        writer.insert_kv(20u32, addr(&[1, 2, 3])).expect("insert other");
+        writer.router.insert_kv(id1, val.clone()).expect("insert id1");
+        writer.router.insert_kv(id2, val.clone()).expect("insert id2");
+        writer.router.insert_kv(20u32, addr(&[1, 2, 3])).expect("insert other");
         writer.flush().expect("flush");
 
         let reader = dict_test_utils::mk_sharder_reader(n, weak_dbs, dict_pk_to_ids, value_by_dict_pk, value_to_dict_pk, dict_pk_by_id);
@@ -366,9 +330,9 @@ mod dict_sharded {
         let val = addr(&[7, 7, 7, 7]);
 
         writer.begin().expect("begin");
-        writer.insert_kv(id1, val.clone()).expect("ins id1");
-        writer.insert_kv(id2, val.clone()).expect("ins id2");
-        assert!(writer.delete_kv(id1).expect("del id1"));
+        writer.router.insert_kv(id1, val.clone()).expect("ins id1");
+        writer.router.insert_kv(id2, val.clone()).expect("ins id2");
+        assert!(writer.router.delete_kv(id1).expect("del id1"));
         writer.flush().expect("flush");
 
         let reader = dict_test_utils::mk_sharder_reader(n, weak_dbs, dict_pk_to_ids, value_by_dict_pk, value_to_dict_pk, dict_pk_by_id);
