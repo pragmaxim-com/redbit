@@ -1,10 +1,10 @@
-use crate::{BlockHeaderLike, BlockLike};
-use redbit::storage::table_writer_api::TaskResult;
-use redbit::{info, warn};
-use std::collections::HashMap;
-use std::sync::Mutex;
-use std::time::Instant;
 use crate::stats::TaskStats;
+use crate::{BlockHeaderLike, BlockLike};
+use redbit::info;
+use redbit::storage::table_writer_api::TaskResult;
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::time::Instant;
 
 pub type BatchWeight = usize;
 pub type BoxWeight = usize;
@@ -12,8 +12,8 @@ pub type BoxWeight = usize;
 pub struct ProgressMonitor<B: BlockLike> {
     weight_report_interval: usize,
     start_time: Instant,
-    task_stats: Mutex<TaskStats>,
-    total_and_last_report_weight: Mutex<(usize, usize)>,
+    task_stats: RefCell<TaskStats>,
+    total_and_last_report_weight: RefCell<(usize, usize)>,
     phantom: std::marker::PhantomData<B>,
 }
 
@@ -22,23 +22,19 @@ impl<B: BlockLike> ProgressMonitor<B> {
         ProgressMonitor {
             weight_report_interval,
             start_time: Instant::now(),
-            task_stats: Mutex::new(TaskStats::default()),
-            total_and_last_report_weight: Mutex::new((0, 0)),
+            task_stats: RefCell::new(TaskStats::default()),
+            total_and_last_report_weight: RefCell::new((0, 0)),
             phantom: std::marker::PhantomData,
         }
-    }
-
-    pub fn warn_gap(&self, need_height: u32, seen_height: u32, pending_heights: usize) {
-        warn!("Block @ {} not fetched, currently @ {} ... pending {} blocks", need_height, seen_height, pending_heights);
     }
 
     pub fn log_batch(&self, batch: &Vec<B>, buffer_size: usize) {
         if let Some(first) = batch.first() {
             let batch_weight = batch.iter().map(|x| x.header().weight() as usize).sum::<usize>();
-            let lh = first.header();
-            let mut total_weight = self.total_and_last_report_weight.lock().unwrap();
+            let mut total_weight = self.total_and_last_report_weight.borrow_mut();
             let new_total_weight = total_weight.0 + batch_weight;
             if new_total_weight > total_weight.1 + self.weight_report_interval {
+                let lh = first.header();
                 let height = lh.height();
                 let timestamp = &lh.timestamp().to_string();
                 let hash = &lh.hash().to_string();
@@ -56,15 +52,15 @@ impl<B: BlockLike> ProgressMonitor<B> {
         }
     }
 
-    pub fn log_task_results(&self, tasks_by_name: HashMap<String, TaskResult>, buffer_size: usize) {
-        let mut s = self.task_stats.lock().expect("stats poisoned");
+    pub fn log_task_results(&self, tasks_by_name: HashMap<String, TaskResult>) {
+        let mut s = self.task_stats.borrow_mut();
         s.update(&tasks_by_name);
 
         if s.iters % 100 != 0 {
             return;
         } else {
             let mut report = s.build_report(&tasks_by_name);
-            let report = report.printable(buffer_size);
+            let report = report.printable();
             info!("Task report:\n{}", report);
         }
     }

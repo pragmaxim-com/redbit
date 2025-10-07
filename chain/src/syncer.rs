@@ -18,18 +18,16 @@ use crate::combine::ShutdownReason;
 pub struct ChainSyncer<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext> {
     pub block_provider: Arc<dyn BlockProvider<FB, TB>>,
     pub chain: Arc<dyn BlockChainLike<TB, CTX>>,
-    pub monitor: Arc<ProgressMonitor<TB>>,
 }
 
 impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'static> ChainSyncer<FB, TB, CTX> {
     pub fn new(block_provider: Arc<dyn BlockProvider<FB, TB>>, chain: Arc<dyn BlockChainLike<TB, CTX>>) -> Self {
-        Self { block_provider, chain, monitor: Arc::new(ProgressMonitor::new(5000)) }
+        Self { block_provider, chain }
     }
 
     pub async fn sync(&self, indexer_conf: &IndexerSettings, last_header: Option<TB::Header>, shutdown: watch::Receiver<bool>) -> Result<(), ChainError> {
         let block_provider = Arc::clone(&self.block_provider);
         let chain = Arc::clone(&self.chain);
-        let monitor = Arc::clone(&self.monitor);
 
         let node_chain_tip_header = block_provider.get_chain_tip().await?;
         let chain_tip_height = node_chain_tip_header.height();
@@ -167,13 +165,12 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
 
                                     // Optional observability/backpressure hint on wide gaps:
                                     if reorder.is_saturated() && let Some((need, seen)) = reorder.gap_span() {
-                                        monitor.warn_gap(need, seen, reorder.pending_len());
+                                        warn!("Block @ {} not fetched, currently @ {} ... pending {} blocks", need, seen, reorder.pending_len());
                                     }
 
                                     // 2) Feed in-order items into weight batcher.
                                     for b in ready {
                                         if let Some(out) = batcher.push_with(b, |x| x.header().weight() as usize) {
-                                            monitor.log_batch(&out, proc_rx.len());
                                             if sort_tx.send(out).await.is_err() { break; }
                                         }
                                     }
@@ -198,11 +195,11 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
         let mut persist_handle = {
             let block_provider = Arc::clone(&block_provider);
             let chain = Arc::clone(&chain);
-            let monitor = Arc::clone(&self.monitor);
             let shutdown = shutdown.clone();
             task::spawn_blocking_named("persist", move || {
                 if let Ok(index_context) = chain.new_indexing_ctx() {
                     let tick = std::time::Duration::from_millis(50);
+                    let monitor = ProgressMonitor::new(5000);
                     loop {
                         if *shutdown.borrow() {
                             info!("persist: shutdown signal received");
@@ -210,6 +207,7 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
                         } else {
                             match sort_rx.try_recv() {
                                 Ok(batch) => {
+                                    monitor.log_batch(&batch, sort_rx.len());
                                     match Self::persist_or_link(
                                         &index_context,
                                         batch,
@@ -218,7 +216,7 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
                                         Arc::clone(&chain),
                                     ) {
                                         Ok(tasks) => {
-                                            monitor.log_task_results(tasks, sort_rx.len());
+                                            monitor.log_task_results(tasks);
                                         }
                                         Err(e) => {
                                             error!("persist: persist_or_link returned error {e}");
