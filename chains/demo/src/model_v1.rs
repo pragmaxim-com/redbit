@@ -83,7 +83,7 @@ pub struct Utxo {
 pub struct Input {
     #[fk(one2many, db_cache = 1)]
     pub id: TransactionPointer,
-    #[column(db_cache = 1)]
+    #[column(db_cache = 1, shards = 2)]
     pub utxo_pointer: TransactionPointer,
 }
 

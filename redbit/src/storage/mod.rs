@@ -15,7 +15,9 @@ pub mod context;
 pub mod init;
 pub mod index_writer_bench;
 pub mod async_boundary;
+pub mod table_writer_api;
 mod cache_bench;
+mod router;
 
 #[cfg(all(test, not(feature = "integration")))]
 pub mod test_utils {

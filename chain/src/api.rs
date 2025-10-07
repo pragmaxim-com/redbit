@@ -8,7 +8,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use redb::StorageError;
 use tokio::task::JoinError;
-use redbit::storage::table_writer::TaskResult;
+use redbit::storage::table_writer_api::TaskResult;
 use crate::batcher::SyncMode;
 
 #[derive(Debug, thiserror::Error)]

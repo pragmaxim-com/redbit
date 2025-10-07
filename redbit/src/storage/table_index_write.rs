@@ -1,4 +1,4 @@
-use crate::storage::table_writer::{TableFactory, WriteTableLike};
+use crate::storage::table_writer_api::{TableFactory, WriteTableLike};
 use crate::{AppError, CacheKey};
 use redb::*;
 use redb::{Key, Table, WriteTransaction};
