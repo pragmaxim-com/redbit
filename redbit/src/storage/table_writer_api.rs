@@ -1,7 +1,7 @@
 use crate::storage::async_boundary::{CopyOwnedValue, ValueBuf, ValueOwned};
 use crate::storage::router::Router;
 use crate::AppError;
-use crossbeam::channel::{Receiver, Sender};
+use crossbeam::channel::{bounded, Receiver, Sender};
 use redb::{AccessGuard, Key, Value, WriteTransaction};
 use std::borrow::Borrow;
 use std::collections::hash_map::Entry;
@@ -58,6 +58,12 @@ pub enum FlushFuture {
 
     /// Flush will be sent when `wait()` is called
     Lazy(Box<dyn FnOnce() -> Result<Receiver<Result<TaskResult, AppError>>, AppError> + Send>),
+
+    /// First get ready, then send the flush and wait for the ack
+    ReadyAndFire {
+        ready: Box<dyn FnOnce() -> Result<Receiver<Result<(), AppError>>, AppError> + Send> ,
+        fire: Box<dyn FnOnce() -> Result<Receiver<Result<TaskResult, AppError>>, AppError> + Send>
+    },
 }
 
 impl FlushFuture {
@@ -68,6 +74,12 @@ impl FlushFuture {
                 let rx = fire()?;
                 rx.recv()?
             }
+            FlushFuture::ReadyAndFire { ready, fire } => {
+                let ready_rx = ready()?;
+                let _ = ready_rx.recv()?;
+                let fire_rx = fire()?;
+                fire_rx.recv()?
+            }
         }
     }
 
@@ -75,11 +87,40 @@ impl FlushFuture {
         FlushFuture::Eager(rx)
     }
 
-    pub fn lazy<F>(f: F) -> Self
-    where
-        F: FnOnce() -> Result<Receiver<Result<TaskResult, AppError>>, AppError> + Send + 'static,
-    {
-        FlushFuture::Lazy(Box::new(f))
+    /// Helper: produce the shared "fire" closure that sends WriterCommand::Flush
+    fn fire<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static>(
+        tx: Sender<WriterCommand<K, V>>,
+    ) -> Box<dyn FnOnce() -> Result<Receiver<Result<TaskResult, AppError>>, AppError> + Send> {
+        Box::new(move || {
+            let (ack_tx, ack_rx) = bounded::<Result<TaskResult, AppError>>(1);
+            match tx.send(WriterCommand::Flush(ack_tx)) {
+                Ok(()) => Ok(ack_rx),
+                Err(e) => Err(AppError::Custom(e.to_string())),
+            }
+        })
+    }
+
+    fn ready<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static>(
+        tx: Sender<WriterCommand<K, V>>,
+    ) -> Box<dyn FnOnce() -> Result<Receiver<Result<(), AppError>>, AppError> + Send> {
+        Box::new(move || {
+            let (ready_tx, ready_rx) = bounded::<Result<(), AppError>>(1);
+            match tx.send(WriterCommand::IsReadyForWriting(ready_tx)) {
+                Ok(()) => Ok(ready_rx),
+                Err(e) => Err(AppError::Custom(e.to_string())),
+            }
+        })
+    }
+
+    pub fn lazy<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static>(tx: Sender<WriterCommand<K, V>>) -> Self {
+        FlushFuture::Lazy(Self::fire(tx))
+    }
+
+    pub fn ready_and_fire<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static>(tx_ready: Sender<WriterCommand<K, V>>, tx_fire: Sender<WriterCommand<K, V>>) -> Self {
+        FlushFuture::ReadyAndFire {
+            ready: Self::ready(tx_ready),
+            fire: Self::fire(tx_fire),
+        }
     }
 }
 
@@ -157,12 +198,14 @@ pub enum WriterCommand<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'stat
     QueryAndWriteBucket { values: Vec<(usize, V)>, sink: Arc<dyn Fn(Vec<(usize, Option<ValueOwned<K>>)>) -> Result<(), AppError> + Send + Sync + 'static> },
     Range(K, K, Sender<Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>>),
     Flush(Sender<Result<TaskResult, AppError>>),              // commit current tx, stay alive (idle)
+    IsReadyForWriting(Sender<Result<(), AppError>>),
     Shutdown(Sender<Result<(), AppError>>),           // graceful stop (no commit)
 }
 
 pub enum Control {
     Continue,
     Flush(Sender<Result<TaskResult, AppError>>),
+    IsReadyForWriting(Sender<Result<(), AppError>>),
     Shutdown(Sender<Result<(), AppError>>),
 }
 
@@ -173,7 +216,8 @@ pub trait WriterLike<K: CopyOwnedValue, V: Value> {
     fn insert_kv(&self, key: K, value: V) -> Result<(), AppError>;
     fn flush(&self) -> Result<TaskResult, AppError>;
     fn flush_async(&self) -> Result<Vec<FlushFuture>, AppError>;
-    fn flush_deferred(&self) -> Vec<FlushFuture>;
+    fn flush_two_phased(&self) -> Vec<FlushFuture>;
+    fn flush_three_phased(&self) -> Vec<FlushFuture>;
     fn shutdown(self) -> Result<(), AppError> where Self: Sized;
     fn shutdown_async(self) -> Result<Vec<StopFuture>, AppError> where Self: Sized;
 }

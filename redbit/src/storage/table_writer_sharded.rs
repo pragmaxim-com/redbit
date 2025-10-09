@@ -92,10 +92,17 @@ where
         Ok(v)
     }
 
-    fn flush_deferred(&self) -> Vec<FlushFuture> {
+    fn flush_two_phased(&self) -> Vec<FlushFuture> {
         let _ = self.router.insert_many(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()));
         let mut v = Vec::with_capacity(self.shards.len());
-        for w in &self.shards { v.extend(w.flush_deferred()) }
+        for w in &self.shards { v.extend(w.flush_three_phased()) }
+        v
+    }
+
+    fn flush_three_phased(&self) -> Vec<FlushFuture> {
+        let _ = self.router.insert_many(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()));
+        let mut v = Vec::with_capacity(self.shards.len());
+        for w in &self.shards { v.extend(w.flush_three_phased()) }
         v
     }
 

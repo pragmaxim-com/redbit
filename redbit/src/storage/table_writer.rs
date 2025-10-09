@@ -58,6 +58,9 @@ where
                 ack.send(Ok(r))?;
                 Ok(Control::Continue)
             }
+            WriterCommand::IsReadyForWriting(ack) => {
+                Ok(Control::IsReadyForWriting(ack))
+            },
             WriterCommand::Flush(ack) => {
                 let kvs = std::mem::take(&mut *async_insert_buffer);
                 table.insert_many_kvs(kvs, true)?;
@@ -132,6 +135,7 @@ where
                         'in_tx: loop {
                             match Self::drain_batch(&mut table, &mut async_insert_buffer, &receiver) {
                                 Ok(Control::Continue) => continue,
+                                Ok(Control::IsReadyForWriting(ack)) => { let _ = ack.send(Ok(())); continue; },
                                 Ok(Control::Flush(ack)) => { flush_ack = Some(ack); break 'in_tx; }
                                 Ok(Control::Shutdown(ack)) => {
                                     drop(table);
@@ -226,16 +230,14 @@ where
         Ok(vec![FlushFuture::eager(ack_rx)])
     }
 
-    fn flush_deferred(&self) -> Vec<FlushFuture> {
+    fn flush_two_phased(&self) -> Vec<FlushFuture> {
         let _ = self.router.insert_many(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()));
-        let tx = self.sender();
-        vec![FlushFuture::lazy(move || {
-            let (ack_tx, ack_rx) = bounded::<Result<TaskResult, AppError>>(1);
-            match tx.send(WriterCommand::Flush(ack_tx)) {
-                Ok(()) => Ok(ack_rx),
-                Err(e) => Err(AppError::Custom(e.to_string())),
-            }
-        })]
+        vec![FlushFuture::lazy(self.sender())]
+    }
+
+    fn flush_three_phased(&self) -> Vec<FlushFuture> {
+        let _ = self.router.insert_many(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()));
+        vec![FlushFuture::ready_and_fire(self.sender(), self.sender())]
     }
 
     fn shutdown(self) -> Result<(), AppError> {
