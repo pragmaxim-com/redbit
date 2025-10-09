@@ -54,6 +54,23 @@ impl<'txn, K: CopyOwnedValue + 'static, V: Key + 'static> WriteTableLike<K, V> f
         Ok(())
     }
 
+    fn insert_many_kvs<'k, 'v, KR: Borrow<K::SelfType<'k>>, VR: Borrow<V::SelfType<'v>>>(&mut self, mut pairs: Vec<(KR, VR)>, sort_by_key: bool) -> Result<(), AppError> {
+        if sort_by_key {
+            pairs.sort_by(|(a, _), (b, _)| {
+                let a_bytes = K::as_bytes(a.borrow());
+                let b_bytes = K::as_bytes(b.borrow());
+                K::compare(a_bytes.as_ref(), b_bytes.as_ref())
+            });
+        }
+
+        for (k, v) in &pairs {
+            let key_ref: &K::SelfType<'k> = k.borrow();
+            let val_ref: &V::SelfType<'v> = v.borrow();
+            self.table.insert(key_ref, val_ref)?;
+        }
+        Ok(())
+    }
+
     fn delete_kv<'k>(&mut self, key: impl Borrow<K::SelfType<'k>>) -> Result<bool, AppError>  {
         let removed = self.table.remove(key)?;
         Ok(removed.is_some())

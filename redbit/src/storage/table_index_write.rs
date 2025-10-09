@@ -1,7 +1,6 @@
 use crate::storage::table_writer_api::{TableFactory, WriteTableLike};
 use crate::{AppError, CacheKey};
-use redb::*;
-use redb::{Key, Table, WriteTransaction};
+use redb::{Key, MultimapTable, MultimapTableDefinition, ReadableMultimapTable, Table, TableDefinition, WriteTransaction};
 use std::borrow::Borrow;
 use std::num::NonZeroUsize;
 use std::ops::RangeBounds;
@@ -85,6 +84,36 @@ impl<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: CacheKey + 'static> WriteTa
         if let Some(c) = self.cache.as_mut() {
             c.put(V::cache_key(val_ref), Self::unit_from_key(key_ref));
         }
+        Ok(())
+    }
+
+    fn insert_many_kvs<'k, 'v, KR: Borrow<K::SelfType<'k>>, VR: Borrow<V::SelfType<'v>>>(&mut self,  mut pairs: Vec<(KR, VR)>, sort_by_key: bool) -> Result<(), AppError> {
+        if sort_by_key {
+            pairs.sort_by(|(a, _), (b, _)| {
+                K::compare(K::as_bytes(a.borrow()).as_ref(), K::as_bytes(b.borrow()).as_ref())
+            });
+        }
+
+        for (k, v) in &pairs {
+            let key_ref: &K::SelfType<'k> = k.borrow();
+            let val_ref: &V::SelfType<'v> = v.borrow();
+            self.index_by_pk.insert(key_ref, val_ref)?;
+            if let Some(c) = self.cache.as_mut() {
+                c.put(V::cache_key(val_ref), Self::unit_from_key(key_ref));
+            }
+        }
+
+        // --- Run 2: sort by Value ---
+        pairs.sort_by(|(_, a), (_, b)| {
+            V::compare(V::as_bytes(a.borrow()).as_ref(), V::as_bytes(b.borrow()).as_ref())
+        });
+
+        for (k, v) in &pairs {
+            let key_ref: &K::SelfType<'k> = k.borrow();
+            let val_ref: &V::SelfType<'v> = v.borrow();
+            self.pk_by_index.insert(val_ref, key_ref)?;
+        }
+
         Ok(())
     }
 

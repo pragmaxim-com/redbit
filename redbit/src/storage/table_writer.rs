@@ -5,16 +5,18 @@ use crate::{error, AppError};
 use crossbeam::channel::{bounded, unbounded, Receiver, Sender};
 use redb::{Database, Key};
 use std::borrow::Borrow;
+use std::cell::RefCell;
 use std::marker::PhantomData;
 use std::sync::{Arc, Weak};
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::Instant;
 
-pub struct TableWriter<K: CopyOwnedValue + Send +  'static, V: Key + Send + 'static, F> {
+pub struct TableWriter<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static, F> {
     topic: Sender<WriterCommand<K, V>>,
     handle: JoinHandle<()>,
     pub router: Arc<dyn Router<K, V>>,
+    sync_insert_buffer: RefCell<Vec<(K, V)>>,
     _marker: PhantomData<F>,
 }
 
@@ -24,16 +26,10 @@ where
     V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
     F: TableFactory<K, V> + Send + Clone + 'static,
 {
-    fn step<T: WriteTableLike<K, V>>(table: &mut T, cmd: WriterCommand<K, V>) -> Result<Control, AppError> {
+    fn step<T: WriteTableLike<K, V>>(table: &mut T, async_insert_buffer: &mut Vec<(K, V)>, cmd: WriterCommand<K, V>) -> Result<Control, AppError> {
         match cmd {
-            WriterCommand::Insert(k, v) => {
-                table.insert_kv(k, v)?;
-                Ok(Control::Continue)
-            }
             WriterCommand::InsertMany(kvs) => {
-                for (k, v) in kvs {
-                    table.insert_kv(k, v)?;
-                }
+                async_insert_buffer.extend(kvs);
                 Ok(Control::Continue)
             }
             WriterCommand::Remove(k, ack) => {
@@ -62,22 +58,26 @@ where
                 ack.send(Ok(r))?;
                 Ok(Control::Continue)
             }
-            WriterCommand::Flush(ack) => Ok(Control::Flush(ack)),
+            WriterCommand::Flush(ack) => {
+                let kvs = std::mem::take(&mut *async_insert_buffer);
+                table.insert_many_kvs(kvs, true)?;
+                Ok(Control::Flush(ack))
+            },
             WriterCommand::Shutdown(ack) => Ok(Control::Shutdown(ack)),
             WriterCommand::Begin(_) => unreachable!("Begin handled outside"),
         }
     }
 
-    fn drain_batch<T: WriteTableLike<K, V>>(table: &mut T, rx: &Receiver<WriterCommand<K, V>>) -> Result<Control, AppError> {
+    fn drain_batch<T: WriteTableLike<K, V>>(table: &mut T, async_insert_buffer: &mut Vec<(K, V)>, rx: &Receiver<WriterCommand<K, V>>) -> Result<Control, AppError> {
         // 1) one blocking recv to ensure progress
-        let mut ctrl = Self::step(table, rx.recv()?)?;
+        let mut ctrl = Self::step(table, async_insert_buffer, rx.recv()?)?;
         if !matches!(ctrl, Control::Continue) {
             return Ok(ctrl);
         }
 
         // 2) opportunistically drain the channel without blocking
         for cmd in rx.try_iter() {
-            ctrl = Self::step(table, cmd)?;
+            ctrl = Self::step(table, async_insert_buffer, cmd)?;
             if !matches!(ctrl, Control::Continue) {
                 break;
             }
@@ -89,6 +89,7 @@ where
         let (topic, receiver): (Sender<WriterCommand<K, V>>, Receiver<WriterCommand<K, V>>) = unbounded();
         let handle = thread::spawn(move || {
             let mut cache = factory.new_cache();
+            let mut async_insert_buffer: Vec<(K, V)> = Vec::new();
             let name = factory.name();
             'outer: loop {
                 // wait until someone asks us to begin a write tx
@@ -106,6 +107,10 @@ where
                                 break 'outer;
                             }
                         };
+                        if !async_insert_buffer.is_empty() {
+                            let _ = ack.send(Err(AppError::Custom("Begin received while previous transaction not finished".to_string())));
+                            break 'outer;
+                        }
                         // 0) open a new write tx
                         let tx = match db_arc.begin_write() {
                             Ok(tx) => tx,
@@ -125,7 +130,7 @@ where
 
                         // 3) process commands until a Flush arrives
                         'in_tx: loop {
-                            match Self::drain_batch(&mut table, &receiver) {
+                            match Self::drain_batch(&mut table, &mut async_insert_buffer, &receiver) {
                                 Ok(Control::Continue) => continue,
                                 Ok(Control::Flush(ack)) => { flush_ack = Some(ack); break 'in_tx; }
                                 Ok(Control::Shutdown(ack)) => {
@@ -173,7 +178,7 @@ where
             }
         });
         let router = Arc::new(PlainRouter::new(topic.clone()));
-        Ok(Self { topic, router, handle, _marker: PhantomData })
+        Ok(Self { topic, router, handle, sync_insert_buffer: RefCell::new(Vec::new()), _marker: PhantomData })
     }
 
     pub fn sender(&self) -> Sender<WriterCommand<K, V>> {
@@ -203,19 +208,26 @@ where
         Ok(vec![StartFuture(ack_rx)])
     }
 
+    fn insert_kv(&self, key: K, value: V) -> Result<(), AppError> {
+        Ok(self.sync_insert_buffer.borrow_mut().push((key, value)))
+    }
+
     fn flush(&self) -> Result<TaskResult, AppError> {
+        self.router.insert_many(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()))?;
         let (ack_tx, ack_rx) = bounded::<Result<TaskResult, AppError>>(1);
         self.topic.send(WriterCommand::Flush(ack_tx))?;
         ack_rx.recv()?
     }
 
     fn flush_async(&self) -> Result<Vec<FlushFuture>, AppError> {
+        self.router.insert_many(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()))?;
         let (ack_tx, ack_rx) = bounded::<Result<TaskResult, AppError>>(1);
         self.topic.send(WriterCommand::Flush(ack_tx))?;
         Ok(vec![FlushFuture::eager(ack_rx)])
     }
 
     fn flush_deferred(&self) -> Vec<FlushFuture> {
+        let _ = self.router.insert_many(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()));
         let tx = self.sender();
         vec![FlushFuture::lazy(move || {
             let (ack_tx, ack_rx) = bounded::<Result<TaskResult, AppError>>(1);

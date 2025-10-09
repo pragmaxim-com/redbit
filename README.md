@@ -62,6 +62,20 @@ make them catch up with others even if they are HOT, see [chain](chain/README.md
 
 ❌ Root key must be newtype struct with numeric inner type (that's part of the design decision to achieve fast indexing of even whole bitcoin)
 
+### Why redb?
+
+Redb is B+Tree based so in comparison to LSM tree with WAL : 
+  - to avoid benchmarking our SSD by random-access writes, we need to sort all data in batches before writing it
+  - sorting + tree building overhead is eliminated by parallelizing writes to all columns into long-running batching threads
+  - this is how we achieve both fast and predictable write performance
+
+  - with B+tree you loose excellent sequential write performance of LSM tree, but you gain stable write performance
+    - my experience is that I would need different RocksDb settings for different machines and for indexing different parts of the chain 
+    => endless tuning of RocksDB parameters to really achieve that good sequential write performance
+
+  - so B+Tree performs universally well if data is sorted upfront (not as well as with memory-mapped B+tree https://github.com/erthink/libmdbx) 
+  - LSM tree can perform better if we tune the hell out of it for specific use case, environment, data, etc.
+
 ### Development
 
 To use redbit in your project:

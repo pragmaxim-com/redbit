@@ -29,7 +29,6 @@ impl<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static> PlainRouter<K,
 
 pub trait Router<K: CopyOwnedValue, V: Value>: Send + Sync {
     fn insert_many(&self, pairs: Vec<(K, V)>) -> Result<(), AppError>;
-    fn insert_kv(&self, key: K, value: V) -> Result<(), AppError>;
     fn delete_kv(&self, key: K) -> Result<bool, AppError>;
     fn range(&self, from: K, until: K) -> Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>;
     fn query_and_write(
@@ -47,10 +46,6 @@ where
     fn insert_many(&self, pairs: Vec<(K, V)>) -> Result<(), AppError> {
         if pairs.is_empty() { return Ok(()); }
         fast_send(&self.sender, WriterCommand::InsertMany(pairs))
-    }
-
-    fn insert_kv(&self, key: K, value: V) -> Result<(), AppError> {
-        fast_send(&self.sender, WriterCommand::Insert(key, value))
     }
 
     fn delete_kv(&self, key: K) -> Result<bool, AppError> {
@@ -124,15 +119,6 @@ where
             fast_send(&self.senders[sid], WriterCommand::InsertMany(bucket))?;
         }
         Ok(())
-    }
-
-    fn insert_kv(&self, key: K, value: V) -> Result<(), AppError> {
-        let sid =
-            match &self.part {
-                Partitioning::ByKey(kp) => kp.partition_key(key.borrow()),
-                Partitioning::ByValue(vp) => vp.partition_value(value.borrow()),
-            };
-        fast_send(&self.senders[sid], WriterCommand::Insert(key, value))
     }
 
     fn delete_kv(&self, key: K) -> Result<bool, AppError> {

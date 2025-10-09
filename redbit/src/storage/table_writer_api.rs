@@ -104,6 +104,7 @@ impl FlushFuture {
 
 pub trait WriteTableLike<K: CopyOwnedValue + 'static, V: Key + 'static> {
     fn insert_kv<'k, 'v>(&mut self, key: impl Borrow<K::SelfType<'k>>, value: impl Borrow<V::SelfType<'v>>) -> Result<(), AppError>;
+    fn insert_many_kvs<'k, 'v, KR: Borrow<K::SelfType<'k>>, VR: Borrow<V::SelfType<'v>>>(&mut self,  pairs: Vec<(KR, VR)>, sort_by_key: bool) -> Result<(), AppError>;
     fn delete_kv<'k>(&mut self, key: impl Borrow<K::SelfType<'k>>) -> Result<bool, AppError>;
     fn get_any_for_index<'v>(&mut self, value: impl Borrow<V::SelfType<'v>>) -> Result<Option<ValueOwned<K>>, AppError>;
     fn range<'a, KR: Borrow<K::SelfType<'a>> + 'a>(&self, range: impl RangeBounds<KR> + 'a) -> Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>;
@@ -150,7 +151,6 @@ pub trait TableFactory<K: CopyOwnedValue + 'static, V: Key + 'static> {
 
 pub enum WriterCommand<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static> {
     Begin(Sender<Result<(), AppError>>),              // start new WriteTransaction + open table
-    Insert(K, V),
     InsertMany(Vec<(K, V)>),
     Remove(K, Sender<Result<bool, AppError>>),
     QueryAndWrite { values: Vec<V>, sink: Arc<dyn Fn(Vec<(usize, Option<ValueOwned<K>>)>) -> Result<(), AppError> + Send + Sync + 'static> },
@@ -170,6 +170,7 @@ pub trait WriterLike<K: CopyOwnedValue, V: Value> {
     fn router(&self) -> Arc<dyn Router<K, V>>;
     fn begin(&self) -> Result<(), AppError>;
     fn begin_async(&self) -> Result<Vec<StartFuture>, AppError>;
+    fn insert_kv(&self, key: K, value: V) -> Result<(), AppError>;
     fn flush(&self) -> Result<TaskResult, AppError>;
     fn flush_async(&self) -> Result<Vec<FlushFuture>, AppError>;
     fn flush_deferred(&self) -> Vec<FlushFuture>;

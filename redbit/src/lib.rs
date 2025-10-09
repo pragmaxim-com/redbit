@@ -112,6 +112,7 @@ use crossbeam::channel::{RecvError, SendError};
 use serde::de::DeserializeOwned;
 use std::net::SocketAddr;
 use std::ops::Add;
+use std::sync::PoisonError;
 use thiserror::Error;
 use tokio::net::TcpListener;
 use tokio::sync::watch;
@@ -349,6 +350,13 @@ impl<T> From<SendError<T>> for AppError
 {
     fn from(e: SendError<T>) -> Self {
         AppError::Custom(format!("send error: {:?}", e.to_string()))
+    }
+}
+
+impl<T> From<PoisonError<T>> for AppError
+{
+    fn from(e: PoisonError<T>) -> Self {
+        AppError::Custom(format!("Poison error: {:?}", e.to_string()))
     }
 }
 
