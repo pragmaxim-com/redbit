@@ -53,7 +53,7 @@ pub struct Header {
 pub struct Transaction {
     #[fk(one2many, db_cache = 1)]
     pub id: BlockPointer,
-    #[column(index, shards = 4, db_cache = 10, lru_cache = 8)]
+    #[column(index, shards = 6, db_cache = 10, lru_cache = 8)]
     pub hash: TxHash,
     pub utxos: Vec<Utxo>,
     #[write_from(input_refs)]
