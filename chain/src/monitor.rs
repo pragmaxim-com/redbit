@@ -1,4 +1,4 @@
-use crate::stats::TaskStats;
+use crate::stats::TaskAcc;
 use crate::{BlockHeaderLike, BlockLike};
 use redbit::info;
 use redbit::storage::table_writer_api::TaskResult;
@@ -12,7 +12,7 @@ pub type BoxWeight = usize;
 pub struct ProgressMonitor<B: BlockLike> {
     weight_report_interval: usize,
     start_time: Instant,
-    task_stats: RefCell<TaskStats>,
+    task_stats: RefCell<TaskAcc>,
     total_and_last_report_weight: RefCell<(usize, usize)>,
     phantom: std::marker::PhantomData<B>,
 }
@@ -22,7 +22,7 @@ impl<B: BlockLike> ProgressMonitor<B> {
         ProgressMonitor {
             weight_report_interval,
             start_time: Instant::now(),
-            task_stats: RefCell::new(TaskStats::default()),
+            task_stats: RefCell::new(TaskAcc::default()),
             total_and_last_report_weight: RefCell::new((0, 0)),
             phantom: std::marker::PhantomData,
         }

@@ -99,7 +99,7 @@ jobs:
 
       - name: Run Built-in Rust Benchmarks and Extract Metrics
         run: |
-          run_bench() {
+          run_bench_and_print() {
             PACKAGE=$1
             OUT_FILE="${PACKAGE}_bench_output.txt"
             CSV_FILE="${PACKAGE}_benchmarks.csv"
@@ -124,8 +124,8 @@ jobs:
             sort -t, -k2 -n "$CSV_FILE" -o "$CSV_FILE"
           }
 
-          run_bench demo
-          run_bench redbit
+          run_bench_and_print demo
+          cargo bench --package redbit --features bench
 
       - name: Update README with documentation
         run: |

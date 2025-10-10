@@ -82,7 +82,7 @@ where
         for fut in acks {
             tasks.push(fut.wait()?);
         }
-        Ok(tasks.into_iter().max_by_key(|t| t.write_took).unwrap())
+        Ok(tasks.into_iter().max_by_key(|t| t.stats.sum()).unwrap())
     }
 
     fn flush_async(&self) -> Result<Vec<FlushFuture>, AppError> {

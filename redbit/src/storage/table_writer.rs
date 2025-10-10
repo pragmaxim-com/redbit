@@ -27,7 +27,7 @@ where
     V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
     F: TableFactory<K, V> + Send + Clone + 'static,
 {
-    fn step<T: WriteTableLike<K, V>>(table: &mut T, async_merge_buf: &RefCell<MergeBuffer<K, V>>, cmd: WriterCommand<K, V>) -> Result<Control, AppError> {
+    fn step<T: WriteTableLike<K, V>>(err: &Option<AppError>, collect_start: Instant, table: &mut T, async_merge_buf: &RefCell<MergeBuffer<K, V>>, cmd: WriterCommand<K, V>) -> Result<Control, AppError> {
         match cmd {
             WriterCommand::SortInserts(kvs) => {
                 async_merge_buf.borrow_mut().push_unsorted(kvs);
@@ -69,30 +69,39 @@ where
             WriterCommand::IsReadyForWriting(ack) => {
                 Ok(Control::IsReadyForWriting(ack))
             },
-            WriterCommand::Flush(ack) => {
-                let mut buf = async_merge_buf.borrow_mut();
-                let kvs = buf.take_sorted();
-                if !kvs.is_empty() {
-                    table.insert_many_kvs(kvs,false)?;
+            WriterCommand::Flush(sender) => {
+                if let Some(_) = err {
+                    Ok(Control::Error(sender))
+                } else {
+                    let collect_took = collect_start.elapsed().as_millis();
+                    let mut buf = async_merge_buf.borrow_mut();
+                    let sort_start = Instant::now();
+                    let kvs = buf.take_sorted();
+                    let sort_took = sort_start.elapsed().as_millis();
+                    let write_start = Instant::now();
+                    if !kvs.is_empty() {
+                        table.insert_many_kvs(kvs,false)?;
+                    }
+                    let write_took = write_start.elapsed().as_millis();
+                    buf.clear();
+                    Ok(Control::Flush(FlushResult{ sender, collect_took, sort_took, write_took }))
                 }
-                buf.clear();
-                Ok(Control::Flush(ack))
             },
             WriterCommand::Shutdown(ack) => Ok(Control::Shutdown(ack)),
             WriterCommand::Begin(_) => unreachable!("Begin handled outside"),
         }
     }
 
-    fn drain_batch<T: WriteTableLike<K, V>>(table: &mut T, async_merge_buf: &RefCell<MergeBuffer<K, V>>, rx: &Receiver<WriterCommand<K, V>>) -> Result<Control, AppError> {
+    fn drain_batch<T: WriteTableLike<K, V>>(err: &Option<AppError>, collecting_start: Instant, table: &mut T, async_merge_buf: &RefCell<MergeBuffer<K, V>>, rx: &Receiver<WriterCommand<K, V>>) -> Result<Control, AppError> {
         // 1) one blocking recv to ensure progress
-        let mut ctrl = Self::step(table, async_merge_buf, rx.recv()?)?;
+        let mut ctrl = Self::step(err, collecting_start, table, async_merge_buf, rx.recv()?)?;
         if !matches!(ctrl, Control::Continue) {
             return Ok(ctrl);
         }
 
         // 2) opportunistically drain the channel without blocking
         for cmd in rx.try_iter() {
-            ctrl = Self::step(table, async_merge_buf, cmd)?;
+            ctrl = Self::step(err, collecting_start, table, async_merge_buf, cmd)?;
             if !matches!(ctrl, Control::Continue) {
                 break;
             }
@@ -133,22 +142,31 @@ where
                         };
                         // 1) drop the strong Arc immediately; owner keeps DB alive
                         drop(db_arc);
-                        let mut flush_ack: Option<Sender<Result<TaskResult, AppError>>> = None;
-                        let mut write_error: Option<Result<(), AppError>> = None;
-                        let write_start = Instant::now();
+                        let mut write_error: Option<AppError> = None;
+                        let mut flush_result: Option<FlushResult> = None;
 
                         // 2) open typed table bound to &tx
                         let mut table = match factory.open(&tx, &mut cache) {
                             Ok(t) => { let _ = ack.send(Ok(())); t },
                             Err(e) => { let _ = ack.send(Err(e)); continue 'outer; }
                         };
+                        let collecting_start = Instant::now();
 
                         // 3) process commands until a Flush arrives
                         'in_tx: loop {
-                            match Self::drain_batch(&mut table, &mut async_merge_buf, &receiver) {
+                            match Self::drain_batch(&write_error, collecting_start, &mut table, &mut async_merge_buf, &receiver) {
                                 Ok(Control::Continue) => continue,
                                 Ok(Control::IsReadyForWriting(ack)) => { let _ = ack.send(Ok(())); continue; },
-                                Ok(Control::Flush(ack)) => { flush_ack = Some(ack); break 'in_tx; }
+                                Ok(Control::Error(sender)) => {
+                                    if let Some(err) = write_error {
+                                        let _ = sender.send(Err(err));
+                                    }
+                                    break 'in_tx;
+                                }
+                                Ok(Control::Flush(result)) => {
+                                    flush_result = Some(result);
+                                    break 'in_tx
+                                },
                                 Ok(Control::Shutdown(ack)) => {
                                     drop(table);
                                     drop(tx);
@@ -156,25 +174,20 @@ where
                                     break 'outer;
                                 }
                                 Err(err) => {
-                                    if write_error.is_none() { write_error = Some(Err(err)); }
-                                    break 'in_tx;
+                                    write_error = Some(err);
+                                    continue;
                                 }
                             }
                         }
 
                         // 4) end-of-tx: drop table FIRST, then commit
                         drop(table);
-                        if let Some(ack) = flush_ack {
-                            let _ = match write_error {
-                                Some(Err(e)) => ack.send(Err(e)),
-                                _ => {
-                                    let write_took = write_start.elapsed().as_millis();
-                                    let commit_start = Instant::now();
-                                    let _ = tx.commit().map_err(AppError::from);
-                                    let commit_took = commit_start.elapsed().as_millis();
-                                    ack.send(Ok(TaskResult::new(&name, write_took, commit_took)))
-                                },
-                            };
+                        if let Some(result) = flush_result {
+                            let flush_start = Instant::now();
+                            let _ = tx.commit().map_err(AppError::from);
+                            let flush_took = flush_start.elapsed().as_millis();
+                            let stats = TaskStats::new(result.collect_took, result.sort_took, result.write_took, flush_took);
+                            let _ = result.sender.send(Ok(TaskResult::new(&name, stats)));
                         } else {
                            error!("Transaction of {} ended without Flush or Shutdown, it can never happen", name);
                         }

@@ -11,25 +11,42 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::fmt;
 
+
+
+#[derive(Clone, Debug)]
+pub struct TaskStats {
+    pub collect_took: u128,
+    pub sort_took: u128,
+    pub write_took: u128,
+    pub flush_took: u128,
+}
+impl TaskStats {
+    pub fn new(collect_took: u128, sort_took: u128, write_took: u128, flush_took: u128) -> Self {
+        Self { collect_took, sort_took, write_took, flush_took }
+    }
+    pub fn sum(&self) -> u128 {
+        self.collect_took + self.sort_took + self.write_took + self.flush_took
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct TaskResult {
     pub name: String,
-    pub write_took: u128,
-    pub commit_took: u128,
+    pub stats: TaskStats
 }
 
 impl fmt::Display for TaskResult {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} : {} ms", self.name, self.write_took)
+        write!(f, "{} : c/s/w/c : {}/{}/{}/{} ms", self.name, self.stats.collect_took, self.stats.sort_took, self.stats.write_took, self.stats.flush_took)
     }
 }
 
 impl TaskResult {
-    pub fn new(name: &str, write_took: u128, commit_took: u128) -> Self {
-        Self { name: name.to_string(), write_took, commit_took }
+    pub fn new(name: &str, stats: TaskStats) -> Self {
+        Self { name: name.to_string(), stats }
     }
-    pub fn master(write_took: u128) -> Self {
-        Self { name: "MASTER".to_string(), write_took, commit_took: 0}
+    pub fn master(master_took: u128) -> Self {
+        Self { name: "MASTER".to_string(), stats: TaskStats::new(master_took, 0, 0, 0) }
     }
 }
 
@@ -133,7 +150,7 @@ impl FlushFuture {
             match by_name.entry(res.name.clone()) {
                 Entry::Vacant(e) => { e.insert(res); }
                 Entry::Occupied(mut e) => {
-                    if res.write_took > e.get().write_took {
+                    if res.stats.sum() > e.get().stats.sum() {
                         e.insert(res); // keep the slowest per name
                     }
                 }
@@ -202,10 +219,17 @@ pub enum WriterCommand<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'stat
     IsReadyForWriting(Sender<Result<(), AppError>>),
     Shutdown(Sender<Result<(), AppError>>),           // graceful stop (no commit)
 }
+pub struct FlushResult {
+    pub sender: Sender<Result<TaskResult, AppError>>,
+    pub collect_took: u128,
+    pub sort_took: u128,
+    pub write_took: u128
+}
 
 pub enum Control {
     Continue,
-    Flush(Sender<Result<TaskResult, AppError>>),
+    Flush(FlushResult),
+    Error(Sender<Result<TaskResult, AppError>>),
     IsReadyForWriting(Sender<Result<(), AppError>>),
     Shutdown(Sender<Result<(), AppError>>),
 }
