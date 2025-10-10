@@ -28,7 +28,8 @@ impl<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static> PlainRouter<K,
 }
 
 pub trait Router<K: CopyOwnedValue, V: Value>: Send + Sync {
-    fn insert_many(&self, pairs: Vec<(K, V)>) -> Result<(), AppError>;
+    fn sort_inserts(&self, pairs: Vec<(K, V)>) -> Result<(), AppError>;
+    fn write_sorted_inserts(&self, pairs: Vec<(K, V)>) -> Result<(), AppError>;
     fn delete_kv(&self, key: K) -> Result<bool, AppError>;
     fn range(&self, from: K, until: K) -> Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>;
     fn query_and_write(
@@ -43,9 +44,14 @@ where
     K: CopyOwnedValue + Send + 'static,
     V: Key + Send + 'static,
 {
-    fn insert_many(&self, pairs: Vec<(K, V)>) -> Result<(), AppError> {
+    fn sort_inserts(&self, pairs: Vec<(K, V)>) -> Result<(), AppError> {
         if pairs.is_empty() { return Ok(()); }
-        fast_send(&self.sender, WriterCommand::InsertMany(pairs))
+        fast_send(&self.sender, WriterCommand::SortInserts(pairs))
+    }
+
+    fn write_sorted_inserts(&self, pairs: Vec<(K, V)>) -> Result<(), AppError> {
+        if pairs.is_empty() { return Ok(()); }
+        fast_send(&self.sender, WriterCommand::WriteSortedInserts(pairs))
     }
 
     fn delete_kv(&self, key: K) -> Result<bool, AppError> {
@@ -76,7 +82,13 @@ pub struct ShardedRouter<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'st
     senders: Arc<[Sender<WriterCommand<K, V>>]>,
 }
 
-impl<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static, KP, VP> ShardedRouter<K, V, KP, VP>
+impl<K, V, KP, VP> ShardedRouter<K, V, KP, VP>
+where
+    K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
+    V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
+    KP: KeyPartitioner<K> + Send + Sync + Clone + 'static,
+    VP: ValuePartitioner<V> + Send + Sync + Clone + 'static,
+
 {
     pub fn new(part: Partitioning<KP, VP>, senders: Vec<Sender<WriterCommand<K, V>>>) -> Self {
         Self { part, senders: senders.into() }
@@ -84,17 +96,8 @@ impl<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static, KP, VP> Sharde
 
     #[inline]
     fn shards(&self) -> usize { self.senders.len() }
-}
 
-impl<K, V, KP, VP> Router<K, V> for ShardedRouter<K, V, KP, VP>
-where
-    K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
-    V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
-    KP: KeyPartitioner<K> + Send + Sync + Clone + 'static,
-    VP: ValuePartitioner<V> + Send + Sync + Clone + 'static,
-{
-    fn insert_many(&self, pairs: Vec<(K, V)>) -> Result<(), AppError> {
-        if pairs.is_empty() { return Ok(()); }
+    fn bucket(&self, pairs: Vec<(K, V)>) -> Vec<Vec<(K, V)>> {
         let n = self.shards();
         let per = (pairs.len() / n).saturating_add(1);
         let mut buckets: Vec<Vec<(K, V)>> = (0..n).map(|_| Vec::with_capacity(per)).collect();
@@ -113,10 +116,29 @@ where
                 }
             }
         }
+        buckets
+    }
+}
 
-        for (sid, bucket) in buckets.into_iter().enumerate() {
+impl<K, V, KP, VP> Router<K, V> for ShardedRouter<K, V, KP, VP>
+where
+    K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
+    V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
+    KP: KeyPartitioner<K> + Send + Sync + Clone + 'static,
+    VP: ValuePartitioner<V> + Send + Sync + Clone + 'static,
+{
+    fn sort_inserts(&self, pairs: Vec<(K, V)>) -> Result<(), AppError> {
+        for (sid, bucket) in self.bucket(pairs).into_iter().enumerate() {
             if bucket.is_empty() { continue; }
-            fast_send(&self.senders[sid], WriterCommand::InsertMany(bucket))?;
+            fast_send(&self.senders[sid], WriterCommand::SortInserts(bucket))?;
+        }
+        Ok(())
+    }
+
+    fn write_sorted_inserts(&self, pairs: Vec<(K, V)>) -> Result<(), AppError> {
+        for (sid, bucket) in self.bucket(pairs).into_iter().enumerate() {
+            if bucket.is_empty() { continue; }
+            fast_send(&self.senders[sid], WriterCommand::WriteSortedInserts(bucket))?;
         }
         Ok(())
     }

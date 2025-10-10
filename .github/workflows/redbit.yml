@@ -125,6 +125,7 @@ jobs:
           }
 
           run_bench demo
+          run_bench redbit
 
       - name: Update README with documentation
         run: |

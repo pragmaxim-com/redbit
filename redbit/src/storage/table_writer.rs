@@ -1,5 +1,6 @@
 use crate::storage::async_boundary::CopyOwnedValue;
-use crate::storage::router::{Router, PlainRouter};
+use crate::storage::router::{PlainRouter, Router};
+use crate::storage::sort_buffer::MergeBuffer;
 use crate::storage::table_writer_api::*;
 use crate::{error, AppError};
 use crossbeam::channel::{bounded, unbounded, Receiver, Sender};
@@ -16,7 +17,7 @@ pub struct TableWriter<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'stat
     topic: Sender<WriterCommand<K, V>>,
     handle: JoinHandle<()>,
     pub router: Arc<dyn Router<K, V>>,
-    sync_insert_buffer: RefCell<Vec<(K, V)>>,
+    sync_buf: RefCell<Vec<(K, V)>>,
     _marker: PhantomData<F>,
 }
 
@@ -26,10 +27,17 @@ where
     V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
     F: TableFactory<K, V> + Send + Clone + 'static,
 {
-    fn step<T: WriteTableLike<K, V>>(table: &mut T, async_insert_buffer: &mut Vec<(K, V)>, cmd: WriterCommand<K, V>) -> Result<Control, AppError> {
+    fn step<T: WriteTableLike<K, V>>(table: &mut T, async_merge_buf: &RefCell<MergeBuffer<K, V>>, cmd: WriterCommand<K, V>) -> Result<Control, AppError> {
         match cmd {
-            WriterCommand::InsertMany(kvs) => {
-                async_insert_buffer.extend(kvs);
+            WriterCommand::SortInserts(kvs) => {
+                async_merge_buf.borrow_mut().push_unsorted(kvs);
+                Ok(Control::Continue)
+            }
+            WriterCommand::WriteSortedInserts(kvs) => {
+                if !async_merge_buf.borrow().is_empty() {
+                    Err(AppError::Custom("WriteSortedInserts cannot be mixed with SortInserts now".to_string()))?
+                }
+                async_merge_buf.swap(&RefCell::new(MergeBuffer::from_sorted(kvs)));
                 Ok(Control::Continue)
             }
             WriterCommand::Remove(k, ack) => {
@@ -62,8 +70,12 @@ where
                 Ok(Control::IsReadyForWriting(ack))
             },
             WriterCommand::Flush(ack) => {
-                let kvs = std::mem::take(&mut *async_insert_buffer);
-                table.insert_many_kvs(kvs, true)?;
+                let mut buf = async_merge_buf.borrow_mut();
+                let kvs = buf.take_sorted();
+                if !kvs.is_empty() {
+                    table.insert_many_kvs(kvs,false)?;
+                }
+                buf.clear();
                 Ok(Control::Flush(ack))
             },
             WriterCommand::Shutdown(ack) => Ok(Control::Shutdown(ack)),
@@ -71,16 +83,16 @@ where
         }
     }
 
-    fn drain_batch<T: WriteTableLike<K, V>>(table: &mut T, async_insert_buffer: &mut Vec<(K, V)>, rx: &Receiver<WriterCommand<K, V>>) -> Result<Control, AppError> {
+    fn drain_batch<T: WriteTableLike<K, V>>(table: &mut T, async_merge_buf: &RefCell<MergeBuffer<K, V>>, rx: &Receiver<WriterCommand<K, V>>) -> Result<Control, AppError> {
         // 1) one blocking recv to ensure progress
-        let mut ctrl = Self::step(table, async_insert_buffer, rx.recv()?)?;
+        let mut ctrl = Self::step(table, async_merge_buf, rx.recv()?)?;
         if !matches!(ctrl, Control::Continue) {
             return Ok(ctrl);
         }
 
         // 2) opportunistically drain the channel without blocking
         for cmd in rx.try_iter() {
-            ctrl = Self::step(table, async_insert_buffer, cmd)?;
+            ctrl = Self::step(table, async_merge_buf, cmd)?;
             if !matches!(ctrl, Control::Continue) {
                 break;
             }
@@ -92,7 +104,7 @@ where
         let (topic, receiver): (Sender<WriterCommand<K, V>>, Receiver<WriterCommand<K, V>>) = unbounded();
         let handle = thread::spawn(move || {
             let mut cache = factory.new_cache();
-            let mut async_insert_buffer: Vec<(K, V)> = Vec::new();
+            let mut async_merge_buf = RefCell::new(MergeBuffer::new());
             let name = factory.name();
             'outer: loop {
                 // wait until someone asks us to begin a write tx
@@ -110,7 +122,7 @@ where
                                 break 'outer;
                             }
                         };
-                        if !async_insert_buffer.is_empty() {
+                        if !async_merge_buf.borrow().is_empty() {
                             let _ = ack.send(Err(AppError::Custom("Begin received while previous transaction not finished".to_string())));
                             break 'outer;
                         }
@@ -133,7 +145,7 @@ where
 
                         // 3) process commands until a Flush arrives
                         'in_tx: loop {
-                            match Self::drain_batch(&mut table, &mut async_insert_buffer, &receiver) {
+                            match Self::drain_batch(&mut table, &mut async_merge_buf, &receiver) {
                                 Ok(Control::Continue) => continue,
                                 Ok(Control::IsReadyForWriting(ack)) => { let _ = ack.send(Ok(())); continue; },
                                 Ok(Control::Flush(ack)) => { flush_ack = Some(ack); break 'in_tx; }
@@ -182,7 +194,7 @@ where
             }
         });
         let router = Arc::new(PlainRouter::new(topic.clone()));
-        Ok(Self { topic, router, handle, sync_insert_buffer: RefCell::new(Vec::new()), _marker: PhantomData })
+        Ok(Self { topic, router, handle, sync_buf: RefCell::new(Vec::new()), _marker: PhantomData })
     }
 
     pub fn sender(&self) -> Sender<WriterCommand<K, V>> {
@@ -213,30 +225,30 @@ where
     }
 
     fn insert_kv(&self, key: K, value: V) -> Result<(), AppError> {
-        Ok(self.sync_insert_buffer.borrow_mut().push((key, value)))
+        Ok(self.sync_buf.borrow_mut().push((key, value)))
     }
 
     fn flush(&self) -> Result<TaskResult, AppError> {
-        self.router.insert_many(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()))?;
+        self.router.write_sorted_inserts(std::mem::take(&mut *self.sync_buf.borrow_mut()))?;
         let (ack_tx, ack_rx) = bounded::<Result<TaskResult, AppError>>(1);
         self.topic.send(WriterCommand::Flush(ack_tx))?;
         ack_rx.recv()?
     }
 
     fn flush_async(&self) -> Result<Vec<FlushFuture>, AppError> {
-        self.router.insert_many(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()))?;
+        self.router.write_sorted_inserts(std::mem::take(&mut *self.sync_buf.borrow_mut()))?;
         let (ack_tx, ack_rx) = bounded::<Result<TaskResult, AppError>>(1);
         self.topic.send(WriterCommand::Flush(ack_tx))?;
         Ok(vec![FlushFuture::eager(ack_rx)])
     }
 
     fn flush_two_phased(&self) -> Vec<FlushFuture> {
-        let _ = self.router.insert_many(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()));
+        let _ = self.router.write_sorted_inserts(std::mem::take(&mut *self.sync_buf.borrow_mut()));
         vec![FlushFuture::lazy(self.sender())]
     }
 
     fn flush_three_phased(&self) -> Vec<FlushFuture> {
-        let _ = self.router.insert_many(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()));
+        let _ = self.router.write_sorted_inserts(std::mem::take(&mut *self.sync_buf.borrow_mut()));
         vec![FlushFuture::ready_and_fire(self.sender(), self.sender())]
     }
 

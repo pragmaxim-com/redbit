@@ -49,8 +49,7 @@ pub struct DbPkMacros {
 }
 
 impl DbPkMacros {
-    pub fn new(entity_def: &EntityDef, multiplicity: Option<Multiplicity>, no_columns: bool, db_cache_weight: usize) -> Self {
-        let column_props = ColumnProps::for_pk(db_cache_weight);
+    pub fn new(entity_def: &EntityDef, multiplicity: Option<Multiplicity>, no_columns: bool, column_props: ColumnProps) -> Self {
         let plain_table_def = PlainTableDef::new(TableDef::pk(entity_def), column_props);
         let range_query = entity::query::pk_range_query(entity_def);
 

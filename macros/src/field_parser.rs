@@ -62,8 +62,8 @@ impl EntityDef {
 #[derive(Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum KeyDef {
-    Pk { field_def: FieldDef, db_cache_weight: usize },
-    Fk { field_def: FieldDef, multiplicity: Multiplicity, parent_type: Option<Type>, db_cache_weight: usize },
+    Pk { field_def: FieldDef, column_props: ColumnProps },
+    Fk { field_def: FieldDef, multiplicity: Multiplicity, parent_type: Option<Type>, column_props: ColumnProps },
 }
 impl KeyDef {
     pub fn is_root(&self) -> bool {
@@ -91,7 +91,7 @@ impl ColumnProps {
     pub fn new(shards: usize, db_cache_weight: usize, lru_cache_size_m: usize) -> Self {
         ColumnProps { shards, db_cache_weight, lru_cache_size: lru_cache_size_m * 1_000_000 }
     }
-    pub fn for_pk(db_cache_weight: usize) -> Self {
+    pub fn for_key(db_cache_weight: usize) -> Self {
         ColumnProps { shards: 0, db_cache_weight, lru_cache_size: 0 }
     }
 }
@@ -189,7 +189,8 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                         db_cache_weight = get_column_usize_attr(&nested, "db_cache")?.unwrap_or(0);
                         Ok(())
                     });
-                    let key_def = KeyDef::Pk { field_def: FieldDef { name: column_name.clone(), tpe: column_type.clone() }, db_cache_weight };
+                    let column_props = ColumnProps::for_key(db_cache_weight);
+                    let key_def = KeyDef::Pk { field_def: FieldDef { name: column_name.clone(), tpe: column_type.clone() }, column_props };
                     return Ok(ColumnDef::Key(key_def));
                 } else if attr.path().is_ident("fk") {
                     let mut multiplicity = None;
@@ -223,7 +224,8 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                     });
                     return if let Some(m) = multiplicity {
                         let field = FieldDef { name: column_name.clone(), tpe: column_type.clone() };
-                        Ok(ColumnDef::Key(KeyDef::Fk { field_def: field.clone(), multiplicity: m, parent_type, db_cache_weight }))
+                        let column_props = ColumnProps::for_key(db_cache_weight);
+                        Ok(ColumnDef::Key(KeyDef::Fk { field_def: field.clone(), multiplicity: m, parent_type, column_props }))
                     } else {
                         Err(syn::Error::new(attr.span(), "Foreign key must specify either `one2many` or `one2one`"))
                     }

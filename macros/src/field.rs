@@ -29,7 +29,7 @@ impl FieldMacros {
         let (key_def, field_macros) = field_parser::get_field_macros(item_struct)?;
         let one_to_many_parent_def =
             match key_def.clone() {
-                KeyDef::Fk { field_def: _, multiplicity: Multiplicity::OneToMany , parent_type: Some(parent_ty), db_cache_weight: _} => Some(OneToManyParentDef {
+                KeyDef::Fk { field_def: _, multiplicity: Multiplicity::OneToMany , parent_type: Some(parent_ty), column_props: _} => Some(OneToManyParentDef {
                     tx_context_ty: context::entity_tx_context_type(&parent_ty, TxType::Read),
                     stream_query_ty: query::filter_query_type(&parent_ty),
                     parent_type: parent_ty.clone(),
@@ -42,11 +42,11 @@ impl FieldMacros {
             };
         let entity_def= EntityDef::new(key_def.clone(), entity_name.clone(), entity_type.clone());
         let field_macros = field_macros.iter().map(|c| match c {
-            ColumnDef::Key(KeyDef::Pk { field_def: _, db_cache_weight}) => {
-                FieldMacros::Pk(DbPkMacros::new(&entity_def, None, field_macros.len() == 1, *db_cache_weight))
+            ColumnDef::Key(KeyDef::Pk { field_def: _, column_props}) => {
+                FieldMacros::Pk(DbPkMacros::new(&entity_def, None, field_macros.len() == 1, column_props.clone()))
             },
-            ColumnDef::Key(KeyDef::Fk { field_def: _, multiplicity, parent_type: _, db_cache_weight}) => {
-                FieldMacros::Pk(DbPkMacros::new(&entity_def, Some(multiplicity.clone()), field_macros.len() == 1, *db_cache_weight))
+            ColumnDef::Key(KeyDef::Fk { field_def: _, multiplicity, parent_type: _, column_props}) => {
+                FieldMacros::Pk(DbPkMacros::new(&entity_def, Some(multiplicity.clone()), field_macros.len() == 1, column_props.clone()))
             },
             ColumnDef::Plain(field, indexing_type) => {
                 FieldMacros::Plain(

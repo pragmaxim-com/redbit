@@ -74,7 +74,7 @@ where
 
     fn flush(&self) -> redb::Result<TaskResult, AppError> {
         let mut acks = Vec::with_capacity(self.shards.len());
-        self.router.insert_many(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()))?;
+        self.router.write_sorted_inserts(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()))?;
         for w in &self.shards {
             acks.extend(w.flush_async()?);
         }
@@ -86,21 +86,21 @@ where
     }
 
     fn flush_async(&self) -> Result<Vec<FlushFuture>, AppError> {
-        self.router.insert_many(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()))?;
+        self.router.write_sorted_inserts(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()))?;
         let mut v = Vec::with_capacity(self.shards.len());
         for w in &self.shards { v.extend(w.flush_async()?) }
         Ok(v)
     }
 
     fn flush_two_phased(&self) -> Vec<FlushFuture> {
-        let _ = self.router.insert_many(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()));
+        let _ = self.router.write_sorted_inserts(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()));
         let mut v = Vec::with_capacity(self.shards.len());
-        for w in &self.shards { v.extend(w.flush_three_phased()) }
+        for w in &self.shards { v.extend(w.flush_two_phased()) }
         v
     }
 
     fn flush_three_phased(&self) -> Vec<FlushFuture> {
-        let _ = self.router.insert_many(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()));
+        let _ = self.router.write_sorted_inserts(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()));
         let mut v = Vec::with_capacity(self.shards.len());
         for w in &self.shards { v.extend(w.flush_three_phased()) }
         v
@@ -240,9 +240,9 @@ mod index_sharded {
                 }
             }
 
-            assert_eq!(acc[0].as_ref().map(|v| v.as_value()), Some(10u32));
+            assert_eq!(acc[0].as_ref().map(|v| v.as_value()), Some(3u32));
             assert_eq!(acc[1].as_ref().map(|v| v.as_value()), Some(7u32));
-            assert_eq!(acc[2].as_ref().map(|v| v.as_value()), Some(100u32));
+            assert_eq!(acc[2].as_ref().map(|v| v.as_value()), Some(4u32));
         }
         // delete current head for a3 (4) and re-check
         assert!(writer.router.delete_kv(4u32).expect("del 4"));

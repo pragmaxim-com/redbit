@@ -192,7 +192,8 @@ pub trait TableFactory<K: CopyOwnedValue + 'static, V: Key + 'static> {
 
 pub enum WriterCommand<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static> {
     Begin(Sender<Result<(), AppError>>),              // start new WriteTransaction + open table
-    InsertMany(Vec<(K, V)>),
+    WriteSortedInserts(Vec<(K, V)>),
+    SortInserts(Vec<(K, V)>),
     Remove(K, Sender<Result<bool, AppError>>),
     QueryAndWrite { values: Vec<V>, sink: Arc<dyn Fn(Vec<(usize, Option<ValueOwned<K>>)>) -> Result<(), AppError> + Send + Sync + 'static> },
     QueryAndWriteBucket { values: Vec<(usize, V)>, sink: Arc<dyn Fn(Vec<(usize, Option<ValueOwned<K>>)>) -> Result<(), AppError> + Send + Sync + 'static> },
