@@ -29,8 +29,12 @@ where
 {
     fn step<T: WriteTableLike<K, V>>(err: &Option<AppError>, collect_start: Instant, table: &mut T, async_merge_buf: &RefCell<MergeBuffer<K, V>>, cmd: WriterCommand<K, V>) -> Result<Control, AppError> {
         match cmd {
-            WriterCommand::SortInserts(kvs) => {
-                async_merge_buf.borrow_mut().push_unsorted(kvs);
+            WriterCommand::MergeUnsortedInserts(kvs) => {
+                async_merge_buf.borrow_mut().merge_unsorted(kvs);
+                Ok(Control::Continue)
+            }
+            WriterCommand::AppendSortedInserts(kvs) => {
+                async_merge_buf.borrow_mut().append_sorted(kvs);
                 Ok(Control::Continue)
             }
             WriterCommand::WriteSortedInserts(kvs) => {
@@ -84,7 +88,7 @@ where
                     }
                     let write_took = write_start.elapsed().as_millis();
                     buf.clear();
-                    Ok(Control::Flush(FlushResult{ sender, collect_took, sort_took, write_took }))
+                    Ok(Control::Flush(sender, WriteResult::new(collect_took, sort_took, write_took)))
                 }
             },
             WriterCommand::Shutdown(ack) => Ok(Control::Shutdown(ack)),
@@ -143,7 +147,7 @@ where
                         // 1) drop the strong Arc immediately; owner keeps DB alive
                         drop(db_arc);
                         let mut write_error: Option<AppError> = None;
-                        let mut flush_result: Option<FlushResult> = None;
+                        let mut flush_result: Option<(Sender<Result<TaskResult, AppError>>, WriteResult)> = None;
 
                         // 2) open typed table bound to &tx
                         let mut table = match factory.open(&tx, &mut cache) {
@@ -163,8 +167,8 @@ where
                                     }
                                     break 'in_tx;
                                 }
-                                Ok(Control::Flush(result)) => {
-                                    flush_result = Some(result);
+                                Ok(Control::Flush(sender, result)) => {
+                                    flush_result = Some((sender, result));
                                     break 'in_tx
                                 },
                                 Ok(Control::Shutdown(ack)) => {
@@ -182,12 +186,12 @@ where
 
                         // 4) end-of-tx: drop table FIRST, then commit
                         drop(table);
-                        if let Some(result) = flush_result {
+                        if let Some((sender, result)) = flush_result {
                             let flush_start = Instant::now();
                             let _ = tx.commit().map_err(AppError::from);
                             let flush_took = flush_start.elapsed().as_millis();
                             let stats = TaskStats::new(result.collect_took, result.sort_took, result.write_took, flush_took);
-                            let _ = result.sender.send(Ok(TaskResult::new(&name, stats)));
+                            let _ = sender.send(Ok(TaskResult::new(&name, stats)));
                         } else {
                            error!("Transaction of {} ended without Flush or Shutdown, it can never happen", name);
                         }

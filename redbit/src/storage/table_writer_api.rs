@@ -210,7 +210,8 @@ pub trait TableFactory<K: CopyOwnedValue + 'static, V: Key + 'static> {
 pub enum WriterCommand<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static> {
     Begin(Sender<Result<(), AppError>>),              // start new WriteTransaction + open table
     WriteSortedInserts(Vec<(K, V)>),
-    SortInserts(Vec<(K, V)>),
+    AppendSortedInserts(Vec<(K, V)>),
+    MergeUnsortedInserts(Vec<(K, V)>),
     Remove(K, Sender<Result<bool, AppError>>),
     QueryAndWrite { values: Vec<V>, sink: Arc<dyn Fn(Vec<(usize, Option<ValueOwned<K>>)>) -> Result<(), AppError> + Send + Sync + 'static> },
     QueryAndWriteBucket { values: Vec<(usize, V)>, sink: Arc<dyn Fn(Vec<(usize, Option<ValueOwned<K>>)>) -> Result<(), AppError> + Send + Sync + 'static> },
@@ -219,16 +220,21 @@ pub enum WriterCommand<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'stat
     IsReadyForWriting(Sender<Result<(), AppError>>),
     Shutdown(Sender<Result<(), AppError>>),           // graceful stop (no commit)
 }
-pub struct FlushResult {
-    pub sender: Sender<Result<TaskResult, AppError>>,
+pub struct WriteResult {
     pub collect_took: u128,
     pub sort_took: u128,
     pub write_took: u128
 }
 
+impl WriteResult {
+    pub fn new(collect_took: u128, sort_took: u128, write_took: u128) -> Self {
+        Self { collect_took, sort_took, write_took }
+    }
+}
+
 pub enum Control {
     Continue,
-    Flush(FlushResult),
+    Flush(Sender<Result<TaskResult, AppError>>, WriteResult),
     Error(Sender<Result<TaskResult, AppError>>),
     IsReadyForWriting(Sender<Result<(), AppError>>),
     Shutdown(Sender<Result<(), AppError>>),

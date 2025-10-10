@@ -22,8 +22,8 @@ pub(crate) fn write_from_input_refs(tx_context: &TransactionWriteTxContext, pare
                 },
             }
         }
-        ids_router.sort_inserts(ids)?;
-        ptrs_router.sort_inserts(pointers)?;
+        ids_router.append_sorted_inserts(ids)?;
+        ptrs_router.merge_unsorted_inserts(pointers)?;
         Ok(())
     }))
 }
