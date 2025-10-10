@@ -2,9 +2,12 @@ use crate::CopyOwnedValue;
 use redb::Key;
 use std::borrow::Borrow;
 use std::cmp::Ordering;
+use std::cmp::Reverse;
+use std::collections::BinaryHeap;
 
 /// Keeps at most one sorted run at each level; on push it “carries” upward by merging.
 /// Total moves per element: O(log N). Flush typically deals with <= 13 runs for 25k items.
+#[derive(Clone)]
 pub struct MergeBuffer<K, V> {
     levels: Vec<Option<Vec<(K, V)>>>,
 }
@@ -149,15 +152,80 @@ where
     }
 
     pub fn take_sorted(&mut self) -> Vec<(K, V)> {
-        let levels = std::mem::take(&mut self.levels);
-        let mut acc: Option<Vec<(K, V)>> = None;
-        for slot in levels.into_iter().flatten() {
-            acc = Some(match acc {
-                None => slot,
-                Some(prev) => merge_sorted_by_key(prev, slot),
-            });
+
+        #[inline]
+        fn first_key<K>(r: &[(K, impl Sized)]) -> &K { &r[0].0 }
+        #[inline]
+        fn last_key<K>(r: &[(K, impl Sized)]) -> &K { &r[r.len() - 1].0 }
+
+        // 1) Collect existing runs.
+        let mut runs: Vec<Vec<(K, V)>> = {
+            let levels = std::mem::take(&mut self.levels);
+            levels.into_iter().flatten().collect()
+        };
+
+        match runs.len() {
+            0 => return Vec::new(),
+            1 => return runs.pop().unwrap(),
+            _ => {}
         }
-        acc.unwrap_or_default()
+
+        // 2) Sort runs by first key, so we can try concatenation fast-path.
+        runs.sort_by(|a, b| {
+            let ab = K::as_bytes(first_key::<K>(a).borrow());
+            let bb = K::as_bytes(first_key::<K>(b).borrow());
+            K::compare(ab.as_ref(), bb.as_ref())
+        });
+
+        // 3) Concatenation fast-path: if every adjacent pair is disjoint/adjacent (last ≤ next.first)
+        let disjoint_chain = runs.windows(2).all(|w| {
+            let la = K::as_bytes(last_key::<K>(&w[0]).borrow());
+            let fb = K::as_bytes(first_key::<K>(&w[1]).borrow());
+            matches!(K::compare(la.as_ref(), fb.as_ref()), Ordering::Less | Ordering::Equal)
+        });
+
+        if disjoint_chain {
+            let total: usize = runs.iter().map(|r| r.len()).sum();
+            let mut out = Vec::with_capacity(total);
+            for mut r in runs {
+                out.extend(r.drain(..));
+            }
+            return out;
+        }
+
+        // 4) Balanced reduction by length using a min-heap of (len, idx).
+        //    Keep vectors in a separate pool; the heap never compares Vecs.
+        let mut pool: Vec<Option<Vec<(K, V)>>> = runs.into_iter().map(Some).collect();
+        let mut heap: BinaryHeap<(Reverse<usize>, usize)> = BinaryHeap::new();
+
+        for (i, slot) in pool.iter().enumerate() {
+            let len = slot.as_ref().unwrap().len();
+            heap.push((Reverse(len), i));
+        }
+
+        let mut next_idx = pool.len();
+
+        while heap.len() > 1 {
+            let (_, ia) = heap.pop().unwrap();
+            let (_, ib) = heap.pop().unwrap();
+
+            // Take ownership of the two smallest runs.
+            let a = pool[ia].take().unwrap();
+            let b = pool[ib].take().unwrap();
+
+            // Stable two-way merge with your comparator.
+            let merged = merge_sorted_by_key(a, b);
+
+            // Store back into the pool under a fresh index; push by its length.
+            pool.push(Some(merged));
+            let new_len = pool.last().as_ref().unwrap().as_ref().unwrap().len();
+            heap.push((Reverse(new_len), next_idx));
+            next_idx += 1;
+        }
+
+        // One run remains; return it.
+        let (_, idx) = heap.pop().unwrap();
+        pool[idx].take().unwrap_or_default()
     }
 
     pub fn runs(&self) -> usize {
@@ -647,8 +715,9 @@ mod bench {
     const TOTAL_TARGET: usize = 30_000;
 
     // merge-only
+    const BASE_LEN_MERGE_ONLY: usize     = 20_000;
     const CHUNK_LEN_UNSORTED: usize      = 5;
-    const UNSORTED_RUNS_MERGE_ONLY: usize = TOTAL_TARGET / CHUNK_LEN_UNSORTED; // 6_000
+    const UNSORTED_RUNS_MERGE_ONLY: usize = (TOTAL_TARGET - BASE_LEN_MERGE_ONLY) / CHUNK_LEN_UNSORTED; // 6_000
 
     // append-only (balanced baseline)
     const BASE_LEN_APPEND_ONLY: usize     = 20_000;
@@ -667,23 +736,30 @@ mod bench {
     const BASE_LEN_SINGLE_FAST: usize     = TOTAL_TARGET - 5_000; // 25_000
     const CHUNK_LEN_SINGLE_FAST: usize    = 5_000;
 
-    // =====================================
-    // Big-chunk variations (10_000 each)
-    // =====================================
-    const CHUNK_LEN_BIG: usize = 10_000;
+    const CHUNK_LEN_BIG: usize = 5_000;
 
     // Variation B: many small appends after big base (2,000 * 5)
     const BASE_LEN_MANY_SMALL: usize      = 20_000;
     const CHUNK_LEN_MANY_SMALL: usize     = 5;
     const APPEND_RUNS_MANY_SMALL: usize   = (TOTAL_TARGET - BASE_LEN_MANY_SMALL) / CHUNK_LEN_MANY_SMALL; // 2_000
 
-    // =============
-    // Workload knobs (scaled down ~30×)
-    // =============
+    // --------------------- Bench knobs (≈30k total) ---------------------
 
-    // =============
-    // Workload knobs (clean & meaningful; ~35× shorter total work)
-    // =============
+    // Disjoint-chain case: 60 runs × 500 = 30_000 elements
+    const R_DISJOINT: usize = 60;
+    const L_DISJOINT: usize = 500;
+
+    // Overlap-equal case: 30 runs × 1_000 = 30_000; 50% overlap step = 500
+    const R_EQUAL: usize = 30;
+    const L_EQUAL: usize = 1_000;
+    const STEP_EQUAL: usize = 500; // 50% overlap (start every 500, len 1000)
+
+    // Mixed case: one big 10k + 100 small 200 (with overlap against big) = 30_000 total
+    const HUGE_LEN: usize   = 10_000;
+    const SMALL_RUNS: usize = 100;
+    const MEDIUM_LEN: usize  = 200;
+    const SMALL_STEP: usize = 100; // 50% overlap among smalls; all overlap into big band too
+
     const BASE_LEN: usize   = 1_000; // from 20_000 → keeps scale but light
 
     // Many tiny overlapping batches (Bitcoin-like “normal” inputs)
@@ -749,6 +825,11 @@ mod bench {
         s[30] = (c >> 8)  as u8;
         s[31] = (c >> 0)  as u8;
         s
+    }
+
+    /// Create a MergeBuffer with each provided run placed as a separate level slot.
+    fn mk_buf_from_runs(runs: Vec<Vec<(TxHash, u32)>>) -> MergeBuffer<TxHash, u32> {
+        MergeBuffer { levels: runs.into_iter().map(Some).collect() }
     }
 
     // Build a sorted run whose keys are *contiguous counters*, starting at `start_ctr`.
@@ -828,9 +909,8 @@ mod bench {
     // Benches (similar work sizes)
     // ============================
 
-    /// Merge-only: ~30k pairs (6_000 unsorted chunks × 5).
     #[bench]
-    fn bench_merge_only_roughly_6000_by_5(b: &mut Bencher) {
+    fn bench_merge_only_roughly_2000_by_5(b: &mut Bencher) {
         let batches = build_unsorted_batches(UNSORTED_RUNS_MERGE_ONLY, CHUNK_LEN_UNSORTED, 0xD00D_F00D_1234_5678);
 
         b.iter(|| {
@@ -1089,6 +1169,64 @@ mod bench {
 
             // Do final reduction once (outside the hot path)
             let out = mb.take_sorted();
+            test::black_box(out);
+        });
+    }
+
+    /// take_sorted() on many non-overlapping runs (concat fast path).
+    #[bench]
+    fn bench_take_sorted_disjoint_chain_30k(b: &mut Bencher) {
+        // Build disjoint runs: run i starts at i * L_DISJOINT, length L_DISJOINT.
+        let runs: Vec<_> = (0..R_DISJOINT)
+            .map(|i| build_counter_sorted_run(L_DISJOINT, i * L_DISJOINT, i as u32))
+            .collect();
+        let tmpl = mk_buf_from_runs(runs);
+
+        b.iter(|| {
+            // isolate take_sorted cost
+            let mut buf = tmpl.clone();
+            let out = buf.take_sorted();
+            test::black_box(out);
+        });
+    }
+
+    /// take_sorted() on equal-sized runs with 50% overlap (forces real merging).
+    #[bench]
+    fn bench_take_sorted_overlap_equal_runs_30k(b: &mut Bencher) {
+        // Run i: start at i * STEP_EQUAL, len L_EQUAL (so neighbors overlap by 50%)
+        let runs: Vec<_> = (0..R_EQUAL)
+            .map(|i| build_counter_sorted_run(L_EQUAL, i * STEP_EQUAL, (i as u32) << 8))
+            .collect();
+        let tmpl = mk_buf_from_runs(runs);
+
+        b.iter(|| {
+            let mut buf = tmpl.clone();
+            let out = buf.take_sorted();
+            test::black_box(out);
+        });
+    }
+
+    /// take_sorted() with one big run and many small overlapping runs (merge ordering stress).
+    #[bench]
+    fn bench_take_sorted_mixed_sizes_overlap_30k(b: &mut Bencher) {
+        // Big in the middle band: [10_000 .. 20_000)
+        let big = build_counter_sorted_run(HUGE_LEN, 10_000, 0xB1B1_0000);
+
+        // Smalls sprinkled across and overlapping with the big band:
+        // start = 10_000 - 5_000 + i*SMALL_STEP  (covers into, across, and beyond big)
+        let base_start = 10_000usize.saturating_sub(5_000);
+        let smalls: Vec<_> = (0..SMALL_RUNS)
+            .map(|i| build_counter_sorted_run(MEDIUM_LEN, base_start + i * SMALL_STEP, 0x51_0000 + i as u32))
+            .collect();
+
+        let mut runs = Vec::with_capacity(1 + SMALL_RUNS);
+        runs.push(big);
+        runs.extend(smalls);
+        let tmpl = mk_buf_from_runs(runs);
+
+        b.iter(|| {
+            let mut buf = tmpl.clone();
+            let out = buf.take_sorted();
             test::black_box(out);
         });
     }
