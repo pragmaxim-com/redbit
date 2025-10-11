@@ -1,8 +1,7 @@
 use crate::CopyOwnedValue;
 use redb::Key;
 use std::borrow::Borrow;
-use std::cmp::Ordering;
-use std::cmp::Reverse;
+use std::cmp::{Ordering, Reverse};
 use std::collections::BinaryHeap;
 
 /// Keeps at most one sorted run at each level; on push it “carries” upward by merging.
@@ -249,7 +248,7 @@ where
             let b = pool[ib].take().unwrap();
 
             // Stable two-way merge with your comparator.
-            let merged = merge_sorted_by_key(a, b);
+            let merged = merge_sorted_by_key_gallop(a, b);
 
             // Store back into the pool under a fresh index; push by its length.
             pool.push(Some(merged));
@@ -360,7 +359,7 @@ where
     lo
 }
 
-pub fn merge_sorted_by_key_gallop_safe<K, V>(a: Vec<(K, V)>, b: Vec<(K, V)>) -> Vec<(K, V)>
+pub fn merge_sorted_by_key_gallop<K, V>(a: Vec<(K, V)>, b: Vec<(K, V)>) -> Vec<(K, V)>
 where
     K: CopyOwnedValue + Borrow<K::SelfType<'static>> + 'static,
     V: Key + Borrow<V::SelfType<'static>> + 'static,
@@ -435,48 +434,6 @@ where
     out.extend(ib);
     out
 }
-pub fn merge_sorted_by_key_gallop<K, V>(a: Vec<(K, V)>, b: Vec<(K, V)>) -> Vec<(K, V)>
-where
-    K: CopyOwnedValue + Borrow<K::SelfType<'static>> + 'static,
-    V: Key + Borrow<V::SelfType<'static>> + 'static,
-{
-    // … your current safe gallop version (the one that passes tests) …
-    // (keep the corrected lower/upper-bound usage)
-    // Omitted here for brevity.
-    merge_sorted_by_key_gallop_safe(a, b)
-}
-
-
-/// Stable merge of two key-sorted vectors.
-pub fn merge_sorted_by_key<K, V>(left: Vec<(K, V)>, right: Vec<(K, V)>) -> Vec<(K, V)>
-where
-    K: CopyOwnedValue + Borrow<K::SelfType<'static>> + 'static,
-    V: Key + Borrow<V::SelfType<'static>> + 'static,
-{
-    use std::iter::Peekable;
-
-    let mut a: Peekable<std::vec::IntoIter<(K, V)>> = left.into_iter().peekable();
-    let mut b: Peekable<std::vec::IntoIter<(K, V)>> = right.into_iter().peekable();
-    let mut out: Vec<(K, V)> = Vec::with_capacity(a.size_hint().0 + b.size_hint().0);
-
-    loop {
-        match (a.peek(), b.peek()) {
-            (Some((ka, _)), Some((kb, _))) => {
-                let ord = K::compare(K::as_bytes(ka.borrow()).as_ref(), K::as_bytes(kb.borrow()).as_ref());
-                // Stable: take from `a` on Equal.
-                if matches!(ord, Ordering::Less | Ordering::Equal) {
-                    out.push(a.next().unwrap());
-                } else {
-                    out.push(b.next().unwrap());
-                }
-            }
-            (Some(_), None) => { out.extend(a); break; }
-            (None, Some(_)) => { out.extend(b); break; }
-            (None, None) => break,
-        }
-    }
-    out
-}
 
 #[cfg(all(test, not(feature = "integration")))]
 mod tests {
@@ -526,7 +483,7 @@ mod tests {
         while q.len() > 1 {
             let lhs = q.pop_front().unwrap();
             let rhs = q.pop_front().unwrap();
-            q.push_back(merge_sorted_by_key(lhs, rhs));
+            q.push_back(merge_sorted_by_key_gallop(lhs, rhs));
         }
         let out = q.pop_front().unwrap();
         assert_sorted_u32_addr(&out);
