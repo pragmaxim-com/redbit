@@ -68,13 +68,17 @@ where
         Ok(v)
     }
 
-    fn insert_kv(&self, key: K, value: V) -> Result<(), AppError> {
+    fn insert_on_flush(&self, key: K, value: V) -> Result<(), AppError> {
         Ok(self.sync_insert_buffer.borrow_mut().push((key, value)))
+    }
+
+    fn insert_now(&self, key: K, value: V) -> Result<(), AppError> {
+        self.router.write_insert_now(key, value)
     }
 
     fn flush(&self) -> redb::Result<TaskResult, AppError> {
         let mut acks = Vec::with_capacity(self.shards.len());
-        self.router.write_sorted_inserts(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()))?;
+        self.router.write_sorted_inserts_on_flush(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()))?;
         for w in &self.shards {
             acks.extend(w.flush_async()?);
         }
@@ -86,21 +90,21 @@ where
     }
 
     fn flush_async(&self) -> Result<Vec<FlushFuture>, AppError> {
-        self.router.write_sorted_inserts(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()))?;
+        self.router.write_sorted_inserts_on_flush(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()))?;
         let mut v = Vec::with_capacity(self.shards.len());
         for w in &self.shards { v.extend(w.flush_async()?) }
         Ok(v)
     }
 
     fn flush_two_phased(&self) -> Vec<FlushFuture> {
-        let _ = self.router.write_sorted_inserts(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()));
+        let _ = self.router.write_sorted_inserts_on_flush(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()));
         let mut v = Vec::with_capacity(self.shards.len());
         for w in &self.shards { v.extend(w.flush_two_phased()) }
         v
     }
 
     fn flush_three_phased(&self) -> Vec<FlushFuture> {
-        let _ = self.router.write_sorted_inserts(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()));
+        let _ = self.router.write_sorted_inserts_on_flush(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()));
         let mut v = Vec::with_capacity(self.shards.len());
         for w in &self.shards { v.extend(w.flush_three_phased()) }
         v
@@ -138,7 +142,7 @@ mod plain_sharded {
         writer.begin().expect("begin");
         for k in 1u32..=24 {
             let v = addr(&[k as u8, (k + 1) as u8, (k * 3) as u8]);
-            writer.insert_kv(k, v).expect("insert");
+            writer.insert_on_flush(k, v).expect("insert");
         }
         writer.flush().expect("flush");
 
@@ -161,7 +165,7 @@ mod plain_sharded {
 
         writer.begin().expect("begin");
         for k in 1u32..=40 {
-            writer.insert_kv(k, addr(&[k as u8])).expect("insert");
+            writer.insert_on_flush(k, addr(&[k as u8])).expect("insert");
         }
         writer.flush().expect("flush");
         writer.begin().expect("begin");
@@ -201,8 +205,8 @@ mod index_sharded {
         let (_owned, weak_dbs) = test_utils::mk_shard_dbs(n, name);
         let (writer, _, _) = index_test_utils::mk_sharded_writer::<Address>(name, n, 1000, weak_dbs.clone());
         writer.begin().expect("begin");
-        writer.insert_kv(4u32, addr(&[0xAA, 0xBB, 0xCC])).expect("ins");
-        writer.insert_kv(3u32, addr(&[1, 2, 3, 4])).expect("ins");
+        writer.insert_on_flush(4u32, addr(&[0xAA, 0xBB, 0xCC])).expect("ins");
+        writer.insert_on_flush(3u32, addr(&[1, 2, 3, 4])).expect("ins");
         let flush_result = writer.flush();
         assert!(flush_result.is_err());
         assert!(format!("{}", flush_result.err().unwrap()).to_lowercase().contains("sorted by key"));
@@ -221,12 +225,12 @@ mod index_sharded {
         let a3 = addr(&[0xAA, 0xBB, 0xCC]);
 
         writer.begin().expect("begin");
-        writer.insert_kv(3u32,  a1.clone()).expect("ins");
-        writer.insert_kv(4u32,   a3.clone()).expect("ins");
-        writer.insert_kv(7u32,  a2.clone()).expect("ins");
-        writer.insert_kv(10u32, a1.clone()).expect("ins");
-        writer.insert_kv(80u32,  a3.clone()).expect("ins");
-        writer.insert_kv(100u32, a3.clone()).expect("ins");
+        writer.insert_on_flush(3u32, a1.clone()).expect("ins");
+        writer.insert_on_flush(4u32, a3.clone()).expect("ins");
+        writer.insert_on_flush(7u32, a2.clone()).expect("ins");
+        writer.insert_on_flush(10u32, a1.clone()).expect("ins");
+        writer.insert_on_flush(80u32, a3.clone()).expect("ins");
+        writer.insert_on_flush(100u32, a3.clone()).expect("ins");
         writer.flush().expect("flush");
         writer.begin().expect("begin");
         // ----- heads before delete -----
@@ -327,9 +331,9 @@ mod dict_sharded {
         let val = addr(&[0xDE, 0xAD, 0xBE, 0xEF]);
 
         writer.begin().expect("begin");
-        writer.insert_kv(id1, val.clone()).expect("insert id1");
-        writer.insert_kv(id2, val.clone()).expect("insert id2");
-        writer.insert_kv(20u32, addr(&[1, 2, 3])).expect("insert other");
+        writer.insert_on_flush(id1, val.clone()).expect("insert id1");
+        writer.insert_on_flush(id2, val.clone()).expect("insert id2");
+        writer.insert_on_flush(20u32, addr(&[1, 2, 3])).expect("insert other");
         writer.flush().expect("flush");
 
         let reader = dict_test_utils::mk_sharder_reader(n, weak_dbs, dict_pk_to_ids, value_by_dict_pk, value_to_dict_pk, dict_pk_by_id);
@@ -359,8 +363,8 @@ mod dict_sharded {
         let val = addr(&[7, 7, 7, 7]);
 
         writer.begin().expect("begin");
-        writer.insert_kv(id1, val.clone()).expect("ins id1");
-        writer.insert_kv(id2, val.clone()).expect("ins id2");
+        writer.insert_on_flush(id1, val.clone()).expect("ins id1");
+        writer.insert_on_flush(id2, val.clone()).expect("ins id2");
         writer.flush().expect("flush");
         writer.begin().expect("begin");
         assert!(writer.router.delete_kv(id1).expect("del id1"));

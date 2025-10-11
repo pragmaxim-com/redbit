@@ -183,12 +183,7 @@ pub fn tx_context_plain_item(def: &PlainTableDef) -> TxContextItem {
         } else {
             Some(quote! { self.#var_ident.flush_async()? })
         };
-    let deferred_flush =
-        if def.root_pk {
-            Some(quote! { self.#var_ident.flush_two_phased() })
-        } else {
-            Some(quote! { self.#var_ident.flush_three_phased() })
-        };
+    let deferred_flush = Some(quote! { self.#var_ident.flush_two_phased() });
     let write_shutdown = quote! { self.#var_ident.shutdown_async()? };
 
     TxContextItem {
@@ -279,7 +274,7 @@ pub fn tx_context_index_item(defs: &IndexTableDefs) -> TxContextItem {
         } else {
             Some(quote! { self.#var_ident.flush_async()? })
         };
-    let deferred_flush = Some(quote! { self.#var_ident.flush_three_phased() });
+    let deferred_flush = Some(quote! { self.#var_ident.flush_two_phased() });
     let write_shutdown = quote! { self.#var_ident.shutdown_async()? };
 
     TxContextItem {
@@ -380,7 +375,7 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
         } else {
             Some(quote! { self.#var_ident.flush_async()? })
         };
-    let deferred_flush = Some(quote! { self.#var_ident.flush_three_phased() });
+    let deferred_flush = Some(quote! { self.#var_ident.flush_two_phased() });
     let write_shutdown = quote! { self.#var_ident.shutdown_async()? };
 
     TxContextItem {

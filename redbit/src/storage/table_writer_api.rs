@@ -216,7 +216,8 @@ pub trait TableFactory<K: CopyOwnedValue + 'static, V: Key + 'static> {
 
 pub enum WriterCommand<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static> {
     Begin(Sender<Result<(), AppError>>),              // start new WriteTransaction + open table
-    WriteSortedInserts(Vec<(K, V)>),
+    WriteSortedInsertsOnFlush(Vec<(K, V)>),
+    WriteInsertNow(K, V),
     AppendSortedInserts(Vec<(K, V)>),
     MergeUnsortedInserts(Vec<(K, V)>),
     Remove(K, Sender<Result<bool, AppError>>),
@@ -251,7 +252,8 @@ pub trait WriterLike<K: CopyOwnedValue, V: Value> {
     fn router(&self) -> Arc<dyn Router<K, V>>;
     fn begin(&self) -> Result<(), AppError>;
     fn begin_async(&self) -> Result<Vec<StartFuture>, AppError>;
-    fn insert_kv(&self, key: K, value: V) -> Result<(), AppError>;
+    fn insert_on_flush(&self, key: K, value: V) -> Result<(), AppError>;
+    fn insert_now(&self, key: K, value: V) -> Result<(), AppError>;
     fn flush(&self) -> Result<TaskResult, AppError>;
     fn flush_async(&self) -> Result<Vec<FlushFuture>, AppError>;
     fn flush_two_phased(&self) -> Vec<FlushFuture>;

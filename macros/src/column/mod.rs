@@ -73,7 +73,7 @@ impl DbColumnMacros {
         let column_type = &col_def.tpe.clone();
         let pk_name = &entity_def.key_def.field_def().name;
         let table_def = TableDef::plain_table_def(entity_def, column_name, column_type);
-        let plain_table_def = PlainTableDef::new(table_def, column_props, used_by, false);
+        let plain_table_def = PlainTableDef::new(table_def, column_props, used_by.clone(), false);
         DbColumnMacros {
             field_def: col_def.clone(),
             range_query: None,
@@ -87,8 +87,8 @@ impl DbColumnMacros {
             struct_init_with_query: init::plain_init_with_query(column_name, &plain_table_def.var_name),
             struct_default_init: init::default_init(column_name, column_type),
             struct_default_init_with_query: init::default_init_with_query(column_name, column_type),
-            store_statement: store::store_statement(pk_name, column_name, &plain_table_def.var_name),
-            store_many_statement: store::store_statement(pk_name, column_name, &plain_table_def.var_name),
+            store_statement: store::store_statement(pk_name, column_name, &plain_table_def.var_name, used_by.clone()),
+            store_many_statement: store::store_statement(pk_name, column_name, &plain_table_def.var_name, used_by),
             delete_statement: delete::delete_statement(&plain_table_def.var_name),
             delete_many_statement: delete::delete_many_statement(&plain_table_def.var_name),
             function_defs: vec![],
@@ -107,7 +107,7 @@ impl DbColumnMacros {
         let column_type = &col_field_def.tpe.clone();
         let pk_name = &entity_def.key_def.field_def().name;
 
-        let index_tables = IndexTableDefs::new(entity_def, column_name, column_type, column_props, used_by);
+        let index_tables = IndexTableDefs::new(entity_def, column_name, column_type, column_props, used_by.clone());
 
         let mut function_defs: Vec<FunctionDef> = Vec::new();
         function_defs.push(get_by::get_by_index_def(entity_def, column_name, column_type, &index_tables.var_name));
@@ -139,8 +139,8 @@ impl DbColumnMacros {
             struct_init_with_query: init::index_init_with_query(column_name, &index_tables.var_name),
             struct_default_init: init::default_init(column_name, column_type),
             struct_default_init_with_query: init::default_init_with_query(column_name, column_type),
-            store_statement: store::store_index_def(column_name, &pk_name, &index_tables.var_name),
-            store_many_statement: store::store_index_def(column_name, &pk_name, &index_tables.var_name),
+            store_statement: store::store_index_def(column_name, &pk_name, &index_tables.var_name, used_by.clone()),
+            store_many_statement: store::store_index_def(column_name, &pk_name, &index_tables.var_name, used_by),
             delete_statement: delete::delete_index_statement(&index_tables.var_name),
             delete_many_statement: delete::delete_many_index_statement(&index_tables.var_name),
             function_defs,
@@ -158,7 +158,7 @@ impl DbColumnMacros {
         let column_type = &col_field_def.tpe.clone();
         let pk_name = &entity_def.key_def.field_def().name;
 
-        let dict_tables = DictTableDefs::new(&entity_def, column_name, column_type, column_props, used_by);
+        let dict_tables = DictTableDefs::new(&entity_def, column_name, column_type, column_props, used_by.clone());
 
         let mut function_defs: Vec<FunctionDef> = Vec::new();
 
@@ -171,7 +171,7 @@ impl DbColumnMacros {
         function_defs.push(get_keys_by::by_dict_def(entity_def, column_name, column_type, &dict_tables.var_name));
         function_defs.push(stream_keys_by::by_dict_def(entity_def, column_name, column_type, &dict_tables.var_name));
 
-        let store_statement = store::store_dict_def(column_name, pk_name, &dict_tables.var_name);
+        let store_statement = store::store_dict_def(column_name, pk_name, &dict_tables.var_name, used_by);
         DbColumnMacros {
             field_def: col_field_def.clone(),
             range_query: None,

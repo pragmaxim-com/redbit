@@ -29,6 +29,10 @@ where
 {
     fn step<T: WriteTableLike<K, V>>(err: &Option<AppError>, collect_start: Instant, table: &mut T, async_merge_buf: &RefCell<MergeBuffer<K, V>>, cmd: WriterCommand<K, V>) -> Result<Control, AppError> {
         match cmd {
+            WriterCommand::WriteInsertNow(k, v) => {
+                table.insert_kv(k, v)?;
+                Ok(Control::Continue)
+            }
             WriterCommand::MergeUnsortedInserts(kvs) => {
                 async_merge_buf.borrow_mut().merge_unsorted(kvs);
                 Ok(Control::Continue)
@@ -37,7 +41,7 @@ where
                 async_merge_buf.borrow_mut().append_sorted(kvs);
                 Ok(Control::Continue)
             }
-            WriterCommand::WriteSortedInserts(kvs) => {
+            WriterCommand::WriteSortedInsertsOnFlush(kvs) => {
                 if !async_merge_buf.borrow().is_empty() {
                     Err(AppError::Custom("WriteSortedInserts cannot be mixed with SortInserts now".to_string()))?
                 }
@@ -217,7 +221,7 @@ where
                     }
 
                     other => {
-                        error!("{} received {:?} before Begin; ignoring", name, std::mem::discriminant(&other));
+                        error!("{} received {:?} outside <Begin - Flush> scope; ignoring", name, std::mem::discriminant(&other));
                     }
                 }
             }
@@ -253,31 +257,39 @@ where
         Ok(vec![StartFuture(ack_rx)])
     }
 
-    fn insert_kv(&self, key: K, value: V) -> Result<(), AppError> {
+    fn insert_on_flush(&self, key: K, value: V) -> Result<(), AppError> {
         Ok(self.sync_buf.borrow_mut().push((key, value)))
     }
 
+    fn insert_now(&self, key: K, value: V) -> Result<(), AppError> {
+        self.router.write_insert_now(key, value)
+    }
+
     fn flush(&self) -> Result<TaskResult, AppError> {
-        self.router.write_sorted_inserts(std::mem::take(&mut *self.sync_buf.borrow_mut()))?;
+        if !self.sync_buf.borrow().is_empty() {
+            self.router.write_sorted_inserts_on_flush(std::mem::take(&mut *self.sync_buf.borrow_mut()))?;
+        }
         let (ack_tx, ack_rx) = bounded::<Result<TaskResult, AppError>>(1);
         self.topic.send(WriterCommand::Flush(ack_tx))?;
         ack_rx.recv()?
     }
 
     fn flush_async(&self) -> Result<Vec<FlushFuture>, AppError> {
-        self.router.write_sorted_inserts(std::mem::take(&mut *self.sync_buf.borrow_mut()))?;
+        if !self.sync_buf.borrow().is_empty() {
+            self.router.write_sorted_inserts_on_flush(std::mem::take(&mut *self.sync_buf.borrow_mut()))?;
+        }
         let (ack_tx, ack_rx) = bounded::<Result<TaskResult, AppError>>(1);
         self.topic.send(WriterCommand::Flush(ack_tx))?;
         Ok(vec![FlushFuture::eager(ack_rx)])
     }
 
     fn flush_two_phased(&self) -> Vec<FlushFuture> {
-        let _ = self.router.write_sorted_inserts(std::mem::take(&mut *self.sync_buf.borrow_mut()));
+        let _ = self.router.write_sorted_inserts_on_flush(std::mem::take(&mut *self.sync_buf.borrow_mut()));
         vec![FlushFuture::lazy(self.sender())]
     }
 
     fn flush_three_phased(&self) -> Vec<FlushFuture> {
-        let _ = self.router.write_sorted_inserts(std::mem::take(&mut *self.sync_buf.borrow_mut()));
+        let _ = self.router.write_sorted_inserts_on_flush(std::mem::take(&mut *self.sync_buf.borrow_mut()));
         vec![FlushFuture::ready_and_fire(self.sender(), self.sender())]
     }
 

@@ -30,7 +30,8 @@ impl<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static> PlainRouter<K,
 pub trait Router<K: CopyOwnedValue, V: Value>: Send + Sync {
     fn append_sorted_inserts(&self, pairs: Vec<(K, V)>) -> Result<(), AppError>;
     fn merge_unsorted_inserts(&self, pairs: Vec<(K, V)>) -> Result<(), AppError>;
-    fn write_sorted_inserts(&self, pairs: Vec<(K, V)>) -> Result<(), AppError>;
+    fn write_sorted_inserts_on_flush(&self, pairs: Vec<(K, V)>) -> Result<(), AppError>;
+    fn write_insert_now(&self, k: K, v: V) -> Result<(), AppError>;
     fn delete_kv(&self, key: K) -> Result<bool, AppError>;
     fn range(&self, from: K, until: K) -> Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>;
     fn query_and_write(
@@ -55,9 +56,13 @@ where
         fast_send(&self.sender, WriterCommand::MergeUnsortedInserts(pairs))
     }
 
-    fn write_sorted_inserts(&self, pairs: Vec<(K, V)>) -> Result<(), AppError> {
+    fn write_sorted_inserts_on_flush(&self, pairs: Vec<(K, V)>) -> Result<(), AppError> {
         if pairs.is_empty() { return Ok(()); }
-        fast_send(&self.sender, WriterCommand::WriteSortedInserts(pairs))
+        fast_send(&self.sender, WriterCommand::WriteSortedInsertsOnFlush(pairs))
+    }
+
+    fn write_insert_now(&self, k: K, v: V) -> Result<(), AppError> {
+        fast_send(&self.sender, WriterCommand::WriteInsertNow(k, v))
     }
 
     fn delete_kv(&self, key: K) -> Result<bool, AppError> {
@@ -94,7 +99,6 @@ where
     V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
     KP: KeyPartitioner<K> + Send + Sync + Clone + 'static,
     VP: ValuePartitioner<V> + Send + Sync + Clone + 'static,
-
 {
     pub fn new(part: Partitioning<KP, VP>, senders: Vec<Sender<WriterCommand<K, V>>>) -> Self {
         Self { part, senders: senders.into() }
@@ -124,6 +128,14 @@ where
         }
         buckets
     }
+    #[inline]
+    fn bucket_one<'k, 'v, KB: Borrow<K::SelfType<'k>>, VB: Borrow<V::SelfType<'v>>>(&self, k: KB, v: VB) -> (usize, KB, VB) {
+        let sid = match &self.part {
+            Partitioning::ByKey(kp)   => kp.partition_key(k.borrow()),
+            Partitioning::ByValue(vp) => vp.partition_value(v.borrow()),
+        };
+        (sid, k, v)
+    }
 }
 
 impl<K, V, KP, VP> Router<K, V> for ShardedRouter<K, V, KP, VP>
@@ -149,12 +161,17 @@ where
         Ok(())
     }
 
-    fn write_sorted_inserts(&self, pairs: Vec<(K, V)>) -> Result<(), AppError> {
+    fn write_sorted_inserts_on_flush(&self, pairs: Vec<(K, V)>) -> Result<(), AppError> {
         for (sid, bucket) in self.bucket(pairs).into_iter().enumerate() {
             if bucket.is_empty() { continue; }
-            fast_send(&self.senders[sid], WriterCommand::WriteSortedInserts(bucket))?;
+            fast_send(&self.senders[sid], WriterCommand::WriteSortedInsertsOnFlush(bucket))?;
         }
         Ok(())
+    }
+
+    fn write_insert_now(&self, k: K, v: V) -> Result<(), AppError> {
+        let (sid, key, value) = self.bucket_one(k, v);
+        fast_send(&self.senders[sid], WriterCommand::WriteInsertNow(key, value))
     }
 
     fn delete_kv(&self, key: K) -> Result<bool, AppError> {
