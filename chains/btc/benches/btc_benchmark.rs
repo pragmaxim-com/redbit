@@ -1,8 +1,10 @@
 use btc::block_provider::BtcBlockProvider;
-use btc::model_v1::BlockChain;
+use btc::model_v1::{BlockChain, BlockPointer, Input, Utxo};
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
-use redbit::{info, StorageOwner, WriteTxContext};
+use redbit::{assert_sorted, info, StorageOwner, WriteTxContext};
 use std::{sync::Arc, time::Duration};
+use std::borrow::Borrow;
+use std::cmp::Ordering;
 
 fn criterion_benchmark(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
@@ -18,6 +20,13 @@ fn criterion_benchmark(c: &mut Criterion) {
     let processed_small_block = BtcBlockProvider::process_block_pure(&small_block).expect("Failed to process small_block");
     let processed_avg_block = BtcBlockProvider::process_block_pure(&avg_block).expect("Failed to process avg_block");
     let processed_huge_block = BtcBlockProvider::process_block_pure(&huge_block).expect("Failed to process huge_block");
+
+    info!("Validating to avoid unexpected write amplification");
+    assert_sorted(&processed_small_block.transactions, "Txs", |tx| &tx.id);
+    for (idx, tx) in processed_small_block.transactions.iter().enumerate() {
+        assert_sorted(&tx.inputs, &format!("Tx[{idx}].inputs"), |inp: &Input| &inp.id);
+        assert_sorted(&tx.utxos, &format!("Tx[{idx}].utxos"), |u: &Utxo|   &u.id);
+    }
 
     info!("Initiating indexing");
     let mut group = c.benchmark_group("btc_chain");

@@ -63,6 +63,7 @@ pub use serde_json::json;
 pub use serde_urlencoded;
 pub use serde_with;
 pub use std::any::type_name;
+use std::borrow::Borrow;
 pub use std::cmp::Ordering;
 pub use std::collections::HashMap;
 pub use std::collections::VecDeque;
@@ -543,4 +544,19 @@ pub async fn serve(
         })
         .await
         .unwrap();
+}
+
+pub fn assert_sorted<T, I>(items: &[T], label: &str, mut extract: impl FnMut(&T) -> &I)
+where
+    I: Key + Borrow<I::SelfType<'static>> + 'static,
+{
+    for w in items.windows(2) {
+        let ia = extract(&w[0]);
+        let ib = extract(&w[1]);
+        let ord = <I as Key>::compare(
+            <I as Value>::as_bytes(ia.borrow()).as_ref(),
+            <I as Value>::as_bytes(ib.borrow()).as_ref(),
+        );
+        assert!(matches!(ord, Ordering::Less | Ordering::Equal), "{} must be sorted by key", label);
+    }
 }

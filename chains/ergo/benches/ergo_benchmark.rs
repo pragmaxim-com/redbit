@@ -3,8 +3,8 @@ use std::{fs, sync::Arc, time::Duration};
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
 use ergo::block_provider::ErgoBlockProvider;
 use ergo::ergo_client::ErgoCBOR;
-use ergo::model_v1::BlockChain;
-use redbit::{info, StorageOwner, WriteTxContext};
+use ergo::model_v1::{BlockChain, Input, Utxo};
+use redbit::{assert_sorted, info, StorageOwner, WriteTxContext};
 
 fn block_from_file(size: &str, tx_count: usize) -> ErgoCBOR {
     info!("Getting {} block with {} txs", size, tx_count);
@@ -26,6 +26,13 @@ fn criterion_benchmark(c: &mut Criterion) {
     let processed_small_block = ErgoBlockProvider::process_block_pure(&small_block).expect("Failed to process small_block");
     let processed_avg_block = ErgoBlockProvider::process_block_pure(&avg_block).expect("Failed to process avg_block");
     let processed_huge_block = ErgoBlockProvider::process_block_pure(&huge_block).expect("Failed to process huge_block");
+
+    info!("Validating to avoid unexpected write amplification");
+    assert_sorted(&processed_small_block.transactions, "Txs", |tx| &tx.id);
+    for (idx, tx) in processed_small_block.transactions.iter().enumerate() {
+        assert_sorted(&tx.inputs, &format!("Tx[{idx}].inputs"), |inp: &Input| &inp.id);
+        assert_sorted(&tx.utxos, &format!("Tx[{idx}].utxos"), |u: &Utxo|   &u.id);
+    }
 
     info!("Initiating indexing");
     let mut group = c.benchmark_group("ergo_chain");
