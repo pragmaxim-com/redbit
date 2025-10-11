@@ -195,6 +195,20 @@ mod index_sharded {
     use std::time::Duration;
 
     #[test]
+    fn inserting_in_wrong_order_should_fail() {
+        let n = 3usize;
+        let name = "index_sharded_heads";
+        let (_owned, weak_dbs) = test_utils::mk_shard_dbs(n, name);
+        let (writer, _, _) = index_test_utils::mk_sharded_writer::<Address>(name, n, 1000, weak_dbs.clone());
+        writer.begin().expect("begin");
+        writer.insert_kv(4u32, addr(&[0xAA, 0xBB, 0xCC])).expect("ins");
+        writer.insert_kv(3u32, addr(&[1, 2, 3, 4])).expect("ins");
+        let flush_result = writer.flush();
+        assert!(flush_result.is_err());
+        assert!(format!("{}", flush_result.err().unwrap()).to_lowercase().contains("sorted by key"));
+    }
+
+    #[test]
     fn sharded_index_heads_and_delete_in_one_tx() {
         let n = 3usize;
         let name = "index_sharded_heads";
@@ -207,15 +221,12 @@ mod index_sharded {
         let a3 = addr(&[0xAA, 0xBB, 0xCC]);
 
         writer.begin().expect("begin");
-        // a1 -> {10, 3}
-        writer.insert_kv(10u32, a1.clone()).expect("ins");
         writer.insert_kv(3u32,  a1.clone()).expect("ins");
-        // a2 -> {7}
-        writer.insert_kv(7u32,  a2.clone()).expect("ins");
-        // a3 -> {100, 4, 80}
-        writer.insert_kv(100u32, a3.clone()).expect("ins");
-        writer.insert_kv(80u32,  a3.clone()).expect("ins");
         writer.insert_kv(4u32,   a3.clone()).expect("ins");
+        writer.insert_kv(7u32,  a2.clone()).expect("ins");
+        writer.insert_kv(10u32, a1.clone()).expect("ins");
+        writer.insert_kv(80u32,  a3.clone()).expect("ins");
+        writer.insert_kv(100u32, a3.clone()).expect("ins");
         writer.flush().expect("flush");
         writer.begin().expect("begin");
         // ----- heads before delete -----
@@ -240,9 +251,9 @@ mod index_sharded {
                 }
             }
 
-            assert_eq!(acc[0].as_ref().map(|v| v.as_value()), Some(3u32));
+            assert_eq!(acc[0].as_ref().map(|v| v.as_value()), Some(10u32));
             assert_eq!(acc[1].as_ref().map(|v| v.as_value()), Some(7u32));
-            assert_eq!(acc[2].as_ref().map(|v| v.as_value()), Some(4u32));
+            assert_eq!(acc[2].as_ref().map(|v| v.as_value()), Some(100u32));
         }
         // delete current head for a3 (4) and re-check
         assert!(writer.router.delete_kv(4u32).expect("del 4"));

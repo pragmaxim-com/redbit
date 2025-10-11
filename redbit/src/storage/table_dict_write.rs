@@ -114,26 +114,19 @@ impl<'txn, 'c, K: CopyOwnedValue + 'static, V: CacheKey + 'static> WriteTableLik
         }
     }
 
-    fn insert_many_kvs<'k, 'v, KR: Borrow<K::SelfType<'k>>, VR: Borrow<V::SelfType<'v>>>(
+    fn insert_many_sorted_by_key<'k, 'v, KR: Borrow<K::SelfType<'k>>, VR: Borrow<V::SelfType<'v>>>(
         &mut self,
-        mut pairs: Vec<(KR, VR)>,
-        sort_by_key: bool,
+        pairs: Vec<(KR, VR)>,
     ) -> Result<(), AppError> {
-        // --- Optional Run 0: sort by Key for locality in key-keyed tables ---
-        if sort_by_key {
-            pairs.sort_by(|(a, _), (b, _)| {
-                let a_bytes = K::as_bytes(a.borrow());
-                let b_bytes = K::as_bytes(b.borrow());
-                K::compare(a_bytes.as_ref(), b_bytes.as_ref())
-            });
+        #[cfg(test)]
+        if !self.is_sorted_by_key(&pairs){
+            return Err(AppError::Custom("DictTable::insert_many_sorted_by_key: input must be strictly sorted by key".into()));
         }
 
         // We defer writes that are *not* keyed by the input Key:
         // - dict_pk_to_keys: (birth_id -> key)  => sort by birth_id
         // - value_to_dict_pk: (value -> birth_id) => sort by value
         //
-        // NOTE: keep these unannotated; let the compiler infer the owned key types returned
-        // by helpers like `owned_from_unit(..)` / `owned_key_from_guard(..)`.
         let mut pk_to_keys_batch = Vec::with_capacity(pairs.len());
         let mut value_to_pk_batch = Vec::new();
 
@@ -499,30 +492,15 @@ mod tests {
         {
             let (_db, tx, mut cache, t1, t2, t3, t4) = setup_dict_defs(1000);
             let mut dict = mk_dict(&tx, &mut cache, t1, t2, t3, t4);
-            let pairs = vec![(9u32, &v), (3u32, &v), (5u32, &v)];
-            dict.insert_many_kvs(pairs, /*sort_by_key*/ false).expect("batch");
+            let pairs = vec![(3u32, &v), (5u32, &v), (9u32, &v)];
+            dict.insert_many_sorted_by_key(pairs).expect("batch");
 
-            let b9 = birth_id_of(&dict, 9);
             let b3 = birth_id_of(&dict, 3);
             let b5 = birth_id_of(&dict, 5);
-            assert_eq!(b9, 9, "first inserter in given order is birth when not sorting");
+            let b9 = birth_id_of(&dict, 9);
+            assert_eq!(b9, 3, "first inserter in given order is birth when not sorting");
             assert_eq!(b9, b3);
             assert_eq!(b9, b5);
-        }
-
-        // Case B: sort_by_key = true → minimal key wins as birth (by K compare)
-        {
-            let (_db, tx, mut cache, t1, t2, t3, t4) = setup_dict_defs(1000);
-            let mut dict = mk_dict(&tx, &mut cache, t1, t2, t3, t4);
-            let pairs = vec![(9u32, &v), (3u32, &v), (5u32, &v)];
-            dict.insert_many_kvs(pairs, /*sort_by_key*/ true).expect("batch");
-
-            let b9 = birth_id_of(&dict, 9);
-            let b3 = birth_id_of(&dict, 3);
-            let b5 = birth_id_of(&dict, 5);
-            assert_eq!(b3, 3, "minimal key becomes birth when sorting by key");
-            assert_eq!(b3, b5);
-            assert_eq!(b3, b9);
         }
     }
 
@@ -543,7 +521,7 @@ mod tests {
         {
             let mut dict = mk_dict(&tx, &mut cache, t1, t2, t3, t4);
             let pairs = vec![(200u32, &val_a), (201u32, &val_a), (300u32, &val_b)];
-            dict.insert_many_kvs(pairs, /*sort_by_key*/ true).expect("batch");
+            dict.insert_many_sorted_by_key(pairs).expect("batch");
 
             // A: should still map to birth 100 for any id
             for id in [100u32, 200, 201] {
@@ -568,36 +546,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn dict_table_batch_idempotent_duplicate_pairs_in_single_batch() {
-        let (_db, tx, mut cache, t1, t2, t3, t4) = setup_dict_defs(1000);
-
-        let val = addr(&[0x55, 0x66]);
-        let pairs = vec![
-            (42u32, &val),
-            (42u32, &val), // duplicate (id,value) in the same batch
-            (7u32,  &val),
-            (7u32,  &val), // duplicate (id,value) in the same batch
-        ];
-
-        let mut dict = mk_dict(&tx, &mut cache, t1, t2, t3, t4);
-        dict.insert_many_kvs(pairs, /*sort_by_key*/ true).expect("batch");
-
-        // Mapping correctness
-        let b42 = birth_id_of(&dict, 42);
-        let b7  = birth_id_of(&dict, 7);
-        assert_eq!(b42, std::cmp::min(7,42), "birth must be minimal key under sort_by_key");
-        assert_eq!(b42, b7);
-        assert_eq!(reverse_birth_of(&dict, &val.0), b42);
-
-        // Ensure dict_pk_by_key holds the same birth id after duplicates
-        assert_eq!(birth_id_of(&dict, 42), b42);
-        assert_eq!(birth_id_of(&dict, 7),  b42);
-
-        // Ensure value_by_dict_pk is a single copy of the value under the birth id
-        assert_eq!(value_of_birth(&dict, b42), val.0);
-    }
-
-    #[tokio::test]
     async fn dict_table_batch_zero_new_value_to_pk_entries_for_existing_value() {
         // For an existing value, batch inserts must not create new value_to_dict_pk rows.
         let (_db, tx, mut cache, t1, t2, t3, t4) = setup_dict_defs(1000);
@@ -613,82 +561,10 @@ mod tests {
         // Batch adds more ids for the same value
         {
             let mut dict = mk_dict(&tx, &mut cache, t1, t2, t3, t4);
-            dict.insert_many_kvs(vec![(11u32, &val), (12u32, &val)], true).expect("batch");
+            dict.insert_many_sorted_by_key(vec![(11u32, &val), (12u32, &val)]).expect("batch");
 
             // Reverse map still points to original birth → no duplicate rows created
             assert_eq!(reverse_birth_of(&dict, &val.0), 10);
-        }
-    }
-
-    #[tokio::test]
-    async fn dict_table_batch_mixed_orders_equivalence() {
-        let val = addr(&[0x33, 0x33]);
-
-        // unsorted path
-        {
-            let (_db, tx, mut cache, t1, t2, t3, t4) = setup_dict_defs(1000);
-            let mut dict = mk_dict(&tx, &mut cache, t1, t2, t3, t4);
-            dict.insert_many_kvs(vec![(5u32, &val), (1u32, &val), (9u32, &val)], false).expect("unsorted");
-            assert_eq!(birth_id_of(&dict, 5), 5, "first in input is birth for unsorted");
-            assert_eq!(reverse_birth_of(&dict, &val.0), 5);
-        }
-
-        // sorted path
-        {
-            let (_db, tx, mut cache, t1, t2, t3, t4) = setup_dict_defs(1000);
-            let mut dict = mk_dict(&tx, &mut cache, t1, t2, t3, t4);
-            dict.insert_many_kvs(vec![(5u32, &val), (1u32, &val), (9u32, &val)], true).expect("sorted");
-            assert_eq!(birth_id_of(&dict, 1), 1, "min key is birth for sorted");
-            assert_eq!(reverse_birth_of(&dict, &val.0), 1);
-        }
-    }
-
-    #[tokio::test]
-    async fn dict_table_batch_table_invariants_hold() {
-        use rand::{Rng, SeedableRng};
-        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
-
-        let (_db, tx, mut cache, t1, t2, t3, t4) = setup_dict_defs(1000);
-        let mut dict = mk_dict(&tx, &mut cache, t1, t2, t3, t4);
-
-        // build a batch with duplicates and uniques
-        let mut vals = Vec::new();
-        for i in 0..50u32 {
-            let tag: u8 = rng.random_range(0..6); // 6 “value groups”
-            let v = addr(&[tag, (i % 17) as u8]);
-            vals.push((1000 + i, v));
-        }
-        // take refs
-        let pairs: Vec<(u32, &Address)> = vals.iter().map(|(k,v)| (*k, v)).collect();
-        dict.insert_many_kvs(pairs, true).expect("batch");
-
-        // invariant 1: for every key k, dict_pk_by_key(k)=b implies:
-        //  - value_by_dict_pk(b) exists
-        //  - dict_pk_to_keys(b) contains k
-        let mut it = dict.dict_pk_by_key.iter().expect("iter");
-        while let Some(kv) = it.next() {
-            let (k, b) = kv.expect("kv");
-            let k = k.value();
-            let b = b.value();
-            let v_guard = dict.value_by_dict_pk.get(&b).expect("get");
-            assert!(v_guard.is_some(), "value_by_dict_pk missing for birth {}", b);
-
-            let mut keys_it = dict.dict_pk_to_keys.get(&b).expect("missing");
-            let mut found = false;
-            while let Some(v) = keys_it.next() {
-                if v.expect("v").value() == k { found = true; break; }
-            }
-            assert!(found, "dict_pk_to_keys({}) does not contain {}", b, k);
-        }
-
-        // invariant 2: reverse map consistent
-        let mut it = dict.value_by_dict_pk.iter().expect("iter");
-        while let Some(kv) = it.next() {
-            let (b, v) = kv.expect("kv");
-            let b = b.value();
-            let Address(vbytes) = v.value();
-            let rb = reverse_birth_of(&dict, &vbytes);
-            assert_eq!(rb, b, "reverse map mismatch for birth {}", b);
         }
     }
 

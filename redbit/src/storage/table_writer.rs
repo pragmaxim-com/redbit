@@ -84,11 +84,16 @@ where
                     let sort_took = sort_start.elapsed().as_millis();
                     let write_start = Instant::now();
                     if !kvs.is_empty() {
-                        table.insert_many_kvs(kvs,false)?;
+                        match table.insert_many_sorted_by_key(kvs) {
+                            Ok(_) => {}
+                            Err(err) => {
+                                return Ok(Control::Flush(sender, Err(err)));
+                            }
+                        }
                     }
                     let write_took = write_start.elapsed().as_millis();
                     buf.clear();
-                    Ok(Control::Flush(sender, WriteResult::new(collect_took, sort_took, write_took)))
+                    Ok(Control::Flush(sender, Ok(WriteResult::new(collect_took, sort_took, write_took))))
                 }
             },
             WriterCommand::Shutdown(ack) => Ok(Control::Shutdown(ack)),
@@ -147,7 +152,7 @@ where
                         // 1) drop the strong Arc immediately; owner keeps DB alive
                         drop(db_arc);
                         let mut write_error: Option<AppError> = None;
-                        let mut flush_result: Option<(Sender<Result<TaskResult, AppError>>, WriteResult)> = None;
+                        let mut flush_result: Option<(Sender<Result<TaskResult, AppError>>, Result<WriteResult, AppError>)> = None;
 
                         // 2) open typed table bound to &tx
                         let mut table = match factory.open(&tx, &mut cache) {
@@ -187,11 +192,18 @@ where
                         // 4) end-of-tx: drop table FIRST, then commit
                         drop(table);
                         if let Some((sender, result)) = flush_result {
-                            let flush_start = Instant::now();
-                            let _ = tx.commit().map_err(AppError::from);
-                            let flush_took = flush_start.elapsed().as_millis();
-                            let stats = TaskStats::new(result.collect_took, result.sort_took, result.write_took, flush_took);
-                            let _ = sender.send(Ok(TaskResult::new(&name, stats)));
+                            match result {
+                                Err(err) => {
+                                    let _ = sender.send(Err(err));
+                                },
+                                Ok(s) => {
+                                    let flush_start = Instant::now();
+                                    let _ = tx.commit().map_err(AppError::from);
+                                    let flush_took = flush_start.elapsed().as_millis();
+                                    let stats = TaskStats::new(s.collect_took, s.sort_took, s.write_took, flush_took);
+                                    let _ = sender.send(Ok(TaskResult::new(&name, stats)));
+                                }
+                            }
                         } else {
                            error!("Transaction of {} ended without Flush or Shutdown, it can never happen", name);
                         }

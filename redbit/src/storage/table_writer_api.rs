@@ -162,10 +162,17 @@ impl FlushFuture {
 
 pub trait WriteTableLike<K: CopyOwnedValue + 'static, V: Key + 'static> {
     fn insert_kv<'k, 'v>(&mut self, key: impl Borrow<K::SelfType<'k>>, value: impl Borrow<V::SelfType<'v>>) -> Result<(), AppError>;
-    fn insert_many_kvs<'k, 'v, KR: Borrow<K::SelfType<'k>>, VR: Borrow<V::SelfType<'v>>>(&mut self,  pairs: Vec<(KR, VR)>, sort_by_key: bool) -> Result<(), AppError>;
+    fn insert_many_sorted_by_key<'k, 'v, KR: Borrow<K::SelfType<'k>>, VR: Borrow<V::SelfType<'v>>>(&mut self, pairs: Vec<(KR, VR)>) -> Result<(), AppError>;
     fn delete_kv<'k>(&mut self, key: impl Borrow<K::SelfType<'k>>) -> Result<bool, AppError>;
     fn get_any_for_index<'v>(&mut self, value: impl Borrow<V::SelfType<'v>>) -> Result<Option<ValueOwned<K>>, AppError>;
     fn range<'a, KR: Borrow<K::SelfType<'a>> + 'a>(&self, range: impl RangeBounds<KR> + 'a) -> Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>;
+
+    fn is_sorted_by_key<'k, 'v, KR: Borrow<K::SelfType<'k>>, VR: Borrow<V::SelfType<'v>>>(&self, pairs: &Vec<(KR, VR)>) -> bool {
+        use std::cmp::Ordering;
+        pairs.is_sorted_by(|(a, _), (b, _)| {
+            matches!(K::compare(K::as_bytes(a.borrow()).as_ref(), K::as_bytes(b.borrow()).as_ref()), Ordering::Less)
+        })
+    }
 
     #[inline]
     fn key_buf(g: AccessGuard<'_, K>) -> ValueBuf<K> {
@@ -234,7 +241,7 @@ impl WriteResult {
 
 pub enum Control {
     Continue,
-    Flush(Sender<Result<TaskResult, AppError>>, WriteResult),
+    Flush(Sender<Result<TaskResult, AppError>>, Result<WriteResult, AppError>),
     Error(Sender<Result<TaskResult, AppError>>),
     IsReadyForWriting(Sender<Result<(), AppError>>),
     Shutdown(Sender<Result<(), AppError>>),

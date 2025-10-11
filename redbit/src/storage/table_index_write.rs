@@ -87,11 +87,10 @@ impl<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: CacheKey + 'static> WriteTa
         Ok(())
     }
 
-    fn insert_many_kvs<'k, 'v, KR: Borrow<K::SelfType<'k>>, VR: Borrow<V::SelfType<'v>>>(&mut self,  mut pairs: Vec<(KR, VR)>, sort_by_key: bool) -> Result<(), AppError> {
-        if sort_by_key {
-            pairs.sort_by(|(a, _), (b, _)| {
-                K::compare(K::as_bytes(a.borrow()).as_ref(), K::as_bytes(b.borrow()).as_ref())
-            });
+    fn insert_many_sorted_by_key<'k, 'v, KR: Borrow<K::SelfType<'k>>, VR: Borrow<V::SelfType<'v>>>(&mut self, mut pairs: Vec<(KR, VR)>) -> Result<(), AppError> {
+        #[cfg(test)]
+        if !self.is_sorted_by_key(&pairs){
+            return Err(AppError::Custom("IndexTable::insert_many_sorted_by_key: input must be strictly sorted by key".into()));
         }
 
         for (k, v) in &pairs {

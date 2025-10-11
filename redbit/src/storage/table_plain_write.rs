@@ -54,13 +54,10 @@ impl<'txn, K: CopyOwnedValue + 'static, V: Key + 'static> WriteTableLike<K, V> f
         Ok(())
     }
 
-    fn insert_many_kvs<'k, 'v, KR: Borrow<K::SelfType<'k>>, VR: Borrow<V::SelfType<'v>>>(&mut self, mut pairs: Vec<(KR, VR)>, sort_by_key: bool) -> Result<(), AppError> {
-        if sort_by_key {
-            pairs.sort_by(|(a, _), (b, _)| {
-                let a_bytes = K::as_bytes(a.borrow());
-                let b_bytes = K::as_bytes(b.borrow());
-                K::compare(a_bytes.as_ref(), b_bytes.as_ref())
-            });
+    fn insert_many_sorted_by_key<'k, 'v, KR: Borrow<K::SelfType<'k>>, VR: Borrow<V::SelfType<'v>>>(&mut self, pairs: Vec<(KR, VR)>) -> Result<(), AppError> {
+        #[cfg(test)]
+        if !self.is_sorted_by_key(&pairs){
+            return Err(AppError::Custom("PlainTable::insert_many_sorted_by_key: input must be strictly sorted by key".into()));
         }
 
         for (k, v) in &pairs {
