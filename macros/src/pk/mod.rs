@@ -15,16 +15,16 @@ mod init;
 pub mod pointer_impls;
 pub mod root_impls;
 
+use crate::column;
 use crate::entity;
 use crate::entity::context;
 use crate::entity::context::TxContextItem;
+use crate::entity::info::TableInfoItem;
 use crate::entity::query::RangeQuery;
 use crate::field_parser::{ColumnProps, EntityDef, FieldDef, Multiplicity};
 use crate::rest::FunctionDef;
 use crate::table::{PlainTableDef, TableDef};
 use proc_macro2::TokenStream;
-use crate::column;
-use crate::entity::info::TableInfoItem;
 
 pub enum PointerType {
     Root,
@@ -50,7 +50,9 @@ pub struct DbPkMacros {
 
 impl DbPkMacros {
     pub fn new(entity_def: &EntityDef, multiplicity: Option<Multiplicity>, no_columns: bool, column_props: ColumnProps) -> Self {
-        let plain_table_def = PlainTableDef::new(TableDef::pk(entity_def), column_props);
+        let pk_name = &entity_def.key_def.field_def().name;
+        let is_root = entity_def.key_def.is_root();
+        let plain_table_def = PlainTableDef::new(TableDef::pk(entity_def), column_props, None, is_root);
         let range_query = entity::query::pk_range_query(entity_def);
 
         let mut function_defs: Vec<FunctionDef> = vec![
@@ -70,7 +72,6 @@ impl DbPkMacros {
             function_defs.push(parent_key::fn_def(entity_def));
         }
 
-        let pk_name = &entity_def.key_def.field_def().name;
         let pk_init = init::pk_init(pk_name);
         DbPkMacros {
             field_def: entity_def.key_def.field_def().clone(),
@@ -79,7 +80,7 @@ impl DbPkMacros {
             struct_init_with_query: pk_init.clone(),
             struct_default_init: pk_init.clone(),
             struct_default_init_with_query: pk_init.clone(),
-            tx_context_item: context::tx_context_plain_item(&plain_table_def, entity_def.key_def.is_root()),
+            tx_context_item: context::tx_context_plain_item(&plain_table_def),
             table_info_item: column::info::plain_table_info(pk_name, &plain_table_def),
             range_query,
             store_statement: store::store_statement(pk_name, &plain_table_def.var_name),

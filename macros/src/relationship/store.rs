@@ -31,14 +31,14 @@ pub fn one2opt_store_many_def(child_name: &Ident, child_type: &Type) -> TokenStr
     }
 }
 
-pub fn one2many_store_def(child_name: &Ident, child_type: &Type, pk_name: &Ident, write_from: Option<WriteFrom>) -> TokenStream {
+pub fn one2many_store_def(child_name: &Ident, child_type: &Type, pk_name: &Ident, write_from_using: Option<WriteFrom>) -> TokenStream {
     let non_empty_children = quote! { #child_type::store_many(&tx_context.#child_name, instance.#child_name)?; };
-    match write_from {
-        Some(WriteFrom(write_from_field)) => {
-            let hook_method_name = Ident::new(&format!("write_from_{}", write_from_field), child_name.span());
+    match write_from_using {
+        Some(WriteFrom { from, using }) => {
+            let hook_method_name = Ident::new(&format!("write_from_{}_using_{}", from, using), child_name.span());
             quote! {
                 if instance.#child_name.is_empty() {
-                    crate::hook::#hook_method_name(&tx_context, instance.#pk_name, instance.#write_from_field)?;
+                    crate::hook::#hook_method_name(&tx_context, instance.#pk_name, instance.#from)?;
                 } else {
                     #non_empty_children
                 }

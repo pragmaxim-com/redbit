@@ -59,7 +59,7 @@ pub struct Transaction {
     #[column(index, shards = 3, db_cache = 4, lru_cache = 1)]
     pub hash: TxHash,
     pub utxos: Vec<Utxo>,
-    #[write_from(input_refs)] // implement custom write_from function, see hook.rs
+    #[write_from_using(input_refs, hash)] // implement custom write_from_using function, see hook.rs
     pub inputs: Vec<Input>,
     pub maybe: Option<MaybeValue>, // just to demonstrate option is possible
     #[column(transient)]

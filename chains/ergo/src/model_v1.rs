@@ -48,7 +48,7 @@ pub struct Transaction {
     #[column(index, db_cache = 2)]
     pub hash: TxHash,
     pub utxos: Vec<Utxo>,
-    #[write_from(input_refs)]
+    #[write_from_using(input_refs, utxos)] // implement custom write_from_using function, see hook.rs
     pub inputs: Vec<Input>,
     #[column(transient)]
     pub input_refs: Vec<BoxId>,

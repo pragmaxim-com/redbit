@@ -6,7 +6,7 @@ version.workspace = true
 [features]
 chain = []
 expansion_structured = []
-default = []
+default = ["chain"]
 
 [lib]
 proc-macro = true

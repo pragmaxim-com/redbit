@@ -1,14 +1,14 @@
+use crate::entity::context::TxContextItem;
+use crate::field_parser::UsedBy;
 use proc_macro2::Ident;
 use quote::quote;
 use syn::Type;
-use crate::entity::context::TxContextItem;
-use crate::field_parser::WriteFrom;
 
-pub fn tx_context_item(child_name: &Ident, write_child_tx_context_type: &Type, read_child_tx_context_type: &Type, write_from: Option<WriteFrom>) -> TxContextItem {
+pub fn tx_context_item(child_name: &Ident, write_child_tx_context_type: &Type, read_child_tx_context_type: &Type, used_by: Option<UsedBy>) -> TxContextItem {
     let write_definition = quote! { pub #child_name: #write_child_tx_context_type };
     let write_constructor = quote! { #child_name: #write_child_tx_context_type::new_write_ctx(storage)? };
     let write_begin = quote! { self.#child_name.begin_writing_async()? };
-    let async_flush = if write_from.is_some() {
+    let async_flush = if used_by.is_some() {
         Some(quote! { self.#child_name.commit_ctx_deferred() })
     } else {
         Some(quote! { self.#child_name.commit_ctx_async()? })
@@ -18,7 +18,6 @@ pub fn tx_context_item(child_name: &Ident, write_child_tx_context_type: &Type, r
     let read_definition = quote! { pub #child_name: #read_child_tx_context_type };
     let read_constructor = quote! { #child_name: #read_child_tx_context_type::begin_read_ctx(storage)? };
     TxContextItem {
-        root_pk: false,
         write_definition,
         write_constructor,
         write_begin,

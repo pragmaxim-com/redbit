@@ -1,14 +1,15 @@
+use crate::entity::context::TxType;
+use crate::entity::{context, info, query};
 use crate::macro_utils;
 use crate::pk::PointerType;
 use proc_macro2::Ident;
 use quote::ToTokens;
+use std::fmt::Debug;
+use syn::meta::ParseNestedMeta;
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::Comma;
-use syn::{Data, DeriveInput, Field, Fields, GenericArgument, ItemStruct, PathArguments, Type};
-use syn::meta::ParseNestedMeta;
-use crate::entity::{context, info, query};
-use crate::entity::context::TxType;
+use syn::{Attribute, Data, DeriveInput, Field, Fields, GenericArgument, ItemStruct, PathArguments, Type};
 
 #[derive(Clone)]
 #[allow(clippy::enum_variant_names)]
@@ -104,21 +105,75 @@ pub enum IndexingType {
     Dict(ColumnProps),
 }
 
-#[derive(Clone)]
-pub struct WriteFrom(pub Ident);
+#[derive(Clone, Debug)]
+pub struct WriteFrom {
+    pub from: Ident,
+    pub using: Ident,
+}
 #[derive(Clone)]
 pub struct ReadFrom {
     pub outer: Ident,
     pub inner: Ident
 }
 
+#[derive(Clone, Debug)]
+pub struct UsedBy(Ident);
+
 #[derive(Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum ColumnDef {
     Key(KeyDef),
-    Plain(FieldDef, IndexingType),
-    Relationship(FieldDef, Option<WriteFrom>, Multiplicity),
+    Plain(FieldDef, IndexingType, Option<UsedBy>),
+    Relationship(FieldDef, Option<WriteFrom>, Option<UsedBy>, Multiplicity),
     Transient(FieldDef, Option<ReadFrom>),
+}
+
+impl Debug for ColumnDef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ColumnDef::Key(k) => write!(f, "Key({})", k.field_def().name),
+            ColumnDef::Plain(field, indexing_type, used_by) => {
+                let index_str = match indexing_type {
+                    IndexingType::Off(_) => "Off",
+                    IndexingType::Index(_) => "Index",
+                    IndexingType::Range(_) => "Range",
+                    IndexingType::Dict(_) => "Dict",
+                };
+                if let Some(UsedBy(used_by_ident)) = used_by {
+                    write!(f, "Plain({}, {}, UsedBy({}))", field.name, index_str, used_by_ident)
+                } else {
+                    write!(f, "Plain({}, {}, No UsedBy)", field.name, index_str)
+                }
+            }
+            ColumnDef::Relationship(field, write_from_using, used_by, multiplicity) => {
+                let mult_str = match multiplicity {
+                    Multiplicity::OneToMany => "OneToMany",
+                    Multiplicity::OneToOne => "OneToOne",
+                    Multiplicity::OneToOption => "OneToOption",
+                };
+                if let Some(UsedBy(used_by_ident)) = used_by {
+                    if let Some(WriteFrom { from, using }) = write_from_using {
+                        write!(f, "Relationship({}, {}, WriteFrom(from: {}, using: {}), UsedBy({}))", field.name, mult_str, from, using, used_by_ident)
+                    } else {
+                        write!(f, "Relationship({}, {}, No WriteFrom, UsedBy({}))", field.name, mult_str, used_by_ident)
+                    }
+                } else {
+                    if let Some(WriteFrom { from, using }) = write_from_using {
+                        write!(f, "Relationship({}, {}, WriteFrom(from: {}, using: {}), No UsedBy)", field.name, mult_str, from, using)
+                    } else {
+                        write!(f, "Relationship({}, {}, No WriteFrom, No UsedBy)", field.name, mult_str)
+                    }
+                }
+            }
+            ColumnDef::Transient(field, read_from) => {
+                if let Some(ReadFrom { outer, inner }) = read_from {
+                    write!(f, "Transient({}, ReadFrom(outer: {}, inner: {}))", field.name, outer, inner)
+                } else {
+                    write!(f, "Transient({}, No ReadFrom)", field.name)
+                }
+            }
+        }
+    }
 }
 
 pub fn get_named_fields(ast: &ItemStruct) -> syn::Result<Punctuated<Field, Comma>> {
@@ -154,6 +209,33 @@ pub fn extract_base_type_from_pointer(field: &Field) -> syn::Result<Type> {
         other => Err(syn::Error::new_spanned(
             other,
             format!("Expected Key type of format `ParentPointer`, found `{:?}`", other.to_token_stream()),
+        )),
+    }
+}
+
+#[inline]
+fn parse_write_from_using(attr: &Attribute) -> syn::Result<WriteFrom> {
+    // Collect comma-separated metas: input_refs, hash
+    let mut idents: Vec<Ident> = Vec::with_capacity(2);
+
+    attr.parse_nested_meta(|nested| {
+        if let Some(id) = nested.path.get_ident() {
+            idents.push(id.clone());
+            Ok(())
+        } else {
+            // Anything non-ident inside the list -> uniform error text
+            Err(syn::Error::new_spanned(
+                &nested.path,
+                "expected #[write_from_using(from_ident, using_ident)]",
+            ))
+        }
+    })?;
+
+    match idents.as_slice() {
+        [from, using] => Ok(WriteFrom { from: from.clone(), using: using.clone() }),
+        _ => Err(syn::Error::new_spanned(
+            attr,
+            "expected #[write_from_using(from_ident, using_ident)]",
         )),
     }
 }
@@ -279,13 +361,13 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                     let column_def = if is_transient {
                         ColumnDef::Transient(field.clone(), read_from)
                     } else if is_dictionary {
-                        ColumnDef::Plain(field.clone(), IndexingType::Dict(column_props))
+                        ColumnDef::Plain(field.clone(), IndexingType::Dict(column_props), None)
                     } else if is_range {
-                        ColumnDef::Plain(field.clone(), IndexingType::Range(column_props))
+                        ColumnDef::Plain(field.clone(), IndexingType::Range(column_props), None)
                     } else if is_index {
-                        ColumnDef::Plain(field.clone(), IndexingType::Index(column_props))
+                        ColumnDef::Plain(field.clone(), IndexingType::Index(column_props), None)
                     } else {
-                        ColumnDef::Plain(field.clone(), IndexingType::Off(column_props))
+                        ColumnDef::Plain(field.clone(), IndexingType::Off(column_props), None)
                     };
                     return Ok(column_def);
                 }
@@ -315,21 +397,12 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                                     tpe: type_path,
                                 };
 
-                                let write_from: Option<WriteFrom> =
-                                    field.attrs.iter()
-                                        .find(|attr| attr.path().is_ident("write_from"))
-                                        .and_then(|attr| {
-                                            let mut field_ref_name: Option<WriteFrom> = None;
-                                            let _ = attr.parse_nested_meta(|nested| {
-                                                if let Some(nested_ident) = nested.path.get_ident() {
-                                                    field_ref_name = Some(WriteFrom(nested_ident.clone()));
-                                                }
-                                                Ok(())
-                                            });
-                                            field_ref_name
-                                        });
+                            let write_from_using: Option<WriteFrom> =
+                                field.attrs.iter()
+                                    .find(|attr| attr.path().is_ident("write_from_using"))
+                                    .and_then(|attr| parse_write_from_using(attr).ok());
 
-                                return Ok(ColumnDef::Relationship(field_def, write_from, Multiplicity::OneToMany));
+                            return Ok(ColumnDef::Relationship(field_def, write_from_using, None, Multiplicity::OneToMany));
                             }
 
                     }
@@ -352,7 +425,7 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                                     name: column_name.clone(),
                                     tpe: type_path,
                                 };
-                                return Ok(ColumnDef::Relationship(field, None, Multiplicity::OneToOption));
+                                return Ok(ColumnDef::Relationship(field, None, None, Multiplicity::OneToOption));
                             }
 
                     }
@@ -368,7 +441,7 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                                 name: column_name.clone(),
                                 tpe: type_path,
                             };
-                            return Ok(ColumnDef::Relationship(field, None, Multiplicity::OneToOne));
+                            return Ok(ColumnDef::Relationship(field, None, None, Multiplicity::OneToOne));
                         }
                     }
                 }
@@ -401,9 +474,114 @@ fn validate_one_to_many_name(
     }
 }
 
+
+#[derive(Clone)]
+struct Dependency {
+    /// The field being depended on (dependee), e.g. `hash`
+    uses: Ident,
+    /// The field that depends on it (depender), e.g. `inputs`
+    used_by: Ident,
+}
+
+/// Extracts a `Dependency` from a column that encodes it via `WriteFrom`.
+/// Relationship(field(name=used_by), Some(WriteFrom{ using: uses, .. }), _)
+#[inline]
+fn extract_dependency(col: &ColumnDef) -> Option<Dependency> {
+    if let ColumnDef::Relationship(
+        FieldDef { name: used_by, .. },
+        Some(WriteFrom { using, .. }),
+        ..,
+    ) = col
+    {
+        Some(Dependency { uses: using.clone(), used_by: used_by.clone() })
+    } else {
+        None
+    }
+}
+
+/// Find the first depender column and return its index + the Dependency link.
+#[inline]
+fn find_dependency_idx(cols: &[ColumnDef]) -> Option<(usize, Dependency)> {
+    cols.iter()
+        .enumerate()
+        .find_map(|(i, c)| extract_dependency(c).map(|dep| (i, dep)))
+}
+/// Find the **dependee** index by name, accepting either Plain **or** Relationship.
+///
+/// - Matches by `FieldDef.name == dep.uses`.
+/// - Skips `skip_idx` to avoid self-dependency.
+///
+#[inline]
+fn find_dependee_idx_for_dependency(
+    cols: &[ColumnDef],
+    dep: &Dependency,
+    skip_idx: usize,
+) -> Option<usize> {
+    cols.iter().enumerate().position(|(i, c)| {
+        if i == skip_idx { return false; }
+        match c {
+            ColumnDef::Plain(FieldDef { name, .. }, _, _)
+            if name == &dep.uses => true,
+            ColumnDef::Relationship(FieldDef { name, .. }, _, _, _)
+            if name == &dep.uses => true,
+            _ => false,
+        }
+    })
+}
+
+/// Stable removals (shift-left), then appends: **dependee first**, then the depender.
+/// Returns:
+/// - Ok(None)    : no dependency column present
+/// - Err(..)     : dependency present but matching dependee not found by name
+/// - Ok(Some(..)): success; columns mutated accordingly
+pub fn take_and_chain_relation_with_plain(
+    columns: &mut Vec<ColumnDef>
+) -> syn::Result<Option<(ColumnDef, syn::Ident)>> {
+    let Some((dep_idx, dep)) = find_dependency_idx(columns) else {
+        return Ok(None);
+    };
+
+    let Some(dependee_idx) = find_dependee_idx_for_dependency(columns, &dep, dep_idx) else {
+        return Err(syn::Error::new(
+            dep.uses.span(),
+            format!("dependency not satisfied: expected field `{}` (Plain or Relationship)", dep.uses),
+        ));
+    };
+
+    // Remove in descending index order to keep indices valid.
+    let (mut dependee_col, depender_col) = if dependee_idx > dep_idx {
+        (columns.remove(dependee_idx), columns.remove(dep_idx))
+    } else {
+        let depcol = columns.remove(dep_idx);
+        let depd = columns.remove(dependee_idx);
+        (depd, depcol)
+    };
+
+    // Set UsedBy(dep.used_by) on the **dependee**, whether Plain or Relationship.
+    match &mut dependee_col {
+        ColumnDef::Plain(_, _, used_by_slot) => {
+            *used_by_slot = Some(UsedBy(dep.used_by.clone()));
+        }
+        ColumnDef::Relationship(_, _write_from, used_by_rel_slot, _) => {
+            *used_by_rel_slot = Some(UsedBy(dep.used_by.clone()));
+        }
+        _ => {
+            // Defensive: with our selection this should be unreachable.
+            return Err(syn::Error::new(dep.uses.span(), "internal invariant: expected Plain or Relationship"));
+        }
+    }
+
+    // Append in order: dependee first, then depender.
+    columns.push(dependee_col);
+    columns.push(depender_col.clone());
+
+    Ok(Some((depender_col, dep.uses)))
+}
+
 pub fn get_field_macros(ast: &ItemStruct) -> syn::Result<(KeyDef, Vec<ColumnDef>)> {
     let mut key_column: Option<KeyDef> = None;
     let mut columns: Vec<ColumnDef> = Vec::new();
+    let mut transient_columns: Vec<ColumnDef> = Vec::new();
 
     let fields = get_named_fields(ast)?;
 
@@ -415,12 +593,23 @@ pub fn get_field_macros(ast: &ItemStruct) -> syn::Result<(KeyDef, Vec<ColumnDef>
                 }
                 key_column = Some(key_def);
             }
+            ColumnDef::Transient(field_def, read_from) => {
+                transient_columns.push(ColumnDef::Transient(field_def, read_from));
+            }
             column => columns.push(column),
         }
     }
 
     let key = key_column.ok_or_else(|| syn::Error::new(ast.span(), "`#[pk]` or `#[fk] attribute not found on any column."))?;
-    columns.insert(0, ColumnDef::Key(key.clone()));
+    if !key.is_root() {
+        columns.insert(0, ColumnDef::Key(key.clone()));
+    }
+
+    take_and_chain_relation_with_plain(&mut columns)?;
+    columns.extend(transient_columns);
+    if key.is_root() {
+        columns.push(ColumnDef::Key(key.clone()));
+    }
     Ok((key, columns))
 }
 
@@ -495,3 +684,234 @@ pub fn validate_pointer_key(input: &DeriveInput) -> Result<(), syn::Error> {
     Ok(())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::mem::discriminant;
+    use syn::{parse_str, Attribute, Type};
+
+    // -------------------------
+    // helpers
+    // -------------------------
+    fn ident(s: &str) -> syn::Ident { parse_str::<syn::Ident>(s).unwrap() }
+    fn mock_type() -> Type { parse_str::<Type>("u64").unwrap() }
+    fn fd(name: &str) -> FieldDef { FieldDef { name: ident(name), tpe: mock_type() } }
+
+    fn plain(name: &str, used_by: Option<&str>) -> ColumnDef {
+        ColumnDef::Plain(
+            fd(name),
+            IndexingType::Off(ColumnProps::for_key(0)),
+            used_by.map(|u| UsedBy(ident(u))),
+        )
+    }
+
+    /// Relationship constructor:
+    /// - field name = `rel_name`
+    /// - write_from = Some(WriteFrom { from, using }) for a **depender**
+    ///               or None for a **dependee** relation.
+    /// - used_by_rel = Option<UsedBy> on the relation itself (usually None initially)
+    fn relation(
+        rel_name: &str,
+        write_from: Option<(&str, &str)>,
+        used_by_rel: Option<&str>,
+        mult: Multiplicity,
+    ) -> ColumnDef {
+        ColumnDef::Relationship(
+            fd(rel_name),
+            write_from.map(|(from, uses)| WriteFrom { from: ident(from), using: ident(uses) }),
+            used_by_rel.map(|u| UsedBy(ident(u))),
+            mult,
+        )
+    }
+
+    // -------------------------
+    // parser tests
+    // -------------------------
+    #[test]
+    fn parses_two_idents_positional() {
+        let attr: Attribute = syn::parse_quote!(#[write_from_using(input_refs, hash)]);
+        let w = super::parse_write_from_using(&attr).unwrap();
+        assert_eq!(w.from, ident("input_refs"));
+        assert_eq!(w.using, ident("hash"));
+    }
+
+    #[test]
+    fn errors_on_wrong_arity() {
+        let attr0: Attribute = syn::parse_quote!(#[write_from_using()]);
+        let attr1: Attribute = syn::parse_quote!(#[write_from_using(only_one)]);
+        let attr3: Attribute = syn::parse_quote!(#[write_from_using(a, b, c)]);
+        for attr in [attr0, attr1, attr3] {
+            let err = super::parse_write_from_using(&attr).unwrap_err();
+            assert!(err.to_string().contains("expected #[write_from_using(from_ident, using_ident)]"));
+        }
+    }
+
+    // -------------------------
+    // dependency chain tests
+    // -------------------------
+
+    #[test]
+    fn ok_none_if_no_dependency_column_present() {
+        // No Relationship with WriteFrom present → Ok(None)
+        let mut cols = vec![
+            plain("hash", None),
+            relation("inputs", None, None, Multiplicity::OneToMany), // no WriteFrom => not a depender
+            plain("z", None),
+        ];
+        let snapshot = cols.clone();
+        let out = super::take_and_chain_relation_with_plain(&mut cols).unwrap();
+        assert!(out.is_none());
+        assert_eq!(cols.len(), snapshot.len());
+    }
+
+    #[test]
+    fn err_if_dependency_present_but_dependee_missing_by_name() {
+        // Depender exists (inputs uses hash), but no column named `hash` exists.
+        let mut cols = vec![
+            plain("a", None),
+            relation("inputs", Some(("input_refs", "hash")), None, Multiplicity::OneToMany),
+            plain("z", None),
+        ];
+        let snapshot = cols.clone();
+
+        let err = super::take_and_chain_relation_with_plain(&mut cols).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("dependency not satisfied"));
+        assert!(msg.contains("hash"));
+
+        // Atomic failure
+        assert_eq!(cols.len(), snapshot.len());
+        match (&cols[1], &snapshot[1]) {
+            (
+                ColumnDef::Relationship(_, Some(WriteFrom { using: u1, from: f1 }), _ub1, m1),
+                ColumnDef::Relationship(_, Some(WriteFrom { using: u2, from: f2 }), _ub2, m2),
+            ) => {
+                assert_eq!(u1, u2);
+                assert_eq!(f1, f2);
+                assert_eq!(discriminant(m1), discriminant(m2));
+            }
+            _ => panic!("structure changed unexpectedly"),
+        }
+    }
+
+    #[test]
+    fn ok_some_depends_on_plain_sets_used_by_and_moves_tail() {
+        // layout:
+        // 0: Plain(a, None)
+        // 1: Plain(hash, None)                   <-- dependee (Plain)
+        // 2: Relationship(inputs uses hash, ..)  <-- depender
+        // 3: Plain(z, None)
+        let mut cols = vec![
+            plain("a", None),
+            plain("hash", None),
+            relation("inputs", Some(("input_refs", "hash")), None, Multiplicity::OneToMany),
+            plain("z", None),
+        ];
+
+        let out = super::take_and_chain_relation_with_plain(&mut cols).unwrap();
+        assert!(out.is_some());
+        let (depender_col, dependee_ident) = out.unwrap();
+        assert_eq!(dependee_ident, ident("hash"));
+
+        // Tail: (Plain(hash, Some(UsedBy(inputs))), Relationship(inputs uses hash, ..))
+        let n = cols.len();
+        match (&cols[n - 2], &cols[n - 1]) {
+            (
+                ColumnDef::Plain(FieldDef { name: name_plain, .. }, _, Some(UsedBy(used_by))),
+                ColumnDef::Relationship(FieldDef { name: name_rel, .. }, Some(WriteFrom { using, from }), _ub_rel, mult),
+            ) => {
+                assert_eq!(name_plain, &ident("hash"));
+                assert_eq!(used_by, &ident("inputs"));
+                assert_eq!(name_rel, &ident("inputs"));
+                assert_eq!(using, &ident("hash"));
+                assert_eq!(from, &ident("input_refs"));
+                assert_eq!(discriminant(mult), discriminant(&Multiplicity::OneToMany));
+            }
+            _ => panic!("tail elements not as expected for Plain dependee"),
+        }
+
+        // returned depender_col equals the final element
+        match (&depender_col, &cols[n - 1]) {
+            (
+                ColumnDef::Relationship(_, Some(WriteFrom { using: u1, from: f1 }), _ub1, m1),
+                ColumnDef::Relationship(_, Some(WriteFrom { using: u2, from: f2 }), _ub2, m2),
+            ) => {
+                assert_eq!(u1, u2);
+                assert_eq!(f1, f2);
+                assert_eq!(discriminant(m1), discriminant(m2));
+            }
+            _ => panic!("returned depender column mismatch"),
+        }
+    }
+
+    #[test]
+    fn ok_some_depends_on_relationship_sets_used_by_and_moves_tail() {
+        // Now dependee is a **Relationship** (named "hash_rel")
+        // 0: Relationship(hash_rel, None, None, ..)     <-- dependee relation (no WriteFrom)
+        // 1: Plain(a, None)
+        // 2: Relationship(inputs uses hash_rel, ..)     <-- depender relation (has WriteFrom)
+        // 3: Plain(z, None)
+        let mut cols = vec![
+            relation("hash_rel", None, None, Multiplicity::OneToOne),
+            plain("a", None),
+            relation("inputs", Some(("input_refs", "hash_rel")), None, Multiplicity::OneToMany),
+            plain("z", None),
+        ];
+
+        let out = super::take_and_chain_relation_with_plain(&mut cols).unwrap();
+        assert!(out.is_some());
+        let (depender_col, dependee_ident) = out.unwrap();
+        assert_eq!(dependee_ident, ident("hash_rel"));
+
+        // Tail: (Relationship(hash_rel, .., Some(UsedBy(inputs)), ..), Relationship(inputs uses hash_rel, ..))
+        let n = cols.len();
+        match (&cols[n - 2], &cols[n - 1]) {
+            (
+                ColumnDef::Relationship(
+                    FieldDef { name: dep_name, .. },
+                    _wf_none,
+                    Some(UsedBy(used_by_rel)),
+                    mult_dependee,
+                ),
+                ColumnDef::Relationship(
+                    FieldDef { name: name_rel, .. },
+                    Some(WriteFrom { using, from }),
+                    _ub_rel2,
+                    mult_depender,
+                ),
+            ) => {
+                assert_eq!(dep_name, &ident("hash_rel"));
+                assert_eq!(used_by_rel, &ident("inputs"));
+                assert_eq!(name_rel, &ident("inputs"));
+                assert_eq!(using, &ident("hash_rel"));
+                assert_eq!(from, &ident("input_refs"));
+                assert_eq!(discriminant(mult_dependee), discriminant(&Multiplicity::OneToOne));
+                assert_eq!(discriminant(mult_depender), discriminant(&Multiplicity::OneToMany));
+            }
+            _ => panic!("tail elements not as expected for Relationship dependee"),
+        }
+
+        // Head order preserved for remaining elements: a, z
+        match (&cols[0], &cols[1]) {
+            (ColumnDef::Plain(FieldDef { name: n0, .. }, _, _),
+                ColumnDef::Plain(FieldDef { name: n1, .. }, _, _)) => {
+                assert_eq!(n0, &ident("a"));
+                assert_eq!(n1, &ident("z"));
+            }
+            _ => panic!("head order not preserved"),
+        }
+
+        // returned depender_col equals the final element
+        match (&depender_col, &cols[n - 1]) {
+            (
+                ColumnDef::Relationship(_, Some(WriteFrom { using: u1, from: f1 }), _ub1, m1),
+                ColumnDef::Relationship(_, Some(WriteFrom { using: u2, from: f2 }), _ub2, m2),
+            ) => {
+                assert_eq!(u1, u2);
+                assert_eq!(f1, f2);
+                assert_eq!(discriminant(m1), discriminant(m2));
+            }
+            _ => panic!("returned depender column mismatch"),
+        }
+    }
+}

@@ -17,7 +17,7 @@ use crate::entity;
 use crate::entity::context;
 use crate::entity::context::TxContextItem;
 use crate::entity::query::{RangeQuery, FilterQueryItem};
-use crate::field_parser::{ColumnProps, EntityDef, FieldDef, IndexingType, OneToManyParentDef};
+use crate::field_parser::{ColumnProps, EntityDef, FieldDef, IndexingType, OneToManyParentDef, UsedBy};
 use crate::rest::*;
 use crate::table::{DictTableDefs, IndexTableDefs, PlainTableDef, TableDef};
 use proc_macro2::TokenStream;
@@ -50,34 +50,35 @@ impl DbColumnMacros {
         col_field_def: &FieldDef,
         indexing_type: IndexingType,
         parent_def: Option<OneToManyParentDef>,
+        used_by: Option<UsedBy>,
     ) -> DbColumnMacros {
         match indexing_type {
             IndexingType::Off(column_props) => {
-                DbColumnMacros::plain(entity_def, col_field_def, column_props)
+                DbColumnMacros::plain(entity_def, col_field_def, column_props, used_by)
             },
             IndexingType::Index(column_props) => {
-                DbColumnMacros::index(entity_def, col_field_def, parent_def, false, column_props)
+                DbColumnMacros::index(entity_def, col_field_def, parent_def, false, column_props, used_by)
             }
             IndexingType::Range(column_props) => {
-                DbColumnMacros::index(entity_def, col_field_def, parent_def, true, column_props)
+                DbColumnMacros::index(entity_def, col_field_def, parent_def, true, column_props, used_by)
             }
             IndexingType::Dict(column_props) => {
-                DbColumnMacros::dictionary(entity_def, col_field_def, parent_def, column_props)
+                DbColumnMacros::dictionary(entity_def, col_field_def, parent_def, column_props, used_by)
             }
         }
     }
 
-    pub fn plain(entity_def: &EntityDef, col_def: &FieldDef, column_props: ColumnProps) -> DbColumnMacros {
+    pub fn plain(entity_def: &EntityDef, col_def: &FieldDef, column_props: ColumnProps, used_by: Option<UsedBy>) -> DbColumnMacros {
         let column_name = &col_def.name.clone();
         let column_type = &col_def.tpe.clone();
         let pk_name = &entity_def.key_def.field_def().name;
         let table_def = TableDef::plain_table_def(entity_def, column_name, column_type);
-        let plain_table_def = PlainTableDef::new(table_def, column_props);
+        let plain_table_def = PlainTableDef::new(table_def, column_props, used_by, false);
         DbColumnMacros {
             field_def: col_def.clone(),
             range_query: None,
             filter_query_init: query::filter_query_init(column_name, column_type),
-            tx_context_items: vec![context::tx_context_plain_item(&plain_table_def, false)],
+            tx_context_items: vec![context::tx_context_plain_item(&plain_table_def)],
             table_info_item: info::plain_table_info(column_name, &plain_table_def),
             table_plain_definitions: vec![plain_table_def.clone()],
             table_index_definition: None,
@@ -100,12 +101,13 @@ impl DbColumnMacros {
         parent_def_opt: Option<OneToManyParentDef>,
         range: bool,
         column_props: ColumnProps,
+        used_by: Option<UsedBy>,
     ) -> DbColumnMacros {
         let column_name = &col_field_def.name.clone();
         let column_type = &col_field_def.tpe.clone();
         let pk_name = &entity_def.key_def.field_def().name;
 
-        let index_tables = IndexTableDefs::new(entity_def, column_name, column_type, column_props);
+        let index_tables = IndexTableDefs::new(entity_def, column_name, column_type, column_props, used_by);
 
         let mut function_defs: Vec<FunctionDef> = Vec::new();
         function_defs.push(get_by::get_by_index_def(entity_def, column_name, column_type, &index_tables.var_name));
@@ -150,12 +152,13 @@ impl DbColumnMacros {
         col_field_def: &FieldDef,
         parent_def_opt: Option<OneToManyParentDef>,
         column_props: ColumnProps,
+        used_by: Option<UsedBy>,
     ) -> DbColumnMacros {
         let column_name = &col_field_def.name.clone();
         let column_type = &col_field_def.tpe.clone();
         let pk_name = &entity_def.key_def.field_def().name;
 
-        let dict_tables = DictTableDefs::new(&entity_def, column_name, column_type, column_props);
+        let dict_tables = DictTableDefs::new(&entity_def, column_name, column_type, column_props, used_by);
 
         let mut function_defs: Vec<FunctionDef> = Vec::new();
 

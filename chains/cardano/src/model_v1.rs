@@ -54,10 +54,10 @@ pub struct BlockHeader {
 pub struct Transaction {
     #[fk(one2many, db_cache = 1)]
     pub id: BlockPointer,
-    #[column(index, db_cache = 5, lru_cache = 20)]
+    #[column(index, db_cache = 4, lru_cache = 20)]
     pub hash: TxHash,
     pub utxos: Vec<Utxo>,
-    #[write_from(input_refs)]
+    #[write_from_using(input_refs, hash)] // implement custom write_from_using function, see hook.rs
     pub inputs: Vec<Input>,
     #[column(transient)]
     pub input_refs: Vec<InputRef>,

@@ -48,17 +48,18 @@ impl FieldMacros {
             ColumnDef::Key(KeyDef::Fk { field_def: _, multiplicity, parent_type: _, column_props}) => {
                 FieldMacros::Pk(DbPkMacros::new(&entity_def, Some(multiplicity.clone()), field_macros.len() == 1, column_props.clone()))
             },
-            ColumnDef::Plain(field, indexing_type) => {
+            ColumnDef::Plain(field, indexing_type, used_by) => {
                 FieldMacros::Plain(
                     DbColumnMacros::new(
                         &entity_def,
                         field,
                         indexing_type.clone(),
-                        one_to_many_parent_def.clone()
+                        one_to_many_parent_def.clone(),
+                        used_by.clone()
                     ))
             },
-            ColumnDef::Relationship(field, write_from, multiplicity) => {
-                FieldMacros::Relationship(DbRelationshipMacros::new(&entity_def, field.clone(), multiplicity.clone(), write_from.clone()))
+            ColumnDef::Relationship(field, write_from_using, used_by, multiplicity) => {
+                FieldMacros::Relationship(DbRelationshipMacros::new(&entity_def, field.clone(), multiplicity.clone(), used_by.clone(), write_from_using.clone()))
             }
             ColumnDef::Transient(field, read_from) => {
                 FieldMacros::Transient(TransientMacros::new(field.clone(), read_from.clone()))

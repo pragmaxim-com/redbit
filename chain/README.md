@@ -62,14 +62,26 @@ redbit = { path = "../../redbit" }
 chain = { path = "../../chain" }
 ```
 
-And then all you need to do is defining entities with minimal required fields about resolving transaction inputs : 
+And then all you need to do is defining entities with minimal required fields about resolving transaction inputs
+ - Bitcoin like utxos pointer : 
 ```
-    #[write_from(input_refs)]
+    pub hash: TxHash,
+    #[write_from_using(input_refs, hash)]
     pub inputs: Vec<Input>,
     #[column(transient)]
     pub input_refs: Vec<InputRef>,
 ```
+ - Ergo like utxo pointer:
+```
+    pub utxos: Vec<Utxo>,
+    #[write_from_using(input_refs, utxos)]
+    pub inputs: Vec<Input>,
+    #[column(transient)]
+    pub input_refs: Vec<BoxId>,
+```
+
 With a custom defined [hook.rs](../chains/demo/src/hook.rs) which lets user turn input refs into redbit standard inputs.
+This is because the chain builds utxo-state on the fly and fails fast in case of tx with an IO issue. 
 
 And [block_provider.rs](../chains/demo/src/block_provider.rs) that fetches blocks from utxo-like blockchain of your choice.
 

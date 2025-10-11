@@ -1,6 +1,6 @@
 use crate::model_v1::*;
 
-pub(crate) fn write_from_input_refs(tx_context: &TransactionWriteTxContext, parent: BlockPointer, input_refs: Vec<BoxId>) -> Result<(), AppError> {
+pub(crate) fn write_from_input_refs_using_utxos(tx_context: &TransactionWriteTxContext, parent: BlockPointer, input_refs: Vec<BoxId>) -> Result<(), AppError> {
     let ids_router  = tx_context.inputs.input_id.router();
     let ptrs_router = tx_context.inputs.input_utxo_pointer_by_id.router();
     tx_context.utxos.utxo_box_id_index.router.query_and_write(input_refs, Arc::new(move |out| {
