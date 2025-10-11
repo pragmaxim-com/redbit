@@ -127,19 +127,13 @@ impl<'txn, 'c, K: CopyOwnedValue + 'static, V: CacheKey + 'static> WriteTableLik
                 let b_bytes = K::as_bytes(b.borrow());
                 K::compare(a_bytes.as_ref(), b_bytes.as_ref())
             });
-        } else {
-            for w in pairs.windows(2) {
-                let (ka, _) = &w[0];
-                let (kb, _) = &w[1];
-                let ord = K::compare(
-                    K::as_bytes(ka.borrow()).as_ref(),
-                    K::as_bytes(kb.borrow()).as_ref(),
-                );
-                assert!(
-                    matches!(ord, Ordering::Less | Ordering::Equal),
-                    "insert_many_kvs(sort_by_key=false): input must be sorted by key"
-                );
+        } else if !pairs.is_sorted_by(|(a, _), (b, _)| {
+            match K::compare(K::as_bytes(a.borrow()).as_ref(), K::as_bytes(b.borrow()).as_ref()) {
+                Ordering::Less => true,
+                Ordering::Equal | Ordering::Greater => false,
             }
+        }) {
+            return Err(AppError::Custom("insert_many_kvs: input must be sorted by key if sort_by_key is false".to_string()));
         }
 
         // We defer writes that are *not* keyed by the input Key:
