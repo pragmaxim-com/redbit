@@ -5,6 +5,7 @@ use lru::LruCache;
 use redb::*;
 use redb::{Table, WriteTransaction};
 use std::borrow::Borrow;
+use std::cmp::Ordering;
 use std::num::NonZeroUsize;
 use std::ops::RangeBounds;
 
@@ -126,6 +127,19 @@ impl<'txn, 'c, K: CopyOwnedValue + 'static, V: CacheKey + 'static> WriteTableLik
                 let b_bytes = K::as_bytes(b.borrow());
                 K::compare(a_bytes.as_ref(), b_bytes.as_ref())
             });
+        } else {
+            for w in pairs.windows(2) {
+                let (ka, _) = &w[0];
+                let (kb, _) = &w[1];
+                let ord = K::compare(
+                    K::as_bytes(ka.borrow()).as_ref(),
+                    K::as_bytes(kb.borrow()).as_ref(),
+                );
+                assert!(
+                    matches!(ord, Ordering::Less | Ordering::Equal),
+                    "insert_many_kvs(sort_by_key=false): input must be sorted by key"
+                );
+            }
         }
 
         // We defer writes that are *not* keyed by the input Key:

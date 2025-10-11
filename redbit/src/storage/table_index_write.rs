@@ -2,6 +2,7 @@ use crate::storage::table_writer_api::{TableFactory, WriteTableLike};
 use crate::{AppError, CacheKey};
 use redb::{Key, MultimapTable, MultimapTableDefinition, ReadableMultimapTable, Table, TableDefinition, WriteTransaction};
 use std::borrow::Borrow;
+use std::cmp::Ordering;
 use std::num::NonZeroUsize;
 use std::ops::RangeBounds;
 use lru::LruCache;
@@ -92,6 +93,19 @@ impl<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: CacheKey + 'static> WriteTa
             pairs.sort_by(|(a, _), (b, _)| {
                 K::compare(K::as_bytes(a.borrow()).as_ref(), K::as_bytes(b.borrow()).as_ref())
             });
+        } else {
+            for w in pairs.windows(2) {
+                let (ka, _) = &w[0];
+                let (kb, _) = &w[1];
+                let ord = K::compare(
+                    K::as_bytes(ka.borrow()).as_ref(),
+                    K::as_bytes(kb.borrow()).as_ref(),
+                );
+                assert!(
+                    matches!(ord, Ordering::Less | Ordering::Equal),
+                    "insert_many_kvs(sort_by_key=false): input must be sorted by key"
+                );
+            }
         }
 
         for (k, v) in &pairs {

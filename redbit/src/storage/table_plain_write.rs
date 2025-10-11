@@ -3,6 +3,7 @@ use crate::AppError;
 use redb::*;
 use redb::{Key, Table, WriteTransaction};
 use std::borrow::Borrow;
+use std::cmp::Ordering;
 use std::ops::RangeBounds;
 use crate::storage::async_boundary::{CopyOwnedValue, ValueBuf, ValueOwned};
 
@@ -61,6 +62,19 @@ impl<'txn, K: CopyOwnedValue + 'static, V: Key + 'static> WriteTableLike<K, V> f
                 let b_bytes = K::as_bytes(b.borrow());
                 K::compare(a_bytes.as_ref(), b_bytes.as_ref())
             });
+        } else {
+            for w in pairs.windows(2) {
+                let (ka, _) = &w[0];
+                let (kb, _) = &w[1];
+                let ord = K::compare(
+                    K::as_bytes(ka.borrow()).as_ref(),
+                    K::as_bytes(kb.borrow()).as_ref(),
+                );
+                assert!(
+                    matches!(ord, Ordering::Less | Ordering::Equal),
+                    "insert_many_kvs(sort_by_key=false): input must be sorted by key"
+                );
+            }
         }
 
         for (k, v) in &pairs {
