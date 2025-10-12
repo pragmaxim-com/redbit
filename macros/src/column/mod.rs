@@ -17,7 +17,7 @@ use crate::entity;
 use crate::entity::context;
 use crate::entity::context::TxContextItem;
 use crate::entity::query::{RangeQuery, FilterQueryItem};
-use crate::field_parser::{ColumnProps, EntityDef, FieldDef, IndexingType, OneToManyParentDef, UsedBy};
+use crate::field_parser::{ColumnProps, EntityDef, FieldDef, IndexingType, OneToManyParentDef, Used};
 use crate::rest::*;
 use crate::table::{DictTableDefs, IndexTableDefs, PlainTableDef, TableDef};
 use proc_macro2::TokenStream;
@@ -50,30 +50,30 @@ impl DbColumnMacros {
         col_field_def: &FieldDef,
         indexing_type: IndexingType,
         parent_def: Option<OneToManyParentDef>,
-        used_by: Option<UsedBy>,
+        used: Option<Used>,
     ) -> DbColumnMacros {
         match indexing_type {
             IndexingType::Off(column_props) => {
-                DbColumnMacros::plain(entity_def, col_field_def, column_props, used_by)
+                DbColumnMacros::plain(entity_def, col_field_def, column_props, used)
             },
             IndexingType::Index(column_props) => {
-                DbColumnMacros::index(entity_def, col_field_def, parent_def, false, column_props, used_by)
+                DbColumnMacros::index(entity_def, col_field_def, parent_def, false, column_props, used)
             }
             IndexingType::Range(column_props) => {
-                DbColumnMacros::index(entity_def, col_field_def, parent_def, true, column_props, used_by)
+                DbColumnMacros::index(entity_def, col_field_def, parent_def, true, column_props, used)
             }
             IndexingType::Dict(column_props) => {
-                DbColumnMacros::dictionary(entity_def, col_field_def, parent_def, column_props, used_by)
+                DbColumnMacros::dictionary(entity_def, col_field_def, parent_def, column_props, used)
             }
         }
     }
 
-    pub fn plain(entity_def: &EntityDef, col_def: &FieldDef, column_props: ColumnProps, used_by: Option<UsedBy>) -> DbColumnMacros {
+    pub fn plain(entity_def: &EntityDef, col_def: &FieldDef, column_props: ColumnProps, used: Option<Used>) -> DbColumnMacros {
         let column_name = &col_def.name.clone();
         let column_type = &col_def.tpe.clone();
         let pk_name = &entity_def.key_def.field_def().name;
         let table_def = TableDef::plain_table_def(entity_def, column_name, column_type);
-        let plain_table_def = PlainTableDef::new(table_def, column_props, used_by.clone(), false);
+        let plain_table_def = PlainTableDef::new(table_def, column_props, used.clone(), false);
         DbColumnMacros {
             field_def: col_def.clone(),
             range_query: None,
@@ -87,8 +87,8 @@ impl DbColumnMacros {
             struct_init_with_query: init::plain_init_with_query(column_name, &plain_table_def.var_name),
             struct_default_init: init::default_init(column_name, column_type),
             struct_default_init_with_query: init::default_init_with_query(column_name, column_type),
-            store_statement: store::store_statement(pk_name, column_name, &plain_table_def.var_name, used_by.clone()),
-            store_many_statement: store::store_statement(pk_name, column_name, &plain_table_def.var_name, used_by),
+            store_statement: store::store_statement(pk_name, column_name, &plain_table_def.var_name, used.clone()),
+            store_many_statement: store::store_statement(pk_name, column_name, &plain_table_def.var_name, used),
             delete_statement: delete::delete_statement(&plain_table_def.var_name),
             delete_many_statement: delete::delete_many_statement(&plain_table_def.var_name),
             function_defs: vec![],
@@ -101,13 +101,13 @@ impl DbColumnMacros {
         parent_def_opt: Option<OneToManyParentDef>,
         range: bool,
         column_props: ColumnProps,
-        used_by: Option<UsedBy>,
+        used: Option<Used>,
     ) -> DbColumnMacros {
         let column_name = &col_field_def.name.clone();
         let column_type = &col_field_def.tpe.clone();
         let pk_name = &entity_def.key_def.field_def().name;
 
-        let index_tables = IndexTableDefs::new(entity_def, column_name, column_type, column_props, used_by.clone());
+        let index_tables = IndexTableDefs::new(entity_def, column_name, column_type, column_props, used.clone());
 
         let mut function_defs: Vec<FunctionDef> = Vec::new();
         function_defs.push(get_by::get_by_index_def(entity_def, column_name, column_type, &index_tables.var_name));
@@ -139,8 +139,8 @@ impl DbColumnMacros {
             struct_init_with_query: init::index_init_with_query(column_name, &index_tables.var_name),
             struct_default_init: init::default_init(column_name, column_type),
             struct_default_init_with_query: init::default_init_with_query(column_name, column_type),
-            store_statement: store::store_index_def(column_name, &pk_name, &index_tables.var_name, used_by.clone()),
-            store_many_statement: store::store_index_def(column_name, &pk_name, &index_tables.var_name, used_by),
+            store_statement: store::store_index_def(column_name, &pk_name, &index_tables.var_name, used.clone()),
+            store_many_statement: store::store_index_def(column_name, &pk_name, &index_tables.var_name, used),
             delete_statement: delete::delete_index_statement(&index_tables.var_name),
             delete_many_statement: delete::delete_many_index_statement(&index_tables.var_name),
             function_defs,
@@ -152,13 +152,13 @@ impl DbColumnMacros {
         col_field_def: &FieldDef,
         parent_def_opt: Option<OneToManyParentDef>,
         column_props: ColumnProps,
-        used_by: Option<UsedBy>,
+        used: Option<Used>,
     ) -> DbColumnMacros {
         let column_name = &col_field_def.name.clone();
         let column_type = &col_field_def.tpe.clone();
         let pk_name = &entity_def.key_def.field_def().name;
 
-        let dict_tables = DictTableDefs::new(&entity_def, column_name, column_type, column_props, used_by.clone());
+        let dict_tables = DictTableDefs::new(&entity_def, column_name, column_type, column_props, used.clone());
 
         let mut function_defs: Vec<FunctionDef> = Vec::new();
 
@@ -171,7 +171,7 @@ impl DbColumnMacros {
         function_defs.push(get_keys_by::by_dict_def(entity_def, column_name, column_type, &dict_tables.var_name));
         function_defs.push(stream_keys_by::by_dict_def(entity_def, column_name, column_type, &dict_tables.var_name));
 
-        let store_statement = store::store_dict_def(column_name, pk_name, &dict_tables.var_name, used_by);
+        let store_statement = store::store_dict_def(column_name, pk_name, &dict_tables.var_name, used);
         DbColumnMacros {
             field_def: col_field_def.clone(),
             range_query: None,

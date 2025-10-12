@@ -44,9 +44,10 @@ where
             WriterCommand::WriteSortedInsertsOnFlush(kvs) => {
                 if !async_merge_buf.borrow().is_empty() {
                     Err(AppError::Custom("WriteSortedInserts cannot be mixed with SortInserts now".to_string()))?
+                } else {
+                    async_merge_buf.swap(&RefCell::new(MergeBuffer::from_sorted(kvs)));
+                    Ok(Control::Continue)
                 }
-                async_merge_buf.swap(&RefCell::new(MergeBuffer::from_sorted(kvs)));
-                Ok(Control::Continue)
             }
             WriterCommand::Remove(k, ack) => {
                 let r = table.delete_kv(k)?;
@@ -283,14 +284,18 @@ where
         Ok(vec![FlushFuture::eager(ack_rx)])
     }
 
-    fn flush_two_phased(&self) -> Vec<FlushFuture> {
-        let _ = self.router.write_sorted_inserts_on_flush(std::mem::take(&mut *self.sync_buf.borrow_mut()));
-        vec![FlushFuture::lazy(self.sender())]
+    fn flush_two_phased(&self) -> Result<Vec<FlushFuture>, AppError> {
+        if !self.sync_buf.borrow().is_empty() {
+            self.router.write_sorted_inserts_on_flush(std::mem::take(&mut *self.sync_buf.borrow_mut()))?;
+        }
+        Ok(vec![FlushFuture::lazy(self.sender())])
     }
 
-    fn flush_three_phased(&self) -> Vec<FlushFuture> {
-        let _ = self.router.write_sorted_inserts_on_flush(std::mem::take(&mut *self.sync_buf.borrow_mut()));
-        vec![FlushFuture::ready_and_fire(self.sender(), self.sender())]
+    fn flush_three_phased(&self) -> Result<Vec<FlushFuture>, AppError> {
+        if !self.sync_buf.borrow().is_empty() {
+            self.router.write_sorted_inserts_on_flush(std::mem::take(&mut *self.sync_buf.borrow_mut()))?;
+        }
+        Ok(vec![FlushFuture::ready_and_fire(self.sender(), self.sender())])
     }
 
     fn shutdown(self) -> Result<(), AppError> {
