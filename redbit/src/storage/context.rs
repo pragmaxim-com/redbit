@@ -7,7 +7,7 @@ pub trait WriteTxContext {
     fn begin_writing_async(&self) -> redb::Result<Vec<StartFuture>, AppError>;
     fn stop_writing_async(self) -> redb::Result<Vec<StopFuture>, AppError>;
     fn commit_ctx_async(&self) -> Result<Vec<FlushFuture>, AppError>;
-    fn commit_ctx_deferred(&self) -> Vec<FlushFuture>;
+    fn commit_ctx_deferred(&self) -> Result<Vec<FlushFuture>, AppError>;
 
     fn begin_writing(&self) -> redb::Result<(), AppError> {
         let futures = self.begin_writing_async()?;

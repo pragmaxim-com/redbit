@@ -256,8 +256,8 @@ pub trait WriterLike<K: CopyOwnedValue, V: Value> {
     fn insert_now(&self, key: K, value: V) -> Result<(), AppError>;
     fn flush(&self) -> Result<TaskResult, AppError>;
     fn flush_async(&self) -> Result<Vec<FlushFuture>, AppError>;
-    fn flush_two_phased(&self) -> Vec<FlushFuture>;
-    fn flush_three_phased(&self) -> Vec<FlushFuture>;
+    fn flush_two_phased(&self) -> Result<Vec<FlushFuture>, AppError>;
+    fn flush_three_phased(&self) -> Result<Vec<FlushFuture>, AppError>;
     fn shutdown(self) -> Result<(), AppError> where Self: Sized;
     fn shutdown_async(self) -> Result<Vec<StopFuture>, AppError> where Self: Sized;
 }

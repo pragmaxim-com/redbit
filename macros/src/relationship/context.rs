@@ -1,19 +1,19 @@
 use crate::entity::context::TxContextItem;
-use crate::field_parser::UsedBy;
+use crate::field_parser::Used;
 use proc_macro2::Ident;
 use quote::quote;
 use syn::Type;
 
-pub fn tx_context_item(child_name: &Ident, write_child_tx_context_type: &Type, read_child_tx_context_type: &Type, used_by: Option<UsedBy>) -> TxContextItem {
+pub fn tx_context_item(child_name: &Ident, write_child_tx_context_type: &Type, read_child_tx_context_type: &Type, used: Option<Used>) -> TxContextItem {
     let write_definition = quote! { pub #child_name: #write_child_tx_context_type };
     let write_constructor = quote! { #child_name: #write_child_tx_context_type::new_write_ctx(storage)? };
     let write_begin = quote! { self.#child_name.begin_writing_async()? };
-    let async_flush = if used_by.is_some() {
-        Some(quote! { self.#child_name.commit_ctx_deferred() })
+    let async_flush = if used.is_some() {
+        Some(quote! { self.#child_name.commit_ctx_deferred()? })
     } else {
         Some(quote! { self.#child_name.commit_ctx_async()? })
     };
-    let deferred_flush = Some(quote! { self.#child_name.commit_ctx_deferred() });
+    let deferred_flush = Some(quote! { self.#child_name.commit_ctx_deferred()? });
     let write_shutdown = quote! { self.#child_name.stop_writing_async()? };
     let read_definition = quote! { pub #child_name: #read_child_tx_context_type };
     let read_constructor = quote! { #child_name: #read_child_tx_context_type::begin_read_ctx(storage)? };

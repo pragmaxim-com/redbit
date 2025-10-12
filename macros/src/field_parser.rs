@@ -117,14 +117,14 @@ pub struct ReadFrom {
 }
 
 #[derive(Clone, Debug)]
-pub struct UsedBy(Ident);
+pub struct Used;
 
 #[derive(Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum ColumnDef {
     Key(KeyDef),
-    Plain(FieldDef, IndexingType, Option<UsedBy>),
-    Relationship(FieldDef, Option<WriteFrom>, Option<UsedBy>, Multiplicity),
+    Plain(FieldDef, IndexingType, Option<Used>),
+    Relationship(FieldDef, Option<WriteFrom>, Option<Used>, Multiplicity),
     Transient(FieldDef, Option<ReadFrom>),
 }
 
@@ -139,8 +139,8 @@ impl Debug for ColumnDef {
                     IndexingType::Range(_) => "Range",
                     IndexingType::Dict(_) => "Dict",
                 };
-                if let Some(UsedBy(used_by_ident)) = used_by {
-                    write!(f, "Plain({}, {}, UsedBy({}))", field.name, index_str, used_by_ident)
+                if let Some(Used) = used_by {
+                    write!(f, "Plain({}, {}, UsedBy)", field.name, index_str)
                 } else {
                     write!(f, "Plain({}, {}, No UsedBy)", field.name, index_str)
                 }
@@ -151,11 +151,11 @@ impl Debug for ColumnDef {
                     Multiplicity::OneToOne => "OneToOne",
                     Multiplicity::OneToOption => "OneToOption",
                 };
-                if let Some(UsedBy(used_by_ident)) = used_by {
+                if let Some(Used) = used_by {
                     if let Some(WriteFrom { from, using }) = write_from_using {
-                        write!(f, "Relationship({}, {}, WriteFrom(from: {}, using: {}), UsedBy({}))", field.name, mult_str, from, using, used_by_ident)
+                        write!(f, "Relationship({}, {}, WriteFrom(from: {}, using: {}), UsedBy)", field.name, mult_str, from, using)
                     } else {
-                        write!(f, "Relationship({}, {}, No WriteFrom, UsedBy({}))", field.name, mult_str, used_by_ident)
+                        write!(f, "Relationship({}, {}, No WriteFrom, UsedBy)", field.name, mult_str)
                     }
                 } else {
                     if let Some(WriteFrom { from, using }) = write_from_using {
@@ -313,6 +313,7 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                     }
                 } else if attr.path().is_ident("column") {
                     let field = FieldDef { name: column_name.clone(), tpe: column_type.clone() };
+                    let mut used = false;
                     let mut db_cache_weight = 0;
                     let mut lru_cache_size_mil = 0;
                     let mut shards = 0;
@@ -326,6 +327,8 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                         if nested.path.is_ident("db_cache") {
                             let lit: syn::LitInt = nested.value()?.parse()?;
                             db_cache_weight = lit.base10_parse::<usize>()?;
+                        } else if nested.path.is_ident("used") {
+                            used = true;
                         } else if nested.path.is_ident("lru_cache") {
                             let lit: syn::LitInt = nested.value()?.parse()?;
                             lru_cache_size_mil = lit.base10_parse::<usize>()?;
@@ -480,7 +483,7 @@ struct Dependency {
     /// The field being depended on (dependee), e.g. `hash`
     uses: Ident,
     /// The field that depends on it (depender), e.g. `inputs`
-    used_by: Ident,
+    _used_by: Ident,
 }
 
 /// Extracts a `Dependency` from a column that encodes it via `WriteFrom`.
@@ -493,7 +496,7 @@ fn extract_dependency(col: &ColumnDef) -> Option<Dependency> {
         ..,
     ) = col
     {
-        Some(Dependency { uses: using.clone(), used_by: used_by.clone() })
+        Some(Dependency { uses: using.clone(), _used_by: used_by.clone() })
     } else {
         None
     }
@@ -501,7 +504,7 @@ fn extract_dependency(col: &ColumnDef) -> Option<Dependency> {
 
 /// Find the first depender column and return its index + the Dependency link.
 #[inline]
-fn find_dependency_idx(cols: &[ColumnDef]) -> Option<(usize, Dependency)> {
+fn find_dependency_by_idx(cols: &[ColumnDef]) -> Option<(usize, Dependency)> {
     cols.iter()
         .enumerate()
         .find_map(|(i, c)| extract_dependency(c).map(|dep| (i, dep)))
@@ -512,11 +515,7 @@ fn find_dependency_idx(cols: &[ColumnDef]) -> Option<(usize, Dependency)> {
 /// - Skips `skip_idx` to avoid self-dependency.
 ///
 #[inline]
-fn find_dependee_idx_for_dependency(
-    cols: &[ColumnDef],
-    dep: &Dependency,
-    skip_idx: usize,
-) -> Option<usize> {
+fn find_used_idx_for_dependency(cols: &[ColumnDef], dep: &Dependency, skip_idx: usize) -> Option<usize> {
     cols.iter().enumerate().position(|(i, c)| {
         if i == skip_idx { return false; }
         match c {
@@ -534,14 +533,12 @@ fn find_dependee_idx_for_dependency(
 /// - Ok(None)    : no dependency column present
 /// - Err(..)     : dependency present but matching dependee not found by name
 /// - Ok(Some(..)): success; columns mutated accordingly
-pub fn take_and_chain_relation_with_plain(
-    columns: &mut Vec<ColumnDef>
-) -> syn::Result<Option<(ColumnDef, syn::Ident)>> {
-    let Some((dep_idx, dep)) = find_dependency_idx(columns) else {
+pub fn take_and_chain_relation_with_plain(columns: &mut Vec<ColumnDef>) -> syn::Result<Option<(ColumnDef, Ident)>> {
+    let Some((dep_idx, dep)) = find_dependency_by_idx(columns) else {
         return Ok(None);
     };
 
-    let Some(dependee_idx) = find_dependee_idx_for_dependency(columns, &dep, dep_idx) else {
+    let Some(used_idx) = find_used_idx_for_dependency(columns, &dep, dep_idx) else {
         return Err(syn::Error::new(
             dep.uses.span(),
             format!("dependency not satisfied: expected field `{}` (Plain or Relationship)", dep.uses),
@@ -549,21 +546,21 @@ pub fn take_and_chain_relation_with_plain(
     };
 
     // Remove in descending index order to keep indices valid.
-    let (mut dependee_col, depender_col) = if dependee_idx > dep_idx {
-        (columns.remove(dependee_idx), columns.remove(dep_idx))
+    let (mut used_col, using_col) = if used_idx > dep_idx {
+        (columns.remove(used_idx), columns.remove(dep_idx))
     } else {
         let depcol = columns.remove(dep_idx);
-        let depd = columns.remove(dependee_idx);
+        let depd = columns.remove(used_idx);
         (depd, depcol)
     };
 
     // Set UsedBy(dep.used_by) on the **dependee**, whether Plain or Relationship.
-    match &mut dependee_col {
+    match &mut used_col {
         ColumnDef::Plain(_, _, used_by_slot) => {
-            *used_by_slot = Some(UsedBy(dep.used_by.clone()));
+            *used_by_slot = Some(Used);
         }
         ColumnDef::Relationship(_, _write_from, used_by_rel_slot, _) => {
-            *used_by_rel_slot = Some(UsedBy(dep.used_by.clone()));
+            *used_by_rel_slot = Some(Used);
         }
         _ => {
             // Defensive: with our selection this should be unreachable.
@@ -572,10 +569,10 @@ pub fn take_and_chain_relation_with_plain(
     }
 
     // Append in order: dependee first, then depender.
-    columns.push(dependee_col);
-    columns.push(depender_col.clone());
+    columns.push(used_col);
+    columns.push(using_col.clone());
 
-    Ok(Some((depender_col, dep.uses)))
+    Ok(Some((using_col, dep.uses)))
 }
 
 pub fn get_field_macros(ast: &ItemStruct) -> syn::Result<(KeyDef, Vec<ColumnDef>)> {
@@ -697,11 +694,11 @@ mod tests {
     fn mock_type() -> Type { parse_str::<Type>("u64").unwrap() }
     fn fd(name: &str) -> FieldDef { FieldDef { name: ident(name), tpe: mock_type() } }
 
-    fn plain(name: &str, used_by: Option<&str>) -> ColumnDef {
+    fn plain(name: &str, used: Option<Used>) -> ColumnDef {
         ColumnDef::Plain(
             fd(name),
             IndexingType::Off(ColumnProps::for_key(0)),
-            used_by.map(|u| UsedBy(ident(u))),
+            used,
         )
     }
 
@@ -713,13 +710,13 @@ mod tests {
     fn relation(
         rel_name: &str,
         write_from: Option<(&str, &str)>,
-        used_by_rel: Option<&str>,
+        used: Option<Used>,
         mult: Multiplicity,
     ) -> ColumnDef {
         ColumnDef::Relationship(
             fd(rel_name),
             write_from.map(|(from, uses)| WriteFrom { from: ident(from), using: ident(uses) }),
-            used_by_rel.map(|u| UsedBy(ident(u))),
+            used,
             mult,
         )
     }
@@ -817,11 +814,10 @@ mod tests {
         let n = cols.len();
         match (&cols[n - 2], &cols[n - 1]) {
             (
-                ColumnDef::Plain(FieldDef { name: name_plain, .. }, _, Some(UsedBy(used_by))),
+                ColumnDef::Plain(FieldDef { name: name_plain, .. }, _, Some(Used)),
                 ColumnDef::Relationship(FieldDef { name: name_rel, .. }, Some(WriteFrom { using, from }), _ub_rel, mult),
             ) => {
                 assert_eq!(name_plain, &ident("hash"));
-                assert_eq!(used_by, &ident("inputs"));
                 assert_eq!(name_rel, &ident("inputs"));
                 assert_eq!(using, &ident("hash"));
                 assert_eq!(from, &ident("input_refs"));
@@ -870,7 +866,7 @@ mod tests {
                 ColumnDef::Relationship(
                     FieldDef { name: dep_name, .. },
                     _wf_none,
-                    Some(UsedBy(used_by_rel)),
+                    Some(Used),
                     mult_dependee,
                 ),
                 ColumnDef::Relationship(
@@ -881,7 +877,6 @@ mod tests {
                 ),
             ) => {
                 assert_eq!(dep_name, &ident("hash_rel"));
-                assert_eq!(used_by_rel, &ident("inputs"));
                 assert_eq!(name_rel, &ident("inputs"));
                 assert_eq!(using, &ident("hash_rel"));
                 assert_eq!(from, &ident("input_refs"));

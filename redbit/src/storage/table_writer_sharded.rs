@@ -78,7 +78,9 @@ where
 
     fn flush(&self) -> redb::Result<TaskResult, AppError> {
         let mut acks = Vec::with_capacity(self.shards.len());
-        self.router.write_sorted_inserts_on_flush(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()))?;
+        if !self.sync_insert_buffer.borrow().is_empty() {
+            self.router.write_sorted_inserts_on_flush(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()))?;
+        }
         for w in &self.shards {
             acks.extend(w.flush_async()?);
         }
@@ -90,24 +92,30 @@ where
     }
 
     fn flush_async(&self) -> Result<Vec<FlushFuture>, AppError> {
-        self.router.write_sorted_inserts_on_flush(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()))?;
-        let mut v = Vec::with_capacity(self.shards.len());
+        if !self.sync_insert_buffer.borrow().is_empty() {
+            self.router.write_sorted_inserts_on_flush(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()))?;
+        }
+        let mut v: Vec<FlushFuture> = Vec::with_capacity(self.shards.len());
         for w in &self.shards { v.extend(w.flush_async()?) }
         Ok(v)
     }
 
-    fn flush_two_phased(&self) -> Vec<FlushFuture> {
-        let _ = self.router.write_sorted_inserts_on_flush(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()));
-        let mut v = Vec::with_capacity(self.shards.len());
-        for w in &self.shards { v.extend(w.flush_two_phased()) }
-        v
+    fn flush_two_phased(&self) -> Result<Vec<FlushFuture>, AppError> {
+        if !self.sync_insert_buffer.borrow().is_empty() {
+            self.router.write_sorted_inserts_on_flush(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()))?;
+        }
+        let mut v: Vec<FlushFuture> = Vec::with_capacity(self.shards.len());
+        for w in &self.shards { v.extend(w.flush_two_phased()?) }
+        Ok(v)
     }
 
-    fn flush_three_phased(&self) -> Vec<FlushFuture> {
-        let _ = self.router.write_sorted_inserts_on_flush(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()));
+    fn flush_three_phased(&self) -> Result<Vec<FlushFuture>, AppError> {
+        if !self.sync_insert_buffer.borrow().is_empty() {
+            self.router.write_sorted_inserts_on_flush(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()))?;
+        }
         let mut v = Vec::with_capacity(self.shards.len());
-        for w in &self.shards { v.extend(w.flush_three_phased()) }
-        v
+        for w in &self.shards { v.extend(w.flush_three_phased()?) }
+        Ok(v)
     }
 
     fn shutdown(self) -> Result<(), AppError> {
