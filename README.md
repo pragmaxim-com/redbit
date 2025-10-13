@@ -229,7 +229,7 @@ And R/W entire instances efficiently using indexes and dictionaries `chains/demo
         println!("Persisting blocks:");
         let ctx = Block::begin_write_ctx(&storage)?;
         Block::store_many(&ctx, blocks)?;
-        let _ = ctx.two_phase_commit_and_close()?;
+        let _ = ctx.two_phase_commit_and_close(MutationType::Writes)?;
     
         let block_read_ctx = Block::begin_read_ctx(&storage)?;
         

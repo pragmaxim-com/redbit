@@ -11,8 +11,8 @@ async fn main() -> Result<()> {
     let block_heights: Vec<Height> = blocks.iter().map(|b|b.height).collect();
     println!("Persisting blocks:");
     let ctx = Block::begin_write_ctx(&storage)?;
-    Block::store_many(&ctx, blocks)?;
-    let _ = ctx.two_phase_commit_and_close()?;
+    Block::store_many(&ctx, blocks, true)?;
+    let _ = ctx.two_phase_commit_and_close(MutationType::Writes)?;
 
     let block_read_ctx = Block::begin_read_ctx(&storage)?;
     

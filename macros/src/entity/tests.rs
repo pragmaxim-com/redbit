@@ -39,8 +39,8 @@ pub fn test_suite(entity_def: &EntityDef, parent_def: Option<OneToManyParentDef>
         fn initialize_storage(storage: Arc<Storage>) {
             let entities = #sample_entity::sample_many(#sample_count);
             let tx_context = #sample_entity::begin_write_ctx(&storage).expect("Failed to begin write transaction");
-            #sample_entity::store_many(&tx_context, entities).expect("Failed to store sample entities");
-            tx_context.two_phase_commit_and_close().expect("Failed to commit all");
+            #sample_entity::store_many(&tx_context, entities, true).expect("Failed to store sample entities");
+            tx_context.two_phase_commit_and_close(MutationType::Writes).expect("Failed to commit all");
         }
     };
 

@@ -69,12 +69,12 @@ pub fn write_tx_context(entity_tx_context_ty: &Type, tx_contexts: &[TxContextIte
                 #( futures.extend(#shutdowns); )*
                 Ok(futures)
            }
-           fn commit_ctx_async(&self) -> Result<Vec<FlushFuture>, AppError> {
+           fn commit_ctx_async(&self, mutation_type: MutationType) -> Result<Vec<FlushFuture>, AppError> {
                 let mut futures: Vec<FlushFuture> = Vec::new();
                 #( futures.extend(#async_flushes); )*
                 Ok(futures)
            }
-           fn commit_ctx_deferred(&self) -> Result<Vec<FlushFuture>, AppError> {
+           fn commit_ctx_deferred(&self, mutation_type: MutationType) -> Result<Vec<FlushFuture>, AppError> {
                 let mut futures: Vec<FlushFuture> = Vec::new();
                 #( futures.extend(#deferred_flushes); )*
                 Ok(futures)
@@ -178,12 +178,15 @@ pub fn tx_context_plain_item(def: &PlainTableDef) -> TxContextItem {
     let async_flush =
         if def.root_pk {
             Some(quote! { self.#var_ident.flush_two_phased()? })
-        } else if def.used.is_some() {
-            Some(quote! { self.#var_ident.flush_three_phased()? })
         } else {
             Some(quote! { self.#var_ident.flush_async()? })
         };
-    let deferred_flush = Some(quote! { self.#var_ident.flush_two_phased()? });
+    let deferred_flush = Some(quote! {
+        match mutation_type  {
+            MutationType::Writes => self.#var_ident.flush_deferred()?,
+            MutationType::Deletes => self.#var_ident.flush_async()?
+        }
+    });
     let write_shutdown = quote! { self.#var_ident.shutdown_async()? };
 
     TxContextItem {
@@ -268,13 +271,13 @@ pub fn tx_context_index_item(defs: &IndexTableDefs) -> TxContextItem {
     };
 
     let write_begin    = quote! { self.#var_ident.begin_async()? };
-    let async_flush =
-        if defs.used.is_some() {
-            Some(quote! { self.#var_ident.flush_three_phased()? })
-        } else {
-            Some(quote! { self.#var_ident.flush_async()? })
-        };
-    let deferred_flush = Some(quote! { self.#var_ident.flush_two_phased()? });
+    let async_flush = Some(quote! { self.#var_ident.flush_async()? });
+    let deferred_flush = Some(quote! {
+        match mutation_type  {
+            MutationType::Writes => self.#var_ident.flush_deferred()?,
+            MutationType::Deletes => self.#var_ident.flush_async()?
+        }
+    });
     let write_shutdown = quote! { self.#var_ident.shutdown_async()? };
 
     TxContextItem {
@@ -369,13 +372,13 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
     };
 
     let write_begin    = quote! { self.#var_ident.begin_async()? };
-    let async_flush =
-        if defs.used.is_some() {
-            Some(quote! { self.#var_ident.flush_three_phased()? })
-        } else {
-            Some(quote! { self.#var_ident.flush_async()? })
-        };
-    let deferred_flush = Some(quote! { self.#var_ident.flush_two_phased()? });
+    let async_flush = Some(quote! { self.#var_ident.flush_async()? });
+    let deferred_flush = Some(quote! {
+        match mutation_type  {
+            MutationType::Writes => self.#var_ident.flush_deferred()?,
+            MutationType::Deletes => self.#var_ident.flush_async()?
+        }
+    });
     let write_shutdown = quote! { self.#var_ident.shutdown_async()? };
 
     TxContextItem {

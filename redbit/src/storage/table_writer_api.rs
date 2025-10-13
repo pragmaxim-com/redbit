@@ -75,12 +75,6 @@ pub enum FlushFuture {
 
     /// Flush will be sent when `wait()` is called
     Lazy(Box<dyn FnOnce() -> Result<Receiver<Result<TaskResult, AppError>>, AppError> + Send>),
-
-    /// First get ready, then send the flush and wait for the ack
-    ReadyAndFire {
-        ready: Box<dyn FnOnce() -> Result<Receiver<Result<(), AppError>>, AppError> + Send> ,
-        fire: Box<dyn FnOnce() -> Result<Receiver<Result<TaskResult, AppError>>, AppError> + Send>
-    },
 }
 
 impl FlushFuture {
@@ -91,12 +85,6 @@ impl FlushFuture {
                 let rx = fire()?;
                 rx.recv()?
             }
-            FlushFuture::ReadyAndFire { ready, fire } => {
-                let ready_rx = ready()?;
-                let _ = ready_rx.recv()?;
-                let fire_rx = fire()?;
-                fire_rx.recv()?
-            }
         }
     }
 
@@ -105,7 +93,7 @@ impl FlushFuture {
     }
 
     /// Helper: produce the shared "fire" closure that sends WriterCommand::Flush
-    fn fire<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static>(
+    fn flush<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static>(
         tx: Sender<WriterCommand<K, V>>,
     ) -> Box<dyn FnOnce() -> Result<Receiver<Result<TaskResult, AppError>>, AppError> + Send> {
         Box::new(move || {
@@ -117,28 +105,10 @@ impl FlushFuture {
         })
     }
 
-    fn ready<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static>(
-        tx: Sender<WriterCommand<K, V>>,
-    ) -> Box<dyn FnOnce() -> Result<Receiver<Result<(), AppError>>, AppError> + Send> {
-        Box::new(move || {
-            let (ready_tx, ready_rx) = bounded::<Result<(), AppError>>(1);
-            match tx.send(WriterCommand::IsReadyForWriting(ready_tx)) {
-                Ok(()) => Ok(ready_rx),
-                Err(e) => Err(AppError::Custom(e.to_string())),
-            }
-        })
-    }
-
     pub fn lazy<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static>(tx: Sender<WriterCommand<K, V>>) -> Self {
-        FlushFuture::Lazy(Self::fire(tx))
+        FlushFuture::Lazy(Self::flush(tx))
     }
 
-    pub fn ready_and_fire<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static>(tx_ready: Sender<WriterCommand<K, V>>, tx_fire: Sender<WriterCommand<K, V>>) -> Self {
-        FlushFuture::ReadyAndFire {
-            ready: Self::ready(tx_ready),
-            fire: Self::fire(tx_fire),
-        }
-    }
 }
 
 impl FlushFuture {
@@ -214,6 +184,12 @@ pub trait TableFactory<K: CopyOwnedValue + 'static, V: Key + 'static> {
     fn open<'txn, 'c>(&self, tx: &'txn WriteTransaction, cache: &'c mut Self::CacheCtx) -> Result<Self::Table<'txn, 'c>, AppError>;
 }
 
+pub struct FlushState {
+    pub sender: Option<Sender<Result<TaskResult, AppError>>>,
+    pub sum: usize,
+    pub shards: Option<usize>
+}
+
 pub enum WriterCommand<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static> {
     Begin(Sender<Result<(), AppError>>),              // start new WriteTransaction + open table
     WriteSortedInsertsOnFlush(Vec<(K, V)>),
@@ -221,11 +197,14 @@ pub enum WriterCommand<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'stat
     AppendSortedInserts(Vec<(K, V)>),
     MergeUnsortedInserts(Vec<(K, V)>),
     Remove(K, Sender<Result<bool, AppError>>),
-    QueryAndWrite { values: Vec<V>, sink: Arc<dyn Fn(Vec<(usize, Option<ValueOwned<K>>)>) -> Result<(), AppError> + Send + Sync + 'static> },
-    QueryAndWriteBucket { values: Vec<(usize, V)>, sink: Arc<dyn Fn(Vec<(usize, Option<ValueOwned<K>>)>) -> Result<(), AppError> + Send + Sync + 'static> },
+    QueryAndWrite {
+        last_shards: Option<usize>,
+        values: Vec<(usize, V)>, sink: Arc<dyn Fn(Option<usize>, Vec<(usize, Option<ValueOwned<K>>)>) -> Result<(), AppError> + Send + Sync + 'static>
+    },
     Range(K, K, Sender<Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>>),
     Flush(Sender<Result<TaskResult, AppError>>),              // commit current tx, stay alive (idle)
-    IsReadyForWriting(Sender<Result<(), AppError>>),
+    FlushWhenReady(Sender<Result<TaskResult, AppError>>),
+    ReadyForFlush(usize),
     Shutdown(Sender<Result<(), AppError>>),           // graceful stop (no commit)
 }
 pub struct WriteResult {
@@ -242,9 +221,10 @@ impl WriteResult {
 
 pub enum Control {
     Continue,
+    ReadyForFlush(usize),
     Flush(Sender<Result<TaskResult, AppError>>, Result<WriteResult, AppError>),
-    Error(Sender<Result<TaskResult, AppError>>),
-    IsReadyForWriting(Sender<Result<(), AppError>>),
+    FlushWhenReady(Sender<Result<TaskResult, AppError>>),
+    Error(Sender<Result<TaskResult, AppError>>, AppError),
     Shutdown(Sender<Result<(), AppError>>),
 }
 
@@ -257,7 +237,7 @@ pub trait WriterLike<K: CopyOwnedValue, V: Value> {
     fn flush(&self) -> Result<TaskResult, AppError>;
     fn flush_async(&self) -> Result<Vec<FlushFuture>, AppError>;
     fn flush_two_phased(&self) -> Result<Vec<FlushFuture>, AppError>;
-    fn flush_three_phased(&self) -> Result<Vec<FlushFuture>, AppError>;
+    fn flush_deferred(&self) -> Result<Vec<FlushFuture>, AppError>;
     fn shutdown(self) -> Result<(), AppError> where Self: Sized;
     fn shutdown_async(self) -> Result<Vec<StopFuture>, AppError> where Self: Sized;
 }

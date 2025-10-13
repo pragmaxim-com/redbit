@@ -8,8 +8,8 @@ mod entity_tests {
         let (storage_owner, storage) = StorageOwner::temp(name, db_cache_size_gb, true).await.unwrap();
         let blocks = Block::sample_many(3);
         let tx_context = Block::begin_write_ctx(&storage).unwrap();
-        Block::store_many(&tx_context, blocks.clone()).expect("Failed to persist blocks");
-        tx_context.two_phase_commit_and_close().unwrap();
+        Block::store_many(&tx_context, blocks.clone(), true).expect("Failed to persist blocks");
+        tx_context.two_phase_commit_and_close(MutationType::Writes).unwrap();
         (blocks, storage_owner, storage)
     }
 
@@ -41,8 +41,8 @@ mod entity_tests {
 
         let (_storage_owner, single_tx_db) = StorageOwner::temp("db_test_2", 0, true).await.unwrap();
         let tx_context = Block::begin_write_ctx(&single_tx_db).unwrap();
-        blocks.into_iter().for_each(|block| Block::store(&tx_context, block).expect("Failed to persist blocks"));
-        tx_context.two_phase_commit_and_close().unwrap();
+        Block::store_many(&tx_context, blocks, true).expect("Failed to persist blocks");
+        tx_context.two_phase_commit_and_close(MutationType::Writes).unwrap();
 
         let block_tx = Block::begin_read_ctx(&multi_tx_storage).unwrap();
         let multi_tx_blocks = Block::take(&block_tx, 100).unwrap();
@@ -120,8 +120,8 @@ mod entity_tests {
         let (blocks, _storage_owner, storage) = init_temp_storage("db_test", 0).await;
         let all_utxos = blocks.iter().flat_map(|b| b.transactions.iter().flat_map(|t| t.utxos.clone())).collect::<Vec<Utxo>>();
         let tx_context = Utxo::begin_write_ctx(&storage).unwrap();
-        Utxo::store_many(&tx_context, all_utxos).expect("Failed to store UTXO");
-        tx_context.two_phase_commit_and_close().expect("Failed to flush transaction context");
+        Utxo::store_many(&tx_context, all_utxos, true).expect("Failed to store UTXO");
+        tx_context.two_phase_commit_and_close(MutationType::Writes).expect("Failed to flush transaction context");
     }
 
     #[tokio::test]

@@ -109,12 +109,12 @@ where
         Ok(v)
     }
 
-    fn flush_three_phased(&self) -> Result<Vec<FlushFuture>, AppError> {
+    fn flush_deferred(&self) -> Result<Vec<FlushFuture>, AppError> {
         if !self.sync_insert_buffer.borrow().is_empty() {
             self.router.write_sorted_inserts_on_flush(std::mem::take(&mut *self.sync_insert_buffer.borrow_mut()))?;
         }
         let mut v = Vec::with_capacity(self.shards.len());
-        for w in &self.shards { v.extend(w.flush_three_phased()?) }
+        for w in &self.shards { v.extend(w.flush_deferred()?) }
         Ok(v)
     }
 
@@ -246,7 +246,7 @@ mod index_sharded {
             let want = 3usize; // querying [a1, a2, a3]
             let (tx, rx) = channel::unbounded::<Vec<(usize, Option<ValueOwned<u32>>)>>();
 
-            writer.router.query_and_write(vec![a1.clone(), a2.clone(), a3.clone()], Arc::new(move |batch| {
+            writer.router.query_and_write(vec![a1.clone(), a2.clone(), a3.clone()], true, Arc::new(move |_last_shards, batch| {
                 // non-blocking: just forward the shard batch
                 tx.send(batch)?;
                 Ok(())
@@ -275,7 +275,7 @@ mod index_sharded {
             let want = 1usize;
             let (tx, rx) = channel::unbounded::<Vec<(usize, Option<ValueOwned<u32>>)>>();
 
-            writer.router.query_and_write(vec![a3.clone()], Arc::new(move |batch| {
+            writer.router.query_and_write(vec![a3.clone()], true, Arc::new(move |_last_shards, batch| {
                 tx.send(batch)?;
                 Ok(())
             })).expect("enqueue head_after");

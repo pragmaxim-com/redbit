@@ -1,9 +1,18 @@
 use crate::model_v1::*;
 
-pub(crate) fn write_from_input_refs_using_utxos(tx_context: &TransactionWriteTxContext, parent: BlockPointer, input_refs: Vec<BoxId>) -> Result<(), AppError> {
+// temporary hack for testing purposes
+pub(crate) fn flush(tx_context: &TransactionWriteTxContext) -> Result<(), AppError> {
     let ids_router  = tx_context.inputs.input_id.router();
     let ptrs_router = tx_context.inputs.input_utxo_pointer_by_id.router();
-    tx_context.utxos.utxo_box_id_index.router.query_and_write(input_refs, Arc::new(move |out| {
+    ids_router.ready_for_flush(1)?;
+    ptrs_router.ready_for_flush(1)?;
+    Ok(())
+}
+
+pub(crate) fn write_from_input_refs_using_utxos(tx_context: &TransactionWriteTxContext, parent: BlockPointer, input_refs: Vec<BoxId>, is_last: bool) -> Result<(), AppError> {
+    let ids_router  = tx_context.inputs.input_id.router();
+    let ptrs_router = tx_context.inputs.input_utxo_pointer_by_id.router();
+    tx_context.utxos.utxo_box_id_index.router.query_and_write(input_refs, is_last, Arc::new(move |last_shards, out| {
         let mut ids = Vec::with_capacity(out.len());
         let mut pointers = Vec::with_capacity(out.len());
         for (index, tx_pointer_buf_opt) in out.into_iter() {
@@ -22,8 +31,8 @@ pub(crate) fn write_from_input_refs_using_utxos(tx_context: &TransactionWriteTxC
                 },
             }
         }
-        ids_router.append_sorted_inserts(ids)?;
-        ptrs_router.merge_unsorted_inserts(pointers)?;
+        ids_router.merge_unsorted_inserts(ids, last_shards)?;
+        ptrs_router.merge_unsorted_inserts(pointers, last_shards)?;
         Ok(())
     }))
 }

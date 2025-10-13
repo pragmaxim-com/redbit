@@ -58,8 +58,8 @@ impl FieldMacros {
                         used_by.clone()
                     ))
             },
-            ColumnDef::Relationship(field, write_from_using, used_by, multiplicity) => {
-                FieldMacros::Relationship(DbRelationshipMacros::new(&entity_def, field.clone(), multiplicity.clone(), used_by.clone(), write_from_using.clone()))
+            ColumnDef::Relationship(field, write_from_using, _, multiplicity) => {
+                FieldMacros::Relationship(DbRelationshipMacros::new(&entity_def, field.clone(), multiplicity.clone(), write_from_using.clone()))
             }
             ColumnDef::Transient(field, read_from) => {
                 FieldMacros::Transient(TransientMacros::new(field.clone(), read_from.clone()))

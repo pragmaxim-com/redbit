@@ -28,8 +28,10 @@ impl<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static> PlainRouter<K,
 }
 
 pub trait Router<K: CopyOwnedValue, V: Value>: Send + Sync {
+    fn shards(&self) -> usize;
     fn append_sorted_inserts(&self, pairs: Vec<(K, V)>) -> Result<(), AppError>;
-    fn merge_unsorted_inserts(&self, pairs: Vec<(K, V)>) -> Result<(), AppError>;
+    fn merge_unsorted_inserts(&self, pairs: Vec<(K, V)>, last_shards: Option<usize>) -> Result<(), AppError>;
+    fn ready_for_flush(&self, shards: usize) -> Result<(), AppError>;
     fn write_sorted_inserts_on_flush(&self, pairs: Vec<(K, V)>) -> Result<(), AppError>;
     fn write_insert_now(&self, k: K, v: V) -> Result<(), AppError>;
     fn delete_kv(&self, key: K) -> Result<bool, AppError>;
@@ -37,7 +39,8 @@ pub trait Router<K: CopyOwnedValue, V: Value>: Send + Sync {
     fn query_and_write(
         &self,
         values: Vec<V>,
-        sink: Arc<dyn Fn(Vec<(usize, Option<ValueOwned<K>>)>) -> Result<(), AppError> + Send + Sync + 'static>,
+        is_last: bool,
+        sink: Arc<dyn Fn(Option<usize>, Vec<(usize, Option<ValueOwned<K>>)>) -> Result<(), AppError> + Send + Sync + 'static>,
     ) -> Result<(), AppError>;
 }
 
@@ -46,14 +49,30 @@ where
     K: CopyOwnedValue + Send + 'static,
     V: Key + Send + 'static,
 {
-    fn append_sorted_inserts(&self, pairs: Vec<(K, V)>) -> Result<(), AppError> {
-        if pairs.is_empty() { return Ok(()); }
-        fast_send(&self.sender, WriterCommand::AppendSortedInserts(pairs))
+    fn shards(&self) -> usize {
+        1
     }
 
-    fn merge_unsorted_inserts(&self, pairs: Vec<(K, V)>) -> Result<(), AppError> {
-        if pairs.is_empty() { return Ok(()); }
-        fast_send(&self.sender, WriterCommand::MergeUnsortedInserts(pairs))
+    fn append_sorted_inserts(&self, pairs: Vec<(K, V)>) -> Result<(), AppError> {
+        if !pairs.is_empty() {
+            fast_send(&self.sender, WriterCommand::AppendSortedInserts(pairs))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn merge_unsorted_inserts(&self, pairs: Vec<(K, V)>, last_shards: Option<usize>) -> Result<(), AppError> {
+        if !pairs.is_empty() {
+            let _ = fast_send(&self.sender, WriterCommand::MergeUnsortedInserts(pairs))?;
+        }
+        if let Some(from_shards) = last_shards {
+            self.ready_for_flush(from_shards)?
+        }
+        Ok(())
+    }
+
+    fn ready_for_flush(&self, shards: usize) -> Result<(), AppError> {
+        fast_send(&self.sender, WriterCommand::ReadyForFlush(shards))
     }
 
     fn write_sorted_inserts_on_flush(&self, pairs: Vec<(K, V)>) -> Result<(), AppError> {
@@ -80,9 +99,11 @@ where
     fn query_and_write(
         &self,
         values: Vec<V>,
-        sink: Arc<dyn Fn(Vec<(usize, Option<ValueOwned<K>>)>) -> Result<(), AppError> + Send + Sync + 'static>,
+        is_last: bool,
+        sink: Arc<dyn Fn(Option<usize>, Vec<(usize, Option<ValueOwned<K>>)>) -> Result<(), AppError> + Send + Sync + 'static>,
     ) -> Result<(), AppError> {
-        fast_send(&self.sender, WriterCommand::QueryAndWrite { values, sink })
+        let last_shards = if is_last { Some(1) } else { None };
+        fast_send(&self.sender, WriterCommand::QueryAndWrite { last_shards: last_shards, values: values.into_iter().enumerate().collect(), sink })
     }
 }
 
@@ -145,6 +166,10 @@ where
     KP: KeyPartitioner<K> + Send + Sync + Clone + 'static,
     VP: ValuePartitioner<V> + Send + Sync + Clone + 'static,
 {
+    fn shards(&self) -> usize {
+        self.senders.len()
+    }
+
     fn append_sorted_inserts(&self, pairs: Vec<(K, V)>) -> Result<(), AppError> {
         for (sid, bucket) in self.bucket(pairs).into_iter().enumerate() {
             if bucket.is_empty() { continue; }
@@ -153,10 +178,20 @@ where
         Ok(())
     }
 
-    fn merge_unsorted_inserts(&self, pairs: Vec<(K, V)>) -> Result<(), AppError> {
+    fn merge_unsorted_inserts(&self, pairs: Vec<(K, V)>, last_shards: Option<usize>) -> Result<(), AppError> {
         for (sid, bucket) in self.bucket(pairs).into_iter().enumerate() {
             if bucket.is_empty() { continue; }
             fast_send(&self.senders[sid], WriterCommand::MergeUnsortedInserts(bucket))?;
+        }
+        if let Some(from_shards) = last_shards {
+            self.ready_for_flush(from_shards)?
+        }
+        Ok(())
+    }
+
+    fn ready_for_flush(&self, shards: usize) -> Result<(), AppError> {
+        for s in self.senders.iter() {
+            fast_send(s, WriterCommand::ReadyForFlush(shards))?;
         }
         Ok(())
     }
@@ -203,7 +238,8 @@ where
     fn query_and_write(
         &self,
         values: Vec<V>,
-        sink: Arc<dyn Fn(Vec<(usize, Option<ValueOwned<K>>)>) -> Result<(), AppError> + Send + Sync + 'static>,
+        is_last: bool,
+        sink: Arc<dyn Fn(Option<usize>, Vec<(usize, Option<ValueOwned<K>>)>) -> Result<(), AppError> + Send + Sync + 'static>,
     ) -> Result<(), AppError> {
         let vp = match &self.part {
             Partitioning::ByValue(vp) => vp,
@@ -211,19 +247,20 @@ where
                 return Err(AppError::Custom("get_any_for_index requires value partitioning".into()));
             }
         };
-
-        let n = self.shards();
-        if values.is_empty() { return Ok(()); }
-
-        let mut buckets: Vec<Vec<(usize, V)>> = (0..n).map(|_| Vec::new()).collect();
+        if values.is_empty() && !is_last {
+            return Ok(());
+        }
+        let shards = self.shards();
+        let mut buckets: Vec<Vec<(usize, V)>> = (0..shards).map(|_| Vec::new()).collect();
         for (pos, v) in values.into_iter().enumerate() {
             let sid = vp.partition_value(v.borrow());
             buckets[sid].push((pos, v));
         }
+        let last_shards = if is_last { Some(shards) } else { None };
 
-        for (sid, vals) in buckets.into_iter().enumerate() {
-            if vals.is_empty() { continue; }
-            fast_send(&self.senders[sid], WriterCommand::QueryAndWriteBucket { values: vals, sink: sink.clone() })?;
+        for (sid, values) in buckets.into_iter().enumerate() {
+            if values.is_empty() && !is_last { continue; }
+            fast_send(&self.senders[sid], WriterCommand::QueryAndWrite { last_shards, values, sink: sink.clone() })?;
         }
         Ok(())
     }
