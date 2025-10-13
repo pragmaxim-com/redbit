@@ -31,7 +31,7 @@ pub struct DbRelationshipMacros {
 }
 
 impl DbRelationshipMacros {
-    pub fn new(entity_def: &EntityDef, field_def: FieldDef, multiplicity: Multiplicity, used: Option<Used>, write_from_using: Option<WriteFrom>) -> DbRelationshipMacros {
+    pub fn new(entity_def: &EntityDef, field_def: FieldDef, multiplicity: Multiplicity, write_from_using: Option<WriteFrom>) -> DbRelationshipMacros {
         let child_name = &field_def.name; // e.g., "transactions"
         let child_type = &field_def.tpe; // e.g., the type `Transaction` from Vec<Transaction>
         let entity_name = &entity_def.entity_name;
@@ -48,7 +48,7 @@ impl DbRelationshipMacros {
                     field_def: field_def.clone(),
                     struct_init: init::one2one_relation_init(child_name, child_type),
                     stream_query_init: query::query_init(child_name, &child_stream_query_type),
-                    tx_context_item: context::tx_context_item(child_name, &write_child_tx_context_type, &read_child_tx_context_type, used),
+                    tx_context_item: context::tx_context_item(child_name, &write_child_tx_context_type, &read_child_tx_context_type, write_from_using),
                     table_info_item: info::table_info_init(child_name, &child_table_info_type),
                     struct_init_with_query: init::one2one_relation_init_with_query(child_name, child_type),
                     struct_default_init: init::one2one_relation_default_init(child_name, child_type),
@@ -65,7 +65,7 @@ impl DbRelationshipMacros {
                     field_def: field_def.clone(),
                     struct_init: init::one2opt_relation_init(child_name, child_type),
                     stream_query_init: query::query_init(child_name, &child_stream_query_type),
-                    tx_context_item: context::tx_context_item(child_name, &write_child_tx_context_type, &read_child_tx_context_type, used),
+                    tx_context_item: context::tx_context_item(child_name, &write_child_tx_context_type, &read_child_tx_context_type, write_from_using),
                     table_info_item: info::table_info_init(child_name, &child_table_info_type),
                     struct_init_with_query: init::one2opt_relation_init_with_query(child_name, child_type),
                     struct_default_init: init::one2opt_relation_default_init(child_name, child_type),
@@ -83,7 +83,7 @@ impl DbRelationshipMacros {
                     field_def: field_def.clone(),
                     struct_init: init::one2many_relation_init(child_name, child_type),
                     stream_query_init: query::query_init(child_name, &child_stream_query_type),
-                    tx_context_item: context::tx_context_item(child_name, &write_child_tx_context_type, &read_child_tx_context_type, used),
+                    tx_context_item: context::tx_context_item(child_name, &write_child_tx_context_type, &read_child_tx_context_type, write_from_using),
                     table_info_item: info::table_info_init(child_name, &child_table_info_type),
                     struct_init_with_query: init::one2many_relation_init_with_query(child_name, child_type),
                     struct_default_init: init::one2many_relation_default_init(child_name, child_type),

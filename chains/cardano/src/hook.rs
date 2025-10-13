@@ -1,11 +1,20 @@
 use crate::model_v1::*;
 use std::ops::Index;
 
-pub(crate) fn write_from_input_refs_using_hash(tx_context: &TransactionWriteTxContext, parent: BlockPointer, input_refs: Vec<InputRef>) -> Result<(), AppError> {
-    let tx_hashes = input_refs.iter().map(|input_ref| input_ref.tx_hash).collect::<Vec<_>>();
+// temporary hack for testing purposes, will be removed
+pub(crate) fn flush(tx_context: &TransactionWriteTxContext) -> Result<(), AppError> {
     let ids_router  = tx_context.inputs.input_id.router();
     let ptrs_router = tx_context.inputs.input_utxo_pointer_by_id.router();
-    tx_context.transaction_hash_index.router.query_and_write(tx_hashes, Arc::new(move |out| {
+    ids_router.ready_for_flush(1)?;
+    ptrs_router.ready_for_flush(1)?;
+    Ok(())
+}
+
+pub(crate) fn write_from_input_refs_using_hash(tx_context: &TransactionWriteTxContext, parent: BlockPointer, input_refs: Vec<InputRef>, is_last: bool) -> Result<(), AppError> {
+    let ids_router  = tx_context.inputs.input_id.router();
+    let ptrs_router = tx_context.inputs.input_utxo_pointer_by_id.router();
+    let tx_hashes = input_refs.iter().map(|input_ref| input_ref.tx_hash).collect::<Vec<_>>();
+    tx_context.transaction_hash_index.router.query_and_write(tx_hashes, is_last, Arc::new(move |last_shards, out| {
         let mut ids = Vec::with_capacity(out.len());
         let mut pointers = Vec::with_capacity(out.len());
         for (index, tx_pointer_buf_opt) in out.into_iter() {
@@ -25,8 +34,8 @@ pub(crate) fn write_from_input_refs_using_hash(tx_context: &TransactionWriteTxCo
                 },
             }
         }
-        ids_router.append_sorted_inserts(ids)?;
-        ptrs_router.merge_unsorted_inserts(pointers)?;
+        ids_router.merge_unsorted_inserts(ids, last_shards)?;
+        ptrs_router.merge_unsorted_inserts(pointers, last_shards)?;
         Ok(())
     }))
 }

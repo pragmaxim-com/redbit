@@ -27,7 +27,7 @@ where
     V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
     F: TableFactory<K, V> + Send + Clone + 'static,
 {
-    fn step<T: WriteTableLike<K, V>>(err: &Option<AppError>, collect_start: Instant, table: &mut T, async_merge_buf: &RefCell<MergeBuffer<K, V>>, cmd: WriterCommand<K, V>) -> Result<Control, AppError> {
+    fn step<T: WriteTableLike<K, V>>(deferred_sender: &mut Option<FlushState>, err: &mut Option<AppError>, collect_start: Instant, table: &mut T, async_merge_buf: &RefCell<MergeBuffer<K, V>>, cmd: WriterCommand<K, V>) -> Result<Control, AppError> {
         match cmd {
             WriterCommand::WriteInsertNow(k, v) => {
                 table.insert_kv(k, v)?;
@@ -54,20 +54,14 @@ where
                 ack.send(Ok(r))?;
                 Ok(Control::Continue)
             }
-            WriterCommand::QueryAndWrite { values, sink } => {
-                let mut out = Vec::with_capacity(values.len());
-                for (idx, v) in values.into_iter().enumerate() {
-                    out.push((idx, table.get_any_for_index(v)?));
+            WriterCommand::QueryAndWrite { last_shards, values, sink } => {
+                if !values.is_empty() || last_shards.is_some() {
+                    let mut out = Vec::with_capacity(values.len());
+                    for (idx, v) in values.into_iter() {
+                        out.push((idx, table.get_any_for_index(v)?));
+                    }
+                    sink(last_shards, out)?;
                 }
-                sink(out)?;
-                Ok(Control::Continue)
-            }
-            WriterCommand::QueryAndWriteBucket { values, sink } => {
-                let mut out = Vec::with_capacity(values.len());
-                for (idx, v) in values.into_iter() {
-                    out.push((idx, table.get_any_for_index(v)?));
-                }
-                sink(out)?;
                 Ok(Control::Continue)
             }
             WriterCommand::Range(from, until, ack) => {
@@ -75,12 +69,25 @@ where
                 ack.send(Ok(r))?;
                 Ok(Control::Continue)
             }
-            WriterCommand::IsReadyForWriting(ack) => {
-                Ok(Control::IsReadyForWriting(ack))
-            },
+            WriterCommand::FlushWhenReady(ack) => {
+                if let Some(FlushState { sender: _, sum, shards: Some(shards_total) }) = deferred_sender.as_ref() {
+                    if *sum == *shards_total {
+                        return Self::step(deferred_sender, err, collect_start, table, async_merge_buf, WriterCommand::Flush(ack));
+                    }
+                }
+                Ok(Control::FlushWhenReady(ack))
+            }
+            WriterCommand::ReadyForFlush(shards_total) => {
+                if let Some(FlushState { sender: Some(ack), sum, shards: Some(_) }) = deferred_sender.as_ref() {
+                    if *sum + 1 == shards_total {
+                        return Self::step(deferred_sender, err, collect_start, table, async_merge_buf, WriterCommand::Flush(ack.clone()));
+                    }
+                }
+                Ok(Control::ReadyForFlush(shards_total))
+            }
             WriterCommand::Flush(sender) => {
-                if let Some(_) = err {
-                    Ok(Control::Error(sender))
+                if let Some(error) = err.take() {
+                    Ok(Control::Error(sender, error))
                 } else {
                     let collect_took = collect_start.elapsed().as_millis();
                     let mut buf = async_merge_buf.borrow_mut();
@@ -106,16 +113,16 @@ where
         }
     }
 
-    fn drain_batch<T: WriteTableLike<K, V>>(err: &Option<AppError>, collecting_start: Instant, table: &mut T, async_merge_buf: &RefCell<MergeBuffer<K, V>>, rx: &Receiver<WriterCommand<K, V>>) -> Result<Control, AppError> {
+    fn drain_batch<T: WriteTableLike<K, V>>(deferred_sender: &mut Option<FlushState>, err: &mut Option<AppError>, collecting_start: Instant, table: &mut T, async_merge_buf: &RefCell<MergeBuffer<K, V>>, rx: &Receiver<WriterCommand<K, V>>) -> Result<Control, AppError> {
         // 1) one blocking recv to ensure progress
-        let mut ctrl = Self::step(err, collecting_start, table, async_merge_buf, rx.recv()?)?;
+        let mut ctrl = Self::step(deferred_sender, err, collecting_start, table, async_merge_buf, rx.recv()?)?;
         if !matches!(ctrl, Control::Continue) {
             return Ok(ctrl);
         }
 
         // 2) opportunistically drain the channel without blocking
         for cmd in rx.try_iter() {
-            ctrl = Self::step(err, collecting_start, table, async_merge_buf, cmd)?;
+            ctrl = Self::step(deferred_sender, err, collecting_start, table, async_merge_buf, cmd)?;
             if !matches!(ctrl, Control::Continue) {
                 break;
             }
@@ -156,8 +163,11 @@ where
                         };
                         // 1) drop the strong Arc immediately; owner keeps DB alive
                         drop(db_arc);
+
+                        // local state
                         let mut write_error: Option<AppError> = None;
                         let mut flush_result: Option<(Sender<Result<TaskResult, AppError>>, Result<WriteResult, AppError>)> = None;
+                        let mut deferred_flush_sender: Option<FlushState> = None;
 
                         // 2) open typed table bound to &tx
                         let mut table = match factory.open(&tx, &mut cache) {
@@ -168,13 +178,23 @@ where
 
                         // 3) process commands until a Flush arrives
                         'in_tx: loop {
-                            match Self::drain_batch(&write_error, collecting_start, &mut table, &mut async_merge_buf, &receiver) {
+                            match Self::drain_batch(&mut deferred_flush_sender, &mut write_error, collecting_start, &mut table, &mut async_merge_buf, &receiver) {
                                 Ok(Control::Continue) => continue,
-                                Ok(Control::IsReadyForWriting(ack)) => { let _ = ack.send(Ok(())); continue; },
-                                Ok(Control::Error(sender)) => {
-                                    if let Some(err) = write_error {
-                                        let _ = sender.send(Err(err));
+                                Ok(Control::ReadyForFlush(shards)) => {
+                                    match deferred_flush_sender {
+                                        Some(FlushState { sender, sum, shards: _}) => deferred_flush_sender = Some(FlushState { sender, sum: sum + 1, shards: Some(shards)}),
+                                        None => deferred_flush_sender = Some(FlushState { sender: None, sum: 1, shards: Some(shards)}),
                                     }
+                                    continue;
+                                },
+                                Ok(Control::FlushWhenReady(ack)) => {
+                                    match deferred_flush_sender {
+                                        Some(FlushState { sender: _, sum, shards}) => deferred_flush_sender = Some(FlushState { sender: Some(ack), sum, shards}),
+                                        None => deferred_flush_sender = Some(FlushState { sender: Some(ack), sum: 0, shards: None}),
+                                    }
+                                },
+                                Ok(Control::Error(sender, err)) => {
+                                    let _ = sender.send(Err(err));
                                     break 'in_tx;
                                 }
                                 Ok(Control::Flush(sender, result)) => {
@@ -188,6 +208,7 @@ where
                                     break 'outer;
                                 }
                                 Err(err) => {
+                                    error!("{} write tx error: {}", name, err);
                                     write_error = Some(err);
                                     continue;
                                 }
@@ -203,10 +224,16 @@ where
                                 },
                                 Ok(s) => {
                                     let flush_start = Instant::now();
-                                    let _ = tx.commit().map_err(AppError::from);
-                                    let flush_took = flush_start.elapsed().as_millis();
-                                    let stats = TaskStats::new(s.collect_took, s.sort_took, s.write_took, flush_took);
-                                    let _ = sender.send(Ok(TaskResult::new(&name, stats)));
+                                    match tx.commit() {
+                                        Ok(_) => {
+                                            let flush_took = flush_start.elapsed().as_millis();
+                                            let stats = TaskStats::new(s.collect_took, s.sort_took, s.write_took, flush_took);
+                                            let _ = sender.send(Ok(TaskResult::new(&name, stats)));
+                                        }
+                                        Err(e) => {
+                                            let _ = sender.send(Err(AppError::from(e)));
+                                        }
+                                    }
                                 }
                             }
                         } else {
@@ -223,6 +250,7 @@ where
 
                     other => {
                         error!("{} received {:?} outside <Begin - Flush> scope; ignoring", name, std::mem::discriminant(&other));
+                        break 'outer;
                     }
                 }
             }
@@ -291,11 +319,13 @@ where
         Ok(vec![FlushFuture::lazy(self.sender())])
     }
 
-    fn flush_three_phased(&self) -> Result<Vec<FlushFuture>, AppError> {
+    fn flush_deferred(&self) -> Result<Vec<FlushFuture>, AppError> {
         if !self.sync_buf.borrow().is_empty() {
             self.router.write_sorted_inserts_on_flush(std::mem::take(&mut *self.sync_buf.borrow_mut()))?;
         }
-        Ok(vec![FlushFuture::ready_and_fire(self.sender(), self.sender())])
+        let (ack_tx, ack_rx) = bounded::<Result<TaskResult, AppError>>(1);
+        self.topic.send(WriterCommand::FlushWhenReady(ack_tx))?;
+        Ok(vec![FlushFuture::eager(ack_rx)])
     }
 
     fn shutdown(self) -> Result<(), AppError> {

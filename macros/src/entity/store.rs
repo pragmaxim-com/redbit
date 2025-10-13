@@ -12,6 +12,7 @@ pub fn store_def(entity_def: &EntityDef,store_statements: &[TokenStream]) -> Fun
     let fn_name = format_ident!("store");
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: &#write_ctx_type, instance: #entity_type) -> Result<(), AppError> {
+            let is_last = true;
             #(#store_statements)*
             Ok(())
         }
@@ -26,7 +27,7 @@ pub fn store_def(entity_def: &EntityDef,store_statements: &[TokenStream]) -> Fun
             for test_entity in #entity_type::sample_many(entity_count) {
                 let pk = #entity_name::#fn_name(&tx_context, test_entity).expect("Failed to store and commit instance");
             }
-            tx_context.two_phase_commit_and_close().expect("Failed to flush transaction context");
+            tx_context.two_phase_commit_and_close(MutationType::Writes).expect("Failed to flush transaction context");
         }
     });
 
@@ -40,7 +41,7 @@ pub fn store_def(entity_def: &EntityDef,store_statements: &[TokenStream]) -> Fun
             b.iter(|| {
                 let _ = tx_context.begin_writing().expect("Failed to begin writing");
                 #entity_name::#fn_name(&tx_context, test_entity.clone()).expect("Failed to store and commit instance");
-                for f in tx_context.commit_ctx_async().unwrap() {
+                for f in tx_context.commit_ctx_async(MutationType::Writes).unwrap() {
                     f.wait().expect("Failed to commit");
                 }
             });
@@ -62,8 +63,11 @@ pub fn store_many_def(entity_def: &EntityDef, store_many_statements: &[TokenStre
     let write_ctx_type = &entity_def.write_ctx_type;
     let fn_name = format_ident!("store_many");
     let fn_stream = quote! {
-        pub fn #fn_name(tx_context: &#write_ctx_type, instances: Vec<#entity_type>) -> Result<(), AppError> {
+        pub fn #fn_name(tx_context: &#write_ctx_type, instances: Vec<#entity_type>, last: bool) -> Result<(), AppError> {
+            let mut remaining = instances.len();
             for instance in instances {
+                remaining -= 1;
+                let is_last = last && remaining == 0;
                 #(#store_many_statements)*
             }
             Ok(())
@@ -77,8 +81,8 @@ pub fn store_many_def(entity_def: &EntityDef, store_many_statements: &[TokenStre
             let entity_count: usize = 3;
             let test_entities = #entity_type::sample_many(entity_count);
             let tx_context = #entity_name::begin_write_ctx(&storage).unwrap();
-            let pk = #entity_name::#fn_name(&tx_context, test_entities).expect("Failed to store and commit instance");
-            tx_context.two_phase_commit_and_close().expect("Failed to flush transaction context");
+            let pk = #entity_name::#fn_name(&tx_context, test_entities, true).expect("Failed to store and commit instance");
+            tx_context.two_phase_commit_and_close(MutationType::Writes).expect("Failed to flush transaction context");
         }
     });
 
@@ -92,13 +96,12 @@ pub fn store_many_def(entity_def: &EntityDef, store_many_statements: &[TokenStre
             let tx_context = #entity_name::new_write_ctx(&storage).unwrap();
             b.iter(|| {
                 let _ = tx_context.begin_writing().expect("Failed to begin writing");
-                #entity_name::#fn_name(&tx_context, test_entities.clone()).expect("Failed to store and commit instance");
-                let _ = tx_context.two_phase_commit().expect("Failed to commit");
+                #entity_name::#fn_name(&tx_context, test_entities.clone(), true).expect("Failed to store and commit instance");
+                let _ = tx_context.two_phase_commit(MutationType::Writes).expect("Failed to commit");
             });
             tx_context.stop_writing().unwrap();
         }
     });
-
 
     FunctionDef {
         fn_stream,
@@ -118,9 +121,10 @@ pub fn persist_def(entity_def: &EntityDef, store_statements: &[TokenStream]) -> 
     let fn_stream = quote! {
         pub fn #fn_name(storage: Arc<Storage>, instance: #entity_type) -> Result<#pk_type, AppError> {
            let pk = instance.#pk_name;
+           let is_last = true;
            let tx_context = #entity_name::begin_write_ctx(&storage)?;
            #(#store_statements)*
-           tx_context.two_phase_commit_and_close()?;
+           tx_context.two_phase_commit_and_close(MutationType::Writes)?;
            Ok(pk)
        }
     };

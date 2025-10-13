@@ -73,7 +73,7 @@ impl DbColumnMacros {
         let column_type = &col_def.tpe.clone();
         let pk_name = &entity_def.key_def.field_def().name;
         let table_def = TableDef::plain_table_def(entity_def, column_name, column_type);
-        let plain_table_def = PlainTableDef::new(table_def, column_props, used.clone(), false);
+        let plain_table_def = PlainTableDef::new(table_def, column_props, false);
         DbColumnMacros {
             field_def: col_def.clone(),
             range_query: None,
@@ -107,7 +107,7 @@ impl DbColumnMacros {
         let column_type = &col_field_def.tpe.clone();
         let pk_name = &entity_def.key_def.field_def().name;
 
-        let index_tables = IndexTableDefs::new(entity_def, column_name, column_type, column_props, used.clone());
+        let index_tables = IndexTableDefs::new(entity_def, column_name, column_type, column_props);
 
         let mut function_defs: Vec<FunctionDef> = Vec::new();
         function_defs.push(get_by::get_by_index_def(entity_def, column_name, column_type, &index_tables.var_name));
@@ -158,7 +158,7 @@ impl DbColumnMacros {
         let column_type = &col_field_def.tpe.clone();
         let pk_name = &entity_def.key_def.field_def().name;
 
-        let dict_tables = DictTableDefs::new(&entity_def, column_name, column_type, column_props, used.clone());
+        let dict_tables = DictTableDefs::new(&entity_def, column_name, column_type, column_props);
 
         let mut function_defs: Vec<FunctionDef> = Vec::new();
 

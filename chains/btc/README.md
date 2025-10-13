@@ -10,7 +10,8 @@ sudo apt-get install rustup
 
 ### Requirements
 
-With current [setup](src/model_v1.rs) you need at least 16 cores CPU and 32GB RAM to run both BTC Node and Redbit without crashing. 
+With current [setup](src/model_v1.rs) you need at least 16 cores CPU and 32GB RAM to run both BTC Node and Redbit efficiently,
+because currently there is 16 columns and 3 columns are sharded.
 
 ### Usage
 

@@ -140,7 +140,7 @@ pub fn block_like(block_type: Type, pk_name: &Ident, pk_type: &Type, field_defs:
                     let tx_context = #block_type::begin_write_ctx(&self.storage)?;
                     let pks = #pk_type::from_many(&(0..=tip_header.#pk_name.0).collect::<Vec<u32>>());
                     #block_type::delete_many(&tx_context, &pks)?;
-                    tx_context.two_phase_commit_and_close()?;
+                    tx_context.two_phase_commit_and_close(MutationType::Deletes)?;
                 }
                 Ok(())
             }
@@ -160,11 +160,9 @@ pub fn block_like(block_type: Type, pk_name: &Ident, pk_type: &Type, field_defs:
             fn store_blocks(&self, indexing_context: &#write_tx_context, blocks: Vec<#block_type>) -> Result<HashMap<String, TaskResult>, chain::ChainError> {
                 let _ = indexing_context.begin_writing()?;
                 let master_start = Instant::now();
-                for block in blocks.into_iter() {
-                    #block_type::store(&indexing_context, block)?;
-                }
+                #block_type::store_many(&indexing_context, blocks, true)?;
                 let master_took = master_start.elapsed().as_millis();
-                let mut tasks = indexing_context.two_phase_commit()?;
+                let mut tasks = indexing_context.two_phase_commit(MutationType::Writes)?;
 
                 let master_task = TaskResult::master(master_took);
                 tasks.insert(master_task.name.clone(), master_task);
@@ -176,7 +174,7 @@ pub fn block_like(block_type: Type, pk_name: &Ident, pk_type: &Type, field_defs:
                 for block in &blocks {
                     #block_type::delete(&indexing_context, block.#pk_name)?;
                 }
-                let _ = indexing_context.two_phase_commit()?;
+                let _ = indexing_context.two_phase_commit(MutationType::Deletes)?;
                 let result = self.store_blocks(indexing_context, blocks)?;
                 Ok(result)
             }

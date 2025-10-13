@@ -52,7 +52,7 @@ impl DbPkMacros {
     pub fn new(entity_def: &EntityDef, multiplicity: Option<Multiplicity>, no_columns: bool, column_props: ColumnProps) -> Self {
         let pk_name = &entity_def.key_def.field_def().name;
         let is_root = entity_def.key_def.is_root();
-        let plain_table_def = PlainTableDef::new(TableDef::pk(entity_def), column_props, None, is_root);
+        let plain_table_def = PlainTableDef::new(TableDef::pk(entity_def), column_props, is_root);
         let range_query = entity::query::pk_range_query(entity_def);
 
         let mut function_defs: Vec<FunctionDef> = vec![
