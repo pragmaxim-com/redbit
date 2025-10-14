@@ -11,7 +11,7 @@ pub fn store_def(entity_def: &EntityDef,store_statements: &[TokenStream]) -> Fun
     let write_ctx_type = &entity_def.write_ctx_type;
     let fn_name = format_ident!("store");
     let fn_stream = quote! {
-        pub fn #fn_name(tx_context: &#write_ctx_type, instance: #entity_type) -> Result<(), AppError> {
+        fn #fn_name(tx_context: &#write_ctx_type, instance: #entity_type) -> Result<(), AppError> {
             let is_last = true;
             #(#store_statements)*
             Ok(())
@@ -23,11 +23,11 @@ pub fn store_def(entity_def: &EntityDef,store_statements: &[TokenStream]) -> Fun
         fn #fn_name() {
             let (storage_owner, storage) = random_storage();
             let entity_count: usize = 3;
-            let tx_context = #entity_name::begin_write_ctx(&storage).unwrap();
             for test_entity in #entity_type::sample_many(entity_count) {
+                let tx_context = #entity_name::begin_write_ctx(&storage).unwrap();
                 let pk = #entity_name::#fn_name(&tx_context, test_entity).expect("Failed to store and commit instance");
+                tx_context.two_phase_commit_and_close(MutationType::Writes).expect("Failed to flush transaction context");
             }
-            tx_context.two_phase_commit_and_close(MutationType::Writes).expect("Failed to flush transaction context");
         }
     });
 
