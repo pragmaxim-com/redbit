@@ -103,7 +103,7 @@ where
         sink: Arc<dyn Fn(Option<usize>, Vec<(usize, Option<ValueOwned<K>>)>) -> Result<(), AppError> + Send + Sync + 'static>,
     ) -> Result<(), AppError> {
         let last_shards = if is_last { Some(1) } else { None };
-        fast_send(&self.sender, WriterCommand::QueryAndWrite { last_shards: last_shards, values: values.into_iter().enumerate().collect(), sink })
+        fast_send(&self.sender, WriterCommand::QueryAndWrite { last_shards, values: values.into_iter().enumerate().collect(), sink })
     }
 }
 

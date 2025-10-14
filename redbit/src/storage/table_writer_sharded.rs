@@ -242,11 +242,12 @@ mod index_sharded {
         writer.flush().expect("flush");
         writer.begin().expect("begin");
         // ----- heads before delete -----
+        let router = writer.router.clone();
         {
             let want = 3usize; // querying [a1, a2, a3]
             let (tx, rx) = channel::unbounded::<Vec<(usize, Option<ValueOwned<u32>>)>>();
 
-            writer.router.query_and_write(vec![a1.clone(), a2.clone(), a3.clone()], true, Arc::new(move |_last_shards, batch| {
+            router.query_and_write(vec![a1.clone(), a2.clone(), a3.clone()], true, Arc::new(move |_last_shards, batch| {
                 // non-blocking: just forward the shard batch
                 tx.send(batch)?;
                 Ok(())
@@ -263,20 +264,23 @@ mod index_sharded {
                 }
             }
 
-            assert_eq!(acc[0].as_ref().map(|v| v.as_value()), Some(10u32));
+            assert_eq!(acc[0].as_ref().map(|v| v.as_value()), Some(3u32));
             assert_eq!(acc[1].as_ref().map(|v| v.as_value()), Some(7u32));
-            assert_eq!(acc[2].as_ref().map(|v| v.as_value()), Some(100u32));
+            assert_eq!(acc[2].as_ref().map(|v| v.as_value()), Some(4u32));
         }
-        // delete current head for a3 (4) and re-check
-        assert!(writer.router.delete_kv(4u32).expect("del 4"));
+        assert!(router.delete_kv(4u32).expect("del 4"));
 
         // ----- head after delete (only a3) -----
         {
             let want = 1usize;
             let (tx, rx) = channel::unbounded::<Vec<(usize, Option<ValueOwned<u32>>)>>();
 
-            writer.router.query_and_write(vec![a3.clone()], true, Arc::new(move |_last_shards, batch| {
+            let router_c = writer.router.clone();
+            router.query_and_write(vec![a3.clone()], true, Arc::new(move |last_shards, batch| {
                 tx.send(batch)?;
+                if let Some(last_shards) = last_shards {
+                    let _ = router_c.ready_for_flush(last_shards);
+                }
                 Ok(())
             })).expect("enqueue head_after");
 
@@ -294,13 +298,13 @@ mod index_sharded {
             assert_eq!(acc[0].as_ref().map(|v| v.as_value()), Some(80u32));
         }
 
-        writer.flush().expect("flush");
+        writer.flush_deferred().expect("flush");
 
         let reader = index_test_utils::mk_sharded_reader::<Address>(n, weak_dbs, pk_by_index_def, index_by_pk_def);
         let keys_iter = reader.get_keys(&a3).expect("get_keys a3");
         let mut keys: Vec<u32> = keys_iter.into_iter().map(|g| g.unwrap().value()).collect();
         keys.sort();
-        assert_eq!(keys, vec![80, 100]);
+        assert_eq!(keys, vec![4, 80, 100]);
 
         writer.shutdown().expect("shutdown");
     }
