@@ -13,6 +13,141 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::time::Instant;
 
+struct TxState<'txn, 'c, K, V, F>
+where
+    K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
+    V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
+    F: TableFactory<K, V>,
+{
+    table: F::Table<'txn, 'c>,
+    async_merge_buf: RefCell<MergeBuffer<K, V>>,
+    deferred: Option<FlushState>,
+    write_error: Option<AppError>,
+    collecting_start: Instant,
+}
+
+impl<'txn, 'c, K, V, F> TxState<'txn, 'c, K, V, F>
+where
+    K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
+    V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
+    F: TableFactory<K, V>,
+{
+    fn step(&mut self, cmd: WriterCommand<K, V>) -> Result<Control, AppError> {
+        match cmd {
+            WriterCommand::WriteInsertNow(k, v) => {
+                self.table.insert_kv(k, v)?;
+                Ok(Control::Continue)
+            }
+            WriterCommand::MergeUnsortedInserts(kvs) => {
+                self.async_merge_buf.borrow_mut().merge_unsorted(kvs);
+                Ok(Control::Continue)
+            }
+            WriterCommand::AppendSortedInserts(kvs) => {
+                self.async_merge_buf.borrow_mut().append_sorted(kvs);
+                Ok(Control::Continue)
+            }
+            WriterCommand::WriteSortedInsertsOnFlush(kvs) => {
+                if !self.async_merge_buf.borrow().is_empty() {
+                    Err(AppError::Custom("WriteSortedInserts cannot be mixed with SortInserts now".to_string()))
+                } else {
+                    self.async_merge_buf = RefCell::new(MergeBuffer::from_sorted(kvs));
+                    Ok(Control::Continue)
+                }
+            }
+            WriterCommand::Remove(k, ack) => {
+                let r = self.table.delete_kv(k)?;
+                ack.send(Ok(r))?;
+                Ok(Control::Continue)
+            }
+            WriterCommand::QueryAndWrite { last_shards, values, sink } => {
+                if !values.is_empty() || last_shards.is_some() {
+                    let mut out = Vec::with_capacity(values.len());
+                    for (idx, v) in values.into_iter() {
+                        out.push((idx, self.table.get_any_for_index(v)?));
+                    }
+                    sink(last_shards, out)?;
+                }
+                Ok(Control::Continue)
+            }
+            WriterCommand::Range(from, until, ack) => {
+                let r = self.table.range(from..until)?;
+                ack.send(Ok(r))?;
+                Ok(Control::Continue)
+            }
+            WriterCommand::FlushWhenReady(ack) => {
+                match &mut self.deferred {
+                    Some(FlushState { sender, .. }) => {
+                        if sender.is_some() {
+                            return Ok(Control::Error(ack, AppError::Custom("flush already pending".to_string())));
+                        }
+                        *sender = Some(ack.clone())
+                    },
+                    None => self.deferred = Some(FlushState { sender: Some(ack.clone()), sum: 0, shards: None }),
+                }
+                if let Some(FlushState { sender: Some(_), sum, shards: Some(total) }) = &self.deferred {
+                    if *sum == *total {
+                        return self.step(WriterCommand::Flush(ack));
+                    }
+                }
+                Ok(Control::Continue)
+            }
+            WriterCommand::ReadyForFlush(total) => {
+                match &mut self.deferred {
+                    Some(FlushState { sum, shards, .. }) => { *sum += 1; *shards = Some(total); }
+                    None => self.deferred = Some(FlushState { sender: None, sum: 1, shards: Some(total) }),
+                }
+                if let Some(FlushState { sender: Some(ack), sum, shards: Some(t) }) = &self.deferred {
+                    if *sum == *t {
+                        return self.step(WriterCommand::Flush(ack.clone()));
+                    }
+                }
+                Ok(Control::Continue)
+            }
+
+            // --- write (no commit here; we only have &WriteTransaction) ---
+            WriterCommand::Flush(sender) => {
+                if let Some(error) = self.write_error.take() {
+                    return Ok(Control::Error(sender, error));
+                }
+
+                let collect_took = self.collecting_start.elapsed().as_millis();
+
+                let mut buf = self.async_merge_buf.borrow_mut();
+                let sort_start = Instant::now();
+                let kvs = buf.take_sorted();
+                let sort_took = sort_start.elapsed().as_millis();
+
+                let write_start = Instant::now();
+                if !kvs.is_empty() {
+                    if let Err(err) = self.table.insert_many_sorted_by_key(kvs) {
+                        buf.clear();
+                        return Ok(Control::Commit(sender, Err(err)));
+                    }
+                }
+                let write_took = write_start.elapsed().as_millis();
+                buf.clear();
+                drop(buf);
+
+                Ok(Control::Commit(sender, Ok(WriteResult::new(collect_took, sort_took, write_took))))
+            }
+
+            WriterCommand::Shutdown(ack) => Ok(Control::Shutdown(ack)),
+            WriterCommand::Begin(_) => unreachable!("Begin handled outside"),
+        }
+    }
+
+    fn drain_batch(&mut self, rx: &Receiver<WriterCommand<K, V>>) -> Result<Control, AppError> {
+        let mut ctrl = self.step(rx.recv()?)?;
+        if !matches!(ctrl, Control::Continue) { return Ok(ctrl); }
+        for cmd in rx.try_iter() {
+            ctrl = self.step(cmd)?;
+            if !matches!(ctrl, Control::Continue) { break; }
+        }
+        Ok(ctrl)
+    }
+}
+
+// ========================= TableWriter (outer loop; drop st before moving tx) =========================
 pub struct TableWriter<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static, F> {
     topic: Sender<WriterCommand<K, V>>,
     handle: JoinHandle<()>,
@@ -27,241 +162,110 @@ where
     V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
     F: TableFactory<K, V> + Send + Clone + 'static,
 {
-    fn step<T: WriteTableLike<K, V>>(deferred_sender: &mut Option<FlushState>, err: &mut Option<AppError>, collect_start: Instant, table: &mut T, async_merge_buf: &RefCell<MergeBuffer<K, V>>, cmd: WriterCommand<K, V>) -> Result<Control, AppError> {
-        match cmd {
-            WriterCommand::WriteInsertNow(k, v) => {
-                table.insert_kv(k, v)?;
-                Ok(Control::Continue)
-            }
-            WriterCommand::MergeUnsortedInserts(kvs) => {
-                async_merge_buf.borrow_mut().merge_unsorted(kvs);
-                Ok(Control::Continue)
-            }
-            WriterCommand::AppendSortedInserts(kvs) => {
-                async_merge_buf.borrow_mut().append_sorted(kvs);
-                Ok(Control::Continue)
-            }
-            WriterCommand::WriteSortedInsertsOnFlush(kvs) => {
-                if !async_merge_buf.borrow().is_empty() {
-                    Err(AppError::Custom("WriteSortedInserts cannot be mixed with SortInserts now".to_string()))?
-                } else {
-                    async_merge_buf.swap(&RefCell::new(MergeBuffer::from_sorted(kvs)));
-                    Ok(Control::Continue)
-                }
-            }
-            WriterCommand::Remove(k, ack) => {
-                let r = table.delete_kv(k)?;
-                ack.send(Ok(r))?;
-                Ok(Control::Continue)
-            }
-            WriterCommand::QueryAndWrite { last_shards, values, sink } => {
-                if !values.is_empty() || last_shards.is_some() {
-                    let mut out = Vec::with_capacity(values.len());
-                    for (idx, v) in values.into_iter() {
-                        out.push((idx, table.get_any_for_index(v)?));
-                    }
-                    sink(last_shards, out)?;
-                }
-                Ok(Control::Continue)
-            }
-            WriterCommand::Range(from, until, ack) => {
-                let r = table.range(from..until)?;
-                ack.send(Ok(r))?;
-                Ok(Control::Continue)
-            }
-            WriterCommand::FlushWhenReady(ack) => {
-                if let Some(FlushState { sender: _, sum, shards: Some(shards_total) }) = deferred_sender.as_ref() {
-                    if *sum == *shards_total {
-                        return Self::step(deferred_sender, err, collect_start, table, async_merge_buf, WriterCommand::Flush(ack));
-                    }
-                }
-                Ok(Control::FlushWhenReady(ack))
-            }
-            WriterCommand::ReadyForFlush(shards_total) => {
-                if let Some(FlushState { sender: Some(ack), sum, shards: Some(_) }) = deferred_sender.as_ref() {
-                    if *sum + 1 == shards_total {
-                        return Self::step(deferred_sender, err, collect_start, table, async_merge_buf, WriterCommand::Flush(ack.clone()));
-                    }
-                }
-                Ok(Control::ReadyForFlush(shards_total))
-            }
-            WriterCommand::Flush(sender) => {
-                if let Some(error) = err.take() {
-                    Ok(Control::Error(sender, error))
-                } else {
-                    let collect_took = collect_start.elapsed().as_millis();
-                    let mut buf = async_merge_buf.borrow_mut();
-                    let sort_start = Instant::now();
-                    let kvs = buf.take_sorted();
-                    let sort_took = sort_start.elapsed().as_millis();
-                    let write_start = Instant::now();
-                    if !kvs.is_empty() {
-                        match table.insert_many_sorted_by_key(kvs) {
-                            Ok(_) => {}
-                            Err(err) => {
-                                return Ok(Control::Flush(sender, Err(err)));
-                            }
-                        }
-                    }
-                    let write_took = write_start.elapsed().as_millis();
-                    buf.clear();
-                    Ok(Control::Flush(sender, Ok(WriteResult::new(collect_took, sort_took, write_took))))
-                }
-            },
-            WriterCommand::Shutdown(ack) => Ok(Control::Shutdown(ack)),
-            WriterCommand::Begin(_) => unreachable!("Begin handled outside"),
-        }
-    }
-
-    fn drain_batch<T: WriteTableLike<K, V>>(deferred_sender: &mut Option<FlushState>, err: &mut Option<AppError>, collecting_start: Instant, table: &mut T, async_merge_buf: &RefCell<MergeBuffer<K, V>>, rx: &Receiver<WriterCommand<K, V>>) -> Result<Control, AppError> {
-        // 1) one blocking recv to ensure progress
-        let mut ctrl = Self::step(deferred_sender, err, collecting_start, table, async_merge_buf, rx.recv()?)?;
-        if !matches!(ctrl, Control::Continue) {
-            return Ok(ctrl);
-        }
-
-        // 2) opportunistically drain the channel without blocking
-        for cmd in rx.try_iter() {
-            ctrl = Self::step(deferred_sender, err, collecting_start, table, async_merge_buf, cmd)?;
-            if !matches!(ctrl, Control::Continue) {
-                break;
-            }
-        }
-        Ok(ctrl)
-    }
-
     pub fn new(db_weak: Weak<Database>, factory: F) -> Result<Self, AppError> {
         let (topic, receiver): (Sender<WriterCommand<K, V>>, Receiver<WriterCommand<K, V>>) = unbounded();
         let handle = thread::spawn(move || {
-            let mut cache = factory.new_cache();
-            let mut async_merge_buf = RefCell::new(MergeBuffer::new());
-            let name = factory.name();
             'outer: loop {
-                // wait until someone asks us to begin a write tx
                 let cmd = match receiver.recv() {
                     Ok(c) => c,
-                    Err(e) => { error!("writer {} terminated: {}", name, e.to_string()); break; }
+                    Err(e) => { error!("writer {} terminated: {}", factory.name(), e.to_string()); break; }
                 };
 
                 match cmd {
                     WriterCommand::Begin(ack) => {
                         let db_arc = match db_weak.upgrade() {
                             Some(db) => db,
-                            None => {
-                                let _ = ack.send(Err(AppError::Custom("database closed".to_string())));
-                                break 'outer;
-                            }
+                            None => { let _ = ack.send(Err(AppError::Custom("database closed".to_string()))); break 'outer; }
                         };
-                        if !async_merge_buf.borrow().is_empty() {
-                            let _ = ack.send(Err(AppError::Custom("Begin received while previous transaction not finished".to_string())));
-                            break 'outer;
-                        }
-                        // 0) open a new write tx
+
                         let tx = match db_arc.begin_write() {
                             Ok(tx) => tx,
                             Err(e) => { let _ = ack.send(Err(AppError::from(e))); continue 'outer; }
                         };
-                        // 1) drop the strong Arc immediately; owner keeps DB alive
                         drop(db_arc);
 
-                        // local state
-                        let mut write_error: Option<AppError> = None;
-                        let mut flush_result: Option<(Sender<Result<TaskResult, AppError>>, Result<WriteResult, AppError>)> = None;
-                        let mut deferred_flush_sender: Option<FlushState> = None;
-
-                        // 2) open typed table bound to &tx
-                        let mut table = match factory.open(&tx, &mut cache) {
+                        let mut cache_local = factory.new_cache();
+                        let table = match factory.open(&tx, &mut cache_local) {
                             Ok(t) => { let _ = ack.send(Ok(())); t },
                             Err(e) => { let _ = ack.send(Err(e)); continue 'outer; }
                         };
-                        let collecting_start = Instant::now();
 
-                        // 3) process commands until a Flush arrives
+                        let mut st = TxState::<K, V, F> {
+                            table,
+                            async_merge_buf: RefCell::new(MergeBuffer::new()),
+                            deferred: None,
+                            write_error: None,
+                            collecting_start: Instant::now(),
+                        };
+
                         'in_tx: loop {
-                            match Self::drain_batch(&mut deferred_flush_sender, &mut write_error, collecting_start, &mut table, &mut async_merge_buf, &receiver) {
+                            match st.drain_batch(&receiver) {
                                 Ok(Control::Continue) => continue,
-                                Ok(Control::ReadyForFlush(shards)) => {
-                                    match deferred_flush_sender {
-                                        Some(FlushState { sender, sum, shards: _}) => deferred_flush_sender = Some(FlushState { sender, sum: sum + 1, shards: Some(shards)}),
-                                        None => deferred_flush_sender = Some(FlushState { sender: None, sum: 1, shards: Some(shards)}),
-                                    }
-                                    continue;
-                                },
-                                Ok(Control::FlushWhenReady(ack)) => {
-                                    match deferred_flush_sender {
-                                        Some(FlushState { sender: _, sum, shards}) => deferred_flush_sender = Some(FlushState { sender: Some(ack), sum, shards}),
-                                        None => deferred_flush_sender = Some(FlushState { sender: Some(ack), sum: 0, shards: None}),
-                                    }
-                                },
                                 Ok(Control::Error(sender, err)) => {
                                     let _ = sender.send(Err(err));
-                                    break 'in_tx;
+                                    break 'in_tx; // tx drops -> abort
                                 }
-                                Ok(Control::Flush(sender, result)) => {
-                                    flush_result = Some((sender, result));
-                                    break 'in_tx
-                                },
+                                Ok(Control::Commit(sender, result)) => {
+                                    match result {
+                                        Err(write_err) => {
+                                            let _ = sender.send(Err(write_err));
+                                            break 'in_tx; // tx drops -> abort
+                                        }
+                                        Ok(wr) => {
+                                            drop(st); // ends &tx borrow
+                                            let flush_start = Instant::now();
+                                            match tx.commit() {
+                                                Ok(()) => {
+                                                    let flush_took = flush_start.elapsed().as_millis();
+                                                    let stats = TaskStats::new(wr.collect_took, wr.sort_took, wr.write_took, flush_took);
+                                                    let _ = sender.send(Ok(TaskResult::new(&factory.name(), stats)));
+                                                }
+                                                Err(e) => {
+                                                    let _ = sender.send(Err(AppError::from(e)));
+                                                }
+                                            }
+                                            break 'in_tx;
+                                        }
+                                    }
+                                }
                                 Ok(Control::Shutdown(ack)) => {
-                                    drop(table);
-                                    drop(tx);
+                                    if let Some(FlushState { sender: Some(pending), .. }) = st.deferred.take() {
+                                        let _ = pending.send(Err(AppError::Custom("aborted".to_string())));
+                                    }
+                                    drop(st); // drop table borrow first
+                                    drop(tx); // abort tx
                                     let _ = ack.send(Ok(()));
                                     break 'outer;
                                 }
+                                Ok(other) => {
+                                    debug_assert!(!matches!(other, Control::Continue));
+                                    continue;
+                                }
                                 Err(err) => {
-                                    error!("{} write tx error: {}", name, err);
-                                    write_error = Some(err);
+                                    error!("{} write tx error: {}", factory.name(), err);
+                                    st.write_error = Some(err);
                                     continue;
                                 }
                             }
                         }
-
-                        // 4) end-of-tx: drop table FIRST, then commit
-                        drop(table);
-                        if let Some((sender, result)) = flush_result {
-                            match result {
-                                Err(err) => {
-                                    let _ = sender.send(Err(err));
-                                },
-                                Ok(s) => {
-                                    let flush_start = Instant::now();
-                                    match tx.commit() {
-                                        Ok(_) => {
-                                            let flush_took = flush_start.elapsed().as_millis();
-                                            let stats = TaskStats::new(s.collect_took, s.sort_took, s.write_took, flush_took);
-                                            let _ = sender.send(Ok(TaskResult::new(&name, stats)));
-                                        }
-                                        Err(e) => {
-                                            let _ = sender.send(Err(AppError::from(e)));
-                                        }
-                                    }
-                                }
-                            }
-                        } else {
-                           error!("Transaction of {} ended without Flush or Shutdown, it can never happen", name);
-                        }
-                        // go back to idle and wait for next Begin
                     }
-
                     WriterCommand::Shutdown(ack) => {
-                        // no active tx at this point; stop thread
                         let _ = ack.send(Ok(()));
                         break 'outer;
                     }
-
                     other => {
-                        error!("{} received {:?} outside <Begin - Flush> scope; ignoring", name, std::mem::discriminant(&other));
+                        error!("{} received {:?} outside <Begin - Flush> scope; ignoring", factory.name(), std::mem::discriminant(&other));
                         break 'outer;
                     }
                 }
             }
         });
+
         let router = Arc::new(PlainRouter::new(topic.clone()));
         Ok(Self { topic, router, handle, sync_buf: RefCell::new(Vec::new()), _marker: PhantomData })
     }
 
-    pub fn sender(&self) -> Sender<WriterCommand<K, V>> {
-        self.topic.clone()
-    }
+    pub fn sender(&self) -> Sender<WriterCommand<K, V>> { self.topic.clone() }
 }
 
 impl<K, V, F> WriterLike<K, V> for TableWriter<K, V, F>

@@ -222,10 +222,11 @@ impl WriteResult {
 pub enum Control {
     Continue,
     ReadyForFlush(usize),
-    Flush(Sender<Result<TaskResult, AppError>>, Result<WriteResult, AppError>),
+    Commit(Sender<Result<TaskResult, AppError>>, Result<WriteResult, AppError>),
     FlushWhenReady(Sender<Result<TaskResult, AppError>>),
     Error(Sender<Result<TaskResult, AppError>>, AppError),
     Shutdown(Sender<Result<(), AppError>>),
+    TxFinished, // new: emitted when Flush also committed the tx
 }
 
 pub trait WriterLike<K: CopyOwnedValue, V: Value> {
