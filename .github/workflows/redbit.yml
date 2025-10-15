@@ -50,7 +50,7 @@ jobs:
           cargo test --package demo --features integration,ci
           cargo test --package btc --features integration,ci
           cargo test --package cardano --features integration,ci
-          # cargo test --package ergo --features integration,ci
+          cargo test --package ergo --features integration,ci
 
   criterion:
     needs: integration
@@ -73,7 +73,7 @@ jobs:
           cargo bench --package demo --bench demo_benchmark -- --quiet
           cargo bench --package btc --bench btc_benchmark  -- --quiet
           cargo bench --package cardano --bench cardano_benchmark -- --quiet
-          # cargo bench --package ergo --bench ergo_benchmark  -- --quiet
+          cargo bench --package ergo --bench ergo_benchmark  -- --quiet
 
       - name: Upload Criterion report to Pages artifact
         id: deployment

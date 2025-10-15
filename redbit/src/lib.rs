@@ -180,15 +180,6 @@ pub trait Sampleable: Default + Sized + Clone {
         }
         values
     }
-    fn sample_many_from(from: u16, n: usize) -> Vec<Self> {
-        let mut values = Vec::with_capacity(n);
-        let mut value = Self::default().nth_value(from as usize);
-        for _ in 0..n {
-            values.push(value.clone());
-            value = value.next_value();
-        }
-        values
-    }
 }
 macro_rules! impl_sampleable_for_primitive {
     ($($t:ty),*) => {
