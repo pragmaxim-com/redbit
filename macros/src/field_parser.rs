@@ -125,7 +125,8 @@ pub enum ColumnDef {
     Key(KeyDef),
     Plain(FieldDef, IndexingType, Option<Used>),
     Relationship(FieldDef, Option<WriteFrom>, Option<Used>, Multiplicity),
-    Transient(FieldDef, Option<ReadFrom>),
+    Transient(FieldDef),
+    TransientRel(FieldDef, Option<ReadFrom>),
 }
 
 impl Debug for ColumnDef {
@@ -165,12 +166,15 @@ impl Debug for ColumnDef {
                     }
                 }
             }
-            ColumnDef::Transient(field, read_from) => {
+            ColumnDef::TransientRel(field, read_from) => {
                 if let Some(ReadFrom { outer, inner }) = read_from {
-                    write!(f, "Transient({}, ReadFrom(outer: {}, inner: {}))", field.name, outer, inner)
+                    write!(f, "TransientRel({}, ReadFrom(outer: {}, inner: {}))", field.name, outer, inner)
                 } else {
-                    write!(f, "Transient({}, No ReadFrom)", field.name)
+                    write!(f, "TransientRel({}, No ReadFrom)", field.name)
                 }
+            }
+            ColumnDef::Transient(field) => {
+                write!(f, "Transient({})", field.name)
             }
         }
     }
@@ -259,6 +263,89 @@ fn get_column_usize_attr(nested: &ParseNestedMeta, attr: &str) -> Result<Option<
     }
 }
 
+fn get_relationship(field: &Field, column_name: &Ident, column_type: &Type, transient: bool, read_from: Option<ReadFrom>) -> syn::Result<Option<ColumnDef>> {
+    if let Type::Path(type_path) = &column_type && let Some(segment) = type_path.path.segments.last() {
+        match segment.ident.to_string().as_str() {
+            "Vec" => {
+                if let PathArguments::AngleBracketed(args) = &segment.arguments
+                    && let Some(GenericArgument::Type(Type::Path(inner_type_path))) = args.args.first() {
+                    let inner_type = inner_type_path
+                        .path
+                        .segments
+                        .last()
+                        .ok_or_else(|| syn::Error::new(field.span(), "Parent field missing"))?
+                        .ident
+                        .clone();
+
+                    if !transient {
+                        validate_one_to_many_name(column_name, &inner_type, field.span())?;
+                    }
+
+                    let type_path = Type::Path(syn::TypePath {
+                        qself: None,
+                        path: syn::Path::from(inner_type.clone()),
+                    });
+                    let field_def = FieldDef {
+                        name: column_name.clone(),
+                        tpe: type_path,
+                    };
+
+                    let write_from_using: Option<WriteFrom> =
+                        field.attrs.iter()
+                            .find(|attr| attr.path().is_ident("write_from_using"))
+                            .and_then(|attr| parse_write_from_using(attr).ok());
+                    return if transient {
+                        Ok(Some(ColumnDef::TransientRel(field_def, read_from)))
+                    } else {
+                        Ok(Some(ColumnDef::Relationship(field_def, write_from_using, None, Multiplicity::OneToMany)))
+                    }
+                }
+
+            }
+            "Option" => {
+                // one-to-option
+                if !transient && let PathArguments::AngleBracketed(args) = &segment.arguments
+                    && let Some(GenericArgument::Type(Type::Path(inner_type_path))) = args.args.first() {
+                    let inner_type = inner_type_path
+                        .path
+                        .segments
+                        .last()
+                        .ok_or_else(|| syn::Error::new(field.span(), "Parent field missing"))?
+                        .ident
+                        .clone();
+                    let type_path = Type::Path(syn::TypePath {
+                        qself: None,
+                        path: syn::Path::from(inner_type),
+                    });
+                    let field = FieldDef {
+                        name: column_name.clone(),
+                        tpe: type_path,
+                    };
+
+                    return Ok(Some(ColumnDef::Relationship(field, None, None, Multiplicity::OneToOption)));
+                }
+
+            }
+            _ => {
+                // one-to-one (plain type)
+                let struct_type = &segment.ident;
+                if !transient && segment.arguments.is_empty() {
+                    let type_path = Type::Path(syn::TypePath {
+                        qself: None,
+                        path: syn::Path::from(struct_type.clone()),
+                    });
+                    let field = FieldDef {
+                        name: column_name.clone(),
+                        tpe: type_path,
+                    };
+                    return Ok(Some(ColumnDef::Relationship(field, None, None, Multiplicity::OneToOne)));
+                }
+            }
+        }
+    }
+    Ok(None)
+}
+
 fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
     match &field.ident {
         None => Err(syn::Error::new(field.span(), "Unnamed fields not supported")),
@@ -312,8 +399,8 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                         Err(syn::Error::new(attr.span(), "Foreign key must specify either `one2many` or `one2one`"))
                     }
                 } else if attr.path().is_ident("column") {
-                    let field = FieldDef { name: column_name.clone(), tpe: column_type.clone() };
-                    let mut used = false;
+                    let field_def = FieldDef { name: column_name.clone(), tpe: column_type.clone() };
+                    let mut used: Option<Used> = None;
                     let mut db_cache_weight = 0;
                     let mut lru_cache_size_mil = 0;
                     let mut shards = 0;
@@ -328,7 +415,7 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                             let lit: syn::LitInt = nested.value()?.parse()?;
                             db_cache_weight = lit.base10_parse::<usize>()?;
                         } else if nested.path.is_ident("used") {
-                            used = true;
+                            used = Some(Used);
                         } else if nested.path.is_ident("lru_cache") {
                             let lit: syn::LitInt = nested.value()?.parse()?;
                             lru_cache_size_mil = lit.base10_parse::<usize>()?;
@@ -362,92 +449,24 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                     });
                     let column_props = ColumnProps::new(shards, db_cache_weight, lru_cache_size_mil);
                     let column_def = if is_transient {
-                        ColumnDef::Transient(field.clone(), read_from)
+                        match get_relationship(field, column_name, &column_type, true, read_from)? {
+                            None => ColumnDef::Transient(field_def.clone()),
+                            Some(rel) => rel
+                        }
                     } else if is_dictionary {
-                        ColumnDef::Plain(field.clone(), IndexingType::Dict(column_props), None)
+                        ColumnDef::Plain(field_def.clone(), IndexingType::Dict(column_props), used)
                     } else if is_range {
-                        ColumnDef::Plain(field.clone(), IndexingType::Range(column_props), None)
+                        ColumnDef::Plain(field_def.clone(), IndexingType::Range(column_props), used)
                     } else if is_index {
-                        ColumnDef::Plain(field.clone(), IndexingType::Index(column_props), None)
+                        ColumnDef::Plain(field_def.clone(), IndexingType::Index(column_props), used)
                     } else {
-                        ColumnDef::Plain(field.clone(), IndexingType::Off(column_props), None)
+                        ColumnDef::Plain(field_def.clone(), IndexingType::Off(column_props), used)
                     };
                     return Ok(column_def);
                 }
             }
-            if let Type::Path(type_path) = &column_type && let Some(segment) = type_path.path.segments.last() {
-                match segment.ident.to_string().as_str() {
-                    "Vec" => {
-                        // one-to-many
-                        if let PathArguments::AngleBracketed(args) = &segment.arguments
-                            && let Some(GenericArgument::Type(Type::Path(inner_type_path))) = args.args.first() {
-                                let inner_type = inner_type_path
-                                    .path
-                                    .segments
-                                    .last()
-                                    .ok_or_else(|| syn::Error::new(field.span(), "Parent field missing"))?
-                                    .ident
-                                    .clone();
-
-                                validate_one_to_many_name(column_name, &inner_type, field.span())?;
-
-                                let type_path = Type::Path(syn::TypePath {
-                                    qself: None,
-                                    path: syn::Path::from(inner_type.clone()),
-                                });
-                                let field_def = FieldDef {
-                                    name: column_name.clone(),
-                                    tpe: type_path,
-                                };
-
-                            let write_from_using: Option<WriteFrom> =
-                                field.attrs.iter()
-                                    .find(|attr| attr.path().is_ident("write_from_using"))
-                                    .and_then(|attr| parse_write_from_using(attr).ok());
-
-                            return Ok(ColumnDef::Relationship(field_def, write_from_using, None, Multiplicity::OneToMany));
-                            }
-
-                    }
-                    "Option" => {
-                        // one-to-option
-                        if let PathArguments::AngleBracketed(args) = &segment.arguments
-                            && let Some(GenericArgument::Type(Type::Path(inner_type_path))) = args.args.first() {
-                                let inner_type = inner_type_path
-                                    .path
-                                    .segments
-                                    .last()
-                                    .ok_or_else(|| syn::Error::new(field.span(), "Parent field missing"))?
-                                    .ident
-                                    .clone();
-                                let type_path = Type::Path(syn::TypePath {
-                                    qself: None,
-                                    path: syn::Path::from(inner_type),
-                                });
-                                let field = FieldDef {
-                                    name: column_name.clone(),
-                                    tpe: type_path,
-                                };
-                                return Ok(ColumnDef::Relationship(field, None, None, Multiplicity::OneToOption));
-                            }
-
-                    }
-                    _ => {
-                        // one-to-one (plain type)
-                        let struct_type = &segment.ident;
-                        if segment.arguments.is_empty() {
-                            let type_path = Type::Path(syn::TypePath {
-                                qself: None,
-                                path: syn::Path::from(struct_type.clone()),
-                            });
-                            let field = FieldDef {
-                                name: column_name.clone(),
-                                tpe: type_path,
-                            };
-                            return Ok(ColumnDef::Relationship(field, None, None, Multiplicity::OneToOne));
-                        }
-                    }
-                }
+            if let Some(rel) = get_relationship(field, column_name, &column_type, false, None)? {
+                return Ok(rel);
             }
             Err(syn::Error::new(
                 field.span(),
@@ -590,8 +609,11 @@ pub fn get_field_macros(ast: &ItemStruct) -> syn::Result<(KeyDef, Vec<ColumnDef>
                 }
                 key_column = Some(key_def);
             }
-            ColumnDef::Transient(field_def, read_from) => {
-                transient_columns.push(ColumnDef::Transient(field_def, read_from));
+            ColumnDef::Transient(field_def)  => {
+                transient_columns.push(ColumnDef::Transient(field_def));
+            }
+            ColumnDef::TransientRel(field_def, read_from)  => {
+                transient_columns.push(ColumnDef::TransientRel(field_def, read_from));
             }
             column => columns.push(column),
         }

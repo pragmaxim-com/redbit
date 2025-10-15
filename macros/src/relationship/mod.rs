@@ -5,6 +5,7 @@ mod delete;
 mod query;
 mod context;
 mod info;
+pub mod transient;
 
 use crate::entity;
 use crate::entity::context::{TxContextItem, TxType};
@@ -83,10 +84,10 @@ impl DbRelationshipMacros {
                     field_def: field_def.clone(),
                     struct_init: init::one2many_relation_init(child_name, child_type),
                     stream_query_init: query::query_init(child_name, &child_stream_query_type),
-                    tx_context_item: context::tx_context_item(child_name, &write_child_tx_context_type, &read_child_tx_context_type, write_from_using),
+                    tx_context_item: context::tx_context_item(child_name, &write_child_tx_context_type, &read_child_tx_context_type, write_from_using.clone()),
                     table_info_item: info::table_info_init(child_name, &child_table_info_type),
                     struct_init_with_query: init::one2many_relation_init_with_query(child_name, child_type),
-                    struct_default_init: init::one2many_relation_default_init(child_name, child_type),
+                    struct_default_init: init::one2many_relation_default_init(child_name, child_type, write_from_using),
                     struct_default_init_with_query: init::one2many_relation_default_init_with_query(child_name, child_type),
                     store_statement: store_statement.clone(),
                     store_many_statement: store_statement,

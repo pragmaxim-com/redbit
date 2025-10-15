@@ -7,7 +7,7 @@ use quote::{format_ident, quote};
 use syn::Type;
 
 pub fn stream_range_by_index_def(entity_def: &EntityDef, column_name: &Ident, column_type: &Type, index_table: &Ident, range_query_ty: &Type) -> FunctionDef {
-    let EntityDef { key_def, entity_name, entity_type, query_type, info_type:_, read_ctx_type, write_ctx_type: _} = &entity_def;
+    let EntityDef { key_def, entity_name, entity_type, query_type, read_ctx_type, ..} = &entity_def;
     let pk_type = &key_def.field_def().tpe;
     let fn_name = format_ident!("stream_range_by_{}", column_name);
     let fn_stream = quote! {

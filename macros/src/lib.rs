@@ -7,7 +7,6 @@ mod macro_utils;
 mod rest;
 mod field_parser;
 mod table;
-mod transient;
 mod endpoint;
 mod field;
 mod entity;
@@ -54,15 +53,20 @@ pub fn column(attr: TokenStream, item: TokenStream) -> TokenStream {
                     #impls
                 }
             },
-            _ => {
+            Fields::Named(fields) => {
                 let custom_db_codec = column_codec::emit_newtype_bincode_impls(&struct_type);
+                let sample_impl = column::column_impls::gen_sampleable_impl(struct_ident, &struct_type, &fields);
+                let default_impl = column::column_impls::gen_default_impl(struct_ident, &struct_type, &fields);
                 let derives: Punctuated<Path, Comma> = syn::parse_quote![Decode, Encode, Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Ord, PartialOrd, Eq, utoipa::ToSchema];
                 macro_utils::merge_struct_derives(&mut input, derives);
                 quote! {
                     #custom_db_codec
+                    #default_impl
+                    #sample_impl
                     #input
                 }
             }
+            _ => abort!(input.ident, "#[column] cannot be applied to structs with Unit or multiple unnamed fields"),
         };
 
     expansion::submit_struct_to_stream(stream, "column", struct_ident, ".rs")

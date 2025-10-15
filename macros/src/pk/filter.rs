@@ -4,7 +4,7 @@ use proc_macro2::Ident;
 use quote::{format_ident, quote};
 
 pub fn fn_def(entity_def: &EntityDef, table: &Ident, no_columns: bool) -> FunctionDef {
-    let EntityDef { key_def, entity_name, entity_type, query_type, info_type:_, read_ctx_type, write_ctx_type: _} = &entity_def;
+    let EntityDef { key_def, entity_name, entity_type, query_type, read_ctx_type, ..} = &entity_def;
     let pk_type = key_def.field_def().tpe;
     let fn_name = format_ident!("filter");
     let fn_stream = quote! {

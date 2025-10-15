@@ -153,7 +153,7 @@ pub fn one2many_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, 
             let pk_value = #pk_type::default();
             let tx_context = #child_type::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             let children = #entity_name::#fn_name(&tx_context, pk_value).expect("Failed to get children by PK");
-            assert!(children.len() == 3, "Expected 3 children for the given PK");
+            assert_eq!(children.len(), 3, "Expected 3 children for {}", stringify!(#child_name));
         }
     });
 

@@ -6,7 +6,7 @@ pub fn default_init_expr(column_type: &Type) -> TokenStream {
     quote! {
         {
             let value = <#column_type as Default>::default();
-            <#column_type as IterableColumn>::nth_value(&value, sample_index)
+            <#column_type as Sampleable>::nth_value(&value, sample_index)
         }
     }
 }

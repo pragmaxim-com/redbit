@@ -37,14 +37,7 @@ pub fn one2many_store_def(child_name: &Ident, child_type: &Type, pk_name: &Ident
         Some(WriteFrom { from, using }) => {
             let hook_method_name = Ident::new(&format!("write_from_{}_using_{}", from, using), child_name.span());
             quote! {
-                if !instance.#child_name.is_empty() {
-                    #non_empty_children
-                    if is_last {
-                        crate::hook::flush(&tx_context)?;
-                    }
-                } else {
-                    crate::hook::#hook_method_name(&tx_context, instance.#pk_name, instance.#from, is_last)?;
-                }
+                crate::hook::#hook_method_name(&tx_context, instance.#pk_name, instance.#from, is_last)?;
             }
         },
         None => non_empty_children

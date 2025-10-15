@@ -1,15 +1,6 @@
 use crate::model_v1::*;
 use std::ops::Index;
 
-// temporary hack for testing purposes, will be removed
-pub(crate) fn flush(tx_context: &TransactionWriteTxContext) -> Result<(), AppError> {
-    let ids_router  = tx_context.inputs.input_id.router();
-    let ptrs_router = tx_context.inputs.input_utxo_pointer_by_id.router();
-    ids_router.ready_for_flush(1)?;
-    ptrs_router.ready_for_flush(1)?;
-    Ok(())
-}
-
 pub(crate) fn write_from_input_refs_using_hash(tx_context: &TransactionWriteTxContext, parent: BlockPointer, input_refs: Vec<InputRef>, is_last: bool) -> Result<(), AppError> {
     let ids_router  = tx_context.inputs.input_id.router();
     let ptrs_router = tx_context.inputs.input_utxo_pointer_by_id.router();

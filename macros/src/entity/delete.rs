@@ -35,7 +35,7 @@ pub fn delete_many_def(entity_def: &EntityDef, delete_many_statements: &[TokenSt
 }
 
 pub fn remove_def(entity_def: &EntityDef, delete_statements: &[TokenStream]) -> FunctionDef {
-    let EntityDef { key_def, entity_name, entity_type, query_type: _, info_type:_, read_ctx_type: _, write_ctx_type: _} = &entity_def;
+    let EntityDef { key_def, entity_name, entity_type, ..} = &entity_def;
     let pk_name = &key_def.field_def().name;
     let pk_type = &key_def.field_def().tpe;
     let fn_name = format_ident!("remove");
@@ -57,7 +57,7 @@ pub fn remove_def(entity_def: &EntityDef, delete_statements: &[TokenStream]) -> 
             let entities = #entity_type::sample_many(entity_count);
             let tx_context = #entity_name::begin_write_ctx(&storage).expect("Failed to begin write transaction context");
             #entity_name::store_many(&tx_context, entities.clone(), true).expect("Failed to store many instances");
-            tx_context.two_phase_commit_and_close(MutationType::Deletes).expect("Failed to commit transaction context");
+            tx_context.two_phase_commit_and_close(MutationType::Writes).expect("Failed to commit transaction context");
 
             for test_entity in entities {
                 let pk = test_entity.#pk_name;

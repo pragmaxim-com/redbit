@@ -1,6 +1,7 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::Type;
+use crate::field_parser::WriteFrom;
 
 pub fn one2one_relation_init(child_name: &Ident, child_type: &Type) -> TokenStream {
     quote! {
@@ -108,13 +109,15 @@ pub fn one2many_relation_init_with_query(child_name: &Ident, child_type: &Type) 
     }
 }
 
-pub fn one2many_relation_default_init(child_name: &Ident, child_type: &Type) -> TokenStream {
+pub fn one2many_relation_default_init(child_name: &Ident, child_type: &Type, write_from: Option<WriteFrom>) -> TokenStream {
+    let wf = if write_from.is_some() { true } else { false };
     quote! {
         let #child_name = {
             let (from, _) = pk.fk_range();
-            let sample_0 = #child_type::sample_with(from, 0);
-            let sample_1 = #child_type::sample_with(from.next_index(), 1);
-            let sample_2 = #child_type::sample_with(from.next_index().next_index(), 2);
+            let idx = if #wf { 0 } else { sample_index };
+            let sample_0 = #child_type::sample_with(from, idx);
+            let sample_1 = #child_type::sample_with(from.next_index(), idx + 1);
+            let sample_2 = #child_type::sample_with(from.next_index().next_index(), idx + 2);
             vec![sample_0, sample_1, sample_2]
         };
     }

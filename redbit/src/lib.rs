@@ -160,7 +160,7 @@ where
     }
 }
 
-pub trait IterableColumn: Sized + Clone {
+pub trait Sampleable: Default + Sized + Clone {
     fn next_value(&self) -> Self;
     fn nth_value(&self, n: usize) -> Self {
         let mut value = self.clone(); // convert &Self → Self
@@ -171,11 +171,29 @@ pub trait IterableColumn: Sized + Clone {
         }
         value
     }
+    fn sample_many(n: usize) -> Vec<Self> {
+        let mut values = Vec::with_capacity(n);
+        let mut value = Self::default();
+        for _ in 0..n {
+            values.push(value.clone());
+            value = value.next_value();
+        }
+        values
+    }
+    fn sample_many_from(from: u16, n: usize) -> Vec<Self> {
+        let mut values = Vec::with_capacity(n);
+        let mut value = Self::default().nth_value(from as usize);
+        for _ in 0..n {
+            values.push(value.clone());
+            value = value.next_value();
+        }
+        values
+    }
 }
-macro_rules! impl_iterable_column_for_primitive {
+macro_rules! impl_sampleable_for_primitive {
     ($($t:ty),*) => {
         $(
-            impl IterableColumn for $t {
+            impl Sampleable for $t {
                 fn next_value(&self) -> Self {
                     self.wrapping_add(1)
                 }
@@ -184,7 +202,7 @@ macro_rules! impl_iterable_column_for_primitive {
     };
 }
 
-impl_iterable_column_for_primitive!(u8, u16, u32, u64, usize, i8, i16, i32, i64, isize);
+impl_sampleable_for_primitive!(u8, u16, u32, u64, usize, i8, i16, i32, i64, isize);
 
 #[macro_export]
 macro_rules! impl_copy_owned_value_identity {

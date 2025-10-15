@@ -9,14 +9,16 @@ use crate::pk::DbPkMacros;
 use crate::relationship::DbRelationshipMacros;
 use crate::rest::FunctionDef;
 use crate::table::{DictTableDefs, IndexTableDefs, PlainTableDef};
-use crate::transient::TransientMacros;
+use crate::column::transient::TransientMacros;
 use proc_macro2::{Ident, TokenStream};
 use syn::{ItemStruct, Type};
+use crate::relationship::transient::TransientRelationshipMacros;
 
 pub enum FieldMacros {
     Pk(DbPkMacros),
     Plain(DbColumnMacros),
     Relationship(DbRelationshipMacros),
+    TransientRel(TransientRelationshipMacros),
     Transient(TransientMacros),
 }
 
@@ -26,7 +28,7 @@ impl FieldMacros {
         entity_name: &Ident,
         entity_type: Type
     ) -> Result<(EntityDef, Option<OneToManyParentDef>, Vec<FieldMacros>), syn::Error> {
-        let (key_def, field_macros) = field_parser::get_field_macros(item_struct)?;
+        let (key_def, col_defs) = field_parser::get_field_macros(item_struct)?;
         let one_to_many_parent_def =
             match key_def.clone() {
                 KeyDef::Fk { field_def: _, multiplicity: Multiplicity::OneToMany , parent_type: Some(parent_ty), column_props: _} => Some(OneToManyParentDef {
@@ -41,12 +43,12 @@ impl FieldMacros {
                 _ => None
             };
         let entity_def= EntityDef::new(key_def.clone(), entity_name.clone(), entity_type.clone());
-        let field_macros = field_macros.iter().map(|c| match c {
+        let field_macros = col_defs.iter().map(|c| match c {
             ColumnDef::Key(KeyDef::Pk { field_def: _, column_props}) => {
-                FieldMacros::Pk(DbPkMacros::new(&entity_def, None, field_macros.len() == 1, column_props.clone()))
+                FieldMacros::Pk(DbPkMacros::new(&entity_def, None, col_defs.len() == 1, column_props.clone()))
             },
             ColumnDef::Key(KeyDef::Fk { field_def: _, multiplicity, parent_type: _, column_props}) => {
-                FieldMacros::Pk(DbPkMacros::new(&entity_def, Some(multiplicity.clone()), field_macros.len() == 1, column_props.clone()))
+                FieldMacros::Pk(DbPkMacros::new(&entity_def, Some(multiplicity.clone()), col_defs.len() == 1, column_props.clone()))
             },
             ColumnDef::Plain(field, indexing_type, used_by) => {
                 FieldMacros::Plain(
@@ -56,13 +58,17 @@ impl FieldMacros {
                         indexing_type.clone(),
                         one_to_many_parent_def.clone(),
                         used_by.clone()
-                    ))
+                    )
+                )
             },
+            ColumnDef::TransientRel(field, read_from) => {
+                FieldMacros::TransientRel(TransientRelationshipMacros::new(field.clone(), read_from.clone()))
+            }
             ColumnDef::Relationship(field, write_from_using, _, multiplicity) => {
                 FieldMacros::Relationship(DbRelationshipMacros::new(&entity_def, field.clone(), multiplicity.clone(), write_from_using.clone()))
             }
-            ColumnDef::Transient(field, read_from) => {
-                FieldMacros::Transient(TransientMacros::new(field.clone(), read_from.clone()))
+            ColumnDef::Transient(field) => {
+                FieldMacros::Transient(TransientMacros::new(field.clone()))
             }
         }).collect::<Vec<FieldMacros>>();
         Ok((entity_def, one_to_many_parent_def, field_macros))
@@ -74,6 +80,7 @@ impl FieldMacros {
             FieldMacros::Plain(column) => column.field_def.clone(),
             FieldMacros::Relationship(relationship) => relationship.field_def.clone(),
             FieldMacros::Transient(transient) => transient.field_def.clone(),
+            FieldMacros::TransientRel(transient_rel) => transient_rel.field_def.clone(),
         }
     }
     
@@ -83,6 +90,7 @@ impl FieldMacros {
             FieldMacros::Plain(column) => column.struct_init.clone(),
             FieldMacros::Relationship(relationship) => relationship.struct_init.clone(),
             FieldMacros::Transient(transient) => transient.struct_init.clone(),
+            FieldMacros::TransientRel(transient_rel) => transient_rel.struct_init.clone(),
         }
     }
     
@@ -92,6 +100,7 @@ impl FieldMacros {
             FieldMacros::Plain(column) => column.struct_init_with_query.clone(),
             FieldMacros::Relationship(relationship) => relationship.struct_init_with_query.clone(),
             FieldMacros::Transient(transient) => transient.struct_init_with_query.clone(),
+            FieldMacros::TransientRel(transient_rel) => transient_rel.struct_init_with_query.clone(),
         }
     }
 
@@ -101,6 +110,7 @@ impl FieldMacros {
             FieldMacros::Plain(column) => column.struct_default_init.clone(),
             FieldMacros::Relationship(relationship) => relationship.struct_default_init.clone(),
             FieldMacros::Transient(transient) => transient.struct_default_init.clone(),
+            FieldMacros::TransientRel(transient_rel) => transient_rel.struct_default_init.clone(),
         }
     }
 
@@ -110,6 +120,7 @@ impl FieldMacros {
             FieldMacros::Plain(column) => column.struct_default_init_with_query.clone(),
             FieldMacros::Relationship(relationship) => relationship.struct_default_init_with_query.clone(),
             FieldMacros::Transient(transient) => transient.struct_default_init_with_query.clone(),
+            FieldMacros::TransientRel(transient_rel) => transient_rel.struct_default_init_with_query.clone(),
         }
     }
 
@@ -183,7 +194,7 @@ impl FieldMacros {
             FieldMacros::Pk(pk) => vec![pk.store_statement.clone()],
             FieldMacros::Plain(column) => vec![column.store_statement.clone()],
             FieldMacros::Relationship(relationship) => vec![relationship.store_statement.clone()],
-            FieldMacros::Transient(_) => vec![],
+            _ => vec![],
         }
     }
 
@@ -192,7 +203,7 @@ impl FieldMacros {
             FieldMacros::Pk(pk) => vec![pk.store_many_statement.clone()],
             FieldMacros::Plain(column) => vec![column.store_many_statement.clone()],
             FieldMacros::Relationship(relationship) => vec![relationship.store_many_statement.clone()],
-            FieldMacros::Transient(_) => vec![],
+            _ => vec![],
         }
     }
 
@@ -201,7 +212,7 @@ impl FieldMacros {
             FieldMacros::Pk(pk) => vec![pk.delete_statement.clone()],
             FieldMacros::Plain(column) => vec![column.delete_statement.clone()],
             FieldMacros::Relationship(relationship) => vec![relationship.delete_statement.clone()],
-            FieldMacros::Transient(_) => vec![],
+            _ => vec![],
         }
     }
 
@@ -210,7 +221,7 @@ impl FieldMacros {
             FieldMacros::Pk(pk) => vec![pk.delete_many_statement.clone()],
             FieldMacros::Plain(column) => vec![column.delete_many_statement.clone()],
             FieldMacros::Relationship(relationship) => vec![relationship.delete_many_statement.clone()],
-            FieldMacros::Transient(_) => vec![],
+            _ => vec![],
         }
     }
 }

@@ -27,18 +27,6 @@ pub(crate) fn one_to_many_field_name_from_ident(inner_type: &Ident) -> Ident {
     format_ident!("{}s", inner_type.to_string().to_snake_case())
 }
 
-pub(crate) fn unwrap_vec_type(ty: &Type) -> Option<&Type> {
-    if let Type::Path(type_path) = ty
-            && type_path.qself.is_none()
-            && type_path.path.segments.len() == 1
-            && type_path.path.segments[0].ident == "Vec"
-            && let syn::PathArguments::AngleBracketed(args) =
-                &type_path.path.segments[0].arguments && let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
-                    return Some(inner_ty);
-                }
-    None
-}
-
 pub fn merge_struct_derives(input: &mut ItemStruct, extra_derives: Punctuated<Path, Comma>) {
     let mut derives_vec: Vec<Path> = extra_derives.into_iter().collect();
     input.attrs.retain(|attr| {
@@ -115,33 +103,31 @@ fn is_time(ty: &Type) -> bool {
     }
 }
 
+pub fn classify_integer_type(ty: &Type) -> Option<IntegerType> {
+    use syn::{TypePath};
+    let Type::Path(TypePath { path, .. }) = ty else { return None };
+    let ident = path.get_ident()?;
+    match ident.to_string().as_str() {
+        "u8"    => Some(IntegerType::U8),
+        "u16"   => Some(IntegerType::U16),
+        "u32"   => Some(IntegerType::U32),
+        "u64"   => Some(IntegerType::U64),
+        "u128"  => Some(IntegerType::U128),
+        "usize" => Some(IntegerType::Usize),
+        "i8"    => Some(IntegerType::I8),
+        "i16"   => Some(IntegerType::I16),
+        "i32"   => Some(IntegerType::I32),
+        "i64"   => Some(IntegerType::I64),
+        "i128"  => Some(IntegerType::I128),
+        "isize" => Some(IntegerType::Isize),
+        _ => None,
+    }
+}
+
 pub fn extract_int_type(ty: &Type) -> InnerKind {
-    if let Type::Path(tp) = ty {
-        if let Some(seg) = tp.path.segments.last() {
-            let ident = seg.ident.to_string();
-            match ident.as_str() {
-                // unsigned
-                "u8" => InnerKind::Integer(IntegerType::U8),
-                "u16" => InnerKind::Integer(IntegerType::U16),
-                "u32" => InnerKind::Integer(IntegerType::U32),
-                "u64" => InnerKind::Integer(IntegerType::U64),
-                "u128" => InnerKind::Integer(IntegerType::U128),
-                "usize" => InnerKind::Integer(IntegerType::Usize),
-                // signed
-                "i8" => InnerKind::Integer(IntegerType::I8),
-                "i16" => InnerKind::Integer(IntegerType::I16),
-                "i32" => InnerKind::Integer(IntegerType::I32),
-                "i64" => InnerKind::Integer(IntegerType::I64),
-                "i128" => InnerKind::Integer(IntegerType::I128),
-                "isize" => InnerKind::Integer(IntegerType::Isize),
-                // byte arrays like [u8; N]
-                _ => InnerKind::Other
-            }
-        } else {
-            InnerKind::Other
-        }
-    } else {
-        InnerKind::Other
+    match classify_integer_type(ty) {
+        Some(k) => InnerKind::Integer(k),
+        None => InnerKind::Other,
     }
 }
 

@@ -1,10 +1,11 @@
-use proc_macro2::{Literal, Ident, TokenStream};
+use crate::column::column_codec::*;
+use crate::macro_utils;
+use crate::macro_utils::InnerKind;
+use proc_macro2::{Ident, Literal, TokenStream};
 use quote::quote;
-use syn::{parse_str, Attribute, Path, Type};
 use syn::punctuated::Punctuated;
 use syn::token::Comma;
-use crate::column::column_codec::*;
-use crate::macro_utils::InnerKind;
+use syn::{parse_str, Attribute, FieldsNamed, Path, Type};
 
 pub fn generate_column_impls(
     struct_ident: &Ident,
@@ -12,7 +13,7 @@ pub fn generate_column_impls(
     inner_type: &Type,
     binary_encoding_opt: Option<String>,
 ) -> (TokenStream, Option<Attribute>, Punctuated<Path, Comma>) {
-    let kind = crate::macro_utils::classify_inner_type(inner_type);
+    let kind = macro_utils::classify_inner_type(inner_type);
 
     let binary_encoding = binary_encoding_opt.unwrap_or_else(|| "hex".to_string());
     let mut schema_example = quote! { vec![Some(json!(#struct_ident::default().url_encode()))] };
@@ -21,7 +22,7 @@ pub fn generate_column_impls(
     let mut schema_type = quote! { SchemaType::Type(Type::String) };
     let mut default_code = quote! { Self(Default::default()) };
     let mut url_encoded_code = quote! { format!("{}", self.0) };
-    let mut iterable_code = quote! { compile_error!("IterableColumn::next is not supported for this type.") };
+    let mut iterable_code = quote! { compile_error!("Sampleable::next is not supported for this type.") };
     let mut custom_db_codec = quote! {};
     let mut cache_key_codec = quote! {};
 
@@ -180,7 +181,7 @@ pub fn generate_column_impls(
             }
         }
 
-        impl IterableColumn for #struct_ident {
+        impl Sampleable for #struct_ident {
             fn next_value(&self) -> Self {
                 #iterable_code
             }
@@ -209,4 +210,62 @@ pub fn generate_column_impls(
     };
 
     (impls, struct_attr, extra_derive_impls)
+}
+
+fn make_zero_or_default_field_expr(field_ty: &Type) -> TokenStream {
+    if macro_utils::classify_integer_type(field_ty).is_some() {
+        quote! { 0 as #field_ty }
+    } else {
+        quote! { Default::default() }
+    }
+}
+
+fn gen_field_inits_zero(fields: &FieldsNamed) -> Vec<TokenStream> {
+    fields.named.iter().map(|f| {
+        let name = f.ident.as_ref().expect("named field");
+        let ty   = &f.ty;
+        let expr = make_zero_or_default_field_expr(ty);
+        quote! { #name: #expr, }
+    }).collect()
+}
+
+fn make_next_field_expr(field_ident: &syn::Ident, field_ty: &Type) -> TokenStream {
+    if macro_utils::classify_integer_type(field_ty).is_some() {
+        quote! { self.#field_ident.wrapping_add(1) }
+    } else {
+        quote! { self.#field_ident.clone() }
+    }
+}
+
+fn gen_next_field_inits(fields: &FieldsNamed) -> Vec<TokenStream> {
+    fields.named.iter().map(|f| {
+        let name = f.ident.as_ref().expect("named field");
+        let ty   = &f.ty;
+        let expr = make_next_field_expr(name, ty);
+        quote! { #name: #expr, }
+    }).collect()
+}
+
+pub fn gen_default_impl(struct_ident: &Ident, struct_type: &Type, fields: &FieldsNamed) -> TokenStream {
+    let default_inits = gen_field_inits_zero(fields);
+
+    quote! {
+        impl ::core::default::Default for #struct_type {
+            fn default() -> Self {
+                #struct_ident { #(#default_inits)* }
+            }
+        }
+    }
+}
+
+pub fn gen_sampleable_impl(struct_ident: &Ident, struct_type: &Type, fields: &FieldsNamed) -> TokenStream {
+    let next_inits = gen_next_field_inits(fields);
+
+    quote! {
+        impl Sampleable for #struct_type {
+            fn next_value(&self) -> Self {
+                #struct_ident { #(#next_inits)* }
+            }
+        }
+    }
 }
