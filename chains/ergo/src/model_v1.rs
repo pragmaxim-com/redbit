@@ -11,7 +11,7 @@ pub use chain::*;
 #[column("utf-8")] pub struct AssetName(pub Vec<u8>);
 #[column("hex")] pub struct Tree(pub Vec<u8>);
 #[column("hex")] pub struct TreeTemplate(pub Vec<u8>);
-#[column("hex")] pub struct BoxId(pub Vec<u8>);
+#[column("hex")] pub struct BoxId(pub [u8; 32]);
 
 #[column("hex")] pub struct BlockHash(pub [u8; 32]);
 #[column("hex")] pub struct TxHash(pub [u8; 32]);
@@ -62,7 +62,7 @@ pub struct Utxo {
     pub id: TransactionPointer,
     #[column(db_cache = 1)]
     pub amount: u64,
-    #[column(index, used,  db_cache = 5, lru_cache = 10)]
+    #[column(index, used, db_cache = 5, lru_cache = 10)]
     pub box_id: BoxId,
     #[column(dictionary, shards = 4, db_cache = 5, lru_cache = 1)]
     pub address: Address,

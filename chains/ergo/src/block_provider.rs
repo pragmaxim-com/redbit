@@ -54,7 +54,7 @@ impl ErgoBlockProvider {
             let (box_weight, outputs) = Self::process_outputs(tx.outputs(), &tx_id);
             let mut inputs = Vec::with_capacity(tx.inputs.len());
             for input in &tx.inputs {
-                inputs.push(model_v1::BoxId(input.box_id.as_ref().into()));
+                inputs.push(model_v1::BoxId(input.box_id.as_ref().try_into().unwrap()));
             }
             block_weight += box_weight;
             block_weight += tx.inputs.len();
@@ -76,9 +76,7 @@ impl ErgoBlockProvider {
         let mut result_outs = Vec::with_capacity(outs.len());
         let mut asset_count = 0;
         for (out_index, out) in outs.iter().enumerate() {
-            let ergo_box_id = out.box_id();
-            let box_id_slice: &[u8] = ergo_box_id.as_ref();
-            let box_id = model_v1::BoxId(box_id_slice.into());
+            let box_id = model_v1::BoxId(out.box_id().as_ref().try_into().unwrap());
             let ergo_tree_template_opt = out.ergo_tree.template_bytes().ok();
             let address_opt = address::Address::recreate_from_ergo_tree(&out.ergo_tree).ok();
             let ergo_tree_opt = match &address_opt {
