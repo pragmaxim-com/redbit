@@ -46,7 +46,7 @@ impl<K: CopyOwnedValue + 'static, V: CacheKey + 'static> TableFactory<K, V> for 
     }
 
     fn new_cache(&self) -> Self::CacheCtx {
-        self.lru_capacity.map(|cap| LruCache::new(NonZeroUsize::new(cap).expect("lru_capacity for index must be > 0")))
+        self.lru_capacity.map(|cap| LruCache::new(NonZeroUsize::new(cap).expect("lru_capacity for dictionary must be > 0")))
     }
 
     fn open<'txn, 'c>(

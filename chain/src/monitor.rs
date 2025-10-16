@@ -29,16 +29,17 @@ impl<B: BlockLike> ProgressMonitor<B> {
     pub fn log_batch(&self, batch: &Vec<B>, buffer_size: usize) {
         if let Some(first) = batch.first() {
             let batch_weight = batch.iter().map(|x| x.header().weight() as usize).sum::<usize>();
-            let total_weight = self.total_weight.replace_with(|old| *old + batch_weight);
+            let total_weight_before = self.total_weight.replace_with(|old| *old + batch_weight);
+            let total_weight_now = total_weight_before + batch_weight;
             let lh = first.header();
             let height = lh.height();
             let timestamp = &lh.timestamp().to_string();
             let hash = &lh.hash().to_string();
             let total_time = self.start_time.elapsed().as_secs();
-            let txs_per_sec = format!("{:.1}", total_weight as f64 / total_time as f64);
+            let txs_per_sec = format!("{:.1}", total_weight_now as f64 / total_time as f64);
             info!(
                 "Batch[{}] @ {} : {} from {} at {} ins+outs+assets/s, total {}, proc_buffer {}",
-                batch.len(), height, &hash[..12], timestamp, txs_per_sec, total_weight, buffer_size
+                batch.len(), height, &hash[..12], timestamp, txs_per_sec, total_weight_now, buffer_size
             );
         }
     }

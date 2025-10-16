@@ -132,19 +132,20 @@ Hand-made criterion benchmarks [deployed](https://pragmaxim-com.github.io/redbit
 Indexing speed in logs is the **average**, for example, the first ~ 50k **bitcoin** blocks with few Txs have lower in+out/s indexing throughput
 and higher blocks/s throughput.
 
-With this much RAM :
+My throughput results after indexing whole bitcoin with this much RAM :
 ```
 $ ps -p <PID> -o rss,vsz
   RSS    VSZ
 38540932 46648556
 ```
 
-My throughput results after indexing whole bitcoin :
+and cpu/ssd/ram specs :
 
 - `2.0GHz` & `NVMe PCIe Gen3` & `DDR3 2100MHz 2Rx4` : `~ 180 000 Inputs+outputs / s`
 - `3.0GHz` & `NVMe PCIe Gen4` & `DDR4 3200MHz 4Rx4` : `~ 310 000 Inputs+outputs / s`
 - `3.5GHz` & `NVMe PCIe Gen5` & `DDR5 4800MHz 4RX8` : `~ 540 000 Inputs+outputs / s`
 
+Lack of RAM can be compensated by shrinking `index.min_batch_size` to make smaller non-durable commits more frequently.
 
 The size of databases (w/o sharding) corresponds to bitcoin databases, note that I index both `address` and `script_hash` :
 ```
