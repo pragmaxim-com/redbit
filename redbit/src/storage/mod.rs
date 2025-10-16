@@ -147,7 +147,7 @@ pub mod test_utils {
 pub mod plain_test_utils {
     use crate::storage::table_plain_write::PlainTable;
     use crate::*;
-    use redb::{Database, Durability, TableDefinition, WriteTransaction};
+    use redb::{Database, TableDefinition, WriteTransaction};
     use std::borrow::Borrow;
 
     pub(crate) fn mk_sharded_reader<V: CacheKey + Send + Clone + 'static + Borrow<V::SelfType<'static>>>(n: usize, weak_dbs: Vec<Weak<Database>>, plain_def: TableDefinition<'static, u32, V>) -> ShardedReadOnlyPlainTable<u32, V, BytesPartitioner> {
@@ -166,7 +166,6 @@ pub mod plain_test_utils {
             Partitioning::by_key(n),
             weak_dbs.clone(),
             PlainFactory::new(name, plain_def),
-            Durability::None
         ).expect("writer");
 
         (writer, plain_def)
@@ -196,7 +195,7 @@ pub mod index_test_utils {
     use crate::storage::test_utils;
     use crate::*;
     use lru::LruCache;
-    use redb::{Database, Durability, MultimapTableDefinition, TableDefinition, WriteTransaction};
+    use redb::{Database, MultimapTableDefinition, TableDefinition, WriteTransaction};
     use std::borrow::Borrow;
     use std::num::NonZeroUsize;
 
@@ -217,7 +216,6 @@ pub mod index_test_utils {
             Partitioning::by_value(n),
             weak_dbs.clone(),
             IndexFactory::new(name, lru_cache, pk_by_index_def, index_by_pk_def),
-            Durability::None
         ).expect("writer");
 
         (writer, pk_by_index_def, index_by_pk_def)
@@ -236,7 +234,7 @@ pub mod index_test_utils {
 
         let pk_by_index   = MultimapTableDefinition::<V, K>::new("pk_by_index");
         let index_by_pk   = TableDefinition::<K, V>::new("index_by_pk");
-        let writer = TableWriter::new(weak_db, IndexFactory::new(name, lru_cap, pk_by_index, index_by_pk), Durability::None).expect("new writer");
+        let writer = TableWriter::new(weak_db, IndexFactory::new(name, lru_cap, pk_by_index, index_by_pk)).expect("new writer");
         (owner_db, writer, lru, pk_by_index, index_by_pk)
     }
 
@@ -261,7 +259,6 @@ pub mod dict_test_utils {
     use lru::LruCache;
     use std::borrow::Borrow;
     use std::num::NonZeroUsize;
-    use redb::Durability;
 
     pub (crate) fn mk_sharder_reader<V: CacheKey + Send + Clone + 'static + Borrow<V::SelfType<'static>>>(n: usize, weak_dbs: Vec<Weak<Database>>, dict_pk_to_ids: MultimapTableDefinition<'static, u32, u32>, value_by_dict_pk: TableDefinition<'static, u32, V>, value_to_dict_pk: TableDefinition<'static, V, u32>, dict_pk_by_id: TableDefinition<'static, u32, u32>) -> ShardedReadOnlyDictTable<u32, V, Xxh3Partitioner> {
         ShardedReadOnlyDictTable::new(
@@ -293,7 +290,6 @@ pub mod dict_test_utils {
                 value_to_dict_pk,
                 dict_pk_by_id,
             ),
-            Durability::None
         ).expect("writer");
 
         (writer, dict_pk_to_ids, value_by_dict_pk, value_to_dict_pk, dict_pk_by_id)

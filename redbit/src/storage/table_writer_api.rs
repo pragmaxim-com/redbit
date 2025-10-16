@@ -2,7 +2,7 @@ use crate::storage::async_boundary::{CopyOwnedValue, ValueBuf, ValueOwned};
 use crate::storage::router::Router;
 use crate::AppError;
 use crossbeam::channel::{bounded, Receiver, Sender};
-use redb::{AccessGuard, Key, Value, WriteTransaction};
+use redb::{AccessGuard, Durability, Key, Value, WriteTransaction};
 use std::borrow::Borrow;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
@@ -191,7 +191,7 @@ pub struct FlushState {
 }
 
 pub enum WriterCommand<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static> {
-    Begin(Sender<Result<(), AppError>>),              // start new WriteTransaction + open table
+    Begin(Sender<Result<(), AppError>>, Durability),              // start new WriteTransaction + open table
     WriteSortedInsertsOnFlush(Vec<(K, V)>),
     WriteInsertNow(K, V),
     AppendSortedInserts(Vec<(K, V)>),
@@ -231,8 +231,8 @@ pub enum Control {
 
 pub trait WriterLike<K: CopyOwnedValue, V: Value> {
     fn router(&self) -> Arc<dyn Router<K, V>>;
-    fn begin(&self) -> Result<(), AppError>;
-    fn begin_async(&self) -> Result<Vec<StartFuture>, AppError>;
+    fn begin(&self, durability: Durability) -> Result<(), AppError>;
+    fn begin_async(&self, durability: Durability) -> Result<Vec<StartFuture>, AppError>;
     fn insert_on_flush(&self, key: K, value: V) -> Result<(), AppError>;
     fn insert_now(&self, key: K, value: V) -> Result<(), AppError>;
     fn flush(&self) -> Result<TaskResult, AppError>;

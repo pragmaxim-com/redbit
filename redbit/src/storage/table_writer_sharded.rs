@@ -29,14 +29,14 @@ impl<
     KP: KeyPartitioner<K> + Sync + Send + Clone + 'static,
     VP: ValuePartitioner<V> + Sync + Send + Clone + 'static,
 > ShardedTableWriter<K,V,F, KP, VP> {
-    pub fn new(partitioning: Partitioning<KP, VP>, dbs: Vec<Weak<Database>>, factory: F, durability: Durability) -> Result<Self, AppError> {
+    pub fn new(partitioning: Partitioning<KP, VP>, dbs: Vec<Weak<Database>>, factory: F) -> Result<Self, AppError> {
         let shards_count = dbs.len();
         if shards_count < 2 {
             return Err(AppError::Custom(format!("ShardedTableWriter: expected at least 2 databases, got {}", shards_count)));
         }
         let mut shards = Vec::with_capacity(shards_count);
         for db_weak in dbs.into_iter() {
-            shards.push(TableWriter::<K,V,F>::new(db_weak, factory.clone(), durability)?);
+            shards.push(TableWriter::<K,V,F>::new(db_weak, factory.clone())?);
         }
         let senders: Vec<_> = shards.iter().map(|w| w.sender()).collect();
         let router = Arc::new(ShardedRouter::new(partitioning.clone(), senders));
@@ -57,14 +57,14 @@ where
         self.router.clone()
     }
 
-    fn begin(&self) -> Result<(), AppError> {
-        for w in &self.shards { w.begin()?; }
+    fn begin(&self, durability: Durability) -> Result<(), AppError> {
+        for w in &self.shards { w.begin(durability)?; }
         Ok(())
     }
 
-    fn begin_async(&self) -> Result<Vec<StartFuture>, AppError> {
+    fn begin_async(&self, durability: Durability) -> Result<Vec<StartFuture>, AppError> {
         let mut v = Vec::with_capacity(self.shards.len());
-        for w in &self.shards { v.extend(w.begin_async()?); }
+        for w in &self.shards { v.extend(w.begin_async(durability)?); }
         Ok(v)
     }
 
@@ -132,6 +132,7 @@ where
 
 #[cfg(all(test, not(feature = "integration")))]
 mod plain_sharded {
+    use redb::Durability;
     use crate::impl_copy_owned_value_identity;
     use crate::storage::async_boundary::CopyOwnedValue;
     use crate::storage::test_utils::addr;
@@ -147,7 +148,7 @@ mod plain_sharded {
         let (_owned, weak_dbs) = test_utils::mk_shard_dbs(n, name);
         let (writer, plain_def) = plain_test_utils::mk_sharded_writer(name, n, weak_dbs.clone());
 
-        writer.begin().expect("begin");
+        writer.begin(Durability::None).expect("begin");
         for k in 1u32..=24 {
             let v = addr(&[k as u8, (k + 1) as u8, (k * 3) as u8]);
             writer.insert_on_flush(k, v).expect("insert");
@@ -171,12 +172,12 @@ mod plain_sharded {
         let (_owned, weak_dbs) = test_utils::mk_shard_dbs(n, name);
         let (writer, plain_def) = plain_test_utils::mk_sharded_writer(name, n, weak_dbs.clone());
 
-        writer.begin().expect("begin");
+        writer.begin(Durability::None).expect("begin");
         for k in 1u32..=40 {
             writer.insert_on_flush(k, addr(&[k as u8])).expect("insert");
         }
         writer.flush().expect("flush");
-        writer.begin().expect("begin");
+        writer.begin(Durability::None).expect("begin");
         for k in (3u32..=40).step_by(3) {
             assert!(writer.router.delete_kv(k).expect("delete"));
         }
@@ -205,6 +206,7 @@ mod index_sharded {
     use crossbeam::channel;
     use std::sync::Arc;
     use std::time::Duration;
+    use redb::Durability;
 
     #[test]
     fn inserting_in_wrong_order_should_fail() {
@@ -212,7 +214,7 @@ mod index_sharded {
         let name = "index_sharded_heads";
         let (_owned, weak_dbs) = test_utils::mk_shard_dbs(n, name);
         let (writer, _, _) = index_test_utils::mk_sharded_writer::<Address>(name, n, 1000, weak_dbs.clone());
-        writer.begin().expect("begin");
+        writer.begin(Durability::None).expect("begin");
         writer.insert_on_flush(4u32, addr(&[0xAA, 0xBB, 0xCC])).expect("ins");
         writer.insert_on_flush(3u32, addr(&[1, 2, 3, 4])).expect("ins");
         let flush_result = writer.flush();
@@ -232,7 +234,7 @@ mod index_sharded {
         let a2 = addr(&[9, 9, 9]);
         let a3 = addr(&[0xAA, 0xBB, 0xCC]);
 
-        writer.begin().expect("begin");
+        writer.begin(Durability::None).expect("begin");
         writer.insert_on_flush(3u32, a1.clone()).expect("ins");
         writer.insert_on_flush(4u32, a3.clone()).expect("ins");
         writer.insert_on_flush(7u32, a2.clone()).expect("ins");
@@ -240,7 +242,7 @@ mod index_sharded {
         writer.insert_on_flush(80u32, a3.clone()).expect("ins");
         writer.insert_on_flush(100u32, a3.clone()).expect("ins");
         writer.flush().expect("flush");
-        writer.begin().expect("begin");
+        writer.begin(Durability::None).expect("begin");
         // ----- heads before delete -----
         let router = writer.router.clone();
         {
@@ -316,7 +318,7 @@ mod index_sharded {
         let (_owned, weak_dbs) = test_utils::mk_shard_dbs(n, name);
         let (writer, _, _) = index_test_utils::mk_sharded_writer::<Address>(name, n, 1000, weak_dbs.clone());
 
-        writer.begin().expect("begin");
+        writer.begin(Durability::None).expect("begin");
         // no inserts; delete should be false
         assert!(!writer.router.delete_kv(123456u32).expect("delete absent"));
         writer.flush().expect("flush");
@@ -327,6 +329,7 @@ mod index_sharded {
 
 #[cfg(all(test, not(feature = "integration")))]
 mod dict_sharded {
+    use redb::Durability;
     use crate::storage::test_utils::addr;
     use crate::storage::{dict_test_utils, test_utils};
     use crate::storage::table_writer_api::WriterLike;
@@ -342,7 +345,7 @@ mod dict_sharded {
         let id2 = 11u32;
         let val = addr(&[0xDE, 0xAD, 0xBE, 0xEF]);
 
-        writer.begin().expect("begin");
+        writer.begin(Durability::None).expect("begin");
         writer.insert_on_flush(id1, val.clone()).expect("insert id1");
         writer.insert_on_flush(id2, val.clone()).expect("insert id2");
         writer.insert_on_flush(20u32, addr(&[1, 2, 3])).expect("insert other");
@@ -374,11 +377,11 @@ mod dict_sharded {
         let id2 = 22u32;
         let val = addr(&[7, 7, 7, 7]);
 
-        writer.begin().expect("begin");
+        writer.begin(Durability::None).expect("begin");
         writer.insert_on_flush(id1, val.clone()).expect("ins id1");
         writer.insert_on_flush(id2, val.clone()).expect("ins id2");
         writer.flush().expect("flush");
-        writer.begin().expect("begin");
+        writer.begin(Durability::None).expect("begin");
         assert!(writer.router.delete_kv(id1).expect("del id1"));
         writer.flush().expect("flush");
 

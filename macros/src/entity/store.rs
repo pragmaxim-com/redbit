@@ -37,9 +37,9 @@ pub fn store_def(entity_def: &EntityDef,store_statements: &[TokenStream]) -> Fun
         fn #bench_fn_name(b: &mut Bencher) {
             let (storage_owner, storage) = random_storage();
             let test_entity = #entity_type::sample();
-            let tx_context = #entity_name::new_write_ctx(&storage, Durability::None).unwrap();
+            let tx_context = #entity_name::new_write_ctx(&storage).unwrap();
             b.iter(|| {
-                let _ = tx_context.begin_writing().expect("Failed to begin writing");
+                let _ = tx_context.begin_writing(Durability::None).expect("Failed to begin writing");
                 #entity_name::#fn_name(&tx_context, test_entity.clone()).expect("Failed to store and commit instance");
                 for f in tx_context.commit_ctx_async(MutationType::Writes).unwrap() {
                     f.wait().expect("Failed to commit");
@@ -93,9 +93,9 @@ pub fn store_many_def(entity_def: &EntityDef, store_many_statements: &[TokenStre
             let (storage_owner, storage) = random_storage();
             let entity_count = 3;
             let test_entities = #entity_type::sample_many(entity_count);
-            let tx_context = #entity_name::new_write_ctx(&storage, Durability::None).unwrap();
+            let tx_context = #entity_name::new_write_ctx(&storage).unwrap();
             b.iter(|| {
-                let _ = tx_context.begin_writing().expect("Failed to begin writing");
+                let _ = tx_context.begin_writing(Durability::None).expect("Failed to begin writing");
                 #entity_name::#fn_name(&tx_context, test_entities.clone(), true).expect("Failed to store and commit instance");
                 let _ = tx_context.two_phase_commit(MutationType::Writes).expect("Failed to commit");
             });

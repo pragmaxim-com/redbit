@@ -54,12 +54,12 @@ pub fn write_tx_context(entity_tx_context_ty: &Type, tx_contexts: &[TxContextIte
             #(#definitions),*
         }
         impl #write_tx_context_name for #entity_tx_context_ty {
-           fn new_write_ctx(storage: &Arc<Storage>, durability: Durability) -> Result<Self, AppError> {
+           fn new_write_ctx(storage: &Arc<Storage>) -> Result<Self, AppError> {
                 Ok(Self {
                     #(#constructors),*
                 })
             }
-           fn begin_writing_async(&self) -> Result<Vec<StartFuture>, AppError> {
+           fn begin_writing_async(&self, durability: Durability) -> Result<Vec<StartFuture>, AppError> {
                 let mut futures: Vec<StartFuture> = Vec::new();
                 #( futures.extend(#begins); )*
                 Ok(futures)
@@ -146,7 +146,6 @@ pub fn tx_context_plain_item(def: &PlainTableDef) -> TxContextItem {
                 Partitioning::by_key(#shards),
                 storage.fetch_sharded_dbs(#name_lit, Some(#shards))?,
                 PlainFactory::new(#name_lit, #table_name),
-                durability
             )?
         }
     } else {
@@ -154,7 +153,6 @@ pub fn tx_context_plain_item(def: &PlainTableDef) -> TxContextItem {
             #var_ident: TableWriter::new(
                 storage.fetch_single_db(#name_lit)?,
                 PlainFactory::new(#name_lit, #table_name),
-                durability
             )?
         }
     };
@@ -176,7 +174,7 @@ pub fn tx_context_plain_item(def: &PlainTableDef) -> TxContextItem {
         }
     };
 
-    let write_begin = quote! { self.#var_ident.begin_async()? };
+    let write_begin = quote! { self.#var_ident.begin_async(durability)? };
     let async_flush =
         if def.root_pk {
             Some(quote! { self.#var_ident.flush_two_phased()? })
@@ -242,7 +240,6 @@ pub fn tx_context_index_item(defs: &IndexTableDefs) -> TxContextItem {
                 Partitioning::by_value(#shards),
                 storage.fetch_sharded_dbs(#name_lit, Some(#shards))?,
                 IndexFactory::new(#name_lit, #lru_cache, #pk_by_index, #index_by_pk),
-                durability
             )?
         }
     } else {
@@ -250,7 +247,6 @@ pub fn tx_context_index_item(defs: &IndexTableDefs) -> TxContextItem {
             #var_ident: TableWriter::new(
                 storage.fetch_single_db(#name_lit)?,
                 IndexFactory::new(#name_lit, #lru_cache, #pk_by_index, #index_by_pk),
-                durability
             )?
         }
     };
@@ -274,7 +270,7 @@ pub fn tx_context_index_item(defs: &IndexTableDefs) -> TxContextItem {
         }
     };
 
-    let write_begin    = quote! { self.#var_ident.begin_async()? };
+    let write_begin    = quote! { self.#var_ident.begin_async(durability)? };
     let async_flush = Some(quote! { self.#var_ident.flush_async()? });
     let deferred_flush = Some(quote! {
         match mutation_type  {
@@ -339,7 +335,6 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
                 Partitioning::by_value(#shards),
                 storage.fetch_sharded_dbs(#name_lit, Some(#shards))?,
                 DictFactory::new(#name_lit, #lru_cache, #dict_pk_to_ids, #value_by_dict, #value_to_dict, #dict_pk_by_pk),
-                durability
             )?
         }
     } else {
@@ -347,7 +342,6 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
             #var_ident: TableWriter::new(
                 storage.fetch_single_db(#name_lit)?,
                 DictFactory::new(#name_lit, #lru_cache, #dict_pk_to_ids, #value_by_dict, #value_to_dict, #dict_pk_by_pk),
-                durability
             )?
         }
     };
@@ -375,7 +369,7 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
         }
     };
 
-    let write_begin    = quote! { self.#var_ident.begin_async()? };
+    let write_begin    = quote! { self.#var_ident.begin_async(durability)? };
     let async_flush = Some(quote! { self.#var_ident.flush_async()? });
     let deferred_flush = Some(quote! {
         match mutation_type  {
@@ -417,8 +411,8 @@ pub fn begin_write_fn_def(tx_context_ty: &Type) -> FunctionDef {
 pub fn new_write_fn_def(tx_context_ty: &Type) -> FunctionDef {
     let fn_name = format_ident!("new_write_ctx");
     let fn_stream = quote! {
-        pub fn #fn_name(storage: &Arc<Storage>, durability: Durability) -> Result<#tx_context_ty, AppError> {
-            #tx_context_ty::#fn_name(&storage, durability)
+        pub fn #fn_name(storage: &Arc<Storage>) -> Result<#tx_context_ty, AppError> {
+            #tx_context_ty::#fn_name(&storage)
         }
     };
 

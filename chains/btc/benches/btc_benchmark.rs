@@ -45,12 +45,12 @@ fn criterion_benchmark(c: &mut Criterion) {
     });
 
     group.sample_size(10);
-    let indexing_context = chain.new_indexing_ctx(Durability::None).expect("Failed to create indexing context");
+    let indexing_context = chain.new_indexing_ctx().expect("Failed to create indexing context");
     group.bench_function(BenchmarkId::from_parameter("small_block_persistence"), |bencher| {
         bencher.iter_batched_ref(
             || vec![processed_small_block.clone()], // setup once
             |blocks| {
-                chain.store_blocks(&indexing_context, std::mem::take(blocks)).expect("Failed to persist block");
+                chain.store_blocks(&indexing_context, std::mem::take(blocks), Durability::None).expect("Failed to persist block");
             },
             BatchSize::LargeInput,
         );
@@ -60,7 +60,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         bencher.iter_batched_ref(
             || vec![processed_avg_block.clone()], // setup once
             |blocks| {
-                chain.store_blocks(&indexing_context, std::mem::take(blocks)).expect("Failed to persist block");
+                chain.store_blocks(&indexing_context, std::mem::take(blocks), Durability::None).expect("Failed to persist block");
             },
             BatchSize::LargeInput,
         );
@@ -70,7 +70,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         bencher.iter_batched_ref(
             || vec![processed_huge_block.clone()], // setup once
             |blocks| {
-                chain.store_blocks(&indexing_context, std::mem::take(blocks)).expect("Failed to persist block");
+                chain.store_blocks(&indexing_context, std::mem::take(blocks), Durability::None).expect("Failed to persist block");
             },
             BatchSize::LargeInput,
         );

@@ -10,14 +10,14 @@ pub enum MutationType {
 }
 
 pub trait WriteTxContext {
-    fn new_write_ctx(storage: &Arc<Storage>, durability: Durability) -> redb::Result<Self, AppError> where Self: Sized;
-    fn begin_writing_async(&self) -> redb::Result<Vec<StartFuture>, AppError>;
+    fn new_write_ctx(storage: &Arc<Storage>) -> redb::Result<Self, AppError> where Self: Sized;
+    fn begin_writing_async(&self, durability: Durability) -> redb::Result<Vec<StartFuture>, AppError>;
     fn stop_writing_async(self) -> redb::Result<Vec<StopFuture>, AppError>;
     fn commit_ctx_async(&self, mutation_type: MutationType) -> Result<Vec<FlushFuture>, AppError>;
     fn commit_ctx_deferred(&self, mutation_type: MutationType) -> Result<Vec<FlushFuture>, AppError>;
 
-    fn begin_writing(&self) -> redb::Result<(), AppError> {
-        let futures = self.begin_writing_async()?;
+    fn begin_writing(&self, durability: Durability) -> redb::Result<(), AppError> {
+        let futures = self.begin_writing_async(durability)?;
         for f in futures {
             f.wait()?;
         }
@@ -31,8 +31,8 @@ pub trait WriteTxContext {
         Ok(())
     }
     fn begin_write_ctx(storage: &Arc<Storage>, durability: Durability) -> redb::Result<Self, AppError> where Self: Sized {
-        let ctx = Self::new_write_ctx(storage, durability)?;
-        ctx.begin_writing()?;
+        let ctx = Self::new_write_ctx(storage)?;
+        ctx.begin_writing(durability)?;
         Ok(ctx)
     }
     fn two_phase_commit(&self, mutation_type: MutationType) -> Result<HashMap<String, TaskResult>, AppError> {

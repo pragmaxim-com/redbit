@@ -5,6 +5,7 @@ use redbit::storage::table_writer_api::TaskResult;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::time::Instant;
+use redb::Durability;
 
 pub type BatchWeight = usize;
 pub type BoxWeight = usize;
@@ -26,7 +27,7 @@ impl<B: BlockLike> ProgressMonitor<B> {
         }
     }
 
-    pub fn log_batch(&self, batch: &Vec<B>, buffer_size: usize) {
+    pub fn log_batch(&self, batch: &Vec<B>, durability: Durability, buffer_size: usize) {
         if let Some(first) = batch.first() {
             let batch_weight = batch.iter().map(|x| x.header().weight() as usize).sum::<usize>();
             let total_weight_before = self.total_weight.replace_with(|old| *old + batch_weight);
@@ -38,8 +39,8 @@ impl<B: BlockLike> ProgressMonitor<B> {
             let total_time = self.start_time.elapsed().as_secs();
             let txs_per_sec = format!("{:.1}", total_weight_now as f64 / total_time as f64);
             info!(
-                "Batch[{}] @ {} : {} from {} at {} ins+outs+assets/s, total {}, proc_buffer {}",
-                batch.len(), height, &hash[..12], timestamp, txs_per_sec, total_weight_now, buffer_size
+                "Batch[{}] @ {} : {} from {} at {} ins+outs+assets/s, total {}, durability: {:?}, proc_buffer {}",
+                batch.len(), height, &hash[..12], timestamp, txs_per_sec, total_weight_now, durability, buffer_size
             );
         }
     }

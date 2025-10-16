@@ -42,7 +42,7 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
         if heights_to_fetch < 1 {
             return Ok(());
         }
-        let (indexing_mode, durability) =
+        let (indexing_mode, default_durability) =
              if heights_to_fetch > indexer_conf.fork_detection_heights as u32 {
                  ("batch", Durability::None)
              } else {
@@ -58,7 +58,8 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
         let fetch_buffer_size = proc_buffer_size / 4;
         let persist_buffer_size = proc_buffer_size / 4;
         let proc_min_batch_limit = 128 * 1024;
-        let persist_min_batch_size = indexer_conf.min_batch_size;
+        let persist_io_batch_size = indexer_conf.min_io_batch_size;
+        let non_durable_batches = indexer_conf.non_durable_batches;
 
         let (fetch_tx, fetch_rx) = mpsc::channel::<Vec<FB>>(fetch_buffer_size);
         let (proc_tx, mut proc_rx) = mpsc::channel::<TB>(proc_buffer_size);
@@ -68,7 +69,7 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
             let block_provider = Arc::clone(&self.block_provider);
             let shutdown = shutdown.clone();
             task::spawn_named("fetch", async move {
-                let mut s = block_provider.stream(node_chain_tip_header.clone(), last_persisted_header, durability);
+                let mut s = block_provider.stream(node_chain_tip_header.clone(), last_persisted_header, default_durability);
                 let mut buf: Vec<FB> = Vec::new();
                 let mut buf_bytes: usize = 0;
                 loop {
@@ -81,7 +82,7 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
                         item = s.next() => {
                             match item {
                                 Some(raw) => {
-                                    match durability {
+                                    match default_durability {
                                         Durability::Immediate => {
                                             if fetch_tx.send(vec![raw]).await.is_err() { break; }
                                         }
@@ -101,7 +102,7 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
                         }
                     }
                 }
-                if matches!(durability, Durability::None) && !buf.is_empty() {
+                if matches!(default_durability, Durability::None) && !buf.is_empty() {
                     let _ = fetch_tx.send(buf).await;
                 }
                 drop(fetch_tx);
@@ -153,7 +154,7 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
             let shutdown = shutdown.clone();
             task::spawn_named("sort", async move {
                 let mut reorder: ReorderBuffer<TB> = ReorderBuffer::new(height_to_index_from, max_buffer_size);
-                let mut batcher: Batcher<TB> = Batcher::new(persist_min_batch_size, max_buffer_size, durability);
+                let mut batcher: Batcher<TB> = Batcher::new(persist_io_batch_size, max_buffer_size, default_durability);
 
                 loop {
                     tokio::select! {
@@ -200,9 +201,10 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
             let chain = Arc::clone(&chain);
             let shutdown = shutdown.clone();
             task::spawn_blocking_named("persist", move || {
-                if let Ok(index_context) = chain.new_indexing_ctx(durability) {
+                if let Ok(index_context) = chain.new_indexing_ctx() {
                     let tick = std::time::Duration::from_millis(50);
                     let monitor = ProgressMonitor::new();
+                    let mut batch_counter = 0;
                     loop {
                         if *shutdown.borrow() {
                             info!("persist: shutdown signal received");
@@ -210,15 +212,22 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
                         } else {
                             match sort_rx.try_recv() {
                                 Ok(batch) => {
-                                    monitor.log_batch(&batch, sort_rx.len());
+                                    let durability = if batch_counter > 0 && batch_counter % non_durable_batches == 0 {
+                                        Durability::Immediate
+                                    } else {
+                                        default_durability
+                                    };
+                                    monitor.log_batch(&batch, durability, sort_rx.len());
                                     match Self::persist_or_link(
                                         &index_context,
                                         batch,
                                         fork_detection_height,
                                         Arc::clone(&block_provider),
                                         Arc::clone(&chain),
+                                        durability
                                     ) {
                                         Ok(tasks) => {
+                                            batch_counter += 1;
                                             monitor.log_task_results(tasks);
                                         }
                                         Err(e) => {
@@ -313,19 +322,19 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
         }
     }
 
-    pub fn persist_or_link(indexing_context: &CTX, mut blocks: Vec<TB>, fork_detection_height: u32, block_provider: Arc<dyn BlockProvider<FB, TB>>, block_chain: Arc<dyn BlockChainLike<TB, CTX>>) -> Result<HashMap<String, TaskResult>, ChainError> {
+    pub fn persist_or_link(indexing_context: &CTX, mut blocks: Vec<TB>, fork_detection_height: u32, block_provider: Arc<dyn BlockProvider<FB, TB>>, block_chain: Arc<dyn BlockChainLike<TB, CTX>>, durability: Durability) -> Result<HashMap<String, TaskResult>, ChainError> {
         if blocks.is_empty() {
             error!("Received empty block batch, nothing to persist");
             Ok(HashMap::new())
         } else if blocks.last().is_some_and(|b| b.header().height() <= fork_detection_height) {
-            block_chain.store_blocks(indexing_context, blocks)
+            block_chain.store_blocks(indexing_context, blocks, durability)
         } else {
             let mut last_tasks: HashMap<String, TaskResult> = HashMap::new();
             for block in blocks.drain(..) {
                 let chain = Self::chain_link(block, Arc::clone(&block_provider), Arc::clone(&block_chain))?;
                 match chain.len() {
                     0 => (),
-                    1 => { last_tasks = block_chain.store_blocks(indexing_context, chain)? },
+                    1 => { last_tasks = block_chain.store_blocks(indexing_context, chain, durability)? },
                     _ => { last_tasks = block_chain.update_blocks(indexing_context, chain)? },
                 }
             }

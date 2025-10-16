@@ -132,7 +132,7 @@ where
             }
 
             WriterCommand::Shutdown(ack) => Ok(Control::Shutdown(ack)),
-            WriterCommand::Begin(_) => unreachable!("Begin handled outside"),
+            WriterCommand::Begin(_, _) => unreachable!("Begin handled outside"),
         }
     }
 
@@ -162,7 +162,7 @@ where
     V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
     F: TableFactory<K, V> + Send + Clone + 'static,
 {
-    pub fn new(db_weak: Weak<Database>, factory: F, durability: Durability) -> Result<Self, AppError> {
+    pub fn new(db_weak: Weak<Database>, factory: F) -> Result<Self, AppError> {
         let (topic, receiver): (Sender<WriterCommand<K, V>>, Receiver<WriterCommand<K, V>>) = unbounded();
         let handle = thread::spawn(move || {
             'outer: loop {
@@ -172,7 +172,7 @@ where
                 };
 
                 match cmd {
-                    WriterCommand::Begin(ack) => {
+                    WriterCommand::Begin(ack, durability) => {
                         let db_arc = match db_weak.upgrade() {
                             Some(db) => db,
                             None => { let _ = ack.send(Err(AppError::Custom("database closed".to_string()))); break 'outer; }
@@ -282,15 +282,15 @@ where
         self.router.clone()
     }
 
-    fn begin(&self) -> Result<(), AppError> {
+    fn begin(&self, durability: Durability) -> Result<(), AppError> {
         let (ack_tx, ack_rx) = bounded::<Result<(), AppError>>(1);
-        self.topic.send(WriterCommand::Begin(ack_tx))?;
+        self.topic.send(WriterCommand::Begin(ack_tx, durability))?;
         ack_rx.recv()?
     }
 
-    fn begin_async(&self) -> Result<Vec<StartFuture>, AppError> {
+    fn begin_async(&self, durability: Durability) -> Result<Vec<StartFuture>, AppError> {
         let (ack_tx, ack_rx) = bounded::<Result<(), AppError>>(1);
-        self.topic.send(WriterCommand::Begin(ack_tx))?;
+        self.topic.send(WriterCommand::Begin(ack_tx, durability))?;
         Ok(vec![StartFuture(ack_rx)])
     }
 

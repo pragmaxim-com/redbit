@@ -69,12 +69,12 @@ pub trait SizeLike: Send + Sync {
 
 #[async_trait]
 pub trait BlockChainLike<B: BlockLike, CTX: WriteTxContext>: Send + Sync {
-    fn new_indexing_ctx(&self, durability: Durability) -> Result<CTX, ChainError>;
+    fn new_indexing_ctx(&self) -> Result<CTX, ChainError>;
     fn init(&self) -> Result<(), ChainError>;
     fn delete(&self) -> Result<(), ChainError>;
     fn get_last_header(&self) -> Result<Option<B::Header>, ChainError>;
     fn get_header_by_hash(&self, hash: <B::Header as BlockHeaderLike>::Hash) -> Result<Vec<B::Header>, ChainError>;
-    fn store_blocks(&self, indexing_context: &CTX, blocks: Vec<B>) -> Result<HashMap<String, TaskResult>, ChainError>;
+    fn store_blocks(&self, indexing_context: &CTX, blocks: Vec<B>, durability: Durability) -> Result<HashMap<String, TaskResult>, ChainError>;
     fn update_blocks(&self, indexing_context: &CTX, blocks: Vec<B>) -> Result<HashMap<String, TaskResult>, ChainError>;
     async fn validate_chain(&self, validation_from_height: u32) -> Result<Vec<B::Header>, ChainError>;
 }

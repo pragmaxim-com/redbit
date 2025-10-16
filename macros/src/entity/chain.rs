@@ -130,8 +130,8 @@ pub fn block_like(block_type: Type, pk_name: &Ident, pk_type: &Type, field_defs:
                 Ok(#block_type::init(Arc::clone(&self.storage))?)
             }
 
-            fn new_indexing_ctx(&self, durability: Durability) -> Result<#write_tx_context, chain::ChainError> {
-                #block_type::new_write_ctx(&self.storage, durability).map_err(|e| chain::ChainError::Custom(format!("Failed to create new indexing context: {}", e)))
+            fn new_indexing_ctx(&self) -> Result<#write_tx_context, chain::ChainError> {
+                #block_type::new_write_ctx(&self.storage).map_err(|e| chain::ChainError::Custom(format!("Failed to create new indexing context: {}", e)))
             }
 
             fn delete(&self) -> Result<(), chain::ChainError> {
@@ -157,8 +157,8 @@ pub fn block_like(block_type: Type, pk_name: &Ident, pk_type: &Type, field_defs:
                 Ok(header)
             }
 
-            fn store_blocks(&self, indexing_context: &#write_tx_context, blocks: Vec<#block_type>) -> Result<HashMap<String, TaskResult>, chain::ChainError> {
-                let _ = indexing_context.begin_writing()?;
+            fn store_blocks(&self, indexing_context: &#write_tx_context, blocks: Vec<#block_type>, durability: Durability) -> Result<HashMap<String, TaskResult>, chain::ChainError> {
+                let _ = indexing_context.begin_writing(durability)?;
                 let master_start = Instant::now();
                 #block_type::store_many(&indexing_context, blocks, true)?;
                 let master_took = master_start.elapsed().as_millis();
@@ -170,12 +170,12 @@ pub fn block_like(block_type: Type, pk_name: &Ident, pk_type: &Type, field_defs:
             }
 
             fn update_blocks(&self, indexing_context: &#write_tx_context, blocks: Vec<#block_type>) -> Result<HashMap<String, TaskResult>, chain::ChainError> {
-                let _ = indexing_context.begin_writing()?;
+                let _ = indexing_context.begin_writing(Durability::Immediate)?;
                 for block in &blocks {
                     #block_type::delete(&indexing_context, block.#pk_name)?;
                 }
                 let _ = indexing_context.two_phase_commit(MutationType::Deletes)?;
-                let result = self.store_blocks(indexing_context, blocks)?;
+                let result = self.store_blocks(indexing_context, blocks, Durability::Immediate)?;
                 Ok(result)
             }
 

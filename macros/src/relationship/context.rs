@@ -6,8 +6,8 @@ use syn::Type;
 
 pub fn tx_context_item(child_name: &Ident, write_child_tx_context_type: &Type, read_child_tx_context_type: &Type, write_from: Option<WriteFrom>) -> TxContextItem {
     let write_definition = quote! { pub #child_name: #write_child_tx_context_type };
-    let write_constructor = quote! { #child_name: #write_child_tx_context_type::new_write_ctx(storage, durability)? };
-    let write_begin = quote! { self.#child_name.begin_writing_async()? };
+    let write_constructor = quote! { #child_name: #write_child_tx_context_type::new_write_ctx(storage)? };
+    let write_begin = quote! { self.#child_name.begin_writing_async(durability)? };
     let async_flush = if write_from.is_some() {
         Some(quote! { self.#child_name.commit_ctx_deferred(mutation_type)? })
     } else {
