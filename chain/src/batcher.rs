@@ -14,6 +14,7 @@
 //! - `is_saturated()` is a soft hint for backpressure/alerting.
 
 use std::collections::HashMap;
+use redb::Durability;
 
 pub type Height = u32;
 
@@ -117,15 +118,6 @@ impl<TB> ReorderBuffer<TB> {
 // Batcher<TB>
 // =============================================================
 
-// Add this enum (top-level near Batcher)
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SyncMode {
-    /// Original behavior: use min_weight / cap thresholds.
-    Batching,
-    /// New behavior: emit each item immediately, ignore weights & capacity.
-    Continuous,
-}
-
 /// Batches an already in-order stream by weight and/or capacity.
 ///
 /// === Complexity ===
@@ -152,10 +144,10 @@ pub struct Batcher<TB> {
     /// Acts as a safety valve against unbounded item count even if `min_weight` isn’t reached.
     /// If `buf.len() >= cap`, a flush is triggered.
     cap: usize,
-    mode: SyncMode,
+    mode: Durability,
 }
 impl<TB> Batcher<TB> {
-    pub fn new(min_weight: usize, capacity: usize, mode: SyncMode) -> Self {
+    pub fn new(min_weight: usize, capacity: usize, mode: Durability) -> Self {
         Self {
             buf: Vec::with_capacity(capacity),
             weight: 0,
@@ -169,11 +161,11 @@ impl<TB> Batcher<TB> {
     /// In Immediate mode, returns `Some(vec![item])` every time.
     pub fn push_with<F: Fn(&TB) -> usize>(&mut self, item: TB, weight_of: F) -> Option<Vec<TB>> {
         match self.mode {
-            SyncMode::Continuous => {
+            Durability::Immediate => {
                 // Ignore buf/weight entirely; emit single-item batch.
                 Some(vec![item])
             }
-            SyncMode::Batching => {
+            Durability::None => {
                 let w = weight_of(&item);
                 self.weight += w;
                 self.buf.push(item);
@@ -182,16 +174,18 @@ impl<TB> Batcher<TB> {
                 }
                 None
             }
+            _ => unreachable!("unsupported durability mode")
         }
     }
 
     /// Final flush. In Immediate mode, this is a no-op and returns None.
     pub fn flush(&mut self) -> Option<Vec<TB>> {
         match self.mode {
-            SyncMode::Continuous => None,
-            SyncMode::Batching => {
+            Durability::Immediate => None,
+            Durability::None => {
                 if self.buf.is_empty() { None } else { Some(self.take_inner()) }
             }
+            _ => unreachable!("unsupported durability mode")
         }
     }
 
@@ -202,8 +196,9 @@ impl<TB> Batcher<TB> {
 
     pub fn len(&self) -> usize {
         match self.mode {
-            SyncMode::Continuous => 0,
-            SyncMode::Batching => self.buf.len(),
+            Durability::Immediate => 0,
+            Durability::None => self.buf.len(),
+            _ => unreachable!("unsupported durability mode")
         }
     }
     pub fn is_empty(&self) -> bool { self.len() == 0 }
@@ -278,7 +273,7 @@ mod tests {
 
     #[test]
     fn immediate_mode_emits_every_item() {
-        let mut b = Batcher::new(1_000_000, 1_000_000, SyncMode::Continuous);
+        let mut b = Batcher::new(1_000_000, 1_000_000, Durability::Immediate);
         let mut out: Vec<Vec<u32>> = Vec::new();
 
         for h in [10u32, 11, 12] {
@@ -292,7 +287,7 @@ mod tests {
 
     #[test]
     fn thresholds_mode_batches_by_weight() {
-        let mut b = Batcher::new(5, 100, SyncMode::Batching);
+        let mut b = Batcher::new(5, 100, Durability::None);
         let mut emitted = Vec::new();
 
         // weight=1 x 5 → flush once with [0..4]
@@ -304,7 +299,7 @@ mod tests {
     #[test]
     fn reorder_contiguous_release() {
         let mut r = ReorderBuffer::new(183, 1024);
-        let mut b = Batcher::new(100, 1000, SyncMode::Batching);
+        let mut b = Batcher::new(100, 1000, Durability::None);
         let mut emitted = Vec::new();
 
         assert!(r.insert(185, mb(185, 1)).is_empty());
@@ -319,7 +314,7 @@ mod tests {
     #[test]
     fn end_to_end_ordering() {
         let mut r = ReorderBuffer::new(0, 1024);
-        let mut b = Batcher::new(3, 100, SyncMode::Batching);
+        let mut b = Batcher::new(3, 100, Durability::None);
         let mut emitted = Vec::new();
 
         for (h, w) in [2u32, 0, 1, 3, 4, 6, 5].into_iter().zip([1usize; 7]) {
@@ -334,7 +329,7 @@ mod tests {
     fn gap_waits_then_releases() {
         let start: u32 = 100;
         let mut r = ReorderBuffer::new(start, 8);
-        let mut b = Batcher::new(10, 100, SyncMode::Batching); // min_weight=10
+        let mut b = Batcher::new(10, 100, Durability::None); // min_weight=10
         let mut emitted: Vec<u32> = Vec::new();
 
         // Preload 101..=130 except 115; nothing should be released yet.
@@ -391,7 +386,7 @@ mod tests {
     #[test]
     fn batcher_multiple_flushes_on_large_release() {
         let mut r = ReorderBuffer::new(0, 1024);
-        let mut b = Batcher::new(5, 100, SyncMode::Batching);
+        let mut b = Batcher::new(5, 100, Durability::None);
         let mut emitted = Vec::new();
 
         insert_range_expect_empty(&mut r, 1..=9);
@@ -432,7 +427,7 @@ mod tests {
         assert_eq!(r.pending_len(), 0, "too-low items must not be retained");
 
         // Normal flow still works.
-        let mut b = Batcher::new(3, 10, SyncMode::Batching);
+        let mut b = Batcher::new(3, 10, Durability::None);
         let mut emitted = Vec::new();
         for h in 200..=205 { feed_ready(&mut b, r.insert(h, mb(h, 1)), &mut emitted); }
         flush_collect(&mut b, &mut emitted);
@@ -442,7 +437,7 @@ mod tests {
     #[test]
     fn immediate_mode_with_reorder_integration() {
         let mut r = ReorderBuffer::new(100, 1024);
-        let mut b = Batcher::new(9999, 9999, SyncMode::Continuous);
+        let mut b = Batcher::new(9999, 9999, Durability::Immediate);
         let mut emitted = Vec::new();
 
         for h in [102u32, 100, 101, 103] {

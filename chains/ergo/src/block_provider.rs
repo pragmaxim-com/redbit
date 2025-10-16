@@ -1,11 +1,11 @@
 use crate::config::ErgoConfig;
 use crate::ergo_client::{ErgoCBOR, ErgoClient};
+use crate::model_v1::{Address, Asset, AssetAction, AssetName, Block, BlockHash, BlockHeader, BlockPointer, Height, Timestamp, Transaction, TransactionPointer, TxHash, Utxo, UtxoPointer, Weight};
 use crate::{model_v1, AssetType, ExplorerError};
-use crate::model_v1::{Address, Asset, AssetAction, AssetName, Block, BlockHash, BlockHeader, BlockPointer, Timestamp, Height, Transaction, TransactionPointer, TxHash, Utxo, UtxoPointer, Weight};
 use async_trait::async_trait;
 use chain::api::{BlockProvider, ChainError};
-use chain::batcher::SyncMode;
 use chain::monitor::BoxWeight;
+use chain::settings::Parallelism;
 use ergo_lib::chain::block::FullBlock;
 use ergo_lib::chain::transaction::ergo_transaction::ErgoTransaction;
 use ergo_lib::ergotree_ir::chain::address::AddressEncoder;
@@ -18,10 +18,10 @@ use ergo_lib::{
 };
 use futures::stream::StreamExt;
 use futures::Stream;
+use redbit::redb::Durability;
 use redbit::*;
 use reqwest::Url;
 use std::{pin::Pin, str::FromStr, sync::Arc};
-use chain::settings::Parallelism;
 
 pub struct ErgoBlockProvider {
     pub client: Arc<ErgoClient>,
@@ -157,7 +157,7 @@ impl BlockProvider<ErgoCBOR, Block> for ErgoBlockProvider {
         &self,
         remote_chain_tip_header: BlockHeader,
         last_persisted_header: Option<BlockHeader>,
-        mode: SyncMode
+        durability: Durability
     ) -> Pin<Box<dyn Stream<Item = ErgoCBOR> + Send + 'static>> {
         let height_to_index_from = last_persisted_header.map_or(1, |h| h.height.0 + 1);
         let heights = height_to_index_from..=remote_chain_tip_header.height.0;
@@ -170,9 +170,10 @@ impl BlockProvider<ErgoCBOR, Block> for ErgoBlockProvider {
                 }
             });
         
-        match mode {
-            SyncMode::Batching => s.buffer_unordered(self.fetching_par.0).boxed(),
-            SyncMode::Continuous => s.buffered(self.fetching_par.0).boxed(),
+        match durability {
+            Durability::None => s.buffer_unordered(self.fetching_par.0).boxed(),
+            Durability::Immediate => s.buffered(self.fetching_par.0).boxed(),
+            _ => unreachable!("Only None and Immediate durability modes are supported")
         }
     }
 }

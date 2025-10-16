@@ -62,19 +62,13 @@ make them catch up with others even if they are HOT, see [chain](chain/README.md
 
 ❌ Root key must be newtype struct with numeric inner type (that's part of the design decision to achieve fast indexing of even whole bitcoin)
 
-### Why redb?
+### Why and when redb?
 
-Redb is B+Tree based so in comparison to LSM tree with WAL : 
-  - to avoid benchmarking our SSD by random-access writes, we need to sort all data in batches before writing it
-  - sorting + tree building overhead is eliminated by parallelizing writes to all columns into long-running batching threads
-  - this is how we achieve both fast and predictable write performance
-
-  - with B+tree you loose excellent sequential write performance of LSM tree, but you gain stable write performance
-    - my experience is that I would need different RocksDb settings for different machines and for indexing different parts of the chain 
-    => endless tuning of RocksDB parameters to really achieve that good sequential write performance
-
-  - so B+Tree performs universally well if data is sorted upfront (not as well as with memory-mapped B+tree https://github.com/erthink/libmdbx) 
-  - LSM tree can perform better if we tune the hell out of it for specific use case, environment, data, etc.
+Redb is copy-on-write (COW) B+Tree based so in comparison to LSM tree with WAL or memory-mapped COW like LMDB, in order 
+to avoid benchmarking our SSD by random-access writes, ie. to rapidly reduce write amplification, we need to : 
+    - systematically combine durable and non-durable writes to leverage Linux VM (page cache) and reduce amount of fsync calls
+    - sort all data in batches before writing it to reduce tree building overhead
+      - solved by parallelizing writes to all columns into long-running batching threads
 
 ### Development
 
@@ -340,7 +334,7 @@ Indexing process is always as slow as the column which in comparison to others h
 
 See [chain](./chain) for more details on performance and data size.
 
-The `persist` is slower because each bench iteration opens ~ 24 tables in comparison to `store` which just writes to them and commits.  
+The `persist` is slower because each bench iteration opens ~ 24 databases with tables in comparison to `store` which just writes to them and commits.  
 The `remove/delete` is analogous to `persist/store`
 
 The `block::_store_many` operation in this context writes and commits 3 blocks of 3 transactions of 1 input and 3 utxos of 3 assets, ie.

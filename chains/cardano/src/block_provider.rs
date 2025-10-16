@@ -4,7 +4,6 @@ use crate::model_v1::*;
 use crate::{AssetType, ExplorerError};
 use async_trait::async_trait;
 use chain::api::{BlockProvider, ChainError};
-use chain::batcher::SyncMode;
 use chain::monitor::BoxWeight;
 use futures::{Stream, StreamExt};
 use pallas::codec::minicbor::{Encode, Encoder};
@@ -14,6 +13,7 @@ use pallas::network::miniprotocols::chainsync::{N2CClient, NextResponse};
 use pallas::network::miniprotocols::{Point, MAINNET_MAGIC};
 use pallas_traverse::wellknown::GenesisValues;
 use std::{pin::Pin, sync::Arc};
+use redb::Durability;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -164,7 +164,7 @@ impl BlockProvider<CardanoCBOR, Block> for CardanoBlockProvider {
         Ok(best_header.header)
     }
 
-    fn stream(&self, _remote_chain_tip: BlockHeader, last_persisted_header: Option<BlockHeader>, _mode: SyncMode) -> Pin<Box<dyn Stream<Item = CardanoCBOR> + Send + 'static>> {
+    fn stream(&self, _remote_chain_tip: BlockHeader, last_persisted_header: Option<BlockHeader>, _durability: Durability) -> Pin<Box<dyn Stream<Item = CardanoCBOR> + Send + 'static>> {
         let last_point = last_persisted_header.as_ref().map_or(Point::Origin, |h| Point::new(h.slot.0 as u64, h.hash.0.to_vec()));
         let socket_path = self.config.socket_path.clone();
         let stream_buffer_size = self.config.stream_buffer_size.clone();

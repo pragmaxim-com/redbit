@@ -15,24 +15,30 @@ pub struct DictFactory<K: CopyOwnedValue + 'static, V: CacheKey + 'static> {
     pub value_by_dict_pk_def: TableDefinition<'static, K, V>,
     pub value_to_dict_pk_def: TableDefinition<'static, V, K>,
     pub dict_pk_by_id_def: TableDefinition<'static, K, K>,
-    pub lru_capacity: usize,
+    pub lru_capacity: Option<usize>,
 }
 
 impl<K: CopyOwnedValue + 'static, V: CacheKey + 'static> DictFactory<K, V> {
-    pub fn new( name: &str, lru_capacity: usize, dict_pk_to_ids_def: MultimapTableDefinition<'static, K, K>, value_by_dict_pk_def: TableDefinition<'static, K, V>, value_to_dict_pk_def: TableDefinition<'static, V, K>, dict_pk_by_id_def: TableDefinition<'static, K, K>) -> Self {
+    pub fn new(name: &str, lru_capacity: usize, dict_pk_to_ids_def: MultimapTableDefinition<'static, K, K>, value_by_dict_pk_def: TableDefinition<'static, K, V>, value_to_dict_pk_def: TableDefinition<'static, V, K>, dict_pk_by_id_def: TableDefinition<'static, K, K>) -> Self {
+        let lru_cache_size_opt =
+            if lru_capacity < 1 {
+                None
+            } else {
+                Some(lru_capacity)
+            };
         Self {
             name: name.to_string(),
             dict_pk_to_ids_def,
             value_by_dict_pk_def,
             value_to_dict_pk_def,
             dict_pk_by_id_def,
-            lru_capacity
+            lru_capacity: lru_cache_size_opt
         }
     }
 }
 
 impl<K: CopyOwnedValue + 'static, V: CacheKey + 'static> TableFactory<K, V> for DictFactory<K, V> {
-    type CacheCtx = LruCache<V::CK, K::Unit>;
+    type CacheCtx = Option<LruCache<V::CK, K::Unit>>;
     type Table<'txn, 'c> = DictTable<'txn, 'c, K, V>;
 
     fn name(&self) -> String {
@@ -40,7 +46,7 @@ impl<K: CopyOwnedValue + 'static, V: CacheKey + 'static> TableFactory<K, V> for 
     }
 
     fn new_cache(&self) -> Self::CacheCtx {
-        LruCache::new(NonZeroUsize::new(self.lru_capacity).expect("lru_capacity for dictionary must be > 0"))
+        self.lru_capacity.map(|cap| LruCache::new(NonZeroUsize::new(cap).expect("lru_capacity for index must be > 0")))
     }
 
     fn open<'txn, 'c>(
@@ -50,7 +56,7 @@ impl<K: CopyOwnedValue + 'static, V: CacheKey + 'static> TableFactory<K, V> for 
     ) -> Result<Self::Table<'txn, 'c>, AppError> {
         DictTable::new(
             tx,
-            cache,
+            cache.as_mut(),
             self.dict_pk_to_ids_def,
             self.value_by_dict_pk_def,
             self.value_to_dict_pk_def,
@@ -63,13 +69,13 @@ pub struct DictTable<'txn, 'c, K: CopyOwnedValue + 'static, V: CacheKey + 'stati
     pub(crate) value_by_dict_pk: Table<'txn, K, V>,
     pub(crate) value_to_dict_pk: Table<'txn, V, K>,
     pub(crate) dict_pk_by_key: Table<'txn, K, K>,
-    cache: &'c mut LruCache<V::CK, K::Unit>,
+    pub(crate) cache: Option<&'c mut LruCache<V::CK, K::Unit>>,
 }
 
 impl<'txn, 'c, K: CopyOwnedValue + 'static, V: CacheKey + 'static> DictTable<'txn, 'c, K, V> {
     pub fn new(
         write_tx: &'txn WriteTransaction,
-        cache: &'c mut LruCache<V::CK, K::Unit>,
+        cache: Option<&'c mut LruCache<V::CK, K::Unit>>,
         dict_pk_to_ids_def: MultimapTableDefinition<K, K>,
         value_by_dict_pk_def: TableDefinition<K, V>,
         value_to_dict_pk_def: TableDefinition<V, K>,
@@ -90,7 +96,7 @@ impl<'txn, 'c, K: CopyOwnedValue + 'static, V: CacheKey + 'static> WriteTableLik
         let val_ref: &V::SelfType<'v> = value.borrow();
         let cache_key: V::CK = V::cache_key(val_ref);
 
-        if let Some(&k) = self.cache.get(&cache_key) {
+        if let Some(&k) = self.cache.as_mut().and_then(|c| c.get(&cache_key)) {
             let birth_id = Self::owned_from_unit(k);
             self.dict_pk_by_key.insert(key_ref, birth_id.as_value())?;
             self.dict_pk_to_keys.insert(birth_id.as_value(), key_ref)?;
@@ -98,7 +104,9 @@ impl<'txn, 'c, K: CopyOwnedValue + 'static, V: CacheKey + 'static> WriteTableLik
         } else {
             if let Some(birth_id_guard) = self.value_to_dict_pk.get(val_ref)? {
                 let birth_id = Self::owned_key_from_guard(birth_id_guard);
-                self.cache.put(cache_key, birth_id.into_unit());
+                if let Some(c) = self.cache.as_mut() {
+                    c.put(cache_key, birth_id.into_unit());
+                }
 
                 self.dict_pk_by_key.insert(key_ref, birth_id.as_value())?;
                 self.dict_pk_to_keys.insert(birth_id.as_value(), key_ref)?;
@@ -108,7 +116,9 @@ impl<'txn, 'c, K: CopyOwnedValue + 'static, V: CacheKey + 'static> WriteTableLik
                 self.dict_pk_by_key.insert(key_ref, key_ref)?;
                 self.dict_pk_to_keys.insert(key_ref, key_ref)?;
 
-                self.cache.put(cache_key, Self::unit_from_key(key_ref));
+                if let Some(c) = self.cache.as_mut() {
+                    c.put(cache_key, Self::unit_from_key(key_ref));
+                }
             }
             Ok(())
         }
@@ -136,7 +146,7 @@ impl<'txn, 'c, K: CopyOwnedValue + 'static, V: CacheKey + 'static> WriteTableLik
             let val_ref: &V::SelfType<'v> = v.borrow();
             let cache_key: V::CK = V::cache_key(val_ref);
 
-            if let Some(&unit) = self.cache.get(&cache_key) {
+            if let Some(&unit) = self.cache.as_mut().and_then(|c| c.get(&cache_key)) {
                 // Existing value found via cache → we know birth_id.
                 let birth_id = Self::owned_from_unit(unit);
                 self.dict_pk_by_key.insert(key_ref, birth_id.as_value())?;
@@ -147,7 +157,9 @@ impl<'txn, 'c, K: CopyOwnedValue + 'static, V: CacheKey + 'static> WriteTableLik
             } else if let Some(birth_id_guard) = self.value_to_dict_pk.get(val_ref)? {
                 // Existing value found in table → materialize, seed cache, same as above.
                 let birth_id = Self::owned_key_from_guard(birth_id_guard);
-                self.cache.put(cache_key, birth_id.into_unit());
+                if let Some(c) = self.cache.as_mut() {
+                    c.put(cache_key, birth_id.into_unit());
+                }
 
                 self.dict_pk_by_key.insert(key_ref, birth_id.as_value())?;
 
@@ -167,7 +179,9 @@ impl<'txn, 'c, K: CopyOwnedValue + 'static, V: CacheKey + 'static> WriteTableLik
                 value_to_pk_batch.push((val_ref, birth_id_owned.clone()));
 
                 // Seed cache so subsequent keys with the same value in this batch hit fast path.
-                self.cache.put(cache_key, Self::unit_from_key(key_ref));
+                if let Some(c) = self.cache.as_mut() {
+                    c.put(cache_key, Self::unit_from_key(key_ref));
+                }
             }
         }
 
@@ -200,7 +214,9 @@ impl<'txn, 'c, K: CopyOwnedValue + 'static, V: CacheKey + 'static> WriteTableLik
             if self.dict_pk_to_keys.get(&birth_id)?.is_empty() && let Some(value_guard) = self.value_by_dict_pk.remove(&birth_id)? {
                 let value = value_guard.value();
                 self.value_to_dict_pk.remove(&value)?;
-                let _ = self.cache.pop(&V::cache_key(&value));
+                if let Some(c) = self.cache.as_mut() {
+                    let _ = c.pop(&V::cache_key(&value));
+                }
             }
             Ok(was_removed)
         } else {

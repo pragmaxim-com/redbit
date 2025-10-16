@@ -36,23 +36,10 @@ pub use once_cell;
 pub use query::*;
 pub use rand;
 pub use redb;
-pub use redb::Database;
-pub use redb::MultimapTable;
-pub use redb::MultimapTableDefinition;
-pub use redb::ReadOnlyMultimapTable;
-pub use redb::ReadOnlyTable;
-pub use redb::ReadTransaction;
-pub use redb::ReadableDatabase;
-pub use redb::ReadableMultimapTable;
-pub use redb::ReadableTable;
-pub use redb::ReadableTableMetadata;
-pub use redb::Table;
-pub use redb::TableDefinition;
-pub use redb::TableError;
-pub use redb::TableStats;
-pub use redb::TransactionError;
-pub use redb::WriteTransaction;
-pub use redb::{Key, TypeName, Value};
+pub use redb::{
+    Database, Durability, Key, TypeName, Value, MultimapTable, MultimapTableDefinition, ReadOnlyMultimapTable, ReadOnlyTable, ReadTransaction,
+    ReadableDatabase, ReadableMultimapTable, ReadableTable, ReadableTableMetadata, Table, TableDefinition, TableError, TableStats, TransactionError, WriteTransaction,
+};
 pub use serde;
 pub use serde::Deserialize;
 pub use serde::Deserializer;

@@ -24,7 +24,7 @@ pub fn store_def(entity_def: &EntityDef,store_statements: &[TokenStream]) -> Fun
             let (storage_owner, storage) = random_storage();
             let entity_count: usize = 3;
             for test_entity in #entity_type::sample_many(entity_count) {
-                let tx_context = #entity_name::begin_write_ctx(&storage).unwrap();
+                let tx_context = #entity_name::begin_write_ctx(&storage, Durability::None).unwrap();
                 let pk = #entity_name::#fn_name(&tx_context, test_entity).expect("Failed to store and commit instance");
                 tx_context.two_phase_commit_and_close(MutationType::Writes).expect("Failed to flush transaction context");
             }
@@ -37,7 +37,7 @@ pub fn store_def(entity_def: &EntityDef,store_statements: &[TokenStream]) -> Fun
         fn #bench_fn_name(b: &mut Bencher) {
             let (storage_owner, storage) = random_storage();
             let test_entity = #entity_type::sample();
-            let tx_context = #entity_name::new_write_ctx(&storage).unwrap();
+            let tx_context = #entity_name::new_write_ctx(&storage, Durability::None).unwrap();
             b.iter(|| {
                 let _ = tx_context.begin_writing().expect("Failed to begin writing");
                 #entity_name::#fn_name(&tx_context, test_entity.clone()).expect("Failed to store and commit instance");
@@ -80,7 +80,7 @@ pub fn store_many_def(entity_def: &EntityDef, store_many_statements: &[TokenStre
             let (storage_owner, storage) = random_storage();
             let entity_count: usize = 3;
             let test_entities = #entity_type::sample_many(entity_count);
-            let tx_context = #entity_name::begin_write_ctx(&storage).unwrap();
+            let tx_context = #entity_name::begin_write_ctx(&storage, Durability::None).unwrap();
             let pk = #entity_name::#fn_name(&tx_context, test_entities, true).expect("Failed to store and commit instance");
             tx_context.two_phase_commit_and_close(MutationType::Writes).expect("Failed to flush transaction context");
         }
@@ -93,7 +93,7 @@ pub fn store_many_def(entity_def: &EntityDef, store_many_statements: &[TokenStre
             let (storage_owner, storage) = random_storage();
             let entity_count = 3;
             let test_entities = #entity_type::sample_many(entity_count);
-            let tx_context = #entity_name::new_write_ctx(&storage).unwrap();
+            let tx_context = #entity_name::new_write_ctx(&storage, Durability::None).unwrap();
             b.iter(|| {
                 let _ = tx_context.begin_writing().expect("Failed to begin writing");
                 #entity_name::#fn_name(&tx_context, test_entities.clone(), true).expect("Failed to store and commit instance");
@@ -122,7 +122,7 @@ pub fn persist_def(entity_def: &EntityDef, store_statements: &[TokenStream]) -> 
         pub fn #fn_name(storage: Arc<Storage>, instance: #entity_type) -> Result<#pk_type, AppError> {
            let pk = instance.#pk_name;
            let is_last = true;
-           let tx_context = #entity_name::begin_write_ctx(&storage)?;
+           let tx_context = #entity_name::begin_write_ctx(&storage, Durability::Immediate)?;
            #(#store_statements)*
            tx_context.two_phase_commit_and_close(MutationType::Writes)?;
            Ok(pk)

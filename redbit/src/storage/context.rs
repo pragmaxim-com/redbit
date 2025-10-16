@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use redb::Durability;
 use crate::{AppError, FlushFuture, Storage, StartFuture, TaskResult, StopFuture};
 
 #[derive(Copy, Clone, Debug)]
@@ -9,7 +10,7 @@ pub enum MutationType {
 }
 
 pub trait WriteTxContext {
-    fn new_write_ctx(storage: &Arc<Storage>) -> redb::Result<Self, AppError> where Self: Sized;
+    fn new_write_ctx(storage: &Arc<Storage>, durability: Durability) -> redb::Result<Self, AppError> where Self: Sized;
     fn begin_writing_async(&self) -> redb::Result<Vec<StartFuture>, AppError>;
     fn stop_writing_async(self) -> redb::Result<Vec<StopFuture>, AppError>;
     fn commit_ctx_async(&self, mutation_type: MutationType) -> Result<Vec<FlushFuture>, AppError>;
@@ -29,8 +30,8 @@ pub trait WriteTxContext {
         }
         Ok(())
     }
-    fn begin_write_ctx(storage: &Arc<Storage>) -> redb::Result<Self, AppError> where Self: Sized {
-        let ctx = Self::new_write_ctx(storage)?;
+    fn begin_write_ctx(storage: &Arc<Storage>, durability: Durability) -> redb::Result<Self, AppError> where Self: Sized {
+        let ctx = Self::new_write_ctx(storage, durability)?;
         ctx.begin_writing()?;
         Ok(ctx)
     }

@@ -4,7 +4,7 @@ use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criteri
 use ergo::block_provider::ErgoBlockProvider;
 use ergo::ergo_client::ErgoCBOR;
 use ergo::model_v1::{BlockChain, Input, Utxo};
-use redbit::{assert_sorted, info, StorageOwner, WriteTxContext};
+use redbit::{assert_sorted, info, Durability, StorageOwner, WriteTxContext};
 
 fn block_from_file(size: &str, tx_count: usize) -> ErgoCBOR {
     info!("Getting {} block with {} txs", size, tx_count);
@@ -53,7 +53,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     });
 
     group.sample_size(10);
-    let indexing_context = chain.new_indexing_ctx().expect("Failed to create indexing context");
+    let indexing_context = chain.new_indexing_ctx(Durability::None).expect("Failed to create indexing context");
     group.bench_function(BenchmarkId::from_parameter("small_block_persistence"), |bencher| {
         bencher.iter_batched_ref(
             || vec![processed_small_block.clone()], // setup once
