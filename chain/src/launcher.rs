@@ -86,11 +86,11 @@ pub async fn maybe_run_scheduling<FB: SizeLike + 'static, TB: BlockLike + 'stati
     scheduler: Scheduler<FB, TB, CTX>,
     shutdown: watch::Receiver<bool>,
 ) -> () {
-    if index_config.enable && index_config.sync_interval_s.gt(&Duration::ZERO) {
+    if index_config.enable && index_config.node_sync_interval_s.gt(&Duration::ZERO) {
         info!("Scheduling initiated");
         scheduler.schedule(&index_config, shutdown).await
     } else {
-        info!("Scheduling is disabled as sync_interval_s = 0, skipping");
+        info!("Scheduling is disabled as node_sync_interval_s = 0, skipping");
         ready(()).await
     }
 }

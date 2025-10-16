@@ -5,7 +5,6 @@ use crate::rest_client::{BtcCBOR, BtcClient};
 use crate::ExplorerError;
 use async_trait::async_trait;
 use chain::api::{BlockProvider, ChainError};
-use chain::batcher::SyncMode;
 use chain::monitor::BoxWeight;
 use chain::settings::Parallelism;
 use futures::stream::StreamExt;
@@ -14,6 +13,7 @@ use redbit::info;
 use redbit::*;
 use serde_json;
 use std::{fs, pin::Pin, sync::Arc};
+use redbit::redb::Durability;
 
 pub struct BtcBlockProvider {
     pub client: Arc<BtcClient>,
@@ -192,7 +192,7 @@ impl BlockProvider<BtcCBOR, Block> for BtcBlockProvider {
         &self,
         remote_chain_tip_header: Header,
         last_persisted_header: Option<Header>,
-        mode: SyncMode
+        durability: Durability
     ) -> Pin<Box<dyn Stream<Item = BtcCBOR> + Send + 'static>> {
         let height_to_index_from = last_persisted_header.map_or(1, |h| h.height.0 + 1);
         let heights = height_to_index_from..=remote_chain_tip_header.height.0;
@@ -204,9 +204,10 @@ impl BlockProvider<BtcCBOR, Block> for BtcBlockProvider {
                     client.get_block_by_height(Height(height)).await.expect("Failed to fetch block by height")
                 }
             });
-        match mode {
-            SyncMode::Batching => s.buffer_unordered(self.fetching_par.0).boxed(),
-            SyncMode::Continuous => s.buffered(self.fetching_par.0).boxed(),
+        match durability {
+            Durability::None => s.buffer_unordered(self.fetching_par.0).boxed(),
+            Durability::Immediate => s.buffered(self.fetching_par.0).boxed(),
+            _ => unreachable!("Only None and Immediate durability modes are supported"),
         }
     }
 }

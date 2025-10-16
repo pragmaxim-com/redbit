@@ -131,7 +131,7 @@ pub struct IndexerSettings {
     pub enable: bool,
     pub db_path: String,
     #[serde(deserialize_with = "duration_from_secs")]
-    pub sync_interval_s: Duration,
+    pub node_sync_interval_s: Duration,
     pub fork_detection_heights: u8,
     pub min_batch_size: usize,
     pub db_cache_size_gb: DbCacheSize,

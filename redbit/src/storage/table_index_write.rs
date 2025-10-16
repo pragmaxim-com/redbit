@@ -38,7 +38,7 @@ pub struct IndexTable<'txn, 'c, K: CopyOwnedValue + 'static, V: CacheKey + 'stat
     pub(crate) cache: Option<&'c mut LruCache<V::CK, K::Unit>>,
 }
 
-impl<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: CacheKey + 'static> IndexTable<'txn, 'c, K, V> {
+impl<'txn, 'c, K: CopyOwnedValue + 'static, V: CacheKey + 'static> IndexTable<'txn, 'c, K, V> {
     pub fn new(write_tx: &'txn WriteTransaction, cache: Option<&'c mut LruCache<V::CK, K::Unit>>, pk_by_index_def: MultimapTableDefinition<'static, V, K>, index_by_pk_def: TableDefinition<'static, K, V>) -> Result<Self, AppError> {
         Ok(Self {
             pk_by_index: write_tx.open_multimap_table(pk_by_index_def)?,
@@ -48,7 +48,7 @@ impl<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: CacheKey + 'static> IndexTa
     }
 }
 
-impl<K: Key + CopyOwnedValue + 'static, V: CacheKey + 'static> TableFactory<K, V> for IndexFactory<K, V> {
+impl<K: CopyOwnedValue + 'static, V: CacheKey + 'static> TableFactory<K, V> for IndexFactory<K, V> {
     type CacheCtx = Option<LruCache<V::CK, K::Unit>>;
     type Table<'txn, 'c> = IndexTable<'txn, 'c, K, V>;
 

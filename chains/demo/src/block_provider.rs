@@ -7,7 +7,7 @@ use std::pin::Pin;
 use std::sync::{Arc, RwLock};
 use redbit::info;
 use chain::api::{BlockProvider, ChainError, SizeLike};
-use chain::batcher::SyncMode;
+use crate::model_v1::redb::Durability;
 
 impl SizeLike for Block {
     fn size(&self) -> usize {
@@ -71,7 +71,7 @@ impl BlockProvider<Block, Block> for DemoBlockProvider {
         &self,
         remote_chain_tip_header: Header,
         last_persisted_header: Option<Header>,
-        _mode: SyncMode
+        _durability: Durability
     ) -> Pin<Box<dyn Stream<Item = Block> + Send + 'static>> {
         let height_to_index_from = last_persisted_header.map_or(1, |h| h.height.0 + 1);
         let heights = height_to_index_from..=remote_chain_tip_header.height.0;

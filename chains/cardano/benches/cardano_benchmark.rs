@@ -56,7 +56,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     });
 
     group.sample_size(10);
-    let indexing_context = chain.new_indexing_ctx().expect("Failed to create indexing context");
+    let indexing_context = chain.new_indexing_ctx(Durability::None).expect("Failed to create indexing context");
     group.bench_function(BenchmarkId::from_parameter("small_block_persistence"), |bencher| {
         bencher.iter_batched_ref(
             || vec![processed_small_block.clone()], // setup once

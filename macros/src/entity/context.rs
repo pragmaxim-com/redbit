@@ -54,7 +54,7 @@ pub fn write_tx_context(entity_tx_context_ty: &Type, tx_contexts: &[TxContextIte
             #(#definitions),*
         }
         impl #write_tx_context_name for #entity_tx_context_ty {
-           fn new_write_ctx(storage: &Arc<Storage>) -> Result<Self, AppError> {
+           fn new_write_ctx(storage: &Arc<Storage>, durability: Durability) -> Result<Self, AppError> {
                 Ok(Self {
                     #(#constructors),*
                 })
@@ -146,6 +146,7 @@ pub fn tx_context_plain_item(def: &PlainTableDef) -> TxContextItem {
                 Partitioning::by_key(#shards),
                 storage.fetch_sharded_dbs(#name_lit, Some(#shards))?,
                 PlainFactory::new(#name_lit, #table_name),
+                durability
             )?
         }
     } else {
@@ -153,6 +154,7 @@ pub fn tx_context_plain_item(def: &PlainTableDef) -> TxContextItem {
             #var_ident: TableWriter::new(
                 storage.fetch_single_db(#name_lit)?,
                 PlainFactory::new(#name_lit, #table_name),
+                durability
             )?
         }
     };
@@ -240,6 +242,7 @@ pub fn tx_context_index_item(defs: &IndexTableDefs) -> TxContextItem {
                 Partitioning::by_value(#shards),
                 storage.fetch_sharded_dbs(#name_lit, Some(#shards))?,
                 IndexFactory::new(#name_lit, #lru_cache, #pk_by_index, #index_by_pk),
+                durability
             )?
         }
     } else {
@@ -247,6 +250,7 @@ pub fn tx_context_index_item(defs: &IndexTableDefs) -> TxContextItem {
             #var_ident: TableWriter::new(
                 storage.fetch_single_db(#name_lit)?,
                 IndexFactory::new(#name_lit, #lru_cache, #pk_by_index, #index_by_pk),
+                durability
             )?
         }
     };
@@ -297,14 +301,12 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
     let name_lit    = Literal::string(&var_ident.to_string());
     let key_ty      = &defs.key_type;
     let val_ty      = &defs.value_type;
-
+    let lru_cache    = defs.column_props.lru_cache_size;
     let dict_pk_to_ids = &defs.dict_pk_to_ids_table_def.name;
     let value_by_dict  = &defs.value_by_dict_pk_table_def.name;
     let value_to_dict  = &defs.value_to_dict_pk_table_def.name;
     let dict_pk_by_pk  = &defs.dict_pk_by_pk_table_def.name;
 
-    // keep a sensible floor on LRU size
-    let lru_cache = core::cmp::max(defs.column_props.lru_cache_size, 20_000);
 
     let shards     = defs.column_props.shards;
     let is_sharded = shards >= 2;
@@ -337,6 +339,7 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
                 Partitioning::by_value(#shards),
                 storage.fetch_sharded_dbs(#name_lit, Some(#shards))?,
                 DictFactory::new(#name_lit, #lru_cache, #dict_pk_to_ids, #value_by_dict, #value_to_dict, #dict_pk_by_pk),
+                durability
             )?
         }
     } else {
@@ -344,6 +347,7 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
             #var_ident: TableWriter::new(
                 storage.fetch_single_db(#name_lit)?,
                 DictFactory::new(#name_lit, #lru_cache, #dict_pk_to_ids, #value_by_dict, #value_to_dict, #dict_pk_by_pk),
+                durability
             )?
         }
     };
@@ -396,8 +400,8 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
 pub fn begin_write_fn_def(tx_context_ty: &Type) -> FunctionDef {
     let fn_name = format_ident!("begin_write_ctx");
     let fn_stream = quote! {
-        pub fn #fn_name(storage: &Arc<Storage>) -> Result<#tx_context_ty, AppError> {
-            #tx_context_ty::#fn_name(&storage)
+        pub fn #fn_name(storage: &Arc<Storage>, durability: Durability) -> Result<#tx_context_ty, AppError> {
+            #tx_context_ty::#fn_name(&storage, durability)
         }
     };
 
@@ -413,8 +417,8 @@ pub fn begin_write_fn_def(tx_context_ty: &Type) -> FunctionDef {
 pub fn new_write_fn_def(tx_context_ty: &Type) -> FunctionDef {
     let fn_name = format_ident!("new_write_ctx");
     let fn_stream = quote! {
-        pub fn #fn_name(storage: &Arc<Storage>) -> Result<#tx_context_ty, AppError> {
-            #tx_context_ty::#fn_name(&storage)
+        pub fn #fn_name(storage: &Arc<Storage>, durability: Durability) -> Result<#tx_context_ty, AppError> {
+            #tx_context_ty::#fn_name(&storage, durability)
         }
     };
 

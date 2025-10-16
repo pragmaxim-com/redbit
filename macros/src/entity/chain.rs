@@ -130,14 +130,14 @@ pub fn block_like(block_type: Type, pk_name: &Ident, pk_type: &Type, field_defs:
                 Ok(#block_type::init(Arc::clone(&self.storage))?)
             }
 
-            fn new_indexing_ctx(&self) -> Result<#write_tx_context, chain::ChainError> {
-                #block_type::new_write_ctx(&self.storage).map_err(|e| chain::ChainError::Custom(format!("Failed to create new indexing context: {}", e)))
+            fn new_indexing_ctx(&self, durability: Durability) -> Result<#write_tx_context, chain::ChainError> {
+                #block_type::new_write_ctx(&self.storage, durability).map_err(|e| chain::ChainError::Custom(format!("Failed to create new indexing context: {}", e)))
             }
 
             fn delete(&self) -> Result<(), chain::ChainError> {
                 let tx_context = #header_type::begin_read_ctx(&self.storage)?;
                 if let Some(tip_header) = #header_type::last(&tx_context)? {
-                    let tx_context = #block_type::begin_write_ctx(&self.storage)?;
+                    let tx_context = #block_type::begin_write_ctx(&self.storage, Durability::Immediate)?;
                     let pks = #pk_type::from_many(&(0..=tip_header.#pk_name.0).collect::<Vec<u32>>());
                     #block_type::delete_many(&tx_context, &pks)?;
                     tx_context.two_phase_commit_and_close(MutationType::Deletes)?;

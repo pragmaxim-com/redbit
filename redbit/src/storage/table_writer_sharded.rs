@@ -1,7 +1,7 @@
 use crate::storage::async_boundary::CopyOwnedValue;
 use crate::storage::partitioning::{KeyPartitioner, Partitioning, ValuePartitioner};
 use crate::storage::router::{Router, ShardedRouter};
-use redb::{Database, Key};
+use redb::{Database, Durability, Key};
 use std::borrow::Borrow;
 use std::sync::Arc;
 use std::{marker::PhantomData, sync::Weak};
@@ -29,14 +29,14 @@ impl<
     KP: KeyPartitioner<K> + Sync + Send + Clone + 'static,
     VP: ValuePartitioner<V> + Sync + Send + Clone + 'static,
 > ShardedTableWriter<K,V,F, KP, VP> {
-    pub fn new(partitioning: Partitioning<KP, VP>, dbs: Vec<Weak<Database>>, factory: F) -> Result<Self, AppError> {
+    pub fn new(partitioning: Partitioning<KP, VP>, dbs: Vec<Weak<Database>>, factory: F, durability: Durability) -> Result<Self, AppError> {
         let shards_count = dbs.len();
         if shards_count < 2 {
             return Err(AppError::Custom(format!("ShardedTableWriter: expected at least 2 databases, got {}", shards_count)));
         }
         let mut shards = Vec::with_capacity(shards_count);
         for db_weak in dbs.into_iter() {
-            shards.push(TableWriter::<K,V,F>::new(db_weak, factory.clone())?);
+            shards.push(TableWriter::<K,V,F>::new(db_weak, factory.clone(), durability)?);
         }
         let senders: Vec<_> = shards.iter().map(|w| w.sender()).collect();
         let router = Arc::new(ShardedRouter::new(partitioning.clone(), senders));

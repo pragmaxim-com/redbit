@@ -6,10 +6,9 @@ use hex::FromHexError;
 use redbit::{AppError, WriteTxContext};
 use std::pin::Pin;
 use std::sync::Arc;
-use redb::StorageError;
+use redb::{Durability, StorageError};
 use tokio::task::JoinError;
 use redbit::storage::table_writer_api::TaskResult;
-use crate::batcher::SyncMode;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ChainError {
@@ -70,7 +69,7 @@ pub trait SizeLike: Send + Sync {
 
 #[async_trait]
 pub trait BlockChainLike<B: BlockLike, CTX: WriteTxContext>: Send + Sync {
-    fn new_indexing_ctx(&self) -> Result<CTX, ChainError>;
+    fn new_indexing_ctx(&self, durability: Durability) -> Result<CTX, ChainError>;
     fn init(&self) -> Result<(), ChainError>;
     fn delete(&self) -> Result<(), ChainError>;
     fn get_last_header(&self) -> Result<Option<B::Header>, ChainError>;
@@ -85,5 +84,5 @@ pub trait BlockProvider<FB: SizeLike, TB: BlockLike>: Send + Sync {
     fn block_processor(&self) -> Arc<dyn Fn(&FB) -> Result<TB, ChainError> + Send + Sync>;
     fn get_processed_block(&self, hash: <TB::Header as BlockHeaderLike>::Hash) -> Result<Option<TB>, ChainError>;
     async fn get_chain_tip(&self) -> Result<TB::Header, ChainError>;
-    fn stream(&self, remote_chain_tip_header: TB::Header, last_persisted_header: Option<TB::Header>, mode: SyncMode) -> Pin<Box<dyn Stream<Item = FB> + Send + 'static>>;
+    fn stream(&self, remote_chain_tip_header: TB::Header, last_persisted_header: Option<TB::Header>, durability: Durability) -> Pin<Box<dyn Stream<Item = FB> + Send + 'static>>;
 }

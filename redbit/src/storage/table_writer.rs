@@ -4,7 +4,7 @@ use crate::storage::sort_buffer::MergeBuffer;
 use crate::storage::table_writer_api::*;
 use crate::{error, AppError};
 use crossbeam::channel::{bounded, unbounded, Receiver, Sender};
-use redb::{Database, Key};
+use redb::{Database, Durability, Key};
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::marker::PhantomData;
@@ -162,7 +162,7 @@ where
     V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
     F: TableFactory<K, V> + Send + Clone + 'static,
 {
-    pub fn new(db_weak: Weak<Database>, factory: F) -> Result<Self, AppError> {
+    pub fn new(db_weak: Weak<Database>, factory: F, durability: Durability) -> Result<Self, AppError> {
         let (topic, receiver): (Sender<WriterCommand<K, V>>, Receiver<WriterCommand<K, V>>) = unbounded();
         let handle = thread::spawn(move || {
             'outer: loop {
@@ -178,10 +178,14 @@ where
                             None => { let _ = ack.send(Err(AppError::Custom("database closed".to_string()))); break 'outer; }
                         };
 
-                        let tx = match db_arc.begin_write() {
+                        let mut tx = match db_arc.begin_write() {
                             Ok(tx) => tx,
                             Err(e) => { let _ = ack.send(Err(AppError::from(e))); continue 'outer; }
                         };
+                        match tx.set_durability(durability) {
+                            Ok(()) => {}
+                            Err(e) => { let _ = ack.send(Err(AppError::Custom(e.to_string()))); continue 'outer; }
+                        }
                         drop(db_arc);
 
                         let mut cache_local = factory.new_cache();

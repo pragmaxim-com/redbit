@@ -2,13 +2,14 @@ use std::collections::HashMap;
 use crate::api::{BlockHeaderLike, SizeLike};
 use crate::api::{BlockChainLike, BlockLike};
 use crate::api::{BlockProvider, ChainError};
-use crate::batcher::{Batcher, ReorderBuffer, SyncMode};
+use crate::batcher::{Batcher, ReorderBuffer};
 use crate::monitor::ProgressMonitor;
 use crate::settings::{IndexerSettings, Parallelism};
 use crate::{combine, task};
 use futures::StreamExt;
 use redbit::{error, info, warn, WriteTxContext};
 use std::sync::Arc;
+use redb::Durability;
 use tokio::sync::{mpsc, watch};
 use tokio::sync::mpsc::error::TryRecvError;
 use tokio_stream::wrappers::ReceiverStream;
@@ -41,16 +42,16 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
         if heights_to_fetch < 1 {
             return Ok(());
         }
-        let (indexing_how, indexing_mode) =
+        let (indexing_mode, durability) =
              if heights_to_fetch > indexer_conf.fork_detection_heights as u32 {
-                 ("batch", SyncMode::Batching)
+                 ("batch", Durability::None)
              } else {
-                 ("continuously", SyncMode::Continuous)
+                 ("continuously", Durability::Immediate)
              };
 
         info!(
             "Going to {} index {} blocks from {} to {}, parallelism : {}, fork_detection @ {}",
-            indexing_how, heights_to_fetch, height_to_index_from, chain_tip_height, indexing_par.0, fork_detection_height
+            indexing_mode, heights_to_fetch, height_to_index_from, chain_tip_height, indexing_par.0, fork_detection_height
         );
         let proc_buffer_size = 512;
         let fetch_buffer_size = proc_buffer_size / 4;
@@ -66,7 +67,7 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
             let block_provider = Arc::clone(&self.block_provider);
             let shutdown = shutdown.clone();
             task::spawn_named("fetch", async move {
-                let mut s = block_provider.stream(node_chain_tip_header.clone(), last_persisted_header, indexing_mode);
+                let mut s = block_provider.stream(node_chain_tip_header.clone(), last_persisted_header, durability);
                 let mut buf: Vec<FB> = Vec::new();
                 let mut buf_bytes: usize = 0;
                 loop {
@@ -79,11 +80,11 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
                         item = s.next() => {
                             match item {
                                 Some(raw) => {
-                                    match indexing_mode {
-                                        SyncMode::Continuous => {
+                                    match durability {
+                                        Durability::Immediate => {
                                             if fetch_tx.send(vec![raw]).await.is_err() { break; }
                                         }
-                                        SyncMode::Batching => {
+                                        Durability::None => {
                                             buf_bytes += raw.size();
                                             buf.push(raw);
                                             if buf_bytes > proc_min_batch_limit {
@@ -91,6 +92,7 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
                                                 buf_bytes = 0;
                                             }
                                         }
+                                        _ => unreachable!("Only None and Immediate durability modes are supported"),
                                     }
                                 }
                                 None => break,
@@ -98,7 +100,7 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
                         }
                     }
                 }
-                if matches!(indexing_mode, SyncMode::Batching) && !buf.is_empty() {
+                if matches!(durability, Durability::None) && !buf.is_empty() {
                     let _ = fetch_tx.send(buf).await;
                 }
                 drop(fetch_tx);
@@ -150,7 +152,7 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
             let shutdown = shutdown.clone();
             task::spawn_named("sort", async move {
                 let mut reorder: ReorderBuffer<TB> = ReorderBuffer::new(height_to_index_from, proc_buffer_size * 8);
-                let mut batcher: Batcher<TB> = Batcher::new(persist_min_batch_size, proc_buffer_size, indexing_mode);
+                let mut batcher: Batcher<TB> = Batcher::new(persist_min_batch_size, proc_buffer_size, durability);
 
                 loop {
                     tokio::select! {
@@ -197,9 +199,9 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
             let chain = Arc::clone(&chain);
             let shutdown = shutdown.clone();
             task::spawn_blocking_named("persist", move || {
-                if let Ok(index_context) = chain.new_indexing_ctx() {
+                if let Ok(index_context) = chain.new_indexing_ctx(durability) {
                     let tick = std::time::Duration::from_millis(50);
-                    let monitor = ProgressMonitor::new(5000);
+                    let monitor = ProgressMonitor::new();
                     loop {
                         if *shutdown.borrow() {
                             info!("persist: shutdown signal received");

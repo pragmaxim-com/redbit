@@ -38,7 +38,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     group.bench_function(BenchmarkId::from_parameter("indexing_context"), |bencher| {
         bencher.iter(|| {
-                let ctx = chain.new_indexing_ctx().expect("Failed to create indexing context");
+                let ctx = chain.new_indexing_ctx(Durability::None).expect("Failed to create indexing context");
                 ctx.begin_writing().unwrap();
                 ctx.two_phase_commit_and_close(MutationType::Deletes).unwrap();
             }

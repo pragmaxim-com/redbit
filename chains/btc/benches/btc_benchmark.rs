@@ -1,10 +1,8 @@
 use btc::block_provider::BtcBlockProvider;
-use btc::model_v1::{BlockChain, BlockPointer, Input, Utxo};
+use btc::model_v1::{BlockChain, Input, Utxo};
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
-use redbit::{assert_sorted, info, StorageOwner, WriteTxContext};
+use redbit::{assert_sorted, info, Durability, StorageOwner, WriteTxContext};
 use std::{sync::Arc, time::Duration};
-use std::borrow::Borrow;
-use std::cmp::Ordering;
 
 fn criterion_benchmark(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
@@ -47,7 +45,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     });
 
     group.sample_size(10);
-    let indexing_context = chain.new_indexing_ctx().expect("Failed to create indexing context");
+    let indexing_context = chain.new_indexing_ctx(Durability::None).expect("Failed to create indexing context");
     group.bench_function(BenchmarkId::from_parameter("small_block_persistence"), |bencher| {
         bencher.iter_batched_ref(
             || vec![processed_small_block.clone()], // setup once

@@ -98,32 +98,33 @@ If throughput does not reach your expectations, check that `buffer` is high enou
 ```
 
 1. If it is close to `0`, it means your block fetching or processing is too slow and persistence tasks are idling.
-2. If indexing is under 50 000 inputs+outputs/s with full `buffer`, it means you need more RAM or better SSD.
+2. If indexing is under 150 000 inputs+outputs/s with full `buffer`, it means you need more RAM or better SSD.
 
 Watch indexing tasks reports in logs : 
- - `COMMIT` - flushing-to-disk-time, of all threads (running in parallel) 
- - `MASTER` - base time, everything above are indexing threads behind the master thread, queue is still not empty
+ - `COLLECT` - Workers are collecting data from the `MASTER` thread 
+ - `SORT`    - How much time workers spend for data sorting 
+ - `WRITE`   - B+Tree modifications time (insertions) 
+ - `FLUSH`   - non-durable commit time 
 
 Here you can see that `transaction_hash_index` is the slowest column, so it can be fixed by sharding it or increase db_cache or lru_cache.
 
 ```
-TASK                               last ms      avg ms      dev ms     cv %
-transaction_hash_index                 416         366         139     38.0
-utxo_script_hash_dict                  394         342         129     37.8
-utxo_address_dict                      393         341         130     38.0
-header_prev_hash_index                 349         312         116     37.1
-header_hash_index                      348         312         116     37.1
-utxo_id                                348         310         117     37.6
-header_merkle_root_index               348         311         116     37.1
-transaction_id                         348         310         117     37.7
-header_timestamp_index                 348         310         117     37.7
-header_height                          348         310         117     37.7
-utxo_amount_by_id                      348         310         117     37.6
-block_height                           348         310         117     37.7
-input_id                               347         309         117     37.8
-input_utxo_pointer_by_id               347         309         117     37.8
-MASTER                                 345         306         116     38.0
-COMMIT                                  69          59          28     46.9
+TASK (c)ollect,(s)ort,(w)rite,(f)lush ms |     c      s      w      f =  last |     c      s      w      f =   avg |      dev | coefov %
+block_height                             |  5186      0      0      0 =  5186 |  5213      0      0      0 =  5213 |     1232 |      221
+utxo_address_dict                        |   472      0   3939    773 =  5184 |   426      0   3961    803 =  5190 |     1321 |       55
+input_utxo_pointer_by_id                 |  3148    102   1585     18 =  4853 |  3389    144   1418     19 =  4970 |     1129 |      104
+input_id                                 |  3149    112   1570      9 =  4840 |  3379    150   1405      9 =  4943 |     1131 |      117
+transaction_hash_index                   |  3149      0      0   1560 =  4709 |  3365      0      0   1408 =  4773 |     1059 |       39
+utxo_script_hash_dict                    |   411      0   3228   1026 =  4665 |   379      0   3334   1000 =  4713 |     1302 |       60
+utxo_id                                  |   386      0   2082     18 =  2486 |   355      0   2162     20 =  2537 |      369 |       70
+utxo_amount_by_id                        |   386      0   1858     52 =  2296 |   355      0   1935     43 =  2333 |      363 |       70
+transaction_id                           |   386      0    724      5 =  1115 |   355      0    707      4 =  1066 |      167 |      115
+header_prev_hash_index                   |   386      0      5      1 =   392 |   355      0      6      1 =   362 |       67 |      224
+header_hash_index                        |   386      0      2      3 =   391 |   355      0      6      1 =   362 |       67 |      196
+header_merkle_root_index                 |   386      0      2      1 =   389 |   355      0      6      1 =   362 |       66 |      204
+header_timestamp_index                   |   386      0      1      1 =   388 |   355      0      0      0 =   355 |       60 |      296
+header_height                            |   386      0      0      0 =   386 |   355      0      0      0 =   355 |       60 |     1175
+MASTER                                   |   385      0      0      0 =   385 |   355      0      0      0 =   355 |       58 |       16
 ```
 
 Hand-made criterion benchmarks [deployed](https://pragmaxim-com.github.io/redbit/report/index.html).
@@ -131,14 +132,21 @@ Hand-made criterion benchmarks [deployed](https://pragmaxim-com.github.io/redbit
 Indexing speed in logs is the **average**, for example, the first ~ 50k **bitcoin** blocks with few Txs have lower in+out/s indexing throughput
 and higher blocks/s throughput.
 
+With this much RAM :
+```
+$ ps -p <PID> -o rss,vsz
+  RSS    VSZ
+38540932 46648556
+```
+
 My throughput results after indexing whole bitcoin :
 
-- `2.0GHz` & `NVMe PCIe Gen3` & `DDR3 2100MHz 2Rx4` : `~ 70 000 Inputs+outputs / s`
-- `3.0GHz` & `NVMe PCIe Gen4` & `DDR4 3200MHz 4Rx4` : `~ 110 000 Inputs+outputs / s`
-- `3.5GHz` & `NVMe PCIe Gen5` & `DDR5 4800MHz 4RX8` : `~ 170 000 Inputs+outputs / s`
+- `2.0GHz` & `NVMe PCIe Gen3` & `DDR3 2100MHz 2Rx4` : `~ 180 000 Inputs+outputs / s`
+- `3.0GHz` & `NVMe PCIe Gen4` & `DDR4 3200MHz 4Rx4` : `~ 310 000 Inputs+outputs / s`
+- `3.5GHz` & `NVMe PCIe Gen5` & `DDR5 4800MHz 4RX8` : `~ 540 000 Inputs+outputs / s`
 
 
-The size of databases corresponds to bitcoin databases, note that I index both `address` and `script_hash` :
+The size of databases (w/o sharding) corresponds to bitcoin databases, note that I index both `address` and `script_hash` :
 ```
 $ du -sh * | sort -rh
 1.3T    .
@@ -158,4 +166,4 @@ $ du -sh * | sort -rh
 7.2M	block_height.db
 ```
 
-In a nutshell, whole bitcoin up to height ~ 0.9M can be indexed in half a day with enough RAM for the Linux VM (page cache).
+In a nutshell, whole bitcoin up to height ~ 0.9M can be indexed in half a day with enough RAM.
