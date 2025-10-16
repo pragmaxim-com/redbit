@@ -1,6 +1,6 @@
 [package]
 name = "root"
-version = "1.0.8"
+version = "1.0.9"
 edition = "2024"
 
 [features]
@@ -11,7 +11,7 @@ chain = ["redbit/chain"]
 expansion_structured = ["redbit/expansion_structured"]
 
 [workspace.package]
-version = "1.0.8"
+version = "1.0.9"
 
 [workspace]
 members = [

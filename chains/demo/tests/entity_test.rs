@@ -1,5 +1,5 @@
 #[cfg(all(test, not(feature = "integration")))]
-mod entity_tests {
+mod tests {
     use demo::model_v1::*;
     use std::collections::HashSet;
     use redbit::storage::init::StorageOwner;
@@ -11,6 +11,28 @@ mod entity_tests {
         Block::store_many(&tx_context, blocks.clone(), true).expect("Failed to persist blocks");
         tx_context.two_phase_commit_and_close(MutationType::Writes).unwrap();
         (blocks, storage_owner, storage)
+    }
+
+    #[tokio::test]
+    async fn debug_io() {
+        let (blocks, _storage_owner, storage) = init_temp_storage("db_test", 0).await;
+        println!("SAMPLE");
+        for tx in blocks.last().unwrap().transactions.clone() {
+            println!("sample {:?}", tx.hash);
+            for i in tx.inputs {
+                print!(" id: {:?} + pointer:{:?} |", i.id.url_encode(), i.utxo_pointer.url_encode());
+            }
+            println!("");
+        }
+        println!("PERSISTED");
+        let block_read_ctx = Block::begin_read_ctx(&storage).unwrap();
+        for tx in Block::last(&block_read_ctx).unwrap().unwrap().transactions {
+            println!("persisted {:?}", tx.hash);
+            for i in tx.inputs {
+                print!(" id: {:?} + pointer:{:?} |", i.id.url_encode(), i.utxo_pointer.url_encode());
+            }
+            println!("");
+        }
     }
 
     #[test]

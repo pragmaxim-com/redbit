@@ -147,12 +147,12 @@ pub struct Batcher<TB> {
     mode: Durability,
 }
 impl<TB> Batcher<TB> {
-    pub fn new(min_weight: usize, capacity: usize, mode: Durability) -> Self {
+    pub fn new(min_weight: usize, cap: usize, mode: Durability) -> Self {
         Self {
-            buf: Vec::with_capacity(capacity),
+            buf: Vec::with_capacity(cap),
             weight: 0,
             min_weight,
-            cap: capacity,
+            cap,
             mode,
         }
     }

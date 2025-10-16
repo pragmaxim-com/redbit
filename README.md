@@ -76,7 +76,7 @@ To use redbit in your project:
 
 ```toml
 [dependencies]
-redbit = "1.0.8"
+redbit = "1.0.9"
 ```
 
 ```

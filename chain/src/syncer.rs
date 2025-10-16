@@ -54,6 +54,7 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
             indexing_mode, heights_to_fetch, height_to_index_from, chain_tip_height, indexing_par.0, fork_detection_height
         );
         let proc_buffer_size = 512;
+        let max_buffer_size = proc_buffer_size * 16;
         let fetch_buffer_size = proc_buffer_size / 4;
         let persist_buffer_size = proc_buffer_size / 4;
         let proc_min_batch_limit = 128 * 1024;
@@ -151,8 +152,8 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
         let sort_handle = {
             let shutdown = shutdown.clone();
             task::spawn_named("sort", async move {
-                let mut reorder: ReorderBuffer<TB> = ReorderBuffer::new(height_to_index_from, proc_buffer_size * 8);
-                let mut batcher: Batcher<TB> = Batcher::new(persist_min_batch_size, proc_buffer_size, durability);
+                let mut reorder: ReorderBuffer<TB> = ReorderBuffer::new(height_to_index_from, max_buffer_size);
+                let mut batcher: Batcher<TB> = Batcher::new(persist_min_batch_size, max_buffer_size, durability);
 
                 loop {
                     tokio::select! {
