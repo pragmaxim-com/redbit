@@ -133,7 +133,7 @@ pub struct IndexerSettings {
     #[serde(deserialize_with = "duration_from_secs")]
     pub node_sync_interval_s: Duration,
     pub fork_detection_heights: u8,
-    pub min_io_batch_size: usize,
+    pub min_entity_batch_size: usize,
     pub non_durable_batches: usize,
     pub db_cache_size_gb: DbCacheSize,
     pub processing_parallelism: Parallelism,

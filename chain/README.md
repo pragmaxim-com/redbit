@@ -145,7 +145,8 @@ and cpu/ssd/ram specs :
 - `3.0GHz` & `NVMe PCIe Gen4` & `DDR4 3200MHz 4Rx4` : `~ 310 000 Inputs+outputs / s`
 - `3.5GHz` & `NVMe PCIe Gen5` & `DDR5 4800MHz 4RX8` : `~ 540 000 Inputs+outputs / s`
 
-Lack of RAM can be compensated by shrinking `index.min_io_batch_size` and `index.non_durable_batches` to relief pressure on RAM leading to swap or OOMKill.
+Lack of RAM can be compensated by shrinking `index.min_entity_batch_size` and `index.non_durable_batches` to relief pressure on RAM.
+Whether kernel throttles our process or it will swap depends on the OS and its configuration, there is no sandbox environment now.
 
 The size of databases (w/o sharding) corresponds to bitcoin databases, note that I index both `address` and `script_hash` :
 ```

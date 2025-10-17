@@ -45,7 +45,7 @@ impl CardanoBlockProvider {
         let prev_h = header.previous_hash().unwrap_or(pallas::crypto::hash::Hash::new([0u8; 32]));
         let prev_hash: [u8; 32] = *prev_h;
         let height = Height(header.number() as u32);
-        let mut block_weight = 0;
+        let mut block_weight = 6;
         let txs: Vec<pallas::ledger::traverse::MultiEraTx> = b.txs();
         let mut result_txs = Vec::with_capacity(txs.len());
 
@@ -54,8 +54,7 @@ impl CardanoBlockProvider {
             let tx_id = BlockPointer::from_parent(height, tx_index as u16);
             let inputs = Self::process_inputs(&tx.inputs());
             let (box_weight, outputs) = Self::process_outputs(&tx.outputs(), tx_id);
-            block_weight += box_weight;
-            block_weight += inputs.len();
+            block_weight += box_weight + inputs.len() + 1;
             result_txs.push(Transaction { id: tx_id, hash: TxHash(tx_hash), utxos: outputs, inputs: vec![], input_refs: inputs, input_utxos: vec![]})
         }
 

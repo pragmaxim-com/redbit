@@ -27,7 +27,7 @@ pub struct InputRef {
 
 #[entity]
 pub struct Block {
-    #[pk]
+    #[pk(db_cache = 1)]
     pub height: Height,
     pub header: Header,
     pub transactions: Vec<Transaction>,
@@ -35,15 +35,15 @@ pub struct Block {
 
 #[entity]
 pub struct Header {
-    #[fk(one2one)]
+    #[fk(one2one, db_cache = 1)]
     pub height: Height,
-    #[column(index)]
+    #[column(index, db_cache = 1)]
     pub hash: BlockHash,
-    #[column(index)]
+    #[column(index, db_cache = 1)]
     pub prev_hash: BlockHash,
-    #[column(range)]
+    #[column(range, db_cache = 1)]
     pub timestamp: Timestamp,
-    #[column(index)]
+    #[column(index, db_cache = 1)]
     pub merkle_root: MerkleRoot,
     #[column(transient)]
     pub weight: Weight,
@@ -51,9 +51,9 @@ pub struct Header {
 
 #[entity]
 pub struct Transaction {
-    #[fk(one2many, db_cache = 1)]
+    #[fk(one2many, db_cache = 2)]
     pub id: BlockPointer,
-    #[column(index, used, shards = 4, db_cache = 10)]
+    #[column(index, used, shards = 4, db_cache = 40)]
     pub hash: TxHash,
     pub utxos: Vec<Utxo>,
     #[write_from_using(input_refs, hash)] // implement custom write_from_using function, see hook.rs
@@ -66,20 +66,20 @@ pub struct Transaction {
 
 #[entity]
 pub struct Utxo {
-    #[fk(one2many, db_cache = 1)]
+    #[fk(one2many, db_cache = 3)]
     pub id: TransactionPointer,
-    #[column(db_cache = 1)]
+    #[column(db_cache = 3)]
     pub amount: u64,
-    #[column(dictionary, shards = 6, db_cache = 11)]
+    #[column(dictionary, shards = 6, db_cache = 44)]
     pub script_hash: ScriptHash,
-    #[column(dictionary, shards = 6, db_cache = 9)]
+    #[column(dictionary, shards = 6, db_cache = 36)]
     pub address: Address,
 }
 
 #[entity]
 pub struct Input {
-    #[fk(one2many, db_cache = 1)]
+    #[fk(one2many, db_cache = 3)]
     pub id: TransactionPointer,
-    #[column(db_cache = 1)]
+    #[column(db_cache = 3)]
     pub utxo_pointer: TransactionPointer,
 }

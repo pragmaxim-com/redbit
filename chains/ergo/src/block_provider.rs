@@ -41,7 +41,7 @@ impl ErgoBlockProvider {
 
     pub fn process_block_pure(cbor: &ErgoCBOR) -> Result<Block, ChainError> {
         let b: FullBlock = serde_json::from_slice(&cbor.0).map_err(|e| ChainError::new(&format!("Failed to parse block CBOR: {}", e)))?;
-        let mut block_weight: usize = 0;
+        let mut block_weight: usize = 6;
         let mut result_txs = Vec::with_capacity(b.block_transactions.transactions.len());
 
         let block_hash: [u8; 32] = b.header.id.0.into();
@@ -51,13 +51,12 @@ impl ErgoBlockProvider {
         for (tx_index, tx) in b.block_transactions.transactions.iter().enumerate() {
             let tx_hash: [u8; 32] = tx.id().0.0;
             let tx_id = BlockPointer::from_parent(height, tx_index as u16);
-            let (box_weight, outputs) = Self::process_outputs(tx.outputs(), &tx_id);
+            let (outs_weight, outputs) = Self::process_outputs(tx.outputs(), &tx_id);
             let mut inputs = Vec::with_capacity(tx.inputs.len());
             for input in &tx.inputs {
                 inputs.push(model_v1::BoxId(input.box_id.as_ref().try_into().unwrap()));
             }
-            block_weight += box_weight;
-            block_weight += tx.inputs.len();
+            block_weight += outs_weight + tx.inputs.len() + 1;
             result_txs.push(Transaction { id: tx_id, hash: TxHash(tx_hash), utxos: outputs, inputs: Vec::new(), input_refs: inputs, input_utxos: vec![] })
         }
 

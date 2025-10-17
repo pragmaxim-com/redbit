@@ -40,13 +40,13 @@ impl BtcBlockProvider {
     pub fn process_block_pure(cbor: &BtcCBOR) -> Result<Block, ChainError> {
         let block: bitcoin::Block = bitcoin::consensus::encode::deserialize(&cbor.raw).map_err(|e| ChainError::new(&format!("Failed to deser CBOR: {}", e)))?;
         let height = cbor.height;
-        let mut block_weight = 0;
+        let mut block_weight = 6;
         let transactions = block
             .txdata
             .iter()
             .enumerate()
             .map(|(tx_index, tx)| {
-                block_weight += tx.input.len() + tx.output.len();
+                block_weight += tx.input.len() + tx.output.len() + 1;
                 Self::process_tx(height, tx_index as u16, &tx)
             })
             .collect();
