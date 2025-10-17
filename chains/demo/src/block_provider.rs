@@ -43,7 +43,7 @@ impl DemoBlockProvider {
         Weight(6 + b
             .transactions
             .iter()
-            .map(|t| &t.inputs.len() + &t.utxos.len() + &t.utxos.iter().map(|u| u.assets.len()).sum() + 1)
+            .map(|t| t.inputs.len() + t.utxos.len() + t.utxos.iter().map(|u| u.assets.len()).sum::<usize>() + 1)
             .sum::<usize>() as u32
         )
     }
