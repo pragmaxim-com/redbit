@@ -98,7 +98,7 @@ If throughput does not reach your expectations, check that `buffer` is high enou
 ```
 
 1. If it is close to `0`, it means your block fetching or processing is too slow and persistence tasks are idling.
-2. If indexing is under 150 000 inputs+outputs/s with full `buffer`, it means you need more RAM or better SSD.
+2. If indexing is under 150 000 entities/s with full `buffer`, it means you need more RAM or better SSD.
 
 Watch indexing tasks reports in logs : 
  - `COLLECT` - Workers are collecting data from the `MASTER` thread 
@@ -129,10 +129,7 @@ MASTER                                   |   385      0      0      0 =   385 | 
 
 Hand-made criterion benchmarks [deployed](https://pragmaxim-com.github.io/redbit/report/index.html).
 
-Indexing speed in logs is the **average**, for example, the first ~ 50k **bitcoin** blocks with few Txs have lower in+out/s indexing throughput
-and higher blocks/s throughput.
-
-My throughput results after indexing whole bitcoin with 15GB for redb LRU cache :
+My throughput results after indexing whole bitcoin with 15GB for redb LRU page cache :
 ```
 $ ps -p <PID> -o rss,vsz
   RSS    VSZ

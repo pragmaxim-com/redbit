@@ -66,6 +66,7 @@ make them catch up with others even if they are HOT, see [chain](chain/README.md
 
 Redb is copy-on-write (COW) B+Tree based so in comparison to LSM tree with WAL or memory-mapped COW like LMDB, in order 
 to avoid benchmarking our SSD by random-access writes, ie. to rapidly reduce write amplification, we need to : 
+
     - systematically combine durable and non-durable writes to leverage Linux VM (page cache) and reduce amount of fsync calls
     - sort all data in batches before writing it to reduce tree building overhead
       - solved by parallelizing writes to all columns into long-running batching threads
