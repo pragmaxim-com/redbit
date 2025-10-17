@@ -132,14 +132,21 @@ Hand-made criterion benchmarks [deployed](https://pragmaxim-com.github.io/redbit
 Indexing speed in logs is the **average**, for example, the first ~ 50k **bitcoin** blocks with few Txs have lower in+out/s indexing throughput
 and higher blocks/s throughput.
 
-My throughput results after indexing whole bitcoin with this much RAM :
+My throughput results after indexing whole bitcoin with 15GB for redb LRU cache :
 ```
 $ ps -p <PID> -o rss,vsz
   RSS    VSZ
-38540932 46648556
+20953476 25294748
 ```
 
-and cpu/ssd/ram specs :
+~ 50GB for OS cache at the peek :
+```
+$ grep -E 'Dirty|Cached' /proc/meminfo 
+Cached: 48076404 kB 
+Dirty: 4888688 kB 
+```
+
+with cpu &ssd & ram specs :
 
 - `2.0GHz` & `NVMe PCIe Gen3` & `DDR3 2100MHz 2Rx4` : `~ 180 000 Inputs+outputs / s`
 - `3.0GHz` & `NVMe PCIe Gen4` & `DDR4 3200MHz 4Rx4` : `~ 310 000 Inputs+outputs / s`
