@@ -39,7 +39,7 @@ impl<B: BlockLike> ProgressMonitor<B> {
             let total_time = self.start_time.elapsed().as_secs();
             let txs_per_sec = format!("{:.1}", total_weight_now as f64 / total_time as f64);
             info!(
-                "Batch[{}] @ {} : {} from {} at {} ins+outs+assets/s, total {}, durability: {:?}, proc_buffer {}",
+                "Batch[{}] @ {} : {} from {} at {} entities/s, total {}, durability: {:?}, proc_buffer {}",
                 batch.len(), height, &hash[..12], timestamp, txs_per_sec, total_weight_now, durability, buffer_size
             );
         }

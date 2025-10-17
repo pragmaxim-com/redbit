@@ -53,17 +53,14 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
             "Going to {} index {} blocks from {} to {}, parallelism : {}, fork_detection @ {}",
             indexing_mode, heights_to_fetch, height_to_index_from, chain_tip_height, indexing_par.0, fork_detection_height
         );
-        let proc_buffer_size = 512;
-        let max_buffer_size = proc_buffer_size * 16;
-        let fetch_buffer_size = proc_buffer_size / 4;
-        let persist_buffer_size = proc_buffer_size / 4;
-        let proc_min_batch_limit = 128 * 1024;
-        let persist_io_batch_size = indexer_conf.min_io_batch_size;
+        
+        let min_block_batch_bytes_limit = 128 * 1024; // 128 KB is reasonable to call spawn_blocking for
+        let min_entity_batch_size = indexer_conf.min_entity_batch_size;
         let non_durable_batches = indexer_conf.non_durable_batches;
 
-        let (fetch_tx, fetch_rx) = mpsc::channel::<Vec<FB>>(fetch_buffer_size);
-        let (proc_tx, mut proc_rx) = mpsc::channel::<TB>(proc_buffer_size);
-        let (sort_tx, mut sort_rx) = mpsc::channel::<Vec<TB>>(persist_buffer_size);
+        let (fetch_tx, fetch_rx) = mpsc::channel::<Vec<FB>>(256);
+        let (proc_tx, mut proc_rx) = mpsc::channel::<Vec<TB>>(4);
+        let (sort_tx, mut sort_rx) = mpsc::channel::<Vec<TB>>(4);
 
         let fetch_handle = {
             let block_provider = Arc::clone(&self.block_provider);
@@ -89,7 +86,7 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
                                         Durability::None => {
                                             buf_bytes += raw.size();
                                             buf.push(raw);
-                                            if buf_bytes > proc_min_batch_limit {
+                                            if buf_bytes > min_block_batch_bytes_limit {
                                                 if fetch_tx.send(std::mem::take(&mut buf)).await.is_err() { break; }
                                                 buf_bytes = 0;
                                             }
@@ -114,35 +111,60 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
             let proc_fn = block_provider.block_processor();
             let shutdown = shutdown.clone();
             task::spawn_named("process", async move {
-                tokio::select! {
-                    _ = {
-                        ReceiverStream::new(fetch_rx)
-                            .map(move |batch| {
-                                let proc_fn = proc_fn.clone();
-                                async move {
-                                    tokio::task::spawn_blocking(move || batch.into_iter().map(|raw| proc_fn(&raw)).collect::<Vec<_>>()).await
-                                }
+                let mut proc_buf: Vec<TB> = Vec::new();
+                let mut proc_weight: usize = 0;
+
+                let proc_stream =
+                    ReceiverStream::new(fetch_rx)
+                        .map(move |batch| {
+                            let proc_fn = proc_fn.clone();
+                            tokio::task::spawn_blocking(move || {
+                                batch
+                                    .into_iter()
+                                    .map(|raw| proc_fn(&raw))
+                                    .collect::<Vec<_>>()
                             })
-                            .buffer_unordered(indexing_par.0)
-                            .for_each(move |res| {
-                                let tx = proc_tx_stream.clone();
-                                async move {
-                                    match res {
+                        })
+                        .buffer_unordered(indexing_par.0);
+
+                futures::pin_mut!(proc_stream);
+                loop {
+                    tokio::select! {
+                        biased;
+                        _ = combine::await_shutdown(shutdown.clone()) => {
+                            info!("process: shutdown");
+                            break;
+                        }
+                        maybe = proc_stream.next() => {
+                            match maybe {
+                                Some(join_res) => {
+                                    match join_res {
                                         Ok(results) => {
                                             for r in results {
                                                 match r {
-                                                    Ok(block) => { let _ = tx.send(block).await; }
-                                                    Err(e)    => { error!("processing failure: {e}"); }
+                                                    Ok(block) => {
+                                                        // accumulate by weight; send when limit crossed
+                                                        proc_weight = proc_weight.saturating_add(block.header().weight() as usize);
+                                                        proc_buf.push(block);
+                                                        if proc_weight > min_entity_batch_size {
+                                                            let _ = proc_tx_stream.send(std::mem::take(&mut proc_buf)).await;
+                                                            proc_weight = 0;
+                                                        }
+                                                    }
+                                                    Err(e) => {
+                                                        error!("processing failure: {e}");
+                                                    }
                                                 }
                                             }
                                         }
-                                        Err(e) => { error!("spawn_blocking join error: {e}"); }
+                                        Err(e) => {
+                                            error!("spawn_blocking join error: {e}");
+                                        }
                                     }
                                 }
-                            })
-                    } => { }
-                    _ = combine::await_shutdown(shutdown.clone()) => {
-                        info!("process: shutdown");
+                                None => break, // upstream closed
+                            }
+                        }
                     }
                 }
                 drop(proc_tx);
@@ -153,29 +175,32 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
         let sort_handle = {
             let shutdown = shutdown.clone();
             task::spawn_named("sort", async move {
-                let mut reorder: ReorderBuffer<TB> = ReorderBuffer::new(height_to_index_from, max_buffer_size);
-                let mut batcher: Batcher<TB> = Batcher::new(persist_io_batch_size, max_buffer_size, default_durability);
+                let safety_cap = 1024 * 8;
+                let mut reorder: ReorderBuffer<TB> = ReorderBuffer::new(height_to_index_from, safety_cap);
+                let mut batcher: Batcher<TB> = Batcher::new(min_entity_batch_size, safety_cap, default_durability);
 
                 loop {
                     tokio::select! {
                         maybe = proc_rx.recv() => {
                             match maybe {
-                                Some(block) => {
-                                    let header = block.header();
-                                    let h = header.height();
+                                Some(blocks) => {
+                                    for block in blocks {
+                                        let header = block.header();
+                                        let h = header.height();
 
-                                    // 1) Strict global reordering; returns only contiguous-from-next items.
-                                    let ready = reorder.insert(h, block);
+                                        // 1) Strict global reordering; returns only contiguous-from-next items.
+                                        let ready = reorder.insert(h, block);
 
-                                    // Optional observability/backpressure hint on wide gaps:
-                                    if reorder.is_saturated() && let Some((need, seen)) = reorder.gap_span() {
-                                        warn!("Block @ {} not fetched, currently @ {} ... pending {} blocks", need, seen, reorder.pending_len());
-                                    }
+                                        // Optional observability/backpressure hint on wide gaps:
+                                        if reorder.is_saturated() && let Some((need, seen)) = reorder.gap_span() {
+                                            warn!("Block @ {} not fetched, currently @ {} ... pending {} blocks", need, seen, reorder.pending_len());
+                                        }
 
-                                    // 2) Feed in-order items into weight batcher.
-                                    for b in ready {
-                                        if let Some(out) = batcher.push_with(b, |x| x.header().weight() as usize) {
-                                            if sort_tx.send(out).await.is_err() { break; }
+                                        // 2) Feed in-order items into weight batcher.
+                                        for b in ready {
+                                            if let Some(out) = batcher.push_with(b, |x| x.header().weight() as usize) {
+                                                if sort_tx.send(out).await.is_err() { break; }
+                                            }
                                         }
                                     }
                                 }

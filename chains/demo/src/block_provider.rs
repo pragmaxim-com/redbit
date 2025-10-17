@@ -40,12 +40,12 @@ impl DemoBlockProvider {
     }
 
     fn calculate_weight(b: &Block) -> Weight {
-        Weight(b
+        Weight(6 + b
             .transactions
             .iter()
-            .flat_map(|t| &t.utxos)
-            .map(|u| u.assets.len() as u32)
-            .sum())
+            .map(|t| &t.inputs.len() + &t.utxos.len() + &t.utxos.iter().map(|u| u.assets.len()).sum() + 1)
+            .sum::<usize>() as u32
+        )
     }
 }
 
