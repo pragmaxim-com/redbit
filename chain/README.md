@@ -129,7 +129,7 @@ MASTER                                   |   385      0      0      0 =   385 | 
 
 Hand-made criterion benchmarks [deployed](https://pragmaxim-com.github.io/redbit/report/index.html).
 
-My throughput results after indexing whole bitcoin with 15GB for redb LRU page cache :
+My throughput results after indexing whole bitcoin with 15GB for LRU cache :
 ```
 $ ps -p <PID> -o rss,vsz
   RSS    VSZ

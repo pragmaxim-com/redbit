@@ -17,11 +17,12 @@ cargo bench --bench demo_benchmark
 Enable kernel features:
 ```
 sudo sysctl -w kernel.perf_event_paranoid=-1
+sudo sysctl kernel.perf_event_mlock_kb=2048
 echo 0 | sudo tee /proc/sys/kernel/kptr_restrict
 ```
 Install required packages:
 ```
-sudo apt install -y linux-perf linux-tools-$(uname -r) linux-cloud-tools-$(uname -r)
+sudo apt install linux-tools-common linux-tools-generic linux-tools-`uname -r`
 ```
 If for some reason deb packages do not contain the perf binary, build it from source:
 ```
@@ -35,5 +36,6 @@ sudo cp perf /usr/lib/linux-tools/$(uname -r)/perf
 
 The rest is at https://github.com/flamegraph-rs/flamegraph?tab=readme-ov-file#examples :
 ```
-cargo flamegraph --package demo --bin showcase
+CARGO_PROFILE_RELEASE_DEBUG=true cargo build --release      # --manifest-path=/opt/redbit/chains/btc/Cargo.toml
+sudo "$(command -v flamegraph)" -- /opt/redbit/target/release/btc
 ```

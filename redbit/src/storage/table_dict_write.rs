@@ -187,9 +187,7 @@ impl<'txn, 'c, K: CopyOwnedValue + 'static, V: CacheKey + 'static> WriteTableLik
 
         // --- Run 2a: flush dict_pk_to_keys in birth_id order ---
         pk_to_keys_batch.sort_by(|(a, _), (b, _)| {
-            let aav = &a.as_value();
-            let abv = &b.as_value();
-            K::compare(K::as_bytes(aav).as_ref(), K::as_bytes(abv).as_ref())
+            K::compare(K::as_bytes(&a.as_value()).as_ref(), K::as_bytes(&b.as_value()).as_ref())
         });
         for (birth_id_owned, key_owned) in pk_to_keys_batch {
             self.dict_pk_to_keys.insert(birth_id_owned.as_value(), key_owned.as_value())?;
