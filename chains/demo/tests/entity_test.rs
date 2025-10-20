@@ -9,7 +9,7 @@ mod tests {
         let blocks = Block::sample_many(3);
         let tx_context = Block::begin_write_ctx(&storage, Durability::None).unwrap();
         Block::store_many(&tx_context, blocks.clone(), true).expect("Failed to persist blocks");
-        tx_context.two_phase_commit_and_close(MutationType::Writes).unwrap();
+        tx_context.two_phase_commit_and_close().unwrap();
         (blocks, storage_owner, storage)
     }
 
@@ -64,7 +64,7 @@ mod tests {
         let (_storage_owner, single_tx_db) = StorageOwner::temp("db_test_2", 0, true).await.unwrap();
         let tx_context = Block::begin_write_ctx(&single_tx_db, Durability::None).unwrap();
         Block::store_many(&tx_context, blocks, true).expect("Failed to persist blocks");
-        tx_context.two_phase_commit_and_close(MutationType::Writes).unwrap();
+        tx_context.two_phase_commit_and_close().unwrap();
 
         let block_tx = Block::begin_read_ctx(&multi_tx_storage).unwrap();
         let multi_tx_blocks = Block::take(&block_tx, 100).unwrap();
@@ -143,7 +143,7 @@ mod tests {
         let all_utxos = blocks.iter().flat_map(|b| b.transactions.iter().flat_map(|t| t.utxos.clone())).collect::<Vec<Utxo>>();
         let tx_context = Utxo::begin_write_ctx(&storage, Durability::None).unwrap();
         Utxo::store_many(&tx_context, all_utxos, true).expect("Failed to store UTXO");
-        tx_context.two_phase_commit_and_close(MutationType::Writes).expect("Failed to flush transaction context");
+        tx_context.two_phase_commit_and_close().expect("Failed to flush transaction context");
     }
 
     #[tokio::test]

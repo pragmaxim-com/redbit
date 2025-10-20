@@ -8,7 +8,7 @@ mod tests {
         let blocks = Block::sample_many(3);
         let tx_context = Block::begin_write_ctx(&storage, Durability::None).unwrap();
         Block::store_many(&tx_context, blocks.clone(), true).expect("Failed to persist blocks");
-        tx_context.two_phase_commit_and_close(MutationType::Writes).unwrap();
+        tx_context.two_phase_commit_and_close().unwrap();
         (blocks, storage_owner, storage)
     }
 

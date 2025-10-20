@@ -11,7 +11,8 @@ use std::marker::PhantomData;
 use std::sync::{Arc, Weak};
 use std::thread;
 use std::thread::JoinHandle;
-use std::time::Instant;
+use std::time::{Duration, Instant};
+use crate::storage::delayed::Delayed;
 
 struct TxState<'txn, 'c, K, V, F>
 where
@@ -20,6 +21,7 @@ where
     F: TableFactory<K, V>,
 {
     table: F::Table<'txn, 'c>,
+    delayed: Delayed<WriterCommand<K, V>>,
     async_merge_buf: RefCell<MergeBuffer<K, V>>,
     deferred: Option<FlushState>,
     write_error: Option<AppError>,
@@ -32,6 +34,31 @@ where
     V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
     F: TableFactory<K, V>,
 {
+    fn flush(&mut self, sender: Sender<Result<TaskResult, AppError>>) -> Result<Control, AppError> {
+        if let Some(error) = self.write_error.take() {
+            return Ok(Control::Error(sender, error));
+        }
+
+        let collect_took = self.collecting_start.elapsed().as_millis();
+
+        let mut buf = self.async_merge_buf.borrow_mut();
+        let sort_start = Instant::now();
+        let kvs = buf.take_sorted();
+        let sort_took = sort_start.elapsed().as_millis();
+
+        let write_start = Instant::now();
+        if !kvs.is_empty() {
+            if let Err(err) = self.table.insert_many_sorted_by_key(kvs) {
+                buf.clear();
+                return Ok(Control::Commit(sender, Err(err)));
+            }
+        }
+        let write_took = write_start.elapsed().as_millis();
+        buf.clear();
+        drop(buf);
+
+        Ok(Control::Commit(sender, Ok(WriteResult::new(collect_took, sort_took, write_took))))
+    }
     fn step(&mut self, cmd: WriterCommand<K, V>) -> Result<Control, AppError> {
         match cmd {
             WriterCommand::WriteInsertNow(k, v) => {
@@ -74,22 +101,31 @@ where
                 ack.send(Ok(r))?;
                 Ok(Control::Continue)
             }
-            WriterCommand::FlushWhenReady(ack) => {
-                match &mut self.deferred {
-                    Some(FlushState { sender, .. }) => {
-                        if sender.is_some() {
-                            return Ok(Control::Error(ack, AppError::Custom("flush already pending".to_string())));
-                        }
-                        *sender = Some(ack.clone())
-                    },
-                    None => self.deferred = Some(FlushState { sender: Some(ack.clone()), sum: 0, shards: None }),
-                }
-                if let Some(FlushState { sender: Some(_), sum, shards: Some(total) }) = &self.deferred {
-                    if *sum == *total {
+            WriterCommand::FlushWhenReady(ack, attempt) => {
+                if self.async_merge_buf.borrow().is_empty() {
+                    if attempt <= 100 {
+                        self.delayed.schedule_in(Duration::from_millis(1), WriterCommand::FlushWhenReady(ack, attempt+1));
+                    } else {
                         return self.step(WriterCommand::Flush(ack));
                     }
+                    Ok(Control::Continue)
+                } else {
+                    match &mut self.deferred {
+                        Some(FlushState { sender, .. }) => {
+                            if sender.is_some() {
+                                return Ok(Control::Error(ack, AppError::Custom("flush already pending".to_string())));
+                            }
+                            *sender = Some(ack.clone())
+                        },
+                        None => self.deferred = Some(FlushState { sender: Some(ack.clone()), sum: 0, shards: None }),
+                    }
+                    if let Some(FlushState { sender: Some(_), sum, shards: Some(total) }) = &self.deferred {
+                        if *sum == *total {
+                            return self.step(WriterCommand::Flush(ack));
+                        }
+                    }
+                    Ok(Control::Continue)
                 }
-                Ok(Control::Continue)
             }
             WriterCommand::ReadyForFlush(total) => {
                 match &mut self.deferred {
@@ -103,34 +139,9 @@ where
                 }
                 Ok(Control::Continue)
             }
-
-            // --- write (no commit here; we only have &WriteTransaction) ---
             WriterCommand::Flush(sender) => {
-                if let Some(error) = self.write_error.take() {
-                    return Ok(Control::Error(sender, error));
-                }
-
-                let collect_took = self.collecting_start.elapsed().as_millis();
-
-                let mut buf = self.async_merge_buf.borrow_mut();
-                let sort_start = Instant::now();
-                let kvs = buf.take_sorted();
-                let sort_took = sort_start.elapsed().as_millis();
-
-                let write_start = Instant::now();
-                if !kvs.is_empty() {
-                    if let Err(err) = self.table.insert_many_sorted_by_key(kvs) {
-                        buf.clear();
-                        return Ok(Control::Commit(sender, Err(err)));
-                    }
-                }
-                let write_took = write_start.elapsed().as_millis();
-                buf.clear();
-                drop(buf);
-
-                Ok(Control::Commit(sender, Ok(WriteResult::new(collect_took, sort_took, write_took))))
+                self.flush(sender)
             }
-
             WriterCommand::Shutdown(ack) => Ok(Control::Shutdown(ack)),
             WriterCommand::Begin(_, _) => unreachable!("Begin handled outside"),
         }
@@ -164,6 +175,7 @@ where
 {
     pub fn new(db_weak: Weak<Database>, factory: F) -> Result<Self, AppError> {
         let (topic, receiver): (Sender<WriterCommand<K, V>>, Receiver<WriterCommand<K, V>>) = unbounded();
+        let state_topic = topic.clone();
         let handle = thread::spawn(move || {
             'outer: loop {
                 let cmd = match receiver.recv() {
@@ -196,6 +208,7 @@ where
 
                         let mut st = TxState::<K, V, F> {
                             table,
+                            delayed: Delayed::start(state_topic.clone()),
                             async_merge_buf: RefCell::new(MergeBuffer::new()),
                             deferred: None,
                             write_error: None,
@@ -332,7 +345,7 @@ where
             self.router.write_sorted_inserts_on_flush(std::mem::take(&mut *self.sync_buf.borrow_mut()))?;
         }
         let (ack_tx, ack_rx) = bounded::<Result<TaskResult, AppError>>(1);
-        self.topic.send(WriterCommand::FlushWhenReady(ack_tx))?;
+        self.topic.send(WriterCommand::FlushWhenReady(ack_tx, 0))?;
         Ok(vec![FlushFuture::eager(ack_rx)])
     }
 

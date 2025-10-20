@@ -26,7 +26,7 @@ pub fn store_def(entity_def: &EntityDef,store_statements: &[TokenStream]) -> Fun
             for test_entity in #entity_type::sample_many(entity_count) {
                 let tx_context = #entity_name::begin_write_ctx(&storage, Durability::None).unwrap();
                 let pk = #entity_name::#fn_name(&tx_context, test_entity).expect("Failed to store and commit instance");
-                tx_context.two_phase_commit_and_close(MutationType::Writes).expect("Failed to flush transaction context");
+                tx_context.two_phase_commit_and_close().expect("Failed to flush transaction context");
             }
         }
     });
@@ -41,7 +41,7 @@ pub fn store_def(entity_def: &EntityDef,store_statements: &[TokenStream]) -> Fun
             b.iter(|| {
                 let _ = tx_context.begin_writing(Durability::None).expect("Failed to begin writing");
                 #entity_name::#fn_name(&tx_context, test_entity.clone()).expect("Failed to store and commit instance");
-                for f in tx_context.commit_ctx_async(MutationType::Writes).unwrap() {
+                for f in tx_context.commit_ctx_async().unwrap() {
                     f.wait().expect("Failed to commit");
                 }
             });
@@ -82,7 +82,7 @@ pub fn store_many_def(entity_def: &EntityDef, store_many_statements: &[TokenStre
             let test_entities = #entity_type::sample_many(entity_count);
             let tx_context = #entity_name::begin_write_ctx(&storage, Durability::None).unwrap();
             let pk = #entity_name::#fn_name(&tx_context, test_entities, true).expect("Failed to store and commit instance");
-            tx_context.two_phase_commit_and_close(MutationType::Writes).expect("Failed to flush transaction context");
+            tx_context.two_phase_commit_and_close().expect("Failed to flush transaction context");
         }
     });
 
@@ -97,7 +97,7 @@ pub fn store_many_def(entity_def: &EntityDef, store_many_statements: &[TokenStre
             b.iter(|| {
                 let _ = tx_context.begin_writing(Durability::None).expect("Failed to begin writing");
                 #entity_name::#fn_name(&tx_context, test_entities.clone(), true).expect("Failed to store and commit instance");
-                let _ = tx_context.two_phase_commit(MutationType::Writes).expect("Failed to commit");
+                let _ = tx_context.two_phase_commit().expect("Failed to commit");
             });
             tx_context.stop_writing().unwrap();
         }
@@ -124,7 +124,7 @@ pub fn persist_def(entity_def: &EntityDef, store_statements: &[TokenStream]) -> 
            let is_last = true;
            let tx_context = #entity_name::begin_write_ctx(&storage, Durability::Immediate)?;
            #(#store_statements)*
-           tx_context.two_phase_commit_and_close(MutationType::Writes)?;
+           tx_context.two_phase_commit_and_close()?;
            Ok(pk)
        }
     };

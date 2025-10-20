@@ -62,7 +62,7 @@ pub use std::sync::Arc;
 pub use std::sync::Weak;
 pub use std::thread;
 pub use std::time::Duration;
-pub use storage::context::{ReadTxContext, WriteTxContext, MutationType};
+pub use storage::context::{ReadTxContext, WriteTxContext};
 pub use storage::partitioning::{Partitioning, BytesPartitioner, Xxh3Partitioner, KeyPartitioner, ValuePartitioner};
 pub use storage::table_dict_read::ReadOnlyDictTable;
 pub use storage::table_dict_read_sharded::ShardedReadOnlyDictTable;

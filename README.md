@@ -64,12 +64,12 @@ make them catch up with others even if they are HOT, see [chain](chain/README.md
 
 ### Why and when redb?
 
-Redb is copy-on-write (COW) B+Tree based so in comparison to LSM tree with WAL or memory-mapped COW like LMDB, in order 
+Redb is copy-on-write (COW) B+Tree based so in comparison to LSM tree with WAL or log-structured heap, in order 
 to avoid benchmarking our SSD by random-access writes, ie. to rapidly reduce write amplification, we need to : 
 
-    - systematically combine durable and non-durable writes to leverage Linux VM (page cache) and reduce amount of fsync calls
-    - sort all data in batches before writing it to reduce tree building overhead
-      - solved by parallelizing writes to all columns into long-running batching threads
+  - systematically combine durable and non-durable writes to leverage Linux VM (page cache) and reduce amount of fsync calls
+  - sort all data in batches before writing it to reduce tree building overhead
+    - solved by parallelizing writes to all columns into long-running batching threads
 
 ### Development
 
@@ -224,7 +224,7 @@ And R/W entire instances efficiently using indexes and dictionaries `chains/demo
         println!("Persisting blocks:");
         let ctx = Block::begin_write_ctx(&storage, Durability::None)?;
         Block::store_many(&ctx, blocks, true)?;
-        let _ = ctx.two_phase_commit_and_close(MutationType::Writes)?;
+        let _ = ctx.two_phase_commit_and_close()?;
     
         let block_read_ctx = Block::begin_read_ctx(&storage)?;
         

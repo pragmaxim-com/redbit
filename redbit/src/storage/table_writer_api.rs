@@ -203,7 +203,7 @@ pub enum WriterCommand<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'stat
     },
     Range(K, K, Sender<Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>>),
     Flush(Sender<Result<TaskResult, AppError>>),              // commit current tx, stay alive (idle)
-    FlushWhenReady(Sender<Result<TaskResult, AppError>>),
+    FlushWhenReady(Sender<Result<TaskResult, AppError>>, usize),
     ReadyForFlush(usize),
     Shutdown(Sender<Result<(), AppError>>),           // graceful stop (no commit)
 }

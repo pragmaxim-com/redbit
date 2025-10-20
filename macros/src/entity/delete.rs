@@ -44,7 +44,7 @@ pub fn remove_def(entity_def: &EntityDef, delete_statements: &[TokenStream]) -> 
            let mut removed: Vec<bool> = Vec::new();
            let tx_context = #entity_name::begin_write_ctx(&storage, Durability::Immediate)?;
            #(#delete_statements)*
-           tx_context.two_phase_commit_and_close(MutationType::Deletes)?;
+           tx_context.two_phase_commit_and_close()?;
            Ok(!removed.contains(&false))
        }
     };
@@ -57,7 +57,7 @@ pub fn remove_def(entity_def: &EntityDef, delete_statements: &[TokenStream]) -> 
             let entities = #entity_type::sample_many(entity_count);
             let tx_context = #entity_name::begin_write_ctx(&storage, Durability::None).expect("Failed to begin write transaction context");
             #entity_name::store_many(&tx_context, entities.clone(), true).expect("Failed to store many instances");
-            tx_context.two_phase_commit_and_close(MutationType::Writes).expect("Failed to commit transaction context");
+            tx_context.two_phase_commit_and_close().expect("Failed to commit transaction context");
 
             for test_entity in entities {
                 let pk = test_entity.#pk_name;
