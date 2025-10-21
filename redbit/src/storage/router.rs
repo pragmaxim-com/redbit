@@ -19,17 +19,8 @@ fn fast_send<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static>(
     }
 }
 
-pub struct PlainRouter<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static> {
-    sender: Sender<WriterCommand<K, V>>,
-}
-
-impl<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static> PlainRouter<K, V> {
-    pub fn new(sender: Sender<WriterCommand<K, V>>) -> Self { Self { sender } }
-}
-
 pub trait Router<K: CopyOwnedValue, V: Value>: Send + Sync {
     fn shards(&self) -> usize;
-    fn append_sorted_inserts(&self, pairs: Vec<(K, V)>) -> Result<(), AppError>;
     fn merge_unsorted_inserts(&self, pairs: Vec<(K, V)>, last_shards: Option<usize>) -> Result<(), AppError>;
     fn ready_for_flush(&self, shards: usize) -> Result<(), AppError>;
     fn write_sorted_inserts_on_flush(&self, pairs: Vec<(K, V)>) -> Result<(), AppError>;
@@ -43,71 +34,6 @@ pub trait Router<K: CopyOwnedValue, V: Value>: Send + Sync {
         sink: Arc<dyn Fn(Option<usize>, Vec<(usize, Option<ValueOwned<K>>)>) -> Result<(), AppError> + Send + Sync + 'static>,
     ) -> Result<(), AppError>;
 }
-
-impl<K, V> Router<K, V> for PlainRouter<K, V>
-where
-    K: CopyOwnedValue + Send + 'static,
-    V: Key + Send + 'static,
-{
-    fn shards(&self) -> usize {
-        1
-    }
-
-    fn append_sorted_inserts(&self, pairs: Vec<(K, V)>) -> Result<(), AppError> {
-        if !pairs.is_empty() {
-            fast_send(&self.sender, WriterCommand::AppendSortedInserts(pairs))
-        } else {
-            Ok(())
-        }
-    }
-
-    fn merge_unsorted_inserts(&self, pairs: Vec<(K, V)>, last_shards: Option<usize>) -> Result<(), AppError> {
-        if !pairs.is_empty() {
-            let _ = fast_send(&self.sender, WriterCommand::MergeUnsortedInserts(pairs))?;
-        }
-        if let Some(from_shards) = last_shards {
-            self.ready_for_flush(from_shards)?
-        }
-        Ok(())
-    }
-
-    fn ready_for_flush(&self, shards: usize) -> Result<(), AppError> {
-        fast_send(&self.sender, WriterCommand::ReadyForFlush(shards))
-    }
-
-    fn write_sorted_inserts_on_flush(&self, pairs: Vec<(K, V)>) -> Result<(), AppError> {
-        if pairs.is_empty() { return Ok(()); }
-        fast_send(&self.sender, WriterCommand::WriteSortedInsertsOnFlush(pairs))
-    }
-
-    fn write_insert_now(&self, k: K, v: V) -> Result<(), AppError> {
-        fast_send(&self.sender, WriterCommand::WriteInsertNow(k, v))
-    }
-
-    fn delete_kv(&self, key: K) -> Result<bool, AppError> {
-        let (ack_tx, ack_rx) = bounded::<Result<bool, AppError>>(1);
-        fast_send(&self.sender, WriterCommand::Remove(key, ack_tx))?;
-        ack_rx.recv()?
-    }
-
-    fn range(&self, from: K, until: K) -> Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError> {
-        let (ack_tx, ack_rx) = bounded::<Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>>(1);
-        fast_send(&self.sender, WriterCommand::Range(from, until, ack_tx))?;
-        ack_rx.recv()?
-    }
-
-    fn query_and_write(
-        &self,
-        values: Vec<V>,
-        is_last: bool,
-        sink: Arc<dyn Fn(Option<usize>, Vec<(usize, Option<ValueOwned<K>>)>) -> Result<(), AppError> + Send + Sync + 'static>,
-    ) -> Result<(), AppError> {
-        let last_shards = if is_last { Some(1) } else { None };
-        fast_send(&self.sender, WriterCommand::QueryAndWrite { last_shards, values: values.into_iter().enumerate().collect(), sink })
-    }
-}
-
-// ------------------------ Sharded router ------------------------
 
 pub struct ShardedRouter<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static, KP, VP> {
     part: Partitioning<KP, VP>,
@@ -170,18 +96,16 @@ where
         self.senders.len()
     }
 
-    fn append_sorted_inserts(&self, pairs: Vec<(K, V)>) -> Result<(), AppError> {
-        for (sid, bucket) in self.bucket(pairs).into_iter().enumerate() {
-            if bucket.is_empty() { continue; }
-            fast_send(&self.senders[sid], WriterCommand::AppendSortedInserts(bucket))?;
-        }
-        Ok(())
-    }
-
     fn merge_unsorted_inserts(&self, pairs: Vec<(K, V)>, last_shards: Option<usize>) -> Result<(), AppError> {
-        for (sid, bucket) in self.bucket(pairs).into_iter().enumerate() {
-            if bucket.is_empty() { continue; }
-            fast_send(&self.senders[sid], WriterCommand::MergeUnsortedInserts(bucket))?;
+        if !pairs.is_empty() {
+            if self.senders.len() == 1 {
+                fast_send(&self.senders[0], WriterCommand::MergeUnsortedInserts(pairs))?;
+            } else {
+                for (sid, bucket) in self.bucket(pairs).into_iter().enumerate() {
+                    if bucket.is_empty() { continue; }
+                    fast_send(&self.senders[sid], WriterCommand::MergeUnsortedInserts(bucket))?;
+                }
+            }
         }
         if let Some(from_shards) = last_shards {
             self.ready_for_flush(from_shards)?
@@ -197,42 +121,63 @@ where
     }
 
     fn write_sorted_inserts_on_flush(&self, pairs: Vec<(K, V)>) -> Result<(), AppError> {
-        for (sid, bucket) in self.bucket(pairs).into_iter().enumerate() {
-            if bucket.is_empty() { continue; }
-            fast_send(&self.senders[sid], WriterCommand::WriteSortedInsertsOnFlush(bucket))?;
+        if pairs.is_empty() {
+            Ok(())
+        } else if self.senders.len() == 1 {
+            fast_send(&self.senders[0], WriterCommand::WriteSortedInsertsOnFlush(pairs))
+        } else {
+            for (sid, bucket) in self.bucket(pairs).into_iter().enumerate() {
+                if bucket.is_empty() { continue; }
+                fast_send(&self.senders[sid], WriterCommand::WriteSortedInsertsOnFlush(bucket))?;
+            }
+            Ok(())
         }
-        Ok(())
     }
 
     fn write_insert_now(&self, k: K, v: V) -> Result<(), AppError> {
-        let (sid, key, value) = self.bucket_one(k, v);
-        fast_send(&self.senders[sid], WriterCommand::WriteInsertNow(key, value))
+        if self.senders.len() == 1 {
+            fast_send(&self.senders[0], WriterCommand::WriteInsertNow(k, v))
+        } else {
+            let (sid, key, value) = self.bucket_one(k, v);
+            fast_send(&self.senders[sid], WriterCommand::WriteInsertNow(key, value))
+        }
     }
 
     fn delete_kv(&self, key: K) -> Result<bool, AppError> {
-        match &self.part {
-            Partitioning::ByKey(kp) => {
-                let sid = kp.partition_key(key.borrow());
-                let (ack_tx, ack_rx) = bounded::<Result<bool, AppError>>(1);
-                fast_send(&self.senders[sid], WriterCommand::Remove(key, ack_tx))?;
-                ack_rx.recv()?
-            },
-            Partitioning::ByValue(_) => {
-                for s in self.senders.iter() {
+        if self.senders.len() == 1 {
+            let (ack_tx, ack_rx) = bounded::<Result<bool, AppError>>(1);
+            fast_send(&self.senders[0], WriterCommand::Remove(key, ack_tx))?;
+            ack_rx.recv()?
+        } else {
+            match &self.part {
+                Partitioning::ByKey(kp) => {
+                    let sid = kp.partition_key(key.borrow());
                     let (ack_tx, ack_rx) = bounded::<Result<bool, AppError>>(1);
-                    fast_send(s, WriterCommand::Remove(key, ack_tx))?;
-                    if ack_rx.recv()?? {
-                        return Ok(true);
+                    fast_send(&self.senders[sid], WriterCommand::Remove(key, ack_tx))?;
+                    ack_rx.recv()?
+                },
+                Partitioning::ByValue(_) => {
+                    for s in self.senders.iter() {
+                        let (ack_tx, ack_rx) = bounded::<Result<bool, AppError>>(1);
+                        fast_send(s, WriterCommand::Remove(key, ack_tx))?;
+                        if ack_rx.recv()?? {
+                            return Ok(true);
+                        }
                     }
-                }
-                Ok(false)
-            },
+                    Ok(false)
+                },
+            }
         }
-
     }
 
-    fn range(&self, _from: K, _until: K) -> Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError> {
-        unimplemented!()
+    fn range(&self, from: K, until: K) -> Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError> {
+        if self.senders.len() == 1 {
+            let (ack_tx, ack_rx) = bounded::<Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>>(1);
+            fast_send(&self.senders[0], WriterCommand::Range(from, until, ack_tx))?;
+            ack_rx.recv()?
+        } else {
+            unimplemented!()
+        }
     }
 
     fn query_and_write(
@@ -241,27 +186,32 @@ where
         is_last: bool,
         sink: Arc<dyn Fn(Option<usize>, Vec<(usize, Option<ValueOwned<K>>)>) -> Result<(), AppError> + Send + Sync + 'static>,
     ) -> Result<(), AppError> {
-        let vp = match &self.part {
-            Partitioning::ByValue(vp) => vp,
-            Partitioning::ByKey(_) => {
-                return Err(AppError::Custom("get_any_for_index requires value partitioning".into()));
+        if self.senders.len() == 1 {
+            let last_shards = if is_last { Some(1) } else { None };
+            fast_send(&self.senders[0], WriterCommand::QueryAndWrite { last_shards, values: values.into_iter().enumerate().collect(), sink })
+        } else {
+            let vp = match &self.part {
+                Partitioning::ByValue(vp) => vp,
+                Partitioning::ByKey(_) => {
+                    return Err(AppError::Custom("get_any_for_index requires value partitioning".into()));
+                }
+            };
+            if values.is_empty() && !is_last {
+                return Ok(());
             }
-        };
-        if values.is_empty() && !is_last {
-            return Ok(());
-        }
-        let shards = self.shards();
-        let mut buckets: Vec<Vec<(usize, V)>> = (0..shards).map(|_| Vec::new()).collect();
-        for (pos, v) in values.into_iter().enumerate() {
-            let sid = vp.partition_value(v.borrow());
-            buckets[sid].push((pos, v));
-        }
-        let last_shards = if is_last { Some(shards) } else { None };
+            let shards = self.shards();
+            let mut buckets: Vec<Vec<(usize, V)>> = (0..shards).map(|_| Vec::new()).collect();
+            for (pos, v) in values.into_iter().enumerate() {
+                let sid = vp.partition_value(v.borrow());
+                buckets[sid].push((pos, v));
+            }
+            let last_shards = if is_last { Some(shards) } else { None };
 
-        for (sid, values) in buckets.into_iter().enumerate() {
-            if values.is_empty() && !is_last { continue; }
-            fast_send(&self.senders[sid], WriterCommand::QueryAndWrite { last_shards, values, sink: sink.clone() })?;
+            for (sid, values) in buckets.into_iter().enumerate() {
+                if values.is_empty() && !is_last { continue; }
+                fast_send(&self.senders[sid], WriterCommand::QueryAndWrite { last_shards, values, sink: sink.clone() })?;
+            }
+            Ok(())
         }
-        Ok(())
     }
 }

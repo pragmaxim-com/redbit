@@ -18,12 +18,13 @@ members = [
     "macros",
     "redbit",
     "chain",
+    "compat",
     "chains/demo",
     "chains/btc",
     "chains/cardano",
     "chains/ergo",
 ]
-default-members = ["macros", "redbit", "chain"]
+default-members = ["macros", "redbit", "compat", "chain"]
 
 [profile.dev.package."*"]
 debug = false

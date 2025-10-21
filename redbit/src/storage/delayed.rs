@@ -69,10 +69,6 @@ impl<M: Send + 'static> Delayed<M> {
         let _ = self.tx.send(Cmd::ScheduleAt { at: Instant::now() + delay, msg });
     }
 
-    #[inline]
-    pub fn schedule_at(&self, at: Instant, msg: M) {
-        let _ = self.tx.send(Cmd::ScheduleAt { at, msg });
-    }
 }
 
 #[cfg(test)]

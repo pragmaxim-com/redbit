@@ -75,8 +75,8 @@ pub use storage::table_plain_read_sharded::ShardedReadOnlyPlainTable;
 pub use storage::table_plain_write::PlainFactory;
 pub use storage::table_writer_api::{StartFuture, StopFuture, TaskResult, FlushFuture, WriterLike, WriteTableLike};
 pub use storage::async_boundary::CopyOwnedValue;
-pub use storage::table_writer::TableWriter;
-pub use storage::table_writer_sharded::ShardedTableWriter;
+pub use storage::tx_fsm::TxFSM;
+pub use storage::table_writer::ShardedTableWriter;
 pub use storage::init::Storage;
 pub use storage::init::StorageOwner;
 pub use urlencoding;
@@ -451,9 +451,9 @@ impl DbDefWithCache {
         }
     }
     pub fn validate(&self) -> Result<(), AppError> {
-        if self.shards == 1 {
+        if self.shards == 0 {
             Err(AppError::Custom(format!(
-                "column `{}`: shards == 1 is not supported; use 0 (single) or >= 2 (sharded)", self.name
+                "column `{}`: shards == 0 is not supported; use 1 (single) or >= 2 (sharded)", self.name
             )))
         } else {
             Ok(())

@@ -3,9 +3,9 @@ pub mod table_dict_write;
 pub mod table_index_read;
 pub mod table_index_write;
 pub mod table_plain_write;
-pub mod table_writer;
+pub mod tx_fsm;
 pub mod cache;
-pub mod table_writer_sharded;
+pub mod table_writer;
 pub mod partitioning;
 pub mod table_dict_read_sharded;
 pub mod table_index_read_sharded;
@@ -225,7 +225,7 @@ pub mod index_test_utils {
     pub(crate) fn setup_index_defs<K: CopyOwnedValue + Send + Clone + 'static + Borrow<K::SelfType<'static>>, V: CacheKey + Send + Clone + 'static + Borrow<V::SelfType<'static>>>
         (name: &str, lru_cap: usize) -> (
         Arc<Database>,
-        TableWriter<K, V, IndexFactory<K, V>>,
+        TxFSM<K, V, IndexFactory<K, V>>,
         LruCache<V::CK, K::Unit>,
         MultimapTableDefinition<'static, V, K>, // pk_by_index
         TableDefinition<'static, K, V>,         // index_by_pk
@@ -235,7 +235,7 @@ pub mod index_test_utils {
 
         let pk_by_index   = MultimapTableDefinition::<V, K>::new("pk_by_index");
         let index_by_pk   = TableDefinition::<K, V>::new("index_by_pk");
-        let writer = TableWriter::new(weak_db, IndexFactory::new(name, lru_cap, pk_by_index, index_by_pk)).expect("new writer");
+        let writer = TxFSM::new(weak_db, IndexFactory::new(name, lru_cap, pk_by_index, index_by_pk)).expect("new writer");
         (owner_db, writer, lru, pk_by_index, index_by_pk)
     }
 

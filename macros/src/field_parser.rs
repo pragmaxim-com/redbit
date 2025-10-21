@@ -93,7 +93,7 @@ impl ColumnProps {
         ColumnProps { shards, db_cache_weight, lru_cache_size: lru_cache_size_m * 1_000_000 }
     }
     pub fn for_key(db_cache_weight: usize) -> Self {
-        ColumnProps { shards: 0, db_cache_weight, lru_cache_size: 0 }
+        ColumnProps { shards: 1, db_cache_weight, lru_cache_size: 0 }
     }
 }
 
@@ -403,7 +403,7 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                     let mut used: Option<Used> = None;
                     let mut db_cache_weight = 0;
                     let mut lru_cache_size_mil = 0;
-                    let mut shards = 0;
+                    let mut shards = 1;
                     let mut is_index = false;
                     let mut is_dictionary = false;
                     let mut is_range = false;

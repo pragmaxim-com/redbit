@@ -102,9 +102,7 @@ impl Storage {
                 }
                 Ok(v)
             }
-            Some(DbSetWeak::Single(_)) => Err(AppError::Custom(format!(
-                "column `{}`: expected sharded DBs, found single", name
-            ))),
+            Some(DbSetWeak::Single(db)) => Ok(vec![db.clone()]),
             None => Err(AppError::Custom(format!("column `{}`: not found", name))),
         }
     }
@@ -175,7 +173,7 @@ impl StorageOwner {
         for dbc in defs {
             dbc.validate()?;
             match dbc.shards {
-                0 => {
+                1 => {
                     let db = Database::builder()
                         .set_cache_size(dbc.db_cache_in_mb)
                         .create(Self::db_file_path(db_dir, &dbc.name, None))?;

@@ -119,15 +119,10 @@ pub fn tx_context_plain_item(def: &PlainTableDef) -> TxContextItem {
     let shards      = def.column_props.shards;
     let is_sharded  = shards >= 2;
 
-    let write_definition = if is_sharded {
+    let write_definition =
         quote! {
             pub #var_ident: ShardedTableWriter<#key_ty, #val_ty, PlainFactory<#key_ty, #val_ty>, BytesPartitioner, Xxh3Partitioner>
-        }
-    } else {
-        quote! {
-            pub #var_ident: TableWriter<#key_ty, #val_ty, PlainFactory<#key_ty, #val_ty>>
-        }
-    };
+        };
 
     let read_definition = if is_sharded {
         quote! {
@@ -140,22 +135,14 @@ pub fn tx_context_plain_item(def: &PlainTableDef) -> TxContextItem {
     };
 
     // --- constructors (plain vs sharded) ---
-    let write_constructor = if is_sharded {
+    let write_constructor =
         quote! {
             #var_ident: ShardedTableWriter::new(
                 Partitioning::by_key(#shards),
                 storage.fetch_sharded_dbs(#name_lit, Some(#shards))?,
                 PlainFactory::new(#name_lit, #table_name),
             )?
-        }
-    } else {
-        quote! {
-            #var_ident: TableWriter::new(
-                storage.fetch_single_db(#name_lit)?,
-                PlainFactory::new(#name_lit, #table_name),
-            )?
-        }
-    };
+        };
 
     let read_constructor = if is_sharded {
         quote! {
@@ -208,15 +195,10 @@ pub fn tx_context_index_item(defs: &IndexTableDefs) -> TxContextItem {
     let is_sharded   = shards >= 2;
 
     // --- type definitions (plain vs sharded) ---
-    let write_definition = if is_sharded {
+    let write_definition =
         quote! {
             pub #var_ident: ShardedTableWriter<#key_ty, #val_ty, IndexFactory<#key_ty, #val_ty>, BytesPartitioner, Xxh3Partitioner>
-        }
-    } else {
-        quote! {
-            pub #var_ident: TableWriter<#key_ty, #val_ty, IndexFactory<#key_ty, #val_ty>>
-        }
-    };
+        };
 
     let read_definition = if is_sharded {
         quote! {
@@ -229,21 +211,12 @@ pub fn tx_context_index_item(defs: &IndexTableDefs) -> TxContextItem {
     };
 
     // --- constructors (plain vs sharded) ---
-    let write_constructor = if is_sharded {
-        quote! {
-            #var_ident: ShardedTableWriter::new(
-                Partitioning::by_value(#shards),
-                storage.fetch_sharded_dbs(#name_lit, Some(#shards))?,
-                IndexFactory::new(#name_lit, #lru_cache, #pk_by_index, #index_by_pk),
-            )?
-        }
-    } else {
-        quote! {
-            #var_ident: TableWriter::new(
-                storage.fetch_single_db(#name_lit)?,
-                IndexFactory::new(#name_lit, #lru_cache, #pk_by_index, #index_by_pk),
-            )?
-        }
+    let write_constructor = quote! {
+        #var_ident: ShardedTableWriter::new(
+            Partitioning::by_value(#shards),
+            storage.fetch_sharded_dbs(#name_lit, Some(#shards))?,
+            IndexFactory::new(#name_lit, #lru_cache, #pk_by_index, #index_by_pk),
+        )?
     };
 
     let read_constructor = if is_sharded {
@@ -298,15 +271,9 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
     let is_sharded = shards >= 2;
 
     // --- type definitions (plain vs sharded) ---
-    let write_definition = if is_sharded {
-        quote! {
+    let write_definition = quote! {
             pub #var_ident: ShardedTableWriter<#key_ty, #val_ty, DictFactory<#key_ty, #val_ty>, BytesPartitioner, Xxh3Partitioner>
-        }
-    } else {
-        quote! {
-            pub #var_ident: TableWriter<#key_ty, #val_ty, DictFactory<#key_ty, #val_ty>>
-        }
-    };
+        };
 
     let read_definition = if is_sharded {
         quote! {
@@ -319,21 +286,12 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
     };
 
     // --- constructors (plain vs sharded) ---
-    let write_constructor = if is_sharded {
-        quote! {
-            #var_ident: ShardedTableWriter::new(
-                Partitioning::by_value(#shards),
-                storage.fetch_sharded_dbs(#name_lit, Some(#shards))?,
-                DictFactory::new(#name_lit, #lru_cache, #dict_pk_to_ids, #value_by_dict, #value_to_dict, #dict_pk_by_pk),
-            )?
-        }
-    } else {
-        quote! {
-            #var_ident: TableWriter::new(
-                storage.fetch_single_db(#name_lit)?,
-                DictFactory::new(#name_lit, #lru_cache, #dict_pk_to_ids, #value_by_dict, #value_to_dict, #dict_pk_by_pk),
-            )?
-        }
+    let write_constructor = quote! {
+        #var_ident: ShardedTableWriter::new(
+            Partitioning::by_value(#shards),
+            storage.fetch_sharded_dbs(#name_lit, Some(#shards))?,
+            DictFactory::new(#name_lit, #lru_cache, #dict_pk_to_ids, #value_by_dict, #value_to_dict, #dict_pk_by_pk),
+        )?
     };
 
     let read_constructor = if is_sharded {
