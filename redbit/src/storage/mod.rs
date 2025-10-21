@@ -18,7 +18,6 @@ pub mod table_writer_api;
 mod cache_bench;
 mod router;
 mod sort_buffer;
-mod delayed;
 
 #[cfg(all(test, not(feature = "integration")))]
 pub mod test_utils {

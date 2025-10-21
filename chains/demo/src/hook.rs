@@ -2,8 +2,8 @@ use crate::model_v1::*;
 use std::ops::Index;
 
 pub(crate) fn write_from_input_refs_using_hash(tx_context: &TransactionWriteTxContext, parent: BlockPointer, input_refs: Vec<InputRef>, is_last: bool) -> Result<(), AppError> {
-    let ids_router  = tx_context.inputs.input_id.router();
-    let ptrs_router = tx_context.inputs.input_utxo_pointer_by_id.router();
+    let ids_router  = tx_context.inputs.input_id.acquire_router();
+    let ptrs_router = tx_context.inputs.input_utxo_pointer_by_id.acquire_router();
     let tx_hashes = input_refs.iter().map(|input_ref| input_ref.tx_hash).collect::<Vec<_>>();
     tx_context.transaction_hash_index.router.query_and_write(tx_hashes, is_last, Arc::new(move |last_shards, out| {
         let mut ids = Vec::with_capacity(out.len());

@@ -6,6 +6,7 @@ use std::borrow::Borrow;
 use std::sync::Arc;
 use std::{marker::PhantomData, sync::Weak};
 use std::cell::RefCell;
+use std::sync::atomic::{AtomicBool, Ordering};
 use crossbeam::channel::bounded;
 use crate::storage::table_writer_api::*;
 use crate::{AppError, TxFSM};
@@ -19,6 +20,7 @@ pub struct ShardedTableWriter<
 > {
     shards: Vec<TxFSM<K, V, F>>,
     pub router: Arc<dyn Router<K, V>>,
+    deferred: AtomicBool,
     sync_buf: RefCell<Vec<(K, V)>>,
     _pd: PhantomData<(KP,VP)>,
 }
@@ -37,7 +39,8 @@ impl<
         }
         let senders: Vec<_> = shards.iter().map(|w| w.sender()).collect();
         let router = Arc::new(ShardedRouter::new(partitioning.clone(), senders));
-        Ok(Self { router, shards, sync_buf: RefCell::new(Vec::new()), _pd: PhantomData })
+        let deferred = AtomicBool::new(false);
+        Ok(Self { router, deferred, shards, sync_buf: RefCell::new(Vec::new()), _pd: PhantomData })
     }
 }
 
@@ -50,7 +53,8 @@ where
     VP: ValuePartitioner<V> + Sync + Send + Clone + 'static,
 {
 
-    fn router(&self) -> Arc<dyn Router<K, V>> {
+    fn acquire_router(&self) -> Arc<dyn Router<K, V>> {
+        self.deferred.store(true, Ordering::SeqCst);
         self.router.clone()
     }
 
@@ -129,7 +133,7 @@ where
         let mut v = Vec::with_capacity(self.shards.len());
         for w in &self.shards {
             let (ack_tx, ack_rx) = bounded::<Result<TaskResult, AppError>>(1);
-            w.topic.send(WriterCommand::FlushWhenReady(ack_tx, 0))?;
+            w.topic.send(WriterCommand::FlushWhenReady { ack: ack_tx, deferred: self.deferred.load(Ordering::SeqCst)})?;
             v.push(FlushFuture::eager(ack_rx))
         }
         Ok(v)

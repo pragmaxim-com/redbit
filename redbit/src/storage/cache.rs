@@ -71,9 +71,9 @@ fn collect_allocations_mb(shares: &[Share], db_defs: &[DbDef]) -> Vec<DbDefWithC
     shares.iter().map(|s| {
         let def = &db_defs[s.idx];
         let shards = def.shards;
-        assert!(shards == 0 || shards >= 2, "column `{}` must have at least 2 shards (got {shards})", def.name);
+        assert!(shards >= 1, "column `{}` must have at least 1 shard (got {shards})", def.name);
 
-        let per_shard_mb = if shards == 0 { s.base_mb } else { s.base_mb / shards as u64 };
+        let per_shard_mb = if shards == 1 { s.base_mb } else { s.base_mb / shards as u64 };
 
         DbDefWithCache {
             name: def.name.clone(),
@@ -95,7 +95,7 @@ mod tests {
 
     // Build DbDefs with a fixed shard count (must be ≥ 2 now).
     fn defs(ws: &[usize], shards: usize) -> Vec<DbDef> {
-        assert!(shards == 0 || shards >= 2, "tests must use shards == 0 or shards >= 2");
+        assert!(shards >= 1, "tests must use shards >= 1");
         ws.iter().enumerate().map(|(i, &w)| DbDef {
             name: format!("db{i}"),
             shards,

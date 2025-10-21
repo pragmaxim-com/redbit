@@ -203,7 +203,7 @@ pub enum WriterCommand<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'stat
     },
     Range(K, K, Sender<Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>>),
     Flush(Sender<Result<TaskResult, AppError>>),              // commit current tx, stay alive (idle)
-    FlushWhenReady(Sender<Result<TaskResult, AppError>>, usize),
+    FlushWhenReady { ack: Sender<Result<TaskResult, AppError>>, deferred: bool },
     ReadyForFlush(usize),
     Shutdown(Sender<Result<(), AppError>>),           // graceful stop (no commit)
 }
@@ -230,7 +230,7 @@ pub enum Control {
 }
 
 pub trait WriterLike<K: CopyOwnedValue, V: Value> {
-    fn router(&self) -> Arc<dyn Router<K, V>>;
+    fn acquire_router(&self) -> Arc<dyn Router<K, V>>;
     fn begin(&self, durability: Durability) -> Result<(), AppError>;
     fn begin_async(&self, durability: Durability) -> Result<Vec<StartFuture>, AppError>;
     fn insert_on_flush(&self, key: K, value: V) -> Result<(), AppError>;

@@ -1,5 +1,4 @@
 use crate::storage::async_boundary::CopyOwnedValue;
-use crate::storage::delayed::Delayed;
 use crate::storage::sort_buffer::MergeBuffer;
 use crate::storage::table_writer_api::*;
 use crate::{error, AppError};
@@ -11,7 +10,7 @@ use std::marker::PhantomData;
 use std::sync::Weak;
 use std::thread;
 use std::thread::JoinHandle;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 struct TxState<'txn, 'c, K, V, F>
 where
@@ -20,7 +19,6 @@ where
     F: TableFactory<K, V>,
 {
     table: F::Table<'txn, 'c>,
-    delayed: Delayed<WriterCommand<K, V>>,
     async_merge_buf: RefCell<MergeBuffer<K, V>>,
     deferred: Option<FlushState>,
     write_error: Option<AppError>,
@@ -100,14 +98,9 @@ where
                 ack.send(Ok(r))?;
                 Ok(Control::Continue)
             }
-            WriterCommand::FlushWhenReady(ack, attempt) => {
-                if self.async_merge_buf.borrow().is_empty() {
-                    if attempt == 0 {
-                        self.delayed.schedule_in(Duration::from_millis(70), WriterCommand::FlushWhenReady(ack, 1));
-                    } else {
-                        return self.step(WriterCommand::Flush(ack));
-                    }
-                    Ok(Control::Continue)
+            WriterCommand::FlushWhenReady { ack, deferred } => {
+                if !deferred {
+                    self.step(WriterCommand::Flush(ack))
                 } else {
                     match &mut self.deferred {
                         Some(FlushState { sender, .. }) => {
@@ -172,7 +165,6 @@ where
 {
     pub fn new(db_weak: Weak<Database>, factory: F) -> Result<Self, AppError> {
         let (topic, receiver): (Sender<WriterCommand<K, V>>, Receiver<WriterCommand<K, V>>) = unbounded();
-        let state_topic = topic.clone();
         let handle = thread::spawn(move || {
             'outer: loop {
                 let cmd = match receiver.recv() {
@@ -205,7 +197,6 @@ where
 
                         let mut st = TxState::<K, V, F> {
                             table,
-                            delayed: Delayed::start(state_topic.clone()),
                             async_merge_buf: RefCell::new(MergeBuffer::new()),
                             deferred: None,
                             write_error: None,
