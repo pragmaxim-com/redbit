@@ -38,17 +38,7 @@ impl ErgoClient {
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
         let api_key = HeaderValue::from_str(&api_key)?;
         headers.insert("api_key", api_key.clone());
-
-        let http = Client::builder()
-            .pool_max_idle_per_host(16)
-            .pool_idle_timeout(Duration::from_secs(30))
-            .tcp_keepalive(Some(Duration::from_secs(30)))
-            //.http2_adaptive_window(true)
-            .timeout(Duration::from_secs(10))
-            .default_headers(headers.clone())
-            .build()?;
-
-
+        let http = Client::builder().default_headers(headers.clone()).build()?;
         Ok(Self { node_url, http, headers: headers.clone() })
     }
 
@@ -114,25 +104,19 @@ impl ErgoClient {
 
     // BLOCKING CLIENT
 
-    fn blocking_client(&self) -> blocking::Client {
-        blocking::Client::builder()
-            .pool_max_idle_per_host(16)
-            .pool_idle_timeout(Duration::from_secs(30))
-            .tcp_keepalive(Some(Duration::from_secs(30)))
-            .timeout(Duration::from_secs(10))
-            .default_headers(self.headers.clone())
-            .build().unwrap()
+    fn blocking_client(&self) -> Result<blocking::Client, ExplorerError> {
+        Ok(blocking::Client::builder().default_headers(self.headers.clone()).build()?)
     }
 
     pub fn get_block_ids_by_height_sync(&self, height: Height) -> Result<Vec<String>, ExplorerError> {
         let block_ids_url = self.node_url.join(&format!("blocks/at/{}", &height.0.to_string()))?;
-        let block_ids = self.blocking_client().get(block_ids_url).send()?.json::<Vec<String>>()?;
+        let block_ids = self.blocking_client()?.get(block_ids_url).send()?.json::<Vec<String>>()?;
         Ok(block_ids)
     }
 
     pub fn get_block_by_hash_response_sync(&self, hash: BlockHash) -> Result<blocking::Response, ExplorerError> {
         let url = self.node_url.join(&format!("blocks/{}", hex::encode(hash.0)))?;
-        let response = self.blocking_client().get(url).send()?;
+        let response = self.blocking_client()?.get(url).send()?;
         Ok(response)
     }
 

@@ -107,6 +107,7 @@ Watch indexing tasks reports in logs :
  - `FLUSH`   - non-durable commit time 
 
 Here you can see that `transaction_hash_index` is the slowest column, so it can be fixed by sharding it or increase db_cache or lru_cache.
+Basically the bigger the `min_entity_batch_size = 1_000_000` the lower write amplification as more data is inserted sorted at once. 
 
 ```
 TASK (c)ollect,(s)ort,(w)rite,(f)lush ms |     c      s      w      f =  last |     c      s      w      f =   avg |      dev | coefov %

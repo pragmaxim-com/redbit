@@ -27,7 +27,7 @@ cargo run --release
 ```
 
 Do not use more than `fetching_parallelism = "mild"` or sharding as Ergo node reading is quite CPU intensive and increasing
-fetching parallelism eats all runtime.
+fetching parallelism eats most of the runtime.
 
 ### Rest API
 
