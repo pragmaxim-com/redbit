@@ -28,7 +28,7 @@ pub struct Timestamp(pub u32);
 
 #[entity]
 pub struct Block {
-    #[pk]
+    #[pk(db_cache = 1)]
     pub height: Height,
     pub header: BlockHeader,
     pub transactions: Vec<Transaction>,
@@ -36,15 +36,15 @@ pub struct Block {
 
 #[entity]
 pub struct BlockHeader {
-    #[fk(one2one)]
+    #[fk(one2one, db_cache = 1)]
     pub height: Height,
-    #[column(index)]
+    #[column(index, db_cache = 1)]
     pub hash: BlockHash,
-    #[column(index)]
+    #[column(index, db_cache = 1)]
     pub prev_hash: BlockHash,
-    #[column(range)]
+    #[column(range, db_cache = 1)]
     pub slot: Slot,
-    #[column(range)]
+    #[column(range, db_cache = 1)]
     pub timestamp: Timestamp,
     #[column(transient)]
     pub weight: Weight,
@@ -52,9 +52,9 @@ pub struct BlockHeader {
 
 #[entity]
 pub struct Transaction {
-    #[fk(one2many, db_cache = 1)]
+    #[fk(one2many, db_cache = 2)]
     pub id: BlockPointer,
-    #[column(index, used, shards = 4, db_cache = 4, lru_cache = 12)]
+    #[column(index, used, db_cache = 20, lru_cache = 20)]
     pub hash: TxHash,
     pub utxos: Vec<Utxo>,
     #[write_from_using(input_refs, hash)] // implement custom write_from_using function, see hook.rs
@@ -71,9 +71,9 @@ pub struct Utxo {
     pub id: TransactionPointer,
     #[column(db_cache = 1)]
     pub amount: u64,
-    #[column(dictionary, shards = 4, db_cache = 4, lru_cache = 8)]
+    #[column(dictionary, db_cache = 20, lru_cache = 20)]
     pub script_hash: ScriptHash,
-    #[column(dictionary, shards = 4, db_cache = 4, lru_cache = 8)]
+    #[column(dictionary, db_cache = 20, lru_cache = 20)]
     pub address: Address,
     pub assets: Vec<Asset>,
 }
@@ -84,11 +84,11 @@ pub struct Asset {
     pub id: UtxoPointer,
     #[column(db_cache = 1)]
     pub amount: u64,
-    #[column(index, shards = 3, db_cache = 2)]
+    #[column(index, db_cache = 2)]
     pub asset_action: AssetAction,
-    #[column(dictionary, shards = 5, db_cache = 4, lru_cache = 6)]
+    #[column(dictionary, db_cache = 20, lru_cache = 20)]
     pub name: AssetName,
-    #[column(dictionary, shards = 5, db_cache = 4, lru_cache = 6)]
+    #[column(dictionary, db_cache = 20, lru_cache = 20)]
     pub policy_id: PolicyId,
 }
 

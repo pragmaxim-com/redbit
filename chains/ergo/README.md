@@ -10,7 +10,13 @@ sudo apt-get install rustup
 
 ### Requirements
 
-With current [setup](src/model_v1.rs) you need at least 8 cores CPU and 16GB RAM to run both Ergo Node and Redbit without crashing.
+With current [setup](src/model_v1.rs) you need at least 8 cores CPU and 12GB RAM to run both Ergo Node and Redbit but remaining RAM is used for page caching
+so it might swap or kernel with throttle our process. If you don't have enough RAM, set : 
+
+```
+db_cache_size_gb = "low"
+min_entity_batch_size = 200_000
+```
 
 ### Usage
 
@@ -20,8 +26,8 @@ export ERGO__API_KEY="foo"           # not needed for syncing
 cargo run --release 
 ```
 
-Indexing might crash especially on laptops with Node running locally and not being synced yet.
-In that case, set `fetching_parallelism = "low"` to not put the Node and Laptop under heavy pressure.
+Do not use more than `fetching_parallelism = "mild"` or sharding as Ergo node reading is quite CPU intensive and increasing
+fetching parallelism eats all runtime.
 
 ### Rest API
 

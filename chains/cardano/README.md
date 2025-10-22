@@ -10,7 +10,13 @@ sudo apt-get install rustup
 
 ### Requirements
 
-With current [setup](src/model_v1.rs) you need at least 16 cores CPU and 32GB RAM to run both Cardano Node and Redbit without crashing.
+With current [setup](src/model_v1.rs) you need at least 16 cores CPU and 32GB RAM to run both Cardano Node (needs 24GB) and Redbit but remaining RAM 
+is used for page caching so it might swap or kernel with throttle our process. If you don't have enough RAM, set :
+
+```
+db_cache_size_gb = "low"
+min_entity_batch_size = 200_000
+```
 
 ### Usage
 

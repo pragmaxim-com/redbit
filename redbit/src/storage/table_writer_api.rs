@@ -199,7 +199,8 @@ pub enum WriterCommand<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'stat
     Remove(K, Sender<Result<bool, AppError>>),
     QueryAndWrite {
         last_shards: Option<usize>,
-        values: Vec<(usize, V)>, sink: Arc<dyn Fn(Option<usize>, Vec<(usize, Option<ValueOwned<K>>)>) -> Result<(), AppError> + Send + Sync + 'static>
+        values: Vec<(usize, V)>,
+        sink: Arc<dyn Fn(Option<usize>, Vec<(usize, Option<ValueOwned<K>>)>) -> Result<(), AppError> + Send + Sync + 'static>
     },
     Range(K, K, Sender<Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>>),
     Flush(Sender<Result<TaskResult, AppError>>),              // commit current tx, stay alive (idle)
