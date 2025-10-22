@@ -1,5 +1,4 @@
-use crate::config::CardanoConfig;
-use crate::ExplorerError;
+use crate::{CardanoConfig, ExplorerError};
 use chain::api::SizeLike;
 use futures::lock::Mutex;
 use pallas::network::{

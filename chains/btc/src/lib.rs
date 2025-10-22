@@ -3,7 +3,6 @@ extern crate test;
 
 pub mod block_provider;
 pub mod rest_client;
-pub mod config;
 pub mod model_v1;
 pub mod codec;
 pub mod hook;
@@ -13,7 +12,14 @@ use chain::ChainError;
 
 use crate::model_v1::chrono::DateTime;
 use std::fmt::Display;
-use crate::model_v1::{BlockHash, Timestamp};
+use chain::settings::Parallelism;
+use crate::model_v1::{BlockHash, Deserialize, Timestamp};
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct BitcoinConfig {
+    pub api_host: String,
+    pub fetching_parallelism: Parallelism,
+}
 
 impl Display for Timestamp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

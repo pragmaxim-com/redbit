@@ -1,7 +1,6 @@
 use super::cardano_client::{CardanoCBOR, CardanoClient};
-use crate::config::CardanoConfig;
 use crate::model_v1::*;
-use crate::{AssetType, ExplorerError};
+use crate::{AssetType, CardanoConfig, ExplorerError};
 use async_trait::async_trait;
 use chain::api::{BlockProvider, ChainError};
 use chain::monitor::BoxWeight;
@@ -16,6 +15,7 @@ use std::{pin::Pin, sync::Arc};
 use redb::Durability;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
+use tokio_util::sync::CancellationToken;
 
 pub struct CardanoBlockProvider {
     client: CardanoClient,
@@ -25,7 +25,7 @@ pub struct CardanoBlockProvider {
 
 impl CardanoBlockProvider {
     pub async fn new() -> Arc<Self> {
-        let config = CardanoConfig::new("config/cardano").expect("Failed to load Cardano configuration");
+        let config: CardanoConfig = chain_config::load_config("config/cardano", "CARDANO").expect("Failed to load Cardano configuration");
         let client = CardanoClient::new(&config).await;
         let genesis = Arc::new(GenesisValues::mainnet());
         Arc::new(CardanoBlockProvider { client, genesis, config })
@@ -163,12 +163,14 @@ impl BlockProvider<CardanoCBOR, Block> for CardanoBlockProvider {
         Ok(best_header.header)
     }
 
-    fn stream(&self, _remote_chain_tip: BlockHeader, last_persisted_header: Option<BlockHeader>, _durability: Durability) -> Pin<Box<dyn Stream<Item = CardanoCBOR> + Send + 'static>> {
+    fn stream(&self, _remote_chain_tip: BlockHeader, last_persisted_header: Option<BlockHeader>, _durability: Durability) -> (Pin<Box<dyn Stream<Item = CardanoCBOR> + Send + 'static>>, CancellationToken) {
         let last_point = last_persisted_header.as_ref().map_or(Point::Origin, |h| Point::new(h.slot.0 as u64, h.hash.0.to_vec()));
         let socket_path = self.config.socket_path.clone();
         let stream_buffer_size = self.config.stream_buffer_size.clone();
 
         let (tx, rx) = mpsc::channel::<CardanoCBOR>(stream_buffer_size);
+        let cancel = CancellationToken::new();
+        let child_token = cancel.child_token();
 
         tokio::spawn(async move {
             // The background-task + mpsc pattern runs the protocol in an owned task that can do async cleanup
@@ -189,28 +191,36 @@ impl BlockProvider<CardanoCBOR, Block> for CardanoBlockProvider {
                 }
             }
             loop {
-                match cs.request_next().await {
-                    Ok(NextResponse::RollForward(bytes, _new_tip)) => {
-                        if tx.send(CardanoCBOR(bytes.0)).await.is_err() {
+                tokio::select! {
+                    biased;
+                    _ = child_token.cancelled() => {
+                        let _ = cs.send_done().await;
+                        break;
+                    }
+
+                    res = cs.request_next() => match res {
+                        Ok(NextResponse::RollForward(bytes, _new_tip)) => {
+                            if tx.send(CardanoCBOR(bytes.0)).await.is_err() {
+                                let _ = cs.send_done().await;
+                                break;
+                            }
+                        }
+                        Ok(NextResponse::RollBackward(_point, _new_tip)) => {
+                            continue;
+                        }
+                        Ok(NextResponse::Await) => {
+                            let _ = cs.send_done().await;
+                            break;
+                        }
+                        Err(e) => {
+                            error!("chainsync request_next failed (stopping): {e:?}");
                             let _ = cs.send_done().await;
                             break;
                         }
                     }
-                    Ok(NextResponse::RollBackward(_point, _new_tip)) => {
-                        continue;
-                    }
-                    Ok(NextResponse::Await) => {
-                        let _ = cs.send_done().await;
-                        break;
-                    }
-                    Err(e) => {
-                        error!("chainsync request_next failed (stopping): {e:?}");
-                        let _ = cs.send_done().await;
-                        break;
-                    }
                 }
             }
         });
-        ReceiverStream::new(rx).boxed()
+        (ReceiverStream::new(rx).boxed(), cancel)
     }
 }

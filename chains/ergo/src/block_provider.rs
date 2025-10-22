@@ -1,7 +1,6 @@
-use crate::config::ErgoConfig;
 use crate::ergo_client::{ErgoCBOR, ErgoClient};
 use crate::model_v1::{Address, Asset, AssetAction, AssetName, Block, BlockHash, BlockHeader, BlockPointer, Height, Timestamp, Transaction, TransactionPointer, TxHash, Utxo, UtxoPointer, Weight};
-use crate::{model_v1, AssetType, ExplorerError};
+use crate::{model_v1, AssetType, ErgoConfig, ExplorerError};
 use async_trait::async_trait;
 use chain::api::{BlockProvider, ChainError};
 use chain::monitor::BoxWeight;
@@ -22,6 +21,8 @@ use redbit::redb::Durability;
 use redbit::*;
 use reqwest::Url;
 use std::{pin::Pin, str::FromStr, sync::Arc};
+use tokio_util::sync::CancellationToken;
+use chain::chain_config;
 
 pub struct ErgoBlockProvider {
     pub client: Arc<ErgoClient>,
@@ -30,12 +31,12 @@ pub struct ErgoBlockProvider {
 
 impl ErgoBlockProvider {
     pub fn new() -> Result<Arc<Self>, ExplorerError> {
-        let ergo_config = ErgoConfig::new("config/ergo").expect("Failed to load Ergo configuration");
-        let ergo_client = ErgoClient::new(Url::from_str(&ergo_config.api_host).unwrap(), ergo_config.api_key.clone())?;
+        let config: ErgoConfig = chain_config::load_config("config/ergo", "ERGO").expect("Failed to load Ergo configuration");
+        let ergo_client = ErgoClient::new(Url::from_str(&config.api_host).unwrap(), config.api_key.clone())?;
 
         Ok(Arc::new(ErgoBlockProvider {
             client: Arc::new(ergo_client),
-            fetching_par: ergo_config.fetching_parallelism.clone().into(),
+            fetching_par: config.fetching_parallelism.clone().into(),
         }))
     }
 
@@ -157,7 +158,7 @@ impl BlockProvider<ErgoCBOR, Block> for ErgoBlockProvider {
         remote_chain_tip_header: BlockHeader,
         last_persisted_header: Option<BlockHeader>,
         durability: Durability
-    ) -> Pin<Box<dyn Stream<Item = ErgoCBOR> + Send + 'static>> {
+    ) -> (Pin<Box<dyn Stream<Item = ErgoCBOR> + Send + 'static>>, CancellationToken) {
         let height_to_index_from = last_persisted_header.map_or(1, |h| h.height.0 + 1);
         let heights = height_to_index_from..=remote_chain_tip_header.height.0;
         let client = Arc::clone(&self.client);
@@ -169,10 +170,11 @@ impl BlockProvider<ErgoCBOR, Block> for ErgoBlockProvider {
                 }
             });
         
-        match durability {
+        let stream = match durability {
             Durability::None => s.buffer_unordered(self.fetching_par.0).boxed(),
             Durability::Immediate => s.buffered(self.fetching_par.0).boxed(),
             _ => unreachable!("Only None and Immediate durability modes are supported")
-        }
+        };
+        (stream, CancellationToken::new())
     }
 }

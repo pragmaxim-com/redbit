@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use std::collections::{BTreeMap, HashMap};
 use std::pin::Pin;
 use std::sync::{Arc, RwLock};
+use tokio_util::sync::CancellationToken;
 use redbit::info;
 use chain::api::{BlockProvider, ChainError, SizeLike};
 use crate::model_v1::redb::Durability;
@@ -72,12 +73,12 @@ impl BlockProvider<Block, Block> for DemoBlockProvider {
         remote_chain_tip_header: Header,
         last_persisted_header: Option<Header>,
         _durability: Durability
-    ) -> Pin<Box<dyn Stream<Item = Block> + Send + 'static>> {
+    ) -> (Pin<Box<dyn Stream<Item = Block> + Send + 'static>>, CancellationToken) {
         let height_to_index_from = last_persisted_header.map_or(1, |h| h.height.0 + 1);
         let heights = height_to_index_from..=remote_chain_tip_header.height.0;
         let hash_by_height = self.hash_by_height.clone();
         let block_by_hash = self.block_by_hash.clone();
-        tokio_stream::iter(heights)
+        let stream = tokio_stream::iter(heights)
             .map(move |height| {
                 let hash_by_height = Arc::clone(&hash_by_height);
                 let block_by_hash = Arc::clone(&block_by_hash);
@@ -86,6 +87,7 @@ impl BlockProvider<Block, Block> for DemoBlockProvider {
                 let hash = hash_by_height.get(&Height(height)).expect("Failed to fetch block hash by height");
                 block_by_hash.get(hash).expect("Failed to fetch block by hash").clone()
             })
-            .boxed()
+            .boxed();
+        (stream, CancellationToken::new())
     }
 }

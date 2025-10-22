@@ -8,6 +8,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use redb::{Durability, StorageError};
 use tokio::task::JoinError;
+use tokio_util::sync::CancellationToken;
 use redbit::storage::table_writer_api::TaskResult;
 
 #[derive(Debug, thiserror::Error)]
@@ -84,5 +85,10 @@ pub trait BlockProvider<FB: SizeLike, TB: BlockLike>: Send + Sync {
     fn block_processor(&self) -> Arc<dyn Fn(&FB) -> Result<TB, ChainError> + Send + Sync>;
     fn get_processed_block(&self, hash: <TB::Header as BlockHeaderLike>::Hash) -> Result<Option<TB>, ChainError>;
     async fn get_chain_tip(&self) -> Result<TB::Header, ChainError>;
-    fn stream(&self, remote_chain_tip_header: TB::Header, last_persisted_header: Option<TB::Header>, durability: Durability) -> Pin<Box<dyn Stream<Item = FB> + Send + 'static>>;
+    fn stream(
+        &self,
+        remote_chain_tip_header: TB::Header,
+        last_persisted_header: Option<TB::Header>,
+        durability: Durability
+    ) -> (Pin<Box<dyn Stream<Item = FB> + Send + 'static>>, CancellationToken);
 }

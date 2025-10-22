@@ -66,7 +66,7 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
             let block_provider = Arc::clone(&self.block_provider);
             let shutdown = shutdown.clone();
             task::spawn_named("fetch", async move {
-                let mut s = block_provider.stream(node_chain_tip_header.clone(), last_persisted_header, default_durability);
+                let (mut s, cancel_token) = block_provider.stream(node_chain_tip_header.clone(), last_persisted_header, default_durability);
                 let mut buf: Vec<FB> = Vec::new();
                 let mut buf_bytes: usize = 0;
                 loop {
@@ -74,6 +74,7 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
                         biased;
                         _ = combine::await_shutdown(shutdown.clone()) => {
                             info!("fetch: shutdown");
+                            cancel_token.cancel();
                             break;
                         }
                         item = s.next() => {
@@ -152,7 +153,7 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
                                                         }
                                                     }
                                                     Err(e) => {
-                                                        error!("processing failure: {e}");
+                                                        warn!("Processing warning: {e}");
                                                     }
                                                 }
                                             }

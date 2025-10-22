@@ -15,7 +15,7 @@ mod chain_tests {
         let (storage_owner, storage) = StorageOwner::temp("chain_sync_test", 1, true).await.expect("Failed to open database");
         let chain = BlockChain::new(Arc::clone(&storage));
         chain.init().expect("Failed to initialize chain");
-        let config = AppConfig::new("config/settings").expect("Failed to load app config");
+        let config: AppConfig = chain_config::load_config("config/settings", "REDBIT").expect("Failed to load Redbit settings");
         let block_provider: Arc<dyn BlockProvider<Block, Block>> = DemoBlockProvider::new(target_height).expect("Failed to create block provider");
         let syncer = ChainSyncer::new(block_provider, chain.clone());
         let start = Instant::now();
@@ -55,7 +55,7 @@ mod chain_tests {
             StorageOwner::temp("chain_sync_shutdown_resume", 1, true).await.expect("Failed to open database");
         let chain = BlockChain::new(Arc::clone(&storage));
         chain.init().expect("Failed to initialize chain");
-        let config = AppConfig::new("config/settings").expect("Failed to load app config");
+        let config: AppConfig = chain_config::load_config("config/settings", "REDBIT").expect("Failed to load Redbit settings");
 
         let block_provider: Arc<dyn BlockProvider<Block, Block>> =
             DemoBlockProvider::new(target_height).expect("Failed to create block provider");

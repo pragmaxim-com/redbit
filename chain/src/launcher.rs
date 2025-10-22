@@ -1,7 +1,7 @@
 use crate::api::{BlockChainLike, BlockLike, BlockProvider, SizeLike};
 use crate::scheduler::Scheduler;
 use crate::settings::{AppConfig, DbCacheSize, HttpSettings, IndexerSettings};
-use crate::{combine, ChainError};
+use crate::{chain_config, combine, ChainError};
 use futures::future::ready;
 use redbit::storage::init::{Storage, StorageOwner};
 use redbit::{error, info, serve, AppError, OpenApiRouter, RequestState, WriteTxContext};
@@ -124,7 +124,7 @@ pub async fn launch<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteT
 where
     F: FnOnce(Arc<Storage>) -> Arc<dyn BlockChainLike<TB, CTX>>,
 {
-    let config = AppConfig::new("config/settings").expect("Failed to load app config");
+    let config: AppConfig = chain_config::load_config("config/settings", "REDBIT").expect("Failed to load Redbit settings");
     maybe_console_init();
     let (created, storage_owner, storage_view) = build_storage(&config).await?;
     let chain: Arc<dyn BlockChainLike<TB, CTX>> = build_chain(Arc::clone(&storage_view));

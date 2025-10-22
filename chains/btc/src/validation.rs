@@ -1,5 +1,5 @@
 use anyhow::Result;
-use btc::config::BitcoinConfig;
+use btc::BitcoinConfig;
 use btc::model_v1::*;
 use btc::rest_client::BtcClient;
 use chain::launcher;
@@ -7,12 +7,12 @@ use chain::settings::AppConfig;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let config = AppConfig::new("config/settings").expect("Failed to load app config");
+    let config: AppConfig = chain_config::load_config("config/settings", "REDBIT").expect("Failed to load Redbit settings");
     let (created, storage_owner, storage) = launcher::build_storage(&config).await?;
 
     assert_eq!(created, false, "We validate existing storage");
 
-    let config = BitcoinConfig::new("config/btc").expect("Failed to load Bitcoin configuration");
+    let config: BitcoinConfig = chain_config::load_config("config/btc", "BITCOIN").expect("Failed to load Bitcoin configuration");
     let client = Arc::new(BtcClient::new(&config)?);
     let block_tx = Block::begin_read_ctx(&storage)?;
 

@@ -22,6 +22,7 @@ min_entity_batch_size = 200_000
 
 ```
 # Ergo node is expected to run locally at port 9053
+curl -H "api_key: hello" http://127.0.0.1:9053/info
 export ERGO__API_KEY="foo"           # not needed for syncing
 cargo run --release 
 ```

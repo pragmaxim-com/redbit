@@ -3,7 +3,6 @@ extern crate test;
 
 pub mod block_provider;
 pub mod cardano_client;
-pub mod config;
 pub mod model_v1;
 pub mod codec;
 pub mod hook;
@@ -13,7 +12,15 @@ use pallas::network::miniprotocols::{blockfetch, chainsync, localstate};
 use chain::ChainError;
 use crate::model_v1::chrono::DateTime;
 use std::fmt::Display;
-use crate::model_v1::{BlockHash, Timestamp};
+use crate::model_v1::{BlockHash, Deserialize, Timestamp};
+
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct CardanoConfig {
+    pub api_host: String,
+    pub socket_path: String,
+    pub stream_buffer_size: usize,
+}
 
 impl Display for Timestamp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

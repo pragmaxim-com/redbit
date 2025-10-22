@@ -1,9 +1,9 @@
 use crate::codec::{TAG_NON_ADDR, TAG_OP_RETURN, TAG_SEGWIT};
-use crate::config::BitcoinConfig;
 use crate::model_v1::{Address, Block, BlockHash, BlockPointer, Header, Height, InputRef, MerkleRoot, ScriptHash, Timestamp, Transaction, TransactionPointer, TxHash, Utxo, Weight};
 use crate::rest_client::{BtcCBOR, BtcClient};
-use crate::ExplorerError;
+use crate::{BitcoinConfig, ExplorerError};
 use async_trait::async_trait;
+use tokio_util::sync::CancellationToken;
 use chain::api::{BlockProvider, ChainError};
 use chain::monitor::BoxWeight;
 use chain::settings::Parallelism;
@@ -13,6 +13,7 @@ use redbit::info;
 use redbit::*;
 use serde_json;
 use std::{fs, pin::Pin, sync::Arc};
+use chain::chain_config;
 use redbit::redb::Durability;
 
 pub struct BtcBlockProvider {
@@ -22,7 +23,7 @@ pub struct BtcBlockProvider {
 
 impl BtcBlockProvider {
     pub fn new() -> Result<Arc<Self>, ExplorerError> {
-        let config = BitcoinConfig::new("config/btc").expect("Failed to load Bitcoin configuration");
+        let config: BitcoinConfig = chain_config::load_config("config/btc", "BITCOIN").expect("Failed to load Bitcoin configuration");
         let client = Arc::new(BtcClient::new(&config)?);
         let fetching_par: Parallelism = config.fetching_parallelism.clone();
         Ok(Arc::new(BtcBlockProvider { client, fetching_par }))
@@ -193,7 +194,7 @@ impl BlockProvider<BtcCBOR, Block> for BtcBlockProvider {
         remote_chain_tip_header: Header,
         last_persisted_header: Option<Header>,
         durability: Durability
-    ) -> Pin<Box<dyn Stream<Item = BtcCBOR> + Send + 'static>> {
+    ) -> (Pin<Box<dyn Stream<Item = BtcCBOR> + Send + 'static>>, CancellationToken) {
         let height_to_index_from = last_persisted_header.map_or(1, |h| h.height.0 + 1);
         let heights = height_to_index_from..=remote_chain_tip_header.height.0;
         let client = Arc::clone(&self.client);
@@ -204,11 +205,12 @@ impl BlockProvider<BtcCBOR, Block> for BtcBlockProvider {
                     client.get_block_by_height(Height(height)).await.expect("Failed to fetch block by height")
                 }
             });
-        match durability {
+        let stream = match durability {
             Durability::None => s.buffer_unordered(self.fetching_par.0).boxed(),
             Durability::Immediate => s.buffered(self.fetching_par.0).boxed(),
             _ => unreachable!("Only None and Immediate durability modes are supported"),
-        }
+        };
+        (stream, CancellationToken::new())
     }
 }
 

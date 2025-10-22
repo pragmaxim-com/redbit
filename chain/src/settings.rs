@@ -1,11 +1,9 @@
-use config::{Config, ConfigError, Environment, File};
 use serde::Deserialize;
 use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::time::Duration;
 use sysinfo::System;
-use redbit::info;
 
 #[derive(Clone, Copy)]
 pub struct Parallelism(pub usize);
@@ -144,16 +142,4 @@ pub struct IndexerSettings {
 pub struct HttpSettings {
     pub enable: bool,
     pub bind_address: SocketAddr,
-}
-
-impl AppConfig {
-    pub fn new(path: &str) -> Result<Self, ConfigError> {
-        let builder =
-            Config::builder()
-                .add_source(File::with_name(path).required(true))
-                .add_source(Environment::with_prefix("REDBIT").try_parsing(true).separator("__"));
-        let config = builder.build()?.try_deserialize::<AppConfig>()?;
-        info!("{:#?}", config);
-        Ok(config)
-    }
 }

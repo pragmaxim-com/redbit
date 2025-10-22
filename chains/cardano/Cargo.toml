@@ -32,6 +32,7 @@ futures = "0.3.31"
 config = "0.15.11"
 redb = "3.0.2"
 tokio-stream = { version = "0.1.17", features = ["sync"] }
+tokio-util = "0.7.16"
 axum = {  version = "0.8.4", features = ["default", "macros"] }
 serde = { version = "1.0.219", features = ["derive"] }
 bech32 = "0.11.0"

@@ -18,7 +18,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     let chain = BlockChain::new(Arc::clone(&storage));
     chain.init().expect("Failed to initialize chain");
     let syncer = ChainSyncer::new(block_provider, chain.clone());
-    let mut config = AppConfig::new("config/settings").expect("Failed to load app config");
+    let mut config: AppConfig = chain_config::load_config("config/settings", "REDBIT").expect("Failed to load Redbit settings");
     config.indexer.fork_detection_heights = 5;
 
     info!("Initiating syncing");
