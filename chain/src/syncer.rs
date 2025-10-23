@@ -53,14 +53,18 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
             "Going to {} index {} blocks from {} to {}, parallelism : {}, fork_detection @ {}",
             indexing_mode, heights_to_fetch, height_to_index_from, chain_tip_height, indexing_par.0, fork_detection_height
         );
-        
-        let min_block_batch_bytes_limit = 128 * 1024; // 128 KB is reasonable to call spawn_blocking for
-        let min_entity_batch_size = indexer_conf.min_entity_batch_size;
+
+        let kb = 1024;
+        let min_block_fetch_batch_size = 256;
+        let min_block_batch_bytes_limit = min_block_fetch_batch_size * kb;
+        let process_persist_batch_size_ratio = 32;
+        let min_entity_persist_batch_size = indexer_conf.min_entity_batch_size;
+        let min_entity_process_batch_size = min_entity_persist_batch_size / process_persist_batch_size_ratio;
         let non_durable_batches = indexer_conf.non_durable_batches;
 
-        let (fetch_tx, fetch_rx) = mpsc::channel::<Vec<FB>>(256);
-        let (proc_tx, mut proc_rx) = mpsc::channel::<Vec<TB>>(4);
-        let (sort_tx, mut sort_rx) = mpsc::channel::<Vec<TB>>(4);
+        let (fetch_tx, fetch_rx) = mpsc::channel::<Vec<FB>>(min_block_fetch_batch_size);
+        let (proc_tx, mut proc_rx) = mpsc::channel::<Vec<TB>>(4 * process_persist_batch_size_ratio); // holds processed batch
+        let (sort_tx, mut sort_rx) = mpsc::channel::<Vec<TB>>(4); // holds persist batch
 
         let fetch_handle = {
             let block_provider = Arc::clone(&self.block_provider);
@@ -147,7 +151,7 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
                                                         // accumulate by weight; send when limit crossed
                                                         proc_weight = proc_weight.saturating_add(block.header().weight() as usize);
                                                         proc_buf.push(block);
-                                                        if proc_weight > min_entity_batch_size {
+                                                        if proc_weight > min_entity_process_batch_size {
                                                             let _ = proc_tx_stream.send(std::mem::take(&mut proc_buf)).await;
                                                             proc_weight = 0;
                                                         }
@@ -178,7 +182,7 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
             task::spawn_named("sort", async move {
                 let safety_cap = 1024 * 8;
                 let mut reorder: ReorderBuffer<TB> = ReorderBuffer::new(height_to_index_from, safety_cap);
-                let mut batcher: Batcher<TB> = Batcher::new(min_entity_batch_size, safety_cap, default_durability);
+                let mut batcher: Batcher<TB> = Batcher::new(min_entity_persist_batch_size, safety_cap, default_durability);
 
                 loop {
                     tokio::select! {
