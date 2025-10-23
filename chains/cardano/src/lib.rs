@@ -7,19 +7,18 @@ pub mod model_v1;
 pub mod codec;
 pub mod hook;
 
+use crate::model_v1::chrono::DateTime;
+use crate::model_v1::{BlockHash, Deserialize, Timestamp};
+use chain::ChainError;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use pallas::network::miniprotocols::{blockfetch, chainsync, localstate};
-use chain::ChainError;
-use crate::model_v1::chrono::DateTime;
 use std::fmt::Display;
-use crate::model_v1::{BlockHash, Deserialize, Timestamp};
 
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct CardanoConfig {
     pub api_host: String,
     pub socket_path: String,
-    pub stream_buffer_size: usize,
 }
 
 impl Display for Timestamp {

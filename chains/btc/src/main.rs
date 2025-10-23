@@ -5,6 +5,6 @@ use chain::launcher;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    launcher::launch(BtcBlockProvider::new()?, BlockChain::new, None, None).await?;
+    launcher::launch_sync(BtcBlockProvider::new, BlockChain::new, None, None).await?;
     Ok(())
 }

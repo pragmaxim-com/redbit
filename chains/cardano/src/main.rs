@@ -5,6 +5,6 @@ use chain::launcher;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    launcher::launch(CardanoBlockProvider::new().await, BlockChain::new, None, None).await?;
+    launcher::launch_async(CardanoBlockProvider::new, BlockChain::new, None, None).await?;
     Ok(())
 }

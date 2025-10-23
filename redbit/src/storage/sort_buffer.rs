@@ -262,7 +262,7 @@ where
         pool[idx].take().unwrap_or_default()
     }
 
-    #[cfg(test)]
+    #[allow(dead_code)]
     pub fn runs(&self) -> usize {
         self.levels.iter().filter(|s| s.is_some()).count()
     }

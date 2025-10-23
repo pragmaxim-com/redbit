@@ -14,11 +14,12 @@ fn criterion_benchmark(c: &mut Criterion) {
     let rt = Runtime::new().unwrap();
     let (storage_owner, storage) = rt.block_on(StorageOwner::temp("demo_benchmark", 1, true)).unwrap();
 
-    let block_provider: Arc<dyn BlockProvider<Block, Block>> = DemoBlockProvider::new(10).expect("Failed to create block provider");
+    let mut config: AppConfig = chain_config::load_config("config/settings", "REDBIT").expect("Failed to load Redbit settings");
+    let block_provider: Arc<dyn BlockProvider<Block, Block>> =
+        DemoBlockProvider::for_height(10, config.indexer.max_entity_buffer_kb_size).expect("Failed to create block provider");
     let chain = BlockChain::new(Arc::clone(&storage));
     chain.init().expect("Failed to initialize chain");
     let syncer = ChainSyncer::new(block_provider, chain.clone());
-    let mut config: AppConfig = chain_config::load_config("config/settings", "REDBIT").expect("Failed to load Redbit settings");
     config.indexer.fork_detection_heights = 5;
 
     info!("Initiating syncing");

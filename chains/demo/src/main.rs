@@ -8,6 +8,6 @@ use demo::routes;
 #[tokio::main]
 async fn main() -> Result<()> {
     let extra_routes = OpenApiRouter::new().routes(utoipa_axum::routes!(routes::test_json_nl_stream));
-    launcher::launch(DemoBlockProvider::new(1005)?, BlockChain::new, Some(extra_routes), None).await?;
+    launcher::launch_sync(DemoBlockProvider::new, BlockChain::new, Some(extra_routes), None).await?;
     Ok(())
 }

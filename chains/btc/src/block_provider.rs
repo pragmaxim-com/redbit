@@ -1,32 +1,34 @@
 use crate::codec::{TAG_NON_ADDR, TAG_OP_RETURN, TAG_SEGWIT};
 use crate::model_v1::{Address, Block, BlockHash, BlockPointer, Header, Height, InputRef, MerkleRoot, ScriptHash, Timestamp, Transaction, TransactionPointer, TxHash, Utxo, Weight};
 use crate::rest_client::{BtcCBOR, BtcClient};
-use crate::{BitcoinConfig, ExplorerError};
+use crate::BitcoinConfig;
 use async_trait::async_trait;
-use tokio_util::sync::CancellationToken;
 use chain::api::{BlockProvider, ChainError};
+use chain::block_stream::{BlockStream, RestBlockStream};
+use chain::chain_config;
 use chain::monitor::BoxWeight;
-use chain::settings::Parallelism;
-use futures::stream::StreamExt;
-use futures::Stream;
+use chain::settings::{AppConfig, Parallelism};
 use redbit::info;
 use redbit::*;
 use serde_json;
-use std::{fs, pin::Pin, sync::Arc};
-use chain::chain_config;
-use redbit::redb::Durability;
+use std::{fs, sync::Arc};
+use tokio::sync::mpsc::Receiver;
+use tokio::sync::watch;
+use tokio::task::JoinHandle;
 
 pub struct BtcBlockProvider {
     pub client: Arc<BtcClient>,
-    pub fetching_par: Parallelism,
+    pub block_stream: Arc<dyn BlockStream<BtcCBOR, Block>>,
 }
 
 impl BtcBlockProvider {
-    pub fn new() -> Result<Arc<Self>, ExplorerError> {
-        let config: BitcoinConfig = chain_config::load_config("config/btc", "BITCOIN").expect("Failed to load Bitcoin configuration");
-        let client = Arc::new(BtcClient::new(&config)?);
-        let fetching_par: Parallelism = config.fetching_parallelism.clone();
-        Ok(Arc::new(BtcBlockProvider { client, fetching_par }))
+    pub fn new(config: AppConfig) -> Result<Arc<dyn BlockProvider<BtcCBOR, Block>>, ChainError> {
+        let btc_config: BitcoinConfig = chain_config::load_config("config/btc", "BITCOIN").expect("Failed to load Bitcoin configuration");
+        let client = Arc::new(BtcClient::new(&btc_config)?);
+        let fetching_par: Parallelism = btc_config.fetching_parallelism.clone();
+        let max_entity_buffer_kb_size = config.indexer.max_entity_buffer_kb_size;
+        let block_stream = Arc::new(RestBlockStream::new(Arc::clone(&client), fetching_par.clone(), max_entity_buffer_kb_size));
+        Ok(Arc::new(BtcBlockProvider { client, block_stream }))
     }
 
     pub fn block_from_file(size: &str, height: u32, tx_count: usize) -> (bitcoin::Block, BtcCBOR) {
@@ -189,28 +191,14 @@ impl BlockProvider<BtcCBOR, Block> for BtcBlockProvider {
         Ok(processed_block.header)
     }
 
-    fn stream(
+    fn block_stream(
         &self,
         remote_chain_tip_header: Header,
         last_persisted_header: Option<Header>,
-        durability: Durability
-    ) -> (Pin<Box<dyn Stream<Item = BtcCBOR> + Send + 'static>>, CancellationToken) {
-        let height_to_index_from = last_persisted_header.map_or(1, |h| h.height.0 + 1);
-        let heights = height_to_index_from..=remote_chain_tip_header.height.0;
-        let client = Arc::clone(&self.client);
-        let s =
-            tokio_stream::iter(heights).map(move |height| {
-                let client = Arc::clone(&client);
-                async move {
-                    client.get_block_by_height(Height(height)).await.expect("Failed to fetch block by height")
-                }
-            });
-        let stream = match durability {
-            Durability::None => s.buffer_unordered(self.fetching_par.0).boxed(),
-            Durability::Immediate => s.buffered(self.fetching_par.0).boxed(),
-            _ => unreachable!("Only None and Immediate durability modes are supported"),
-        };
-        (stream, CancellationToken::new())
+        shutdown: watch::Receiver<bool>,
+        batch: bool,
+    ) -> (Receiver<Vec<BtcCBOR>>, JoinHandle<()>) {
+        self.block_stream.stream(remote_chain_tip_header, last_persisted_header, shutdown, batch)
     }
 }
 

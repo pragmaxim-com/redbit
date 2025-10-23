@@ -4,31 +4,32 @@ use crate::{AssetType, CardanoConfig, ExplorerError};
 use async_trait::async_trait;
 use chain::api::{BlockProvider, ChainError};
 use chain::monitor::BoxWeight;
-use futures::{Stream, StreamExt};
+use chain::settings::AppConfig;
+use chain::size_batcher::SizeBatcher;
 use pallas::codec::minicbor::{Encode, Encoder};
 use pallas::ledger::traverse::{MultiEraBlock, MultiEraInput, MultiEraOutput};
 use pallas::network::facades::NodeClient;
 use pallas::network::miniprotocols::chainsync::{N2CClient, NextResponse};
 use pallas::network::miniprotocols::{Point, MAINNET_MAGIC};
 use pallas_traverse::wellknown::GenesisValues;
-use std::{pin::Pin, sync::Arc};
-use redb::Durability;
-use tokio::sync::mpsc;
-use tokio_stream::wrappers::ReceiverStream;
-use tokio_util::sync::CancellationToken;
+use std::sync::Arc;
+use tokio::sync::mpsc::Receiver;
+use tokio::sync::{mpsc, watch};
+use tokio::task::JoinHandle;
 
 pub struct CardanoBlockProvider {
     client: CardanoClient,
     genesis: Arc<GenesisValues>,
-    config: CardanoConfig
+    cardano_config: CardanoConfig,
+    max_entity_buffer_kb_size: usize,
 }
 
 impl CardanoBlockProvider {
-    pub async fn new() -> Arc<Self> {
-        let config: CardanoConfig = chain_config::load_config("config/cardano", "CARDANO").expect("Failed to load Cardano configuration");
-        let client = CardanoClient::new(&config).await;
+    pub async fn new(config: AppConfig) -> Arc<dyn BlockProvider<CardanoCBOR, Block>> {
+        let cardano_config: CardanoConfig = chain_config::load_config("config/cardano", "CARDANO").expect("Failed to load Cardano configuration");
+        let client = CardanoClient::new(&cardano_config).await;
         let genesis = Arc::new(GenesisValues::mainnet());
-        Arc::new(CardanoBlockProvider { client, genesis, config })
+        Arc::new(CardanoBlockProvider { client, genesis, cardano_config, max_entity_buffer_kb_size: config.indexer.max_entity_buffer_kb_size })
     }
 
     fn is_byron_ebb(b: &MultiEraBlock<'_>) -> bool {
@@ -163,17 +164,21 @@ impl BlockProvider<CardanoCBOR, Block> for CardanoBlockProvider {
         Ok(best_header.header)
     }
 
-    fn stream(&self, _remote_chain_tip: BlockHeader, last_persisted_header: Option<BlockHeader>, _durability: Durability) -> (Pin<Box<dyn Stream<Item = CardanoCBOR> + Send + 'static>>, CancellationToken) {
+    fn block_stream(
+        &self,
+        _remote_chain_tip: BlockHeader,
+        last_persisted_header: Option<BlockHeader>,
+        shutdown: watch::Receiver<bool>,
+        batch: bool
+    ) -> (Receiver<Vec<CardanoCBOR>>, JoinHandle<()>) {
         let last_point = last_persisted_header.as_ref().map_or(Point::Origin, |h| Point::new(h.slot.0 as u64, h.hash.0.to_vec()));
-        let socket_path = self.config.socket_path.clone();
-        let stream_buffer_size = self.config.stream_buffer_size.clone();
+        let socket_path = self.cardano_config.socket_path.clone();
+        let buffer_size = 64;
+        let min_batch_kb_size = core::cmp::max(self.max_entity_buffer_kb_size, 256) / buffer_size;
 
-        let (tx, rx) = mpsc::channel::<CardanoCBOR>(stream_buffer_size);
-        let cancel = CancellationToken::new();
-        let child_token = cancel.child_token();
+        let (tx, rx) = mpsc::channel::<Vec<CardanoCBOR>>(buffer_size);
 
-        tokio::spawn(async move {
-            // The background-task + mpsc pattern runs the protocol in an owned task that can do async cleanup
+        let handle = tokio::spawn(async move {
             let mut node_client = match NodeClient::connect(socket_path, MAINNET_MAGIC).await {
                 Ok(c) => c,
                 Err(e) => {
@@ -182,38 +187,45 @@ impl BlockProvider<CardanoCBOR, Block> for CardanoBlockProvider {
                 }
             };
             let cs: &mut N2CClient = node_client.chainsync();
-            match cs.find_intersect(vec![last_point]).await {
-                Ok(_) => {},
-                Err(e) => {
-                    error!("chainsync find_intersect failed: {e:?}");
-                    let _ = cs.send_done().await;
-                    return;
-                }
+            if let Err(e) = cs.find_intersect(vec![last_point]).await {
+                error!("chainsync find_intersect failed: {e:?}");
+                let _ = cs.send_done().await;
+                return;
             }
+
+            let mut batcher = SizeBatcher::<CardanoCBOR>::from_kb(min_batch_kb_size, !batch);
+
             loop {
                 tokio::select! {
                     biased;
-                    _ = child_token.cancelled() => {
-                        let _ = cs.send_done().await;
+                    _ = combine::await_shutdown(shutdown.clone()) => {
+                        info!("fetch: shutdown");
+                        if let Some(tail) = batcher.take_all() { let _ = tx.send(tail).await; }
                         break;
                     }
 
                     res = cs.request_next() => match res {
                         Ok(NextResponse::RollForward(bytes, _new_tip)) => {
-                            if tx.send(CardanoCBOR(bytes.0)).await.is_err() {
-                                let _ = cs.send_done().await;
-                                break;
+                            if let Some(batch) = batcher.push(CardanoCBOR(bytes.0)) {
+                                if tx.send(batch).await.is_err() {
+                                    let _ = cs.send_done().await;
+                                    break;
+                                }
                             }
                         }
-                        Ok(NextResponse::RollBackward(_point, _new_tip)) => {
-                            continue;
-                        }
+                        Ok(NextResponse::RollBackward(_point, _new_tip)) => { continue; }
                         Ok(NextResponse::Await) => {
+                            if let Some(tail) = batcher.take_all() {
+                                let _ = tx.send(tail).await;
+                            }
                             let _ = cs.send_done().await;
                             break;
                         }
                         Err(e) => {
                             error!("chainsync request_next failed (stopping): {e:?}");
+                            if let Some(tail) = batcher.take_all() {
+                                let _ = tx.send(tail).await;
+                            }
                             let _ = cs.send_done().await;
                             break;
                         }
@@ -221,6 +233,6 @@ impl BlockProvider<CardanoCBOR, Block> for CardanoBlockProvider {
                 }
             }
         });
-        (ReceiverStream::new(rx).boxed(), cancel)
+        (rx, handle)
     }
 }

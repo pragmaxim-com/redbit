@@ -132,6 +132,7 @@ pub struct IndexerSettings {
     pub node_sync_interval_s: Duration,
     pub fork_detection_heights: u8,
     pub min_entity_batch_size: usize,
+    pub max_entity_buffer_kb_size: usize,
     pub non_durable_batches: usize,
     pub db_cache_size_gb: DbCacheSize,
     pub processing_parallelism: Parallelism,
