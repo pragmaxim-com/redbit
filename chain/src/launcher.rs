@@ -115,40 +115,41 @@ pub async fn build_storage(config: &AppConfig) -> Result<(bool, StorageOwner, Ar
 
 enum Flow { Continue, Stop }
 
-pub async fn launch<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'static, F>(
+// ----------------- shared core implementation -----------------
+async fn launch_with_provider<
+    FB: SizeLike + 'static,
+    TB: BlockLike + 'static,
+    CTX: WriteTxContext + 'static,
+>(
     block_provider: Arc<dyn BlockProvider<FB, TB>>,
-    build_chain: F,
+    build_chain: impl FnOnce(Arc<Storage>) -> Arc<dyn BlockChainLike<TB, CTX>>,
     extras: Option<OpenApiRouter<RequestState>>,
     cors: Option<CorsLayer>,
 ) -> Result<(), ChainError>
-where
-    F: FnOnce(Arc<Storage>) -> Arc<dyn BlockChainLike<TB, CTX>>,
 {
-    let config: AppConfig = chain_config::load_config("config/settings", "REDBIT").expect("Failed to load Redbit settings");
+    // load config and init
+    let config: AppConfig = chain_config::load_config("config/settings", "REDBIT")?;
     maybe_console_init();
     let (created, storage_owner, storage_view) = build_storage(&config).await?;
     let chain: Arc<dyn BlockChainLike<TB, CTX>> = build_chain(Arc::clone(&storage_view));
 
-    let unlinked_headers: Vec<TB::Header> =
-        if created {
-            chain.init()?;
-            Vec::new()
-        } else {
-            info!("Validating chain for being linked");
-            chain.validate_chain(config.indexer.validation_from_height).await?
-        };
+    let unlinked_headers: Vec<TB::Header> = if created {
+        chain.init()?;
+        Vec::new()
+    } else {
+        info!("Validating chain for being linked");
+        chain.validate_chain(config.indexer.validation_from_height).await?
+    };
 
     let syncer: Arc<ChainSyncer<FB, TB, CTX>> = Arc::new(ChainSyncer::new(Arc::clone(&block_provider), Arc::clone(&chain)));
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
 
-    // Phase 1: initial sync
     match run_initial_sync_phase(config.indexer.clone(), unlinked_headers.first().cloned(), Arc::clone(&syncer), shutdown_tx.clone(), shutdown_rx.clone()).await {
         Flow::Stop => {
             teardown::<FB, TB, CTX>(storage_view, chain, syncer, storage_owner);
             Ok(())
         }
         Flow::Continue => {
-            // Phase 2: schedule + HTTP (also under signal handling)
             let indexing_f = maybe_run_scheduling(config.indexer, Scheduler::new(Arc::clone(&syncer)), shutdown_rx.clone());
             let server_f   = maybe_run_server(config.http, Arc::clone(&storage_view), extras, cors, shutdown_rx.clone());
             let res = combine::futures(indexing_f, server_f, shutdown_tx).await;
@@ -157,5 +158,37 @@ where
             Ok(res)
         }
     }
+}
 
+/// For callers that have a synchronous factory `FnOnce(AppConfig) -> Arc<dyn BlockProvider<...>>`
+pub async fn launch_sync<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'static, CFN, PFN>(
+    block_provider_factory: PFN,
+    build_chain: CFN,
+    extras: Option<OpenApiRouter<RequestState>>,
+    cors: Option<CorsLayer>,
+) -> Result<(), ChainError>
+where
+    CFN: FnOnce(Arc<Storage>) -> Arc<dyn BlockChainLike<TB, CTX>>,
+    PFN: FnOnce(AppConfig) -> Result<Arc<dyn BlockProvider<FB, TB>>, ChainError>,
+{
+    let config: AppConfig = chain_config::load_config("config/settings", "REDBIT")?;
+    let provider = block_provider_factory(config)?;
+    launch_with_provider::<FB, TB, CTX>(provider, build_chain, extras, cors).await
+}
+
+/// For callers that have an async factory `FnOnce(AppConfig) -> impl Future<Output = Arc<...>>`
+pub async fn launch_async<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'static, CFN, PFN, PFut>(
+    block_provider_factory: PFN,
+    build_chain: CFN,
+    extras: Option<OpenApiRouter<RequestState>>,
+    cors: Option<CorsLayer>,
+) -> Result<(), ChainError>
+where
+    CFN: FnOnce(Arc<Storage>) -> Arc<dyn BlockChainLike<TB, CTX>>,
+    PFN: FnOnce(AppConfig) -> PFut,
+    PFut: Future<Output = Arc<dyn BlockProvider<FB, TB>>> + Send,
+{
+    let config: AppConfig = chain_config::load_config("config/settings", "REDBIT")?;
+    let provider = block_provider_factory(config).await;
+    launch_with_provider::<FB, TB, CTX>(provider, build_chain, extras, cors).await
 }

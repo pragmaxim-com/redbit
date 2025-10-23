@@ -5,6 +5,6 @@ use ergo::model_v1::BlockChain;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    launcher::launch(ErgoBlockProvider::new()?, BlockChain::new, None, None).await?;
+    launcher::launch_sync(ErgoBlockProvider::new, BlockChain::new, None, None).await?;
     Ok(())
 }

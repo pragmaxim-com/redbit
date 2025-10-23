@@ -1,15 +1,15 @@
+use async_trait::async_trait;
+use config::ConfigError;
+use hex::FromHexError;
+use redb::{Durability, StorageError};
+use redbit::storage::table_writer_api::TaskResult;
+use redbit::{AppError, WriteTxContext};
 use std::collections::HashMap;
 use std::fmt::Display;
-use async_trait::async_trait;
-use futures::Stream;
-use hex::FromHexError;
-use redbit::{AppError, WriteTxContext};
-use std::pin::Pin;
 use std::sync::Arc;
-use redb::{Durability, StorageError};
-use tokio::task::JoinError;
-use tokio_util::sync::CancellationToken;
-use redbit::storage::table_writer_api::TaskResult;
+use tokio::sync::mpsc::Receiver;
+use tokio::sync::watch;
+use tokio::task::{JoinError, JoinHandle};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ChainError {
@@ -40,6 +40,9 @@ pub enum ChainError {
     #[error("Invalid hex: {0}")]
     Hex(#[from] FromHexError),
 
+    #[error("Config error: {0}")]
+    ConfigError(#[from] ConfigError),
+
     #[error("{0}")]
     Custom(String),
 }
@@ -49,6 +52,9 @@ impl ChainError {
         ChainError::Custom(msg.into())
     }
 }
+
+pub type Height = u32;
+
 pub trait BlockHeaderLike: Send + Sync + Clone {
     type Hash : Display;
     type TS : Display;
@@ -85,10 +91,5 @@ pub trait BlockProvider<FB: SizeLike, TB: BlockLike>: Send + Sync {
     fn block_processor(&self) -> Arc<dyn Fn(&FB) -> Result<TB, ChainError> + Send + Sync>;
     fn get_processed_block(&self, hash: <TB::Header as BlockHeaderLike>::Hash) -> Result<Option<TB>, ChainError>;
     async fn get_chain_tip(&self) -> Result<TB::Header, ChainError>;
-    fn stream(
-        &self,
-        remote_chain_tip_header: TB::Header,
-        last_persisted_header: Option<TB::Header>,
-        durability: Durability
-    ) -> (Pin<Box<dyn Stream<Item = FB> + Send + 'static>>, CancellationToken);
+    fn block_stream(&self, remote_chain_tip_header: TB::Header, last_persisted_header: Option<TB::Header>, shutdown: watch::Receiver<bool>, batch: bool) -> (Receiver<Vec<FB>>, JoinHandle<()>);
 }

@@ -4,6 +4,8 @@ use redbit::retry::{retry_with_delay_async, retry_with_delay_sync};
 use reqwest::{blocking, Client};
 use std::sync::Arc;
 use std::time::Duration;
+use chain::ChainError;
+use chain::block_stream::RestClient;
 use crate::{BitcoinConfig, ExplorerError};
 
 pub struct BtcCBOR {
@@ -17,9 +19,18 @@ impl SizeLike for BtcCBOR {
     }
 }
 
+#[derive(Clone)]
 pub struct BtcClient {
     http_client: Arc<Client>,
     base_url: String,
+}
+
+#[async_trait::async_trait]
+impl RestClient<BtcCBOR> for BtcClient {
+    async fn get_block_by_height(&self, height: u32) -> Result<BtcCBOR, ChainError> {
+        let cbor = self.get_block_by_height(Height(height)).await?;
+        Ok(cbor)
+    }
 }
 
 impl BtcClient {

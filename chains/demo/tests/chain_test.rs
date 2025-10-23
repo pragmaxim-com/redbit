@@ -16,7 +16,8 @@ mod chain_tests {
         let chain = BlockChain::new(Arc::clone(&storage));
         chain.init().expect("Failed to initialize chain");
         let config: AppConfig = chain_config::load_config("config/settings", "REDBIT").expect("Failed to load Redbit settings");
-        let block_provider: Arc<dyn BlockProvider<Block, Block>> = DemoBlockProvider::new(target_height).expect("Failed to create block provider");
+        let block_provider: Arc<dyn BlockProvider<Block, Block>> =
+            DemoBlockProvider::for_height(target_height, config.indexer.max_entity_buffer_kb_size).expect("Failed to create block provider");
         let syncer = ChainSyncer::new(block_provider, chain.clone());
         let start = Instant::now();
         let (_shutdown_tx, shutdown_rx) = watch::channel(false);
@@ -58,7 +59,7 @@ mod chain_tests {
         let config: AppConfig = chain_config::load_config("config/settings", "REDBIT").expect("Failed to load Redbit settings");
 
         let block_provider: Arc<dyn BlockProvider<Block, Block>> =
-            DemoBlockProvider::new(target_height).expect("Failed to create block provider");
+            DemoBlockProvider::for_height(target_height, config.indexer.max_entity_buffer_kb_size).expect("Failed to create block provider");
         let syncer = ChainSyncer::new(block_provider, chain.clone());
 
         // start sync in background so we can interrupt it

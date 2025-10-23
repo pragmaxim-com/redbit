@@ -1,11 +1,13 @@
 use crate::model_v1::{BlockHash, Height};
+use crate::ExplorerError;
 use chain::api::SizeLike;
+use chain::block_stream::RestClient;
 use ergo_lib::chain::block::FullBlock;
 use redbit::retry::retry_with_delay_async;
 use reqwest::{blocking, header::{HeaderMap, HeaderValue, ACCEPT, CONTENT_TYPE}, Client, Response, Url};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use crate::ExplorerError;
+use chain::ChainError;
 
 #[derive(Default, Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 #[repr(C)]
@@ -17,10 +19,19 @@ pub struct NodeInfo {
     pub full_height: u32,
 }
 
+#[derive(Clone)]
 pub struct ErgoClient {
     node_url: Url,
     http: Client,
     headers: HeaderMap,
+}
+
+#[async_trait::async_trait]
+impl RestClient<ErgoCBOR> for ErgoClient {
+    async fn get_block_by_height(&self, height: u32) -> Result<ErgoCBOR, ChainError> {
+        let cbor = self.get_cbor_by_height_retry_async(Height(height)).await?;
+        Ok(cbor)
+    }
 }
 
 pub struct ErgoCBOR(pub Vec<u8>);
