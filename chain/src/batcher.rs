@@ -50,7 +50,7 @@ pub struct ReorderBuffer<TB> {
 
     /// The largest height observed so far (monotonic, for diagnostics).
     /// Together with `next_height` it defines the current gap span.
-    max_seen: Height,
+    max_seen: Option<Height>,
 
     /// Count of items dropped because their height was below `next_height`
     /// (i.e., already emitted). This counter increments saturatingly to avoid
@@ -65,7 +65,7 @@ impl<TB> ReorderBuffer<TB> {
             next_height: start_lower_bound,
             pending: HashMap::new(),
             max_buffer_hint,
-            max_seen: start_lower_bound.saturating_sub(1),
+            max_seen: None,
             dropped_too_low: 0,
         }
     }
@@ -80,8 +80,10 @@ impl<TB> ReorderBuffer<TB> {
             self.dropped_too_low = self.dropped_too_low.saturating_add(1);
             return Vec::new();
         }
-        if height > self.max_seen {
-            self.max_seen = height;
+        match self.max_seen {
+            None => self.max_seen = Some(height),
+            Some(ms) if height > ms => self.max_seen = Some(height),
+            _ => {}
         }
         // First-come-wins; ignore duplicates to avoid double-release.
         self.pending.entry(height).or_insert(block);
@@ -103,11 +105,15 @@ impl<TB> ReorderBuffer<TB> {
     pub fn next_expected(&self) -> Height { self.next_height }
 
     /// Largest height observed so far.
-    pub fn max_seen(&self) -> Height { self.max_seen }
+    pub fn max_seen(&self) -> Option<Height> { self.max_seen }
 
     /// Current gap (next_expected..=max_seen), if any.
     pub fn gap_span(&self) -> Option<(Height, Height)> {
-        if self.max_seen >= self.next_height { Some((self.next_height, self.max_seen)) } else { None }
+        match self.max_seen {
+            None => None,
+            Some(ms) if ms >= self.next_height => Some((self.next_height, ms)),
+            _ => None,
+        }
     }
 
     /// Count of items dropped for arriving below `next_expected()`.
@@ -158,16 +164,14 @@ impl<TB> Batcher<TB> {
     }
 
     /// Push `item`; returns a full batch when ready.
-    /// In Immediate mode, returns `Some(vec![item])` every time.
     pub fn push_with<F: Fn(&TB) -> usize>(&mut self, item: TB, weight_of: F) -> Option<Vec<TB>> {
         match self.mode {
             Durability::Immediate => {
-                // Ignore buf/weight entirely; emit single-item batch.
                 Some(vec![item])
             }
             Durability::None => {
                 let w = weight_of(&item);
-                self.weight += w;
+                self.weight = self.weight.saturating_add(w);
                 self.buf.push(item);
                 if self.weight >= self.min_weight || self.buf.len() >= self.cap {
                     return Some(self.take_inner());
@@ -177,7 +181,6 @@ impl<TB> Batcher<TB> {
             _ => unreachable!("unsupported durability mode")
         }
     }
-
     /// Final flush. In Immediate mode, this is a no-op and returns None.
     pub fn flush(&mut self) -> Option<Vec<TB>> {
         match self.mode {
@@ -191,7 +194,7 @@ impl<TB> Batcher<TB> {
 
     fn take_inner(&mut self) -> Vec<TB> {
         self.weight = 0;
-        std::mem::take(&mut self.buf)
+        std::mem::replace(&mut self.buf, Vec::with_capacity(self.cap))
     }
 
     pub fn len(&self) -> usize {
@@ -272,6 +275,39 @@ mod tests {
     // ---------- tests ----------
 
     #[test]
+    fn capacity_preserved_after_flush() {
+        let mut b: Batcher<u8> = Batcher::new(10, 64, Durability::None);
+        assert!(b.buf.capacity() >= 64); // initial capacity
+        for i in 0..5 {
+            let _ = b.push_with(i, |_| 3usize); // small pushes
+        }
+        // force flush by pushing an item that crosses min_weight
+        let batch = b.push_with(99u8, |_| 100usize).expect("should flush");
+        assert!(!batch.is_empty());
+        // after flush the internal buffer should still have capacity == configured cap
+        assert_eq!(b.buf.capacity(), 64);
+    }
+
+    #[test]
+    fn weight_saturates_and_resets_on_flush() {
+        let mut b: Batcher<u8> = Batcher::new(usize::MAX, 10, Durability::None);
+        let out = b.push_with(1u8, |_| usize::MAX);
+        // push_with should have triggered a flush and returned the batch
+        assert!(out.is_some());
+        // after flush weight is reset to 0
+        assert_eq!(b.weight, 0);
+    }
+
+    #[test]
+    fn immediate_mode_returns_single_item_and_len_zero() {
+        let mut b: Batcher<i32> = Batcher::new(10, 10, Durability::Immediate);
+        let out = b.push_with(5, |_| 1usize);
+        assert_eq!(out, Some(vec![5]));
+        assert_eq!(b.len(), 0);
+        assert!(b.flush().is_none());
+    }
+
+    #[test]
     fn immediate_mode_emits_every_item() {
         let mut b = Batcher::new(1_000_000, 1_000_000, Durability::Immediate);
         let mut out: Vec<Vec<u32>> = Vec::new();
@@ -342,7 +378,7 @@ mod tests {
         for h in (start + 1)..=(start + 30) { if h != 115 { assert!(r.insert(h, mb(h, 1)).is_empty()); } }
 
         assert_eq!(r.next_expected(), start);
-        assert_eq!(r.max_seen(), start + 30);
+        assert_eq!(r.max_seen(), Some(start + 30));
         assert!(r.is_saturated(), "soft hint should trigger under a big gap");
         assert_eq!(r.pending_len(), 29);
 
@@ -405,7 +441,7 @@ mod tests {
         insert_range_expect_empty(&mut r, [52u32, 53, 60, 61, 62]);
 
         assert_eq!(r.next_expected(), 50u32);
-        assert_eq!(r.max_seen(), 62u32);
+        assert_eq!(r.max_seen(), Some(62u32));
 
         match r.gap_span() {
             Some((lo, hi)) => { assert_eq!(lo, 50u32); assert_eq!(hi, 62u32); }
@@ -444,5 +480,12 @@ mod tests {
             feed_ready(&mut b, r.insert(h, mb(h, 1)), &mut emitted);
         }
         assert_eq!(emitted, vec![100, 101, 102, 103]);
+    }
+
+    #[test]
+    fn gap_span_starting_at_zero_should_be_none() {
+        let rb = ReorderBuffer::<()>::new(0, 1024);
+        // before the fix, gap_span() would have returned Some((0,0))
+        assert!(rb.gap_span().is_none(), "gap_span must be None before any heights seen");
     }
 }
