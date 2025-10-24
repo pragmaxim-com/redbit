@@ -55,7 +55,7 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
             indexing_mode, heights_to_fetch, height_to_index_from, chain_tip_height, indexing_par.0, fork_detection_height
         );
 
-        let process_persist_batch_size_ratio = 32;
+        let process_persist_batch_size_ratio = 64;
         let min_entity_persist_batch_size = indexer_conf.min_entity_batch_size;
         let min_entity_process_batch_size = min_entity_persist_batch_size / process_persist_batch_size_ratio;
         let non_durable_batches = indexer_conf.non_durable_batches;
@@ -121,7 +121,10 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
                                         }
                                     }
                                 }
-                                None => break, // upstream closed
+                                None => {
+                                    info!("process: proc_stream closed");
+                                    break;
+                                },
                             }
                         }
                     }
@@ -137,7 +140,6 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
                 let safety_cap = 1024 * 8;
                 let mut reorder: ReorderBuffer<TB> = ReorderBuffer::new(height_to_index_from, safety_cap);
                 let mut batcher: WeightBatcher<TB> = WeightBatcher::new(min_entity_persist_batch_size, safety_cap, default_durability);
-
                 loop {
                     tokio::select! {
                         maybe = proc_rx.recv() => {
@@ -146,24 +148,32 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
                                     for block in blocks {
                                         let header = block.header();
                                         let h = header.height();
-
                                         // 1) Strict global reordering; returns only contiguous-from-next items.
                                         let ready = reorder.insert(h, block);
 
                                         // Optional observability/backpressure hint on wide gaps:
-                                        if reorder.is_saturated() && let Some((need, seen)) = reorder.gap_span() {
-                                            warn!("Block @ {} not fetched, currently @ {} ... pending {} blocks", need, seen, reorder.pending_len());
+                                        if reorder.is_saturated() {
+                                            warn!("Too many blocks pending for persistence: {}", reorder.pending_len());
+                                            if let Some((need, seen)) = reorder.gap_span() {
+                                               warn!("Block @ {} not fetched, currently @ {} ... pending {} blocks", need, seen, reorder.pending_len());
+                                            }
                                         }
 
                                         // 2) Feed in-order items into weight batcher.
                                         for b in ready {
                                             if let Some(out) = batcher.push_with(b, |x| x.header().weight() as usize) {
-                                                if sort_tx.send(out).await.is_err() { break; }
+                                               if let Err(_) = sort_tx.send(out).await {
+                                                    info!("sort: sort_tx closed — terminating sort task");
+                                                    return;
+                                                }
                                             }
                                         }
                                     }
                                 }
-                                None => break, // upstream closed
+                                None => {
+                                    info!("sort: proc_rx closed" );
+                                    break;
+                                },
                             }
                         }
                         _ = combine::await_shutdown(shutdown.clone()) => {
@@ -225,6 +235,7 @@ impl<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext + 'sta
                                     continue;
                                 }
                                 Err(TryRecvError::Disconnected) => {
+                                    warn!("persist: sort_rx disconnected, terminating persist task");
                                     break;
                                 }
                             }

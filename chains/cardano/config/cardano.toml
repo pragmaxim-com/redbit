@@ -1,3 +1,2 @@
 api_host = "localhost:3001"
 socket_path = "/home/lisak/.cardano/db/node.socket" ## needs to be absolute path
-stream_buffer_size = 2048

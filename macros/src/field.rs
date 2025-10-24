@@ -198,15 +198,6 @@ impl FieldMacros {
         }
     }
 
-    pub fn store_many_statements(&self) -> Vec<TokenStream> {
-        match self {
-            FieldMacros::Pk(pk) => vec![pk.store_many_statement.clone()],
-            FieldMacros::Plain(column) => vec![column.store_many_statement.clone()],
-            FieldMacros::Relationship(relationship) => vec![relationship.store_many_statement.clone()],
-            _ => vec![],
-        }
-    }
-
     pub fn delete_statements(&self) -> Vec<TokenStream> {
         match self {
             FieldMacros::Pk(pk) => vec![pk.delete_statement.clone()],

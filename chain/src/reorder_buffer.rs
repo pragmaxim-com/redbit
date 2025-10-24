@@ -1,5 +1,7 @@
+use std::collections::hash_map::Entry;
 use crate::api::Height;
 use std::collections::HashMap;
+use redbit::warn;
 
 /// Guarantees globally increasing delivery (contiguous from `next_height`).
 /// Stores out-of-order blocks in O(1) expected time per insert.
@@ -57,6 +59,7 @@ impl<TB> ReorderBuffer<TB> {
         // If we already emitted past this height, drop it (observability counter increments).
         if height < self.next_height {
             self.dropped_too_low = self.dropped_too_low.saturating_add(1);
+            warn!("ReorderBuffer: dropped item for height {} below next_expected {}", height, self.next_height);
             return Vec::new();
         }
         match self.max_seen {
@@ -65,7 +68,10 @@ impl<TB> ReorderBuffer<TB> {
             _ => {}
         }
         // First-come-wins; ignore duplicates to avoid double-release.
-        self.pending.entry(height).or_insert(block);
+        match self.pending.entry(height) {
+            Entry::Vacant(v) => { v.insert(block); }
+            Entry::Occupied(_) => { warn!("ReorderBuffer: duplicate for height {}", height);}
+        }
         let mut ready = Vec::new();
         while let Some(b) = self.pending.remove(&self.next_height) {
             ready.push(b);

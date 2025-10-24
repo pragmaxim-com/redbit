@@ -25,7 +25,6 @@ pub struct DbRelationshipMacros {
     pub struct_default_init: TokenStream,
     pub struct_default_init_with_query: TokenStream,
     pub store_statement: TokenStream,
-    pub store_many_statement: TokenStream,
     pub delete_statement: TokenStream,
     pub delete_many_statement: TokenStream,
     pub function_def: FunctionDef,
@@ -55,7 +54,6 @@ impl DbRelationshipMacros {
                     struct_default_init: init::one2one_relation_default_init(child_name, child_type),
                     struct_default_init_with_query: init::one2one_relation_default_init_with_query(child_name, child_type),
                     store_statement: store::one2one_store_def(child_name, child_type),
-                    store_many_statement: store::one2one_store_many_def(child_name, child_type),
                     delete_statement: delete::one2one_delete_def(child_name, child_type),
                     delete_many_statement: delete::one2one_delete_many_def(child_name, child_type),
                     function_def: get::one2one_def(entity_name, child_name, child_type, pk_name, pk_type, &read_child_tx_context_type)
@@ -72,14 +70,12 @@ impl DbRelationshipMacros {
                     struct_default_init: init::one2opt_relation_default_init(child_name, child_type),
                     struct_default_init_with_query: init::one2opt_relation_default_init_with_query(child_name, child_type),
                     store_statement: store::one2opt_store_def(child_name, child_type),
-                    store_many_statement: store::one2opt_store_many_def(child_name, child_type),
                     delete_statement: delete::one2opt_delete_def(child_name, child_type),
                     delete_many_statement: delete::one2opt_delete_many_def(child_name, child_type),
                     function_def: get::one2opt_def(entity_name, child_name, child_type, pk_name, pk_type, &read_child_tx_context_type)
                 }
             }
             Multiplicity::OneToMany => {
-                let store_statement = store::one2many_store_def(child_name, child_type, pk_name, write_from_using.clone());
                 DbRelationshipMacros {
                     field_def: field_def.clone(),
                     struct_init: init::one2many_relation_init(child_name, child_type),
@@ -87,10 +83,9 @@ impl DbRelationshipMacros {
                     tx_context_item: context::tx_context_item(child_name, &write_child_tx_context_type, &read_child_tx_context_type, write_from_using.clone()),
                     table_info_item: info::table_info_init(child_name, &child_table_info_type),
                     struct_init_with_query: init::one2many_relation_init_with_query(child_name, child_type),
-                    struct_default_init: init::one2many_relation_default_init(child_name, child_type, write_from_using),
+                    struct_default_init: init::one2many_relation_default_init(child_name, child_type, write_from_using.clone()),
                     struct_default_init_with_query: init::one2many_relation_default_init_with_query(child_name, child_type),
-                    store_statement: store_statement.clone(),
-                    store_many_statement: store_statement,
+                    store_statement: store::one2many_store_def(child_name, child_type, pk_name, write_from_using),
                     delete_statement: delete::one2many_delete_def(child_name, child_type),
                     delete_many_statement: delete::one2many_delete_many_def(child_name, child_type),
                     function_def: get::one2many_def(entity_name, child_name, child_type, pk_name, pk_type, &read_child_tx_context_type)
