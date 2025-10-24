@@ -46,17 +46,19 @@ impl CardanoBlockProvider {
         let prev_h = header.previous_hash().unwrap_or(pallas::crypto::hash::Hash::new([0u8; 32]));
         let prev_hash: [u8; 32] = *prev_h;
         let height = Height(header.number() as u32);
-        let mut block_weight = 6;
+        // cardano block has higher weight due to many empty blocks, let's compensate that by giving it weight 25
+        // which is an emulation of a block with a few txs with a few IOs
+        let mut block_weight = 25;
         let txs: Vec<pallas::ledger::traverse::MultiEraTx> = b.txs();
         let mut result_txs = Vec::with_capacity(txs.len());
 
         for (tx_index, tx) in txs.iter().enumerate() {
             let tx_hash: [u8; 32] = *tx.hash();
             let tx_id = BlockPointer::from_parent(height, tx_index as u16);
-            let inputs = Self::process_inputs(&tx.inputs());
+            let input_refs = Self::process_inputs(&tx.inputs());
             let (box_weight, outputs) = Self::process_outputs(&tx.outputs(), tx_id);
-            block_weight += box_weight + inputs.len() + 1;
-            result_txs.push(Transaction { id: tx_id, hash: TxHash(tx_hash), utxos: outputs, inputs: vec![], input_refs: inputs, input_utxos: vec![]})
+            block_weight += box_weight + input_refs.len() + 1;
+            result_txs.push(Transaction { id: tx_id, hash: TxHash(tx_hash), utxos: outputs, inputs: vec![], input_refs, input_utxos: vec![]})
         }
 
         let header = BlockHeader {
@@ -91,11 +93,16 @@ impl CardanoBlockProvider {
         for (out_index, out) in outs.iter().enumerate() {
             let address_opt = out.address().ok().map(|a| a.to_vec());
 
-            let script_hash_opt = out.script_ref().map(|h| {
+            let mut script_hash_opt = None;
+            out.script_ref().map(|h| {
                 script_buf.clear();
                 let mut enc = Encoder::new(&mut script_buf);
-                h.encode(&mut enc, &mut ctx).unwrap();
-                script_buf.clone() // keep a copy per output
+                if let Err(e) = h.encode(&mut enc, &mut ctx) {
+                    warn!("failed to encode script_ref: {:?}", e);
+                    script_hash_opt = None;
+                } else {
+                    script_hash_opt = Some(script_buf.clone());
+                }
             });
 
             let utxo_pointer = TransactionPointer::from_parent(tx_pointer, out_index as u16);
@@ -106,8 +113,14 @@ impl CardanoBlockProvider {
             let mut idx: u16 = 0;
 
             for policy_assets in out.value().assets() {
-                // clone the policy‐id bytes once
-                let pid_bytes: [u8; 28] = policy_assets.policy().as_ref().try_into().unwrap();
+                let pid_slice = policy_assets.policy().as_ref();
+                let pid_bytes: [u8; 28] = match pid_slice.try_into() {
+                    Ok(a) => a,
+                    Err(_) => {
+                        warn!("process_outputs: unexpected policy id len = {} (expected 28)", pid_slice.len());
+                        continue;
+                    }
+                };
                 let policy_id = PolicyId(pid_bytes);
 
                 for asset in policy_assets.assets() {
@@ -208,6 +221,7 @@ impl BlockProvider<CardanoCBOR, Block> for CardanoBlockProvider {
                         Ok(NextResponse::RollForward(bytes, _new_tip)) => {
                             if let Some(batch) = batcher.push(CardanoCBOR(bytes.0)) {
                                 if tx.send(batch).await.is_err() {
+                                    warn!("block_stream: receiver dropped, stopping");
                                     let _ = cs.send_done().await;
                                     break;
                                 }

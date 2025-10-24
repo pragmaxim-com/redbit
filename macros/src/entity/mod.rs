@@ -37,7 +37,6 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
     let mut struct_default_inits_with_query = Vec::new();
     let mut store_statements = Vec::new();
     let mut delete_statements = Vec::new();
-    let mut store_many_statements = Vec::new();
     let mut delete_many_statements = Vec::new();
     let mut column_function_defs = Vec::new();
 
@@ -56,7 +55,6 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
         struct_default_inits_with_query.push(field_macro.struct_default_init_with_query());
         store_statements.extend(field_macro.store_statements());
         delete_statements.extend(field_macro.delete_statements());
-        store_many_statements.extend(field_macro.store_many_statements());
         delete_many_statements.extend(field_macro.delete_many_statements());
         column_function_defs.extend(field_macro.function_defs())
     }
@@ -67,7 +65,7 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
     let mut function_defs = vec![
         info::table_info_fn(&entity_def),
         store::persist_def(&entity_def, &store_statements),
-        store::store_many_def(&entity_def, &store_many_statements),
+        store::store_many_def(&entity_def, &store_statements),
         store::store_def(&entity_def, &store_statements),
         context::begin_write_fn_def(&entity_def.write_ctx_type),
         context::new_write_fn_def(&entity_def.write_ctx_type),
