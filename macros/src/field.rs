@@ -1,3 +1,4 @@
+use crate::column::transient::TransientMacros;
 use crate::column::DbColumnMacros;
 use crate::entity::context::{TxContextItem, TxType};
 use crate::entity::info::TableInfoItem;
@@ -6,13 +7,12 @@ use crate::entity::{context, query};
 use crate::field_parser;
 use crate::field_parser::{ColumnDef, EntityDef, FieldDef, KeyDef, Multiplicity, OneToManyParentDef};
 use crate::pk::DbPkMacros;
-use crate::relationship::DbRelationshipMacros;
+use crate::relationship::transient::TransientRelationshipMacros;
+use crate::relationship::{DbRelationshipMacros, StoreStatement};
 use crate::rest::FunctionDef;
 use crate::table::{DictTableDefs, IndexTableDefs, PlainTableDef};
-use crate::column::transient::TransientMacros;
 use proc_macro2::{Ident, TokenStream};
 use syn::{ItemStruct, Type};
-use crate::relationship::transient::TransientRelationshipMacros;
 
 pub enum FieldMacros {
     Pk(DbPkMacros),
@@ -189,10 +189,10 @@ impl FieldMacros {
         }
     }
 
-    pub fn store_statements(&self) -> Vec<TokenStream> {
+    pub fn store_statements(&self) -> Vec<StoreStatement> {
         match self {
-            FieldMacros::Pk(pk) => vec![pk.store_statement.clone()],
-            FieldMacros::Plain(column) => vec![column.store_statement.clone()],
+            FieldMacros::Pk(pk) => vec![StoreStatement::Plain(pk.store_statement.clone())],
+            FieldMacros::Plain(column) => vec![StoreStatement::Plain(column.store_statement.clone())],
             FieldMacros::Relationship(relationship) => vec![relationship.store_statement.clone()],
             _ => vec![],
         }

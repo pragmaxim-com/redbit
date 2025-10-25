@@ -4,16 +4,27 @@ use crate::rest::HttpParams::Body;
 use crate::rest::{BodyExpr, EndpointTag, FunctionDef, HttpMethod};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
+use crate::relationship::{StoreStatement, WriteFromStatement};
 
-pub fn store_def(entity_def: &EntityDef,store_statements: &[TokenStream]) -> FunctionDef {
+pub fn store_def(entity_def: &EntityDef, mixed_statements: &[StoreStatement]) -> FunctionDef {
     let entity_name = &entity_def.entity_name;
     let entity_type = &entity_def.entity_type;
     let write_ctx_type = &entity_def.write_ctx_type;
     let fn_name = format_ident!("store");
+
+    let mut store_stmts: Vec<TokenStream> = Vec::new();
+
+    for stmt in mixed_statements {
+        match stmt {
+            StoreStatement::Plain(ts) => store_stmts.push(ts.clone()),
+            StoreStatement::WriteFrom(_) => {},
+        }
+    }
+
     let fn_stream = quote! {
         fn #fn_name(tx_context: &#write_ctx_type, instance: #entity_type) -> Result<(), AppError> {
             let is_last = true;
-            #(#store_statements)*
+            #(#store_stmts)*
             Ok(())
         }
     };
@@ -57,19 +68,39 @@ pub fn store_def(entity_def: &EntityDef,store_statements: &[TokenStream]) -> Fun
     }
 }
 
-pub fn store_many_def(entity_def: &EntityDef, store_many_statements: &[TokenStream]) -> FunctionDef {
+pub fn store_many_def(entity_def: &EntityDef, mixed_statements: &[StoreStatement]) -> FunctionDef {
     let entity_name = &entity_def.entity_name;
     let entity_type = &entity_def.entity_type;
     let write_ctx_type = &entity_def.write_ctx_type;
     let fn_name = format_ident!("store_many");
+
+    let mut store_stmts: Vec<TokenStream> = Vec::new();
+    let mut write_from_stmts: Vec<WriteFromStatement> = Vec::new();
+
+    for stmt in mixed_statements {
+        match stmt {
+            StoreStatement::Plain(ts) => store_stmts.push(ts.clone()),
+            StoreStatement::WriteFrom(wfs) => write_from_stmts.push(wfs.clone()),
+        }
+    }
+
+    // Prepare the pieces derived from write-from hooks
+    let write_from_inits: Vec<TokenStream> = write_from_stmts.iter().map(|wfs| wfs.init.clone()).collect();
+    let write_from_collects: Vec<TokenStream> = write_from_stmts.iter().map(|wfs| wfs.collect.clone()).collect();
+    let write_from_stores: Vec<TokenStream> = write_from_stmts.iter().map(|wfs| wfs.store.clone()).collect();
+
+    // store_stmts will be expanded in the loop body
     let fn_stream = quote! {
-        pub fn #fn_name(tx_context: &#write_ctx_type, instances: Vec<#entity_type>, last: bool) -> Result<(), AppError> {
+        pub fn #fn_name(tx_context: &#write_ctx_type, instances: Vec<#entity_type>, is_last: bool) -> Result<(), AppError> {
             let mut remaining = instances.len();
+            #(#write_from_inits)*
             for instance in instances {
                 remaining -= 1;
-                let is_last = last && remaining == 0;
-                #(#store_many_statements)*
+                let is_last = is_last && remaining == 0;
+                #(#store_stmts)*
+                #(#write_from_collects)*
             }
+            #(#write_from_stores)*
             Ok(())
         }
     };
@@ -111,19 +142,29 @@ pub fn store_many_def(entity_def: &EntityDef, store_many_statements: &[TokenStre
     }
 }
 
-pub fn persist_def(entity_def: &EntityDef, store_statements: &[TokenStream]) -> FunctionDef {
+pub fn persist_def(entity_def: &EntityDef, mixed_statements: &[StoreStatement]) -> FunctionDef {
     let fn_name = format_ident!("persist");
     let entity_name = &entity_def.entity_name;
     let entity_type = &entity_def.entity_type;
     let key_def = &entity_def.key_def.field_def();
     let pk_name = &key_def.name;
     let pk_type = &key_def.tpe;
+
+    let mut store_stmts: Vec<TokenStream> = Vec::new();
+
+    for stmt in mixed_statements {
+        match stmt {
+            StoreStatement::Plain(ts) => store_stmts.push(ts.clone()),
+            StoreStatement::WriteFrom(_) => {},
+        }
+    }
+
     let fn_stream = quote! {
         pub fn #fn_name(storage: Arc<Storage>, instance: #entity_type) -> Result<#pk_type, AppError> {
            let pk = instance.#pk_name;
            let is_last = true;
            let tx_context = #entity_name::begin_write_ctx(&storage, Durability::Immediate)?;
-           #(#store_statements)*
+           #(#store_stmts)*
            tx_context.two_phase_commit_and_close()?;
            Ok(pk)
        }
