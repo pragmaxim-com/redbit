@@ -34,7 +34,7 @@ pub use macros::PointerKey;
 pub use macros::RootKey;
 pub use once_cell;
 pub use query::*;
-pub use indexmap::IndexMap;
+pub use indexmap;
 pub use rand;
 pub use redb;
 pub use redb::{

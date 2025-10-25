@@ -22,14 +22,26 @@ pub fn one2many_store_def(child_name: &Ident, child_type: &Type) -> TokenStream 
     quote! { #child_type::store_many(&tx_context.#child_name, instance.#child_name, is_last)?; }
 }
 
-pub fn one2many_write_from_def(entity_name: &Ident, child_name: &Ident, pk_name: &Ident, write_from_using: WriteFrom) -> WriteFromStatement {
+fn write_from_init(from: &Ident, many: bool) -> TokenStream {
+    let init_instances = Ident::new(&format!("{}_instances", from), from.span());
+    if many {
+        quote! { let mut #init_instances = indexmap::IndexMap::with_capacity(instances.iter().map(|i| i.#from.len()).sum()); }
+    } else {
+        quote! { let mut #init_instances = indexmap::IndexMap::with_capacity(instance.#from.len()); }
+    }
+}
+
+pub fn one2many_write_from_def(child_name: &Ident, pk_name: &Ident, write_from_using: WriteFrom, many: bool) -> WriteFromStatement {
     let WriteFrom { from, using } = write_from_using;
     let hook_method_name = Ident::new(&format!("write_from_{}_using_{}", from, using), child_name.span());
-    let init_instances = Ident::new(&format!("{}_instances", entity_name.to_string().to_lowercase()), entity_name.span());
-    let init = quote! { let mut #init_instances = IndexMap::with_capacity(instances.iter().map(|i| i.#from.len()).sum()); };
+    let init_instances = Ident::new(&format!("{}_instances", from), from.span());
+    let init = write_from_init(&from, many);
     let collect = quote! {
         for from in instance.#from {
-            #init_instances.insert(from, instance.#pk_name);
+            match #init_instances.entry(from) {
+                indexmap::map::Entry::Vacant(v) => { v.insert(instance.#pk_name); }
+                indexmap::map::Entry::Occupied(_) => return Err(AppError::Custom("Double spend not supported".to_string())),
+            }
         }
     };
     let store =

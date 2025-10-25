@@ -17,7 +17,7 @@ use crate::entity::info::TableInfoItem;
 
 #[derive(Clone)]
 pub enum StoreStatement {
-    WriteFrom(WriteFromStatement),
+    WriteFrom { single: WriteFromStatement, multi: WriteFromStatement },
     Plain(TokenStream),
 }
 
@@ -90,9 +90,10 @@ impl DbRelationshipMacros {
             }
             Multiplicity::OneToMany => {
                 let store_statement = match write_from_using.clone() {
-                    Some(write_from) => StoreStatement::WriteFrom(
-                        store::one2many_write_from_def(entity_name, child_name, pk_name, write_from),
-                    ),
+                    Some(write_from) => StoreStatement::WriteFrom {
+                        single: store::one2many_write_from_def(child_name, pk_name, write_from.clone(), false),
+                        multi: store::one2many_write_from_def(child_name, pk_name, write_from, true),
+                    },
                     None => StoreStatement::Plain(
                         store::one2many_store_def(child_name, child_type),
                     ),
