@@ -1,7 +1,8 @@
+use crate::{AppError, FlushFuture, StartFuture, StopFuture, Storage, TaskResult};
+use redb::Durability;
 use std::collections::HashMap;
 use std::sync::Arc;
-use redb::Durability;
-use crate::{AppError, FlushFuture, Storage, StartFuture, TaskResult, StopFuture};
+use std::time::Instant;
 
 pub trait WriteTxContext {
     fn new_write_ctx(storage: &Arc<Storage>) -> redb::Result<Self, AppError> where Self: Sized;
@@ -37,6 +38,46 @@ pub trait WriteTxContext {
         self.stop_writing()?;
         Ok(tasks)
     }
+    fn two_phase_commit_or_rollback_and_close_with<F, R>(self, f: F) -> Result<HashMap<String, TaskResult>, AppError>
+    where
+        F: FnOnce(&Self) -> Result<R, AppError>,
+        Self: Sized
+    {
+        let master_start = Instant::now();
+        match f(&self) {
+            Ok(_) => {
+                let master_took = master_start.elapsed().as_millis();
+                let mut tasks = self.two_phase_commit_and_close()?;
+                let master_task = TaskResult::master(master_took);
+                tasks.insert(master_task.name.clone(), master_task);
+                Ok(tasks)
+            }
+            Err(err) => {
+                let _ = self.stop_writing()?;
+                Err(err)
+            }
+        }
+    }
+    fn two_phase_commit_with<F, R>(&self, f: F) -> Result<HashMap<String, TaskResult>, AppError>
+    where
+        F: FnOnce(&Self) -> Result<R, AppError>,
+        Self: Sized
+    {
+        let master_start = Instant::now();
+        match f(&self) {
+            Ok(_) => {
+                let master_took = master_start.elapsed().as_millis();
+                let mut tasks = self.two_phase_commit()?;
+                let master_task = TaskResult::master(master_took);
+                tasks.insert(master_task.name.clone(), master_task);
+                Ok(tasks)
+            }
+            Err(err) => {
+                Err(err)
+            }
+        }
+    }
+
 }
 
 pub trait ReadTxContext {

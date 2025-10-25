@@ -1,21 +1,23 @@
 use crate::model_v1::*;
+use std::ops::Index;
 
-pub(crate) fn write_from_input_refs_using_utxos(tx_context: &TransactionWriteTxContext, parent: BlockPointer, input_refs: Vec<BoxId>, is_last: bool) -> Result<(), AppError> {
+pub(crate) fn write_from_input_refs_using_utxos(tx_context: &TransactionWriteTxContext, input_refs_with_pointer: indexmap::IndexMap<BoxId, BlockPointer>, is_last: bool) -> Result<(), AppError> {
     let ids_router  = tx_context.inputs.input_id.acquire_router();
     let ptrs_router = tx_context.inputs.input_utxo_pointer_by_id.acquire_router();
+    let input_refs = input_refs_with_pointer.iter().map(|(box_id, _)| *box_id).collect::<Vec<_>>();
     tx_context.utxos.utxo_box_id_index.router.query_and_write(input_refs, is_last, Arc::new(move |last_shards, out| {
         let mut ids = Vec::with_capacity(out.len());
         let mut pointers = Vec::with_capacity(out.len());
         for (index, tx_pointer_buf_opt) in out.into_iter() {
             match tx_pointer_buf_opt {
                 Some(tx_pointer_buf) => {
-                    let id = TransactionPointer::from_parent(parent, index as u16);
+                    let id = TransactionPointer::from_parent(*input_refs_with_pointer.index(index), index as u16);
                     let utxo_pointer = tx_pointer_buf.as_value();
                     ids.push((id, ()));
                     pointers.push((id, utxo_pointer));
                 }
                 _ => {
-                    let id = TransactionPointer::from_parent(parent, index as u16);
+                    let id = TransactionPointer::from_parent(*input_refs_with_pointer.index(index), index as u16);
                     let utxo_pointer = TransactionPointer::from_parent(BlockPointer::from_parent(Height(0), 0), 0); // genesis of unknown index
                     ids.push((id, ()));
                     pointers.push((id, utxo_pointer));

@@ -10,9 +10,11 @@ async fn main() -> Result<()> {
     let blocks = Block::sample_many(3);
     let block_heights: Vec<Height> = blocks.iter().map(|b|b.height).collect();
     println!("Persisting blocks:");
-    let ctx = Block::begin_write_ctx(&storage, Durability::None)?;
-    Block::store_many(&ctx, blocks, true)?;
-    let _ = ctx.two_phase_commit_and_close()?;
+    Block::begin_write_ctx(&storage, Durability::None)?
+        .two_phase_commit_or_rollback_and_close_with(|tx_context| {
+            Block::store_many(&tx_context, blocks, true)?;
+            Ok(())
+        })?;
 
     let block_read_ctx = Block::begin_read_ctx(&storage)?;
     

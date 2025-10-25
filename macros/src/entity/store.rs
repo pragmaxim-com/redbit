@@ -13,18 +13,27 @@ pub fn store_def(entity_def: &EntityDef, mixed_statements: &[StoreStatement]) ->
     let fn_name = format_ident!("store");
 
     let mut store_stmts: Vec<TokenStream> = Vec::new();
+    let mut write_from_stmts: Vec<WriteFromStatement> = Vec::new();
 
     for stmt in mixed_statements {
         match stmt {
             StoreStatement::Plain(ts) => store_stmts.push(ts.clone()),
-            StoreStatement::WriteFrom(_) => {},
+            StoreStatement::WriteFrom { single, .. } => write_from_stmts.push(single.clone()),
         }
     }
+
+    // Prepare the pieces derived from write-from hooks
+    let write_from_inits: Vec<TokenStream> = write_from_stmts.iter().map(|wfs| wfs.init.clone()).collect();
+    let write_from_collects: Vec<TokenStream> = write_from_stmts.iter().map(|wfs| wfs.collect.clone()).collect();
+    let write_from_stores: Vec<TokenStream> = write_from_stmts.iter().map(|wfs| wfs.store.clone()).collect();
 
     let fn_stream = quote! {
         fn #fn_name(tx_context: &#write_ctx_type, instance: #entity_type) -> Result<(), AppError> {
             let is_last = true;
             #(#store_stmts)*
+            #(#write_from_inits)*
+            #(#write_from_collects)*
+            #(#write_from_stores)*
             Ok(())
         }
     };
@@ -35,9 +44,11 @@ pub fn store_def(entity_def: &EntityDef, mixed_statements: &[StoreStatement]) ->
             let (storage_owner, storage) = random_storage();
             let entity_count: usize = 3;
             for test_entity in #entity_type::sample_many(entity_count) {
-                let tx_context = #entity_name::begin_write_ctx(&storage, Durability::None).unwrap();
-                let pk = #entity_name::#fn_name(&tx_context, test_entity).expect("Failed to store and commit instance");
-                tx_context.two_phase_commit_and_close().expect("Failed to flush transaction context");
+                let ctx = #entity_name::begin_write_ctx(&storage, Durability::None).unwrap();
+                ctx.two_phase_commit_or_rollback_and_close_with(|tx_context| {
+                    let _ = #entity_name::#fn_name(&tx_context, test_entity)?;
+                    Ok(())
+                }).expect("Failed to store and commit instance");
             }
         }
     });
@@ -80,7 +91,7 @@ pub fn store_many_def(entity_def: &EntityDef, mixed_statements: &[StoreStatement
     for stmt in mixed_statements {
         match stmt {
             StoreStatement::Plain(ts) => store_stmts.push(ts.clone()),
-            StoreStatement::WriteFrom(wfs) => write_from_stmts.push(wfs.clone()),
+            StoreStatement::WriteFrom { multi, .. } => write_from_stmts.push(multi.clone()),
         }
     }
 
@@ -111,9 +122,11 @@ pub fn store_many_def(entity_def: &EntityDef, mixed_statements: &[StoreStatement
             let (storage_owner, storage) = random_storage();
             let entity_count: usize = 3;
             let test_entities = #entity_type::sample_many(entity_count);
-            let tx_context = #entity_name::begin_write_ctx(&storage, Durability::None).unwrap();
-            let pk = #entity_name::#fn_name(&tx_context, test_entities, true).expect("Failed to store and commit instance");
-            tx_context.two_phase_commit_and_close().expect("Failed to flush transaction context");
+            let ctx = #entity_name::begin_write_ctx(&storage, Durability::None).unwrap();
+            ctx.two_phase_commit_or_rollback_and_close_with(|tx_context| {
+                let _ = #entity_name::#fn_name(&tx_context, test_entities, true)?;
+                Ok(())
+            }).expect("Failed to store and commit instances");
         }
     });
 
@@ -124,13 +137,15 @@ pub fn store_many_def(entity_def: &EntityDef, mixed_statements: &[StoreStatement
             let (storage_owner, storage) = random_storage();
             let entity_count = 3;
             let test_entities = #entity_type::sample_many(entity_count);
-            let tx_context = #entity_name::new_write_ctx(&storage).unwrap();
+            let ctx = #entity_name::new_write_ctx(&storage).unwrap();
             b.iter(|| {
-                let _ = tx_context.begin_writing(Durability::None).expect("Failed to begin writing");
-                #entity_name::#fn_name(&tx_context, test_entities.clone(), true).expect("Failed to store and commit instance");
-                let _ = tx_context.two_phase_commit().expect("Failed to commit");
+                let _ = ctx.begin_writing(Durability::None).expect("Failed to begin writing");
+                ctx.two_phase_commit_with(|tx_context| {
+                    #entity_name::#fn_name(&tx_context, test_entities.clone(), true)?;
+                    Ok(())
+                })?;
             });
-            tx_context.stop_writing().unwrap();
+            ctx.stop_writing().unwrap();
         }
     });
 
@@ -151,21 +166,31 @@ pub fn persist_def(entity_def: &EntityDef, mixed_statements: &[StoreStatement]) 
     let pk_type = &key_def.tpe;
 
     let mut store_stmts: Vec<TokenStream> = Vec::new();
+    let mut write_from_stmts: Vec<WriteFromStatement> = Vec::new();
 
     for stmt in mixed_statements {
         match stmt {
             StoreStatement::Plain(ts) => store_stmts.push(ts.clone()),
-            StoreStatement::WriteFrom(_) => {},
+            StoreStatement::WriteFrom { single, .. } => write_from_stmts.push(single.clone()),
         }
     }
+
+    let write_from_inits: Vec<TokenStream> = write_from_stmts.iter().map(|wfs| wfs.init.clone()).collect();
+    let write_from_collects: Vec<TokenStream> = write_from_stmts.iter().map(|wfs| wfs.collect.clone()).collect();
+    let write_from_stores: Vec<TokenStream> = write_from_stmts.iter().map(|wfs| wfs.store.clone()).collect();
 
     let fn_stream = quote! {
         pub fn #fn_name(storage: Arc<Storage>, instance: #entity_type) -> Result<#pk_type, AppError> {
            let pk = instance.#pk_name;
            let is_last = true;
-           let tx_context = #entity_name::begin_write_ctx(&storage, Durability::Immediate)?;
-           #(#store_stmts)*
-           tx_context.two_phase_commit_and_close()?;
+           let ctx = #entity_name::begin_write_ctx(&storage, Durability::Immediate)?;
+           ctx.two_phase_commit_or_rollback_and_close_with(|tx_context| {
+               #(#store_stmts)*
+               #(#write_from_inits)*
+               #(#write_from_collects)*
+               #(#write_from_stores)*
+               Ok(())
+           })?;
            Ok(pk)
        }
     };

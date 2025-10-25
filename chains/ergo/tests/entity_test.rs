@@ -6,9 +6,11 @@ mod tests {
     async fn init_temp_storage(name: &str, db_cache_size_gb: u8) -> (Vec<Block>, StorageOwner, Arc<Storage>) {
         let (storage_owner, storage) = StorageOwner::temp(name, db_cache_size_gb, true).await.unwrap();
         let blocks = Block::sample_many(3);
-        let tx_context = Block::begin_write_ctx(&storage, Durability::None).unwrap();
-        Block::store_many(&tx_context, blocks.clone(), true).expect("Failed to persist blocks");
-        tx_context.two_phase_commit_and_close().unwrap();
+        let ctx = Block::begin_write_ctx(&storage, Durability::None).unwrap();
+        ctx.two_phase_commit_or_rollback_and_close_with(|tx_context| {
+            Block::store_many(&tx_context, blocks.clone(), true)?;
+            Ok(())
+        }).expect("Failed to use write context");
         (blocks, storage_owner, storage)
     }
 

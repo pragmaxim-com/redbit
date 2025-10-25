@@ -40,8 +40,9 @@ fn criterion_benchmark(c: &mut Criterion) {
     group.bench_function(BenchmarkId::from_parameter("indexing_context"), |bencher| {
         bencher.iter(|| {
                 let ctx = chain.new_indexing_ctx().expect("Failed to create indexing context");
-                ctx.begin_writing(Durability::None).unwrap();
-                ctx.two_phase_commit_and_close().unwrap();
+                ctx.two_phase_commit_or_rollback_and_close_with(|_ctx| {
+                    Ok(())
+                }).expect("Failed to use write context");
             }
         );
     });

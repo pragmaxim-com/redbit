@@ -7,9 +7,11 @@ mod tests {
     async fn init_temp_storage(name: &str, db_cache_size_gb: u8) -> (Vec<Block>, StorageOwner, Arc<Storage>) {
         let (storage_owner, storage) = StorageOwner::temp(name, db_cache_size_gb, true).await.unwrap();
         let blocks = Block::sample_many(3);
-        let tx_context = Block::begin_write_ctx(&storage, Durability::None).unwrap();
-        Block::store_many(&tx_context, blocks.clone(), true).expect("Failed to persist blocks");
-        tx_context.two_phase_commit_and_close().unwrap();
+        let ctx = Block::begin_write_ctx(&storage, Durability::None).unwrap();
+        ctx.two_phase_commit_or_rollback_and_close_with(|tx_context| {
+            Block::store_many(&tx_context, blocks.clone(), true)?;
+            Ok(())
+        }).expect("Failed to persist sample blocks");
         (blocks, storage_owner, storage)
     }
 
@@ -62,9 +64,11 @@ mod tests {
         let (blocks, _multi_tx_storage_owner, multi_tx_storage) = init_temp_storage("db_test", 0).await;
 
         let (_storage_owner, single_tx_db) = StorageOwner::temp("db_test_2", 0, true).await.unwrap();
-        let tx_context = Block::begin_write_ctx(&single_tx_db, Durability::None).unwrap();
-        Block::store_many(&tx_context, blocks, true).expect("Failed to persist blocks");
-        tx_context.two_phase_commit_and_close().unwrap();
+        let ctx = Block::begin_write_ctx(&single_tx_db, Durability::None).unwrap();
+        ctx.two_phase_commit_or_rollback_and_close_with(|tx_context| {
+            Block::store_many(&tx_context, blocks, true)?;
+            Ok(())
+        }).expect("Failed to persist blocks in single transaction");
 
         let block_tx = Block::begin_read_ctx(&multi_tx_storage).unwrap();
         let multi_tx_blocks = Block::take(&block_tx, 100).unwrap();
@@ -141,9 +145,11 @@ mod tests {
     async fn store_many_utxos() {
         let (blocks, _storage_owner, storage) = init_temp_storage("db_test", 0).await;
         let all_utxos = blocks.iter().flat_map(|b| b.transactions.iter().flat_map(|t| t.utxos.clone())).collect::<Vec<Utxo>>();
-        let tx_context = Utxo::begin_write_ctx(&storage, Durability::None).unwrap();
-        Utxo::store_many(&tx_context, all_utxos, true).expect("Failed to store UTXO");
-        tx_context.two_phase_commit_and_close().expect("Failed to flush transaction context");
+        let ctx = Utxo::begin_write_ctx(&storage, Durability::None).unwrap();
+        ctx.two_phase_commit_or_rollback_and_close_with(|tx_context| {
+            Utxo::store_many(&tx_context, all_utxos, true)?;
+            Ok(())
+        }).expect("Failed to persist many UTXOs");
     }
 
     #[tokio::test]
