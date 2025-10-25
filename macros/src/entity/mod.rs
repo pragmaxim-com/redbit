@@ -7,6 +7,7 @@ use crate::table::{DictTableDefs, IndexTableDefs, PlainTableDef};
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::{parse_quote, ItemStruct};
+use crate::relationship::StoreStatement;
 
 pub mod query;
 mod store;
@@ -35,7 +36,7 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
     let mut struct_inits_with_query = Vec::new();
     let mut struct_default_inits = Vec::new();
     let mut struct_default_inits_with_query = Vec::new();
-    let mut store_statements = Vec::new();
+    let mut store_statements: Vec<StoreStatement> = Vec::new();
     let mut delete_statements = Vec::new();
     let mut delete_many_statements = Vec::new();
     let mut column_function_defs = Vec::new();
