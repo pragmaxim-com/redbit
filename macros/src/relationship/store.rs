@@ -40,7 +40,9 @@ pub fn one2many_write_from_def(child_name: &Ident, pk_name: &Ident, write_from_u
         for from in instance.#from {
             match #init_instances.entry(from) {
                 indexmap::map::Entry::Vacant(v) => { v.insert(instance.#pk_name); }
-                indexmap::map::Entry::Occupied(_) => return Err(AppError::Custom("Double spend not supported".to_string())),
+                indexmap::map::Entry::Occupied(v) => {
+                    return Err(AppError::Custom(format!("Double spend not supported {:?}", v)))
+                },
             }
         }
     };

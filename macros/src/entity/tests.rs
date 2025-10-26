@@ -37,7 +37,7 @@ pub fn test_suite(entity_def: &EntityDef, parent_def: Option<OneToManyParentDef>
         }
 
         fn initialize_storage(storage: Arc<Storage>) {
-            let entities = #sample_entity::sample_many(#sample_count);
+            let entities = #sample_entity::sample_many(Default::default(), #sample_count);
             let ctx = #sample_entity::begin_write_ctx(&storage, Durability::None).expect("Failed to begin write transaction");
             ctx.two_phase_commit_or_rollback_and_close_with(|tx_context| {
                 #sample_entity::store_many(&tx_context, entities, true)?;

@@ -18,6 +18,7 @@ pub(crate) fn write_from_input_refs_using_hash(tx_context: &TransactionWriteTxCo
                     pointers.push((id, utxo_pointer));
                 }
                 _ => {
+                    // eprintln!("Warning: write_from_input_refs_using_hash: missing tx_pointer for input_ref at index {}", index);
                     let id = TransactionPointer::from_parent(*input_refs_with_pointer.index(index), index as u16);
                     let utxo_pointer = TransactionPointer::from_parent(BlockPointer::from_parent(Height(0), 0), 0); // genesis of unknown index
                     ids.push((id, ()));

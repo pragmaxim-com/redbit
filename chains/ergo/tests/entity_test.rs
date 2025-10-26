@@ -5,7 +5,7 @@ mod tests {
 
     async fn init_temp_storage(name: &str, db_cache_size_gb: u8) -> (Vec<Block>, StorageOwner, Arc<Storage>) {
         let (storage_owner, storage) = StorageOwner::temp(name, db_cache_size_gb, true).await.unwrap();
-        let blocks = Block::sample_many(3);
+        let blocks = Block::sample_many(Default::default(), 3);
         let ctx = Block::begin_write_ctx(&storage, Durability::None).unwrap();
         ctx.two_phase_commit_or_rollback_and_close_with(|tx_context| {
             Block::store_many(&tx_context, blocks.clone(), true)?;

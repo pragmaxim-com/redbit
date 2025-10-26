@@ -27,9 +27,15 @@ pub fn new(struct_name: &Ident, index_field: Field) -> TokenStream {
             }
         }
         impl RootPointer for #struct_name {
+            fn total_index(&self) -> u128 {
+                self.index().into()
+            }
             fn is_pointer(&self) -> bool { false }
             fn from_many(pks: &[#index_type]) -> Vec<Self> {
                 pks.iter().map(|idx| #struct_name(*idx)).collect()
+            }
+            fn depth(&self) -> usize {
+                0
             }
         }
 

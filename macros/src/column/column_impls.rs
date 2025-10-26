@@ -229,11 +229,11 @@ fn gen_field_inits_zero(fields: &FieldsNamed) -> Vec<TokenStream> {
     }).collect()
 }
 
-fn make_next_field_expr(field_ident: &syn::Ident, field_ty: &Type) -> TokenStream {
+fn make_next_field_expr(field_ident: &Ident, field_ty: &Type) -> TokenStream {
     if macro_utils::classify_integer_type(field_ty).is_some() {
         quote! { self.#field_ident.wrapping_add(1) }
     } else {
-        quote! { self.#field_ident.clone() }
+        quote! { <#field_ty as Sampleable>::next_value(&self.#field_ident) }
     }
 }
 

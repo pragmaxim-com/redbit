@@ -111,7 +111,7 @@ use tower_http::cors::CorsLayer;
 pub trait ColInnerType { type Repr; }
 
 pub trait IndexedPointer: Copy {
-    type Index: Copy + Ord + Add<Output = Self::Index> + Default;
+    type Index: Copy + Ord + Add<Output = Self::Index> + Default + Into<u128>;
     fn index(&self) -> Self::Index;
     fn next_index(&self) -> Self;
     fn nth_index(&self, n: usize) -> Self;
@@ -119,15 +119,19 @@ pub trait IndexedPointer: Copy {
 }
 
 pub trait RootPointer: IndexedPointer + Copy {
+    fn total_index(&self) -> u128;
     fn is_pointer(&self) -> bool;
     fn from_many(indexes: &[Self::Index]) -> Vec<Self>;
+    fn depth(&self) -> usize;
 }
 
 pub trait ChildPointer: IndexedPointer + Copy {
     type Parent: IndexedPointer + Copy;
+    fn total_index(&self) -> u128;
     fn is_pointer(&self) -> bool;
     fn parent(&self) -> Self::Parent;
     fn from_parent(parent: Self::Parent, index: Self::Index) -> Self;
+    fn depth(&self) -> usize;
 }
 
 pub trait ForeignKey<CH>: Copy
@@ -162,6 +166,15 @@ pub trait Sampleable: Default + Sized + Clone {
     fn sample_many(n: usize) -> Vec<Self> {
         let mut values = Vec::with_capacity(n);
         let mut value = Self::default();
+        for _ in 0..n {
+            values.push(value.clone());
+            value = value.next_value();
+        }
+        values
+    }
+    fn sample_many_from(n: usize, from: u16) -> Vec<Self> {
+        let mut values = Vec::with_capacity(n);
+        let mut value = Self::default().nth_value(from as usize);
         for _ in 0..n {
             values.push(value.clone());
             value = value.next_value();

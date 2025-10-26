@@ -28,6 +28,14 @@ pub fn new(struct_name: &Ident, parent_field: Field, index_field: Field) -> Toke
             fn is_pointer(&self) -> bool { true }
             fn parent(&self) -> Self::Parent { self.#parent_name }
             fn from_parent(#parent_name: Self::Parent, #index_name: #index_type) -> Self { #struct_name { #parent_name, #index_name } }
+            fn total_index(&self) -> u128 {
+                let parent_total = self.parent().total_index();
+                let idx: u128 = self.index().into();
+                parent_total * 3 + idx
+            }
+            fn depth(&self) -> usize {
+                1 + self.parent().depth()
+            }
         }
 
         impl BinaryCodec for #struct_name {

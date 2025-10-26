@@ -42,7 +42,7 @@ pub fn fn_def(entity_def: &EntityDef, table: &Ident, no_columns: bool) -> Functi
             let pk_default = #pk_type::default();
             let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             let entity = #entity_name::#fn_name(&tx_context, pk_default, &query).expect("Failed to get entity by PK").expect("Expected entity to exist");
-            let expected_entity = #entity_type::sample_with_query(pk_default, 0, &query).expect("Failed to create sample entity with query");
+            let expected_entity = #entity_type::sample_with_query(pk_default, &query).expect("Failed to create sample entity with query");
             assert_eq!(entity, expected_entity, "Entity PK does not match the requested PK");
         }
         #filter_test
