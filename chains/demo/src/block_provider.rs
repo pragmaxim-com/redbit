@@ -42,7 +42,7 @@ impl DemoBlockProvider {
     pub fn for_height(chain_tip_height: u32, max_entity_buffer_kb_size: usize) -> Result<Arc<dyn BlockProvider<Block, Block>>, ChainError> {
         let mut hash_by_height = BTreeMap::new();
         let mut block_by_hash = HashMap::new();
-        let mut blocks_iter = Block::sample_many(chain_tip_height as usize + 1).into_iter();
+        let mut blocks_iter = Block::sample_many(Default::default(), chain_tip_height as usize + 1).into_iter();
         let genesis = blocks_iter.next().expect("at least one block");
         let mut prev_hash = genesis.header.hash;
         for mut block in blocks_iter {

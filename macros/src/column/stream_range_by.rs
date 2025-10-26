@@ -59,7 +59,7 @@ pub fn stream_range_by_index_def(entity_def: &EntityDef, column_name: &Ident, co
             let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             let entity_stream = #entity_name::#fn_name(tx_context, from_value, until_value, None).expect("Failed to range entities by index");
             let entities = entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
-            let expected_entities = #entity_type::sample_many(2);
+            let expected_entities = #entity_type::sample_many(Default::default(), 2);
             assert_eq!(expected_entities, entities, "Expected entities to be returned for the given stream_range by index");
         }
         #[tokio::test]
@@ -72,7 +72,7 @@ pub fn stream_range_by_index_def(entity_def: &EntityDef, column_name: &Ident, co
             let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             let entity_stream = #entity_name::#fn_name(tx_context, from_value, until_value, Some(query.clone())).expect("Failed to range entities by index");
             let entities = entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
-            let expected_entity = #entity_type::sample_with_query(pk, 0, &query).expect("Failed to create sample entity with query");
+            let expected_entity = #entity_type::sample_with_query(pk, &query).expect("Failed to create sample entity with query");
             assert_eq!(entities.len(), 1, "Expected only one entity to be returned for the given range by with filter");
             assert_eq!(entities[0], expected_entity, "RangeBy result is not equal to sample because it is filtered, query: {:?}", query);
         }

@@ -7,7 +7,7 @@ use redbit::storage::init::StorageOwner;
 #[tokio::main]
 async fn main() -> Result<()> {
     let (storage_owner, storage) = StorageOwner::temp("showcase", 1, true).await?;
-    let blocks = Block::sample_many(3);
+    let blocks = Block::sample_many(Default::default(), 3);
     let block_heights: Vec<Height> = blocks.iter().map(|b|b.height).collect();
     println!("Persisting blocks:");
     Block::begin_write_ctx(&storage, Durability::None)?

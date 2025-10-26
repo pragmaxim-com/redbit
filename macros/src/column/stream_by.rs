@@ -73,7 +73,7 @@ pub fn by_dict_def(
             let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             let entity_stream = #entity_name::#fn_name(tx_context, val, Some(query.clone())).expect("Failed to get entities by index");
             let entities = entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
-            let expected_entity = #entity_type::sample_with_query(pk, 0, &query).expect("Failed to create sample entity with query");
+            let expected_entity = #entity_type::sample_with_query(pk, &query).expect("Failed to create sample entity with query");
             assert_eq!(entities.len(), 1, "Expected only one entity to be returned for the given dictionary index with filter");
             assert_eq!(entities[0], expected_entity, "Dict result is not equal to sample because it is filtered, query: {:?}", query);
         }
@@ -193,7 +193,7 @@ pub fn by_index_def(entity_def: &EntityDef, column_name: &Ident, column_type: &T
             let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             let entity_stream = #entity_name::#fn_name(tx_context, val, Some(query.clone())).expect("Failed to get entities by index");
             let entities = entity_stream.try_collect::<Vec<#entity_type>>().await.expect("Failed to collect entity stream");
-            let expected_entity = #entity_type::sample_with_query(pk, 0, &query).expect("Failed to create sample entity with query");
+            let expected_entity = #entity_type::sample_with_query(pk, &query).expect("Failed to create sample entity with query");
             assert_eq!(entities.len(), 1, "Expected only one entity to be returned for the given index with filter");
             assert_eq!(entities[0], expected_entity, "Indexed result is not equal to sample because it is filtered, query: {:?}", query);
         }

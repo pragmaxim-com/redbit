@@ -6,7 +6,7 @@ mod tests {
 
     async fn init_temp_storage(name: &str, db_cache_size_gb: u8) -> (Vec<Block>, StorageOwner, Arc<Storage>) {
         let (storage_owner, storage) = StorageOwner::temp(name, db_cache_size_gb, true).await.unwrap();
-        let blocks = Block::sample_many(3);
+        let blocks = Block::sample_many(Default::default(), 3);
         let ctx = Block::begin_write_ctx(&storage, Durability::None).unwrap();
         ctx.two_phase_commit_or_rollback_and_close_with(|tx_context| {
             Block::store_many(&tx_context, blocks.clone(), true)?;
@@ -20,18 +20,26 @@ mod tests {
         let (blocks, _storage_owner, storage) = init_temp_storage("db_test", 0).await;
         println!("SAMPLE");
         for tx in blocks.last().unwrap().transactions.clone() {
-            println!("sample {:?}", tx.hash);
+            println!("sample {:?}", tx.hash.url_encode());
             for i in tx.inputs {
                 print!(" id: {:?} + pointer:{:?} |", i.id.url_encode(), i.utxo_pointer.url_encode());
+            }
+            println!("");
+            for utxo in tx.utxos {
+                print!(" id: {:?} + amount:{:?} |", utxo.id.url_encode(), utxo.amount);
             }
             println!("");
         }
         println!("PERSISTED");
         let block_read_ctx = Block::begin_read_ctx(&storage).unwrap();
         for tx in Block::last(&block_read_ctx).unwrap().unwrap().transactions {
-            println!("persisted {:?}", tx.hash);
+            println!("persisted {:?}", tx.hash.url_encode());
             for i in tx.inputs {
                 print!(" id: {:?} + pointer:{:?} |", i.id.url_encode(), i.utxo_pointer.url_encode());
+            }
+            println!("");
+            for utxo in tx.utxos {
+                print!(" id: {:?} + amount:{:?} |", utxo.id.url_encode(), utxo.amount);
             }
             println!("");
         }

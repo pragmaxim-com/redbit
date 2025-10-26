@@ -45,7 +45,7 @@ pub fn fn_def(entity_def: &EntityDef, table: &Ident) -> FunctionDef {
             let n: usize = 2;
             let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             let entities = #entity_name::#fn_name(&tx_context, n).expect("Failed to tail entities");
-            let mut expected_entities = #entity_type::sample_many(3);
+            let mut expected_entities = #entity_type::sample_many(Default::default(), 3);
             expected_entities.remove(0);
             assert_eq!(entities, expected_entities, "Expected to take last 2 entities");
         }

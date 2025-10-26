@@ -56,7 +56,7 @@ pub fn remove_def(entity_def: &EntityDef, delete_statements: &[TokenStream]) -> 
         fn #fn_name() {
             let (storage_owner, storage) = random_storage();
             let entity_count: usize = 3;
-            let entities = #entity_type::sample_many(entity_count);
+            let entities = #entity_type::sample_many(Default::default(), entity_count);
             let ctx = #entity_name::begin_write_ctx(&storage, Durability::None).expect("Failed to begin write transaction context");
             ctx.two_phase_commit_or_rollback_and_close_with(|tx_context| {
                 #entity_name::store_many(&tx_context, entities.clone(), true)?;

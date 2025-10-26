@@ -43,7 +43,7 @@ pub fn store_def(entity_def: &EntityDef, mixed_statements: &[StoreStatement]) ->
         fn #fn_name() {
             let (storage_owner, storage) = random_storage();
             let entity_count: usize = 3;
-            for test_entity in #entity_type::sample_many(entity_count) {
+            for test_entity in #entity_type::sample_many(Default::default(), entity_count) {
                 let ctx = #entity_name::begin_write_ctx(&storage, Durability::None).unwrap();
                 ctx.two_phase_commit_or_rollback_and_close_with(|tx_context| {
                     let _ = #entity_name::#fn_name(&tx_context, test_entity)?;
@@ -121,7 +121,7 @@ pub fn store_many_def(entity_def: &EntityDef, mixed_statements: &[StoreStatement
         fn #fn_name() {
             let (storage_owner, storage) = random_storage();
             let entity_count: usize = 3;
-            let test_entities = #entity_type::sample_many(entity_count);
+            let test_entities = #entity_type::sample_many(Default::default(), entity_count);
             let ctx = #entity_name::begin_write_ctx(&storage, Durability::None).unwrap();
             ctx.two_phase_commit_or_rollback_and_close_with(|tx_context| {
                 let _ = #entity_name::#fn_name(&tx_context, test_entities, true)?;
@@ -136,7 +136,7 @@ pub fn store_many_def(entity_def: &EntityDef, mixed_statements: &[StoreStatement
         fn #bench_fn_name(b: &mut Bencher) {
             let (storage_owner, storage) = random_storage();
             let entity_count = 3;
-            let test_entities = #entity_type::sample_many(entity_count);
+            let test_entities = #entity_type::sample_many(Default::default(), entity_count);
             let ctx = #entity_name::new_write_ctx(&storage).unwrap();
             b.iter(|| {
                 let _ = ctx.begin_writing(Durability::None).expect("Failed to begin writing");
@@ -200,7 +200,7 @@ pub fn persist_def(entity_def: &EntityDef, mixed_statements: &[StoreStatement]) 
         fn #fn_name() {
             let (storage_owner, storage) = random_storage();
             let entity_count: usize = 3;
-            for test_entity in #entity_type::sample_many(entity_count) {
+            for test_entity in #entity_type::sample_many(Default::default(), entity_count) {
                 let pk = #entity_name::#fn_name(Arc::clone(&storage), test_entity.clone()).expect("Failed to store and commit instance");
                 assert_eq!(test_entity.#pk_name, pk, "Stored PK does not match the instance PK");
             }
