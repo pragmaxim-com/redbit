@@ -172,16 +172,30 @@ pub trait Sampleable: Default + Sized + Clone {
         }
         values
     }
-    fn sample_many_from(n: usize, from: u16) -> Vec<Self> {
+    fn sample_many_from(n: usize, from: usize) -> Vec<Self> {
+        let start = from.saturating_mul(n); // O(1)
         let mut values = Vec::with_capacity(n);
-        let mut value = Self::default().nth_value(from as usize);
+        let mut value = Self::default().nth_value(start); // O(start)
         for _ in 0..n {
             values.push(value.clone());
-            value = value.next_value();
+            value = value.next_value(); // O(1) per step
         }
         values
     }
+    fn seed_nth_with_index_zero(from: usize) -> Self {
+        Self::default().nth_value(from)
+    }
+    fn sample_many_from_seed_index_only(n: usize, seed: &Self) -> Vec<Self> {
+        let mut out = Vec::with_capacity(n);
+        let mut v = seed.clone();
+        for _ in 0..n {
+            out.push(v.clone());
+            v = v.next_value();
+        }
+        out
+    }
 }
+
 macro_rules! impl_sampleable_for_primitive {
     ($($t:ty),*) => {
         $(

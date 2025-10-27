@@ -20,7 +20,7 @@ pub use chain::*;
 #[column]
 pub struct InputRef {
     pub tx_hash: TxHash,
-    pub index: u32,
+    pub index: u16,
 }
 
 #[column]
@@ -96,6 +96,6 @@ pub struct Asset {
 pub struct Input {
     #[fk(one2many, db_cache = 1)]
     pub id: TransactionPointer,
-    #[column(db_cache = 1)]
+    #[column(pointer, db_cache = 1)]
     pub utxo_pointer: TransactionPointer,
 }

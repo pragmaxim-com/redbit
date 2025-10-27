@@ -1,7 +1,6 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::Type;
-use crate::field_parser::WriteFrom;
 
 pub fn one2one_relation_init(child_name: &Ident, child_type: &Type) -> TokenStream {
     quote! {
@@ -109,8 +108,7 @@ pub fn one2many_relation_init_with_query(child_name: &Ident, child_type: &Type) 
     }
 }
 
-pub fn one2many_relation_default_init(child_name: &Ident, child_type: &Type, write_from: Option<WriteFrom>) -> TokenStream {
-    let wf = if write_from.is_some() { true } else { false };
+pub fn one2many_relation_default_init(child_name: &Ident, child_type: &Type) -> TokenStream {
     quote! {
         let #child_name = {
             let (from, _) = pk.fk_range();

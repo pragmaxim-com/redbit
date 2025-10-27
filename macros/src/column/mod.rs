@@ -51,24 +51,25 @@ impl DbColumnMacros {
         indexing_type: IndexingType,
         parent_def: Option<OneToManyParentDef>,
         used: Option<Used>,
+        is_pointer: bool,
     ) -> DbColumnMacros {
         match indexing_type {
             IndexingType::Off(column_props) => {
-                DbColumnMacros::plain(entity_def, col_field_def, column_props, used)
+                DbColumnMacros::plain(entity_def, col_field_def, column_props, used, is_pointer)
             },
             IndexingType::Index(column_props) => {
-                DbColumnMacros::index(entity_def, col_field_def, parent_def, false, column_props, used)
+                DbColumnMacros::index(entity_def, col_field_def, parent_def, false, column_props, used, is_pointer)
             }
             IndexingType::Range(column_props) => {
-                DbColumnMacros::index(entity_def, col_field_def, parent_def, true, column_props, used)
+                DbColumnMacros::index(entity_def, col_field_def, parent_def, true, column_props, used, is_pointer)
             }
             IndexingType::Dict(column_props) => {
-                DbColumnMacros::dictionary(entity_def, col_field_def, parent_def, column_props, used)
+                DbColumnMacros::dictionary(entity_def, col_field_def, parent_def, column_props, used, is_pointer)
             }
         }
     }
 
-    pub fn plain(entity_def: &EntityDef, col_def: &FieldDef, column_props: ColumnProps, used: Option<Used>) -> DbColumnMacros {
+    pub fn plain(entity_def: &EntityDef, col_def: &FieldDef, column_props: ColumnProps, used: Option<Used>, is_pointer: bool) -> DbColumnMacros {
         let column_name = &col_def.name.clone();
         let column_type = &col_def.tpe.clone();
         let pk_name = &entity_def.key_def.field_def().name;
@@ -85,8 +86,8 @@ impl DbColumnMacros {
             table_dict_definition: None,
             struct_init: init::plain_init(column_name, &plain_table_def.var_name),
             struct_init_with_query: init::plain_init_with_query(column_name, &plain_table_def.var_name),
-            struct_default_init: init::default_init(column_name, column_type),
-            struct_default_init_with_query: init::default_init_with_query(column_name, column_type),
+            struct_default_init: init::default_init(column_name, column_type, is_pointer),
+            struct_default_init_with_query: init::default_init_with_query(column_name, column_type, is_pointer),
             store_statement: store::store_statement(pk_name, column_name, &plain_table_def.var_name, used),
             delete_statement: delete::delete_statement(&plain_table_def.var_name),
             delete_many_statement: delete::delete_many_statement(&plain_table_def.var_name),
@@ -101,6 +102,7 @@ impl DbColumnMacros {
         range: bool,
         column_props: ColumnProps,
         used: Option<Used>,
+        is_pointer: bool,
     ) -> DbColumnMacros {
         let column_name = &col_field_def.name.clone();
         let column_type = &col_field_def.tpe.clone();
@@ -136,8 +138,8 @@ impl DbColumnMacros {
             table_dict_definition: None,
             struct_init: init::index_init(column_name, &index_tables.var_name),
             struct_init_with_query: init::index_init_with_query(column_name, &index_tables.var_name),
-            struct_default_init: init::default_init(column_name, column_type),
-            struct_default_init_with_query: init::default_init_with_query(column_name, column_type),
+            struct_default_init: init::default_init(column_name, column_type, is_pointer),
+            struct_default_init_with_query: init::default_init_with_query(column_name, column_type, is_pointer),
             store_statement: store::store_index_def(column_name, &pk_name, &index_tables.var_name, used),
             delete_statement: delete::delete_index_statement(&index_tables.var_name),
             delete_many_statement: delete::delete_many_index_statement(&index_tables.var_name),
@@ -151,6 +153,7 @@ impl DbColumnMacros {
         parent_def_opt: Option<OneToManyParentDef>,
         column_props: ColumnProps,
         used: Option<Used>,
+        is_pointer: bool,
     ) -> DbColumnMacros {
         let column_name = &col_field_def.name.clone();
         let column_type = &col_field_def.tpe.clone();
@@ -181,8 +184,8 @@ impl DbColumnMacros {
             table_dict_definition: Some(dict_tables.clone()),
             struct_init: init::dict_init(column_name, &dict_tables.var_name),
             struct_init_with_query: init::dict_init_with_query(column_name, &dict_tables.var_name),
-            struct_default_init_with_query: init::default_init_with_query(column_name, column_type),
-            struct_default_init: init::default_init(column_name, column_type),
+            struct_default_init_with_query: init::default_init_with_query(column_name, column_type, is_pointer),
+            struct_default_init: init::default_init(column_name, column_type, is_pointer),
             store_statement: store_statement.clone(),
             delete_statement: delete::delete_dict_statement(&dict_tables.var_name),
             delete_many_statement: delete::delete_many_dict_statement(&dict_tables.var_name),

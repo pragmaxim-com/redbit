@@ -47,16 +47,11 @@ impl TransientRelationshipMacros {
         let (struct_init, default_init) = if let Some(ReadFrom { outer, inner }) = read_from {
             Self::read_from(child_name, child_type, outer, inner)
         } else {
-            let struct_init =
-                quote! {
-                    let #child_name = <#child_type as Sampleable>::sample_many(3);
-                };
             let default_init =
                 quote! {
-                    let #child_name = vec![#child_type::default().nth_value(pk.total_index() as usize)];
-                  //  eprintln!("Sampled transient from={} : {:?}", pk.total_index(), pk);
+                    let #child_name = <#child_type as Sampleable>::sample_many_from(3, pk.total_index() as usize);
                 };
-            (struct_init, default_init)
+            (default_init.clone(), default_init)
         };
 
         TransientRelationshipMacros {

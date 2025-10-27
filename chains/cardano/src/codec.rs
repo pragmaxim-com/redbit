@@ -106,7 +106,6 @@ impl ByteVecColumnSerde for BaseOrBech {
     }
 }
 
-
 impl SerializeAs<Vec<u8>> for BaseOrBech {
     fn serialize_as<S>(source: &Vec<u8>, serializer: S) -> Result<S::Ok, S::Error>
     where

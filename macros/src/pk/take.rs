@@ -36,7 +36,7 @@ pub fn fn_def(entity_def: &EntityDef, table: &Ident) -> FunctionDef {
         #[test]
         fn #fn_name() {
             let (storage_owner, storage) = &*STORAGE;
-            let n: usize = 2;
+            let n: usize = 3;
             let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
             let entities = #entity_name::#fn_name(&tx_context, n).expect("Failed to take entities");
             let expected_entities = #entity_type::sample_many(Default::default(), n);

@@ -74,7 +74,7 @@ impl BtcBlockProvider {
         ins.iter()
             .map(|input| {
                 let tx_hash = TxHash(*input.previous_output.txid.as_ref());
-                InputRef { tx_hash, index: input.previous_output.vout }
+                InputRef { tx_hash, index: input.previous_output.vout as u16 }
             })
             .collect()
     }

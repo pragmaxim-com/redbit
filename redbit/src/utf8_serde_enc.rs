@@ -6,13 +6,40 @@ use crate::ByteVecColumnSerde;
 #[derive(Copy, Clone, Debug, Default)]
 pub struct Utf8;
 
+impl Utf8 {
+    fn increment_last_scalar(s: &str) -> String {
+        if s.is_empty() {
+            return "\u{1}".to_string();
+        }
+
+        let mut chars: Vec<char> = s.chars().collect();
+        let last_cp = chars.pop().unwrap() as u32;
+        let mut candidate = last_cp.wrapping_add(1);
+        while candidate <= 0x10_FFFF {
+            if let Some(c) = std::char::from_u32(candidate) {
+                chars.push(c);
+                return chars.into_iter().collect();
+            }
+            candidate = candidate.wrapping_add(1);
+        }
+        chars.push('\u{1}');
+        chars.into_iter().collect()
+    }
+}
+
 impl ByteVecColumnSerde for Utf8 {
     fn decoded_example() -> Vec<u8> {
         Self::encoded_example().as_bytes().to_vec()
     }
-
     fn encoded_example() -> String {
         "a".to_string()
+    }
+    fn next_value(value: &[u8]) -> Vec<u8> {
+        let s = match String::from_utf8(value.to_vec()) {
+            Ok(s) => s,
+            Err(_) => String::from_utf8_lossy(value).into_owned(),
+        };
+        Self::increment_last_scalar(&s).into_bytes()
     }
 }
 

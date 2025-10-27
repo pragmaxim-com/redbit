@@ -62,7 +62,7 @@ pub struct Utxo {
     pub id: TransactionPointer,
     #[column(db_cache = 1)]
     pub amount: u64,
-    #[column(index, used, db_cache = 30)]
+    #[column(index, used, lru_cache = 20, db_cache = 30)]
     pub box_id: BoxId,
     #[column(dictionary, lru_cache = 20, db_cache = 30)]
     pub address: Address,
@@ -89,6 +89,6 @@ pub struct Asset {
 pub struct Input {
     #[fk(one2many, db_cache = 1)]
     pub id: TransactionPointer,
-    #[column(db_cache = 1)]
+    #[column(pointer, db_cache = 1)]
     pub utxo_pointer: TransactionPointer,
 }

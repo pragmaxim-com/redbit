@@ -50,14 +50,15 @@ impl FieldMacros {
             ColumnDef::Key(KeyDef::Fk { field_def: _, multiplicity, parent_type: _, column_props}) => {
                 FieldMacros::Pk(DbPkMacros::new(&entity_def, Some(multiplicity.clone()), col_defs.len() == 1, column_props.clone()))
             },
-            ColumnDef::Plain(field, indexing_type, used_by) => {
+            ColumnDef::Plain(field, indexing_type, used_by, pointer) => {
                 FieldMacros::Plain(
                     DbColumnMacros::new(
                         &entity_def,
                         field,
                         indexing_type.clone(),
                         one_to_many_parent_def.clone(),
-                        used_by.clone()
+                        used_by.clone(),
+                        *pointer
                     )
                 )
             },
