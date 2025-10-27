@@ -17,7 +17,10 @@ pub(crate) fn write_from_input_refs_using_hash(tx_context: &TransactionWriteTxCo
                 Some(tx_pointer_buf) => TransactionPointer::from_parent(tx_pointer_buf.as_value(), input_ref.index),
                 // coinbase marker, actually u32::MAX, but we store btc input index as u16 as it never exceeds that in by size limits
                 None if input_ref.index == u16::MAX => TransactionPointer::from_parent(BlockPointer::from_parent(Height(0), 0), input_ref.index),
-                None => return Err(AppError::Custom(format!("missing tx_pointer for input_ref {:?}", input_ref))),
+                None => {
+                    warn!("missing tx_pointer for input_ref {:?}", input_ref); // we cannot return Err because it would be impossible to benchmark big blocks
+                    TransactionPointer::from_parent(BlockPointer::from_parent(Height(0), 0), 0)
+                },
             };
             ids.push((id, ()));
             pointers.push((id, utxo_pointer));

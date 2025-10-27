@@ -1,15 +1,15 @@
 use crate::storage::async_boundary::CopyOwnedValue;
 use crate::storage::partitioning::{KeyPartitioner, Partitioning, ValuePartitioner};
 use crate::storage::router::{Router, ShardedRouter};
-use redb::{Database, Durability, Key};
-use std::borrow::Borrow;
-use std::sync::Arc;
-use std::{marker::PhantomData, sync::Weak};
-use std::cell::RefCell;
-use std::sync::atomic::{AtomicBool, Ordering};
-use crossbeam::channel::bounded;
 use crate::storage::table_writer_api::*;
 use crate::{AppError, TxFSM};
+use crossbeam::channel::bounded;
+use redb::{Database, Durability, Key};
+use std::borrow::Borrow;
+use std::cell::RefCell;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::{marker::PhantomData, sync::Weak};
 
 pub struct ShardedTableWriter<
     K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
@@ -161,12 +161,12 @@ where
 
 #[cfg(all(test, not(feature = "integration")))]
 mod plain_sharded {
-    use redb::Durability;
     use crate::impl_copy_owned_value_identity;
     use crate::storage::async_boundary::CopyOwnedValue;
+    use crate::storage::table_writer_api::WriterLike;
     use crate::storage::test_utils::addr;
     use crate::storage::{plain_test_utils, test_utils};
-    use crate::storage::table_writer_api::WriterLike;
+    use redb::Durability;
 
     impl_copy_owned_value_identity!(u32);
     // insert-only integrity
@@ -229,13 +229,13 @@ mod plain_sharded {
 #[cfg(all(test, not(feature = "integration")))]
 mod index_sharded {
     use crate::storage::async_boundary::ValueOwned;
+    use crate::storage::table_writer_api::WriterLike;
     use crate::storage::test_utils::{addr, Address};
     use crate::storage::{index_test_utils, test_utils};
-    use crate::storage::table_writer_api::WriterLike;
     use crossbeam::channel;
+    use redb::Durability;
     use std::sync::Arc;
     use std::time::Duration;
-    use redb::Durability;
 
     #[test]
     fn inserting_in_wrong_order_should_fail() {
@@ -277,8 +277,7 @@ mod index_sharded {
         {
             let want = 3usize; // querying [a1, a2, a3]
             let (tx, rx) = channel::unbounded::<Vec<(usize, Option<ValueOwned<u32>>)>>();
-
-            router.query_and_write(vec![a1.clone(), a2.clone(), a3.clone()], true, Arc::new(move |_last_shards, batch| {
+            router.query_and_write(vec![a1.clone(), a2.clone(), a3.clone()], true, Arc::new(move |last_shards, batch| {
                 // non-blocking: just forward the shard batch
                 tx.send(batch)?;
                 Ok(())
@@ -306,12 +305,8 @@ mod index_sharded {
             let want = 1usize;
             let (tx, rx) = channel::unbounded::<Vec<(usize, Option<ValueOwned<u32>>)>>();
 
-            let router_c = writer.router.clone();
-            router.query_and_write(vec![a3.clone()], true, Arc::new(move |last_shards, batch| {
+            router.query_and_write(vec![a3.clone()], true, Arc::new(move |_last_shards, batch| {
                 tx.send(batch)?;
-                if let Some(last_shards) = last_shards {
-                    let _ = router_c.ready_for_flush(last_shards);
-                }
                 Ok(())
             })).expect("enqueue head_after");
 
@@ -358,10 +353,10 @@ mod index_sharded {
 
 #[cfg(all(test, not(feature = "integration")))]
 mod dict_sharded {
-    use redb::Durability;
+    use crate::storage::table_writer_api::WriterLike;
     use crate::storage::test_utils::addr;
     use crate::storage::{dict_test_utils, test_utils};
-    use crate::storage::table_writer_api::WriterLike;
+    use redb::Durability;
 
     #[test]
     fn sharded_dict_two_ids_same_value_share_after_flush() {

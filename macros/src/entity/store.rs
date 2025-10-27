@@ -143,7 +143,7 @@ pub fn store_many_def(entity_def: &EntityDef, mixed_statements: &[StoreStatement
                 ctx.two_phase_commit_with(|tx_context| {
                     #entity_name::#fn_name(&tx_context, test_entities.clone(), true)?;
                     Ok(())
-                })?;
+                }).expect("Failed to store and commit instances");
             });
             ctx.stop_writing().unwrap();
         }

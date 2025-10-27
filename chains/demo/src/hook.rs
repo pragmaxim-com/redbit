@@ -16,7 +16,7 @@ pub(crate) fn write_from_input_refs_using_hash(tx_context: &TransactionWriteTxCo
             let utxo_pointer = match tx_pointer_buf_opt {
                 Some(tx_pointer_buf) => TransactionPointer::from_parent(tx_pointer_buf.as_value(), input_ref.index),
                 None => {
-                    eprintln!("missing tx_pointer for input_ref {:?}", input_ref);
+                    warn!("missing tx_pointer for input_ref {:?}", input_ref);
                     TransactionPointer::from_parent(BlockPointer::from_parent(Height(0), 0), 0)
                 }
             };

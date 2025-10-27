@@ -33,13 +33,14 @@ fn criterion_benchmark(c: &mut Criterion) {
     group.bench_function(BenchmarkId::from_parameter("syncing"), |bencher| {
         bencher.to_async(&rt).iter(|| async {
             syncer.sync(&config.indexer, None, shutdown_rx.clone()).await.expect("Syncing failed"); // syncing is ~ as fast as deleting, which is good
-            chain.delete()
+            chain.delete().expect("Failed to delete chain after syncing");
         })
     });
 
     group.bench_function(BenchmarkId::from_parameter("indexing_context"), |bencher| {
         bencher.iter(|| {
                 let ctx = chain.new_indexing_ctx().expect("Failed to create indexing context");
+                ctx.begin_writing(Durability::None).expect("Failed to begin writing");
                 ctx.two_phase_commit_or_rollback_and_close_with(|_ctx| {
                     Ok(())
                 }).expect("Failed to use write context");

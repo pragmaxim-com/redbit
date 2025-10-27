@@ -335,8 +335,9 @@ Indexing process is always as slow as the column which in comparison to others h
 
 See [chain](./chain) for more details on performance and data size.
 
-The `persist` is slower because each bench iteration opens ~ 24 databases with tables in comparison to `store` which just writes to them and commits.  
-The `remove/delete` is analogous to `persist/store`
+The `persist/remove` methods are slower because each bench iteration opens ~ 34 new databases for whole block.
+The throughput is ~ **10 000 blocks/s** in batch mode which is ~ **300 000 db rows/s** until B+Tree grows significantly
+=> write amplification increases and kernel page cache is fully utilized => kernel throttles writes.
 
 The `block::_store_many` operation in this context writes and commits 3 blocks of 3 transactions of 1 input and 3 utxos of 3 assets, ie.
 the operations writes :
