@@ -78,7 +78,7 @@ impl CardanoBlockProvider {
         for input in ins {
             // MultiEraInput::hash returns &Hash<32> (Copy under the hood).
             let tx_hash: [u8; 32] = **input.hash();
-            out.push(InputRef { tx_hash: TxHash(tx_hash), index: input.index() as u32 });
+            out.push(InputRef { tx_hash: TxHash(tx_hash), index: input.index() as u16 });
         }
         out
     }

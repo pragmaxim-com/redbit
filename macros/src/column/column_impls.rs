@@ -237,15 +237,6 @@ fn make_next_field_expr(field_ident: &Ident, field_ty: &Type) -> TokenStream {
     }
 }
 
-fn gen_next_field_inits(fields: &FieldsNamed) -> Vec<TokenStream> {
-    fields.named.iter().map(|f| {
-        let name = f.ident.as_ref().expect("named field");
-        let ty   = &f.ty;
-        let expr = make_next_field_expr(name, ty);
-        quote! { #name: #expr, }
-    }).collect()
-}
-
 pub fn gen_default_impl(struct_ident: &Ident, struct_type: &Type, fields: &FieldsNamed) -> TokenStream {
     let default_inits = gen_field_inits_zero(fields);
 
@@ -259,12 +250,72 @@ pub fn gen_default_impl(struct_ident: &Ident, struct_type: &Type, fields: &Field
 }
 
 pub fn gen_sampleable_impl(struct_ident: &Ident, struct_type: &Type, fields: &FieldsNamed) -> TokenStream {
-    let next_inits = gen_next_field_inits(fields);
+    // next_value: advance all fields (ints += 1; non-ints delegate to Sampleable::next_value)
+    let next_full_inits: Vec<TokenStream> = fields.named.iter().map(|f| {
+        let name = f.ident.as_ref().expect("named field");
+        let ty   = &f.ty;
+        let expr = make_next_field_expr(name, ty);
+        quote! { #name: #expr, }
+    }).collect();
+
+    // step_index_only: only integer fields increment; non-integer fields stay constant (clone)
+    let next_index_only_inits: Vec<TokenStream> = fields.named.iter().map(|f| {
+        let name = f.ident.as_ref().expect("named field");
+        let ty   = &f.ty;
+        if macro_utils::classify_integer_type(ty).is_some() {
+            quote! { #name: self.#name.wrapping_add(1), }
+        } else {
+            quote! { #name: self.#name.clone(), }
+        }
+    }).collect();
+
+    // seed_nth_with_index_zero: start from Default().nth_value(from), then force `index` = 0
+    let index_zero_stmt: Vec<TokenStream> = fields.named.iter().filter_map(|f| {
+        let name = f.ident.as_ref().expect("named field");
+        let ty   = &f.ty;
+        if name == "index" && macro_utils::classify_integer_type(ty).is_some() {
+            Some(quote! { seed.#name = 0 as #ty; })
+        } else {
+            None
+        }
+    }).collect();
 
     quote! {
         impl Sampleable for #struct_type {
+            #[inline]
             fn next_value(&self) -> Self {
-                #struct_ident { #(#next_inits)* }
+                #struct_ident { #(#next_full_inits)* }
+            }
+            #[inline]
+            fn sample_many_from(n: usize, from: usize) -> Vec<Self> {
+                Self::sample_many_from_seed_index_only(n, &Self::seed_nth_with_index_zero(from))
+            }
+        }
+
+        impl #struct_ident {
+            #[inline]
+            fn step_index_only(&self) -> Self {
+                #struct_ident { #(#next_index_only_inits)* }
+            }
+
+            #[inline]
+            pub fn seed_nth_with_index_zero(from: usize) -> Self
+            where #struct_type: Default + Sampleable + Clone
+            {
+                let mut seed = <#struct_type as Default>::default().nth_value(from);
+                #(#index_zero_stmt)*
+                seed
+            }
+
+            #[inline]
+            pub fn sample_many_from_seed_index_only(n: usize, seed: &Self) -> Vec<Self> {
+                let mut out = Vec::with_capacity(n);
+                let mut v = seed.clone();
+                for _ in 0..n {
+                    out.push(v.clone());
+                    v = v.step_index_only();
+                }
+                out
             }
         }
     }

@@ -37,9 +37,9 @@ pub fn one2many_write_from_def(child_name: &Ident, pk_name: &Ident, write_from_u
     let init_instances = Ident::new(&format!("{}_instances", from), from.span());
     let init = write_from_init(&from, many);
     let collect = quote! {
-        for from in instance.#from {
+        for (idx, from) in instance.#from.into_iter().enumerate() {
             match #init_instances.entry(from) {
-                indexmap::map::Entry::Vacant(v) => { v.insert(instance.#pk_name); }
+                indexmap::map::Entry::Vacant(v) => { v.insert((instance.#pk_name, idx)); }
                 indexmap::map::Entry::Occupied(v) => {
                     return Err(AppError::Custom(format!("Double spend not supported {:?}", v)))
                 },
@@ -48,7 +48,8 @@ pub fn one2many_write_from_def(child_name: &Ident, pk_name: &Ident, write_from_u
     };
     let store =
         quote! {
-            crate::hook::#hook_method_name(&tx_context, #init_instances, is_last)?;
+            let entries = #init_instances.iter().map(|(k, &v)| (k.clone(), v)).collect();
+            crate::hook::#hook_method_name(&tx_context, entries, is_last)?;
         };
     WriteFromStatement {
         init,

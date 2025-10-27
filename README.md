@@ -122,7 +122,7 @@ Let's say we want to persist and query blockchain data using Redbit, declare ann
     #[column]
     pub struct InputRef {
         pub tx_hash: TxHash,
-        pub index: u32,
+        pub index: u16,
     }
     
     #[entity]

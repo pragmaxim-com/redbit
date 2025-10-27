@@ -1,4 +1,4 @@
-#[cfg(all(test, feature = "ci"))]
+#[cfg(all(test, not(feature = "integration")))]
 mod tests {
     #[test]
     fn compile_pass_tests() {

@@ -123,7 +123,7 @@ pub struct Used;
 #[allow(clippy::large_enum_variant)]
 pub enum ColumnDef {
     Key(KeyDef),
-    Plain(FieldDef, IndexingType, Option<Used>),
+    Plain(FieldDef, IndexingType, Option<Used>, bool),
     Relationship(FieldDef, Option<WriteFrom>, Option<Used>, Multiplicity),
     Transient(FieldDef),
     TransientRel(FieldDef, Option<ReadFrom>),
@@ -133,7 +133,7 @@ impl Debug for ColumnDef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ColumnDef::Key(k) => write!(f, "Key({})", k.field_def().name),
-            ColumnDef::Plain(field, indexing_type, used_by) => {
+            ColumnDef::Plain(field, indexing_type, used_by, pointer) => {
                 let index_str = match indexing_type {
                     IndexingType::Off(_) => "Off",
                     IndexingType::Index(_) => "Index",
@@ -141,9 +141,9 @@ impl Debug for ColumnDef {
                     IndexingType::Dict(_) => "Dict",
                 };
                 if let Some(Used) = used_by {
-                    write!(f, "Plain({}, {}, UsedBy)", field.name, index_str)
+                    write!(f, "Plain({}, {}, Used, Pointer: {})", field.name, index_str, pointer)
                 } else {
-                    write!(f, "Plain({}, {}, No UsedBy)", field.name, index_str)
+                    write!(f, "Plain({}, {}, No Used, Pointer: {})", field.name, index_str, pointer)
                 }
             }
             ColumnDef::Relationship(field, write_from_using, used_by, multiplicity) => {
@@ -401,6 +401,7 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                 } else if attr.path().is_ident("column") {
                     let field_def = FieldDef { name: column_name.clone(), tpe: column_type.clone() };
                     let mut used: Option<Used> = None;
+                    let mut pointer = false;
                     let mut db_cache_weight = 0;
                     let mut lru_cache_size_mil = 0;
                     let mut shards = 1;
@@ -411,7 +412,9 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                     let mut read_from: Option<ReadFrom> = None;
 
                     let _ = attr.parse_nested_meta(|nested| {
-                        if nested.path.is_ident("db_cache") {
+                        if nested.path.is_ident("pointer") {
+                            pointer = true;
+                        } else if nested.path.is_ident("db_cache") {
                             let lit: syn::LitInt = nested.value()?.parse()?;
                             db_cache_weight = lit.base10_parse::<usize>()?;
                         } else if nested.path.is_ident("used") {
@@ -454,13 +457,13 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                             Some(rel) => rel
                         }
                     } else if is_dictionary {
-                        ColumnDef::Plain(field_def.clone(), IndexingType::Dict(column_props), used)
+                        ColumnDef::Plain(field_def.clone(), IndexingType::Dict(column_props), used, pointer)
                     } else if is_range {
-                        ColumnDef::Plain(field_def.clone(), IndexingType::Range(column_props), used)
+                        ColumnDef::Plain(field_def.clone(), IndexingType::Range(column_props), used, pointer)
                     } else if is_index {
-                        ColumnDef::Plain(field_def.clone(), IndexingType::Index(column_props), used)
+                        ColumnDef::Plain(field_def.clone(), IndexingType::Index(column_props), used, pointer)
                     } else {
-                        ColumnDef::Plain(field_def.clone(), IndexingType::Off(column_props), used)
+                        ColumnDef::Plain(field_def.clone(), IndexingType::Off(column_props), used, pointer)
                     };
                     return Ok(column_def);
                 }
@@ -538,9 +541,9 @@ fn find_used_idx_for_dependency(cols: &[ColumnDef], dep: &Dependency, skip_idx: 
     cols.iter().enumerate().position(|(i, c)| {
         if i == skip_idx { return false; }
         match c {
-            ColumnDef::Plain(FieldDef { name, .. }, _, _)
+            ColumnDef::Plain(FieldDef { name, .. }, ..)
             if name == &dep.uses => true,
-            ColumnDef::Relationship(FieldDef { name, .. }, _, _, _)
+            ColumnDef::Relationship(FieldDef { name, .. }, ..)
             if name == &dep.uses => true,
             _ => false,
         }
@@ -575,7 +578,7 @@ pub fn take_and_chain_relation_with_plain(columns: &mut Vec<ColumnDef>) -> syn::
 
     // Set UsedBy(dep.used_by) on the **dependee**, whether Plain or Relationship.
     match &mut used_col {
-        ColumnDef::Plain(_, _, used_by_slot) => {
+        ColumnDef::Plain(_, _, used_by_slot, _) => {
             *used_by_slot = Some(Used);
         }
         ColumnDef::Relationship(_, _write_from, used_by_rel_slot, _) => {
@@ -721,6 +724,7 @@ mod tests {
             fd(name),
             IndexingType::Off(ColumnProps::for_key(0)),
             used,
+            false
         )
     }
 
@@ -836,7 +840,7 @@ mod tests {
         let n = cols.len();
         match (&cols[n - 2], &cols[n - 1]) {
             (
-                ColumnDef::Plain(FieldDef { name: name_plain, .. }, _, Some(Used)),
+                ColumnDef::Plain(FieldDef { name: name_plain, .. }, _, Some(Used), _),
                 ColumnDef::Relationship(FieldDef { name: name_rel, .. }, Some(WriteFrom { using, from }), _ub_rel, mult),
             ) => {
                 assert_eq!(name_plain, &ident("hash"));
@@ -910,8 +914,8 @@ mod tests {
 
         // Head order preserved for remaining elements: a, z
         match (&cols[0], &cols[1]) {
-            (ColumnDef::Plain(FieldDef { name: n0, .. }, _, _),
-                ColumnDef::Plain(FieldDef { name: n1, .. }, _, _)) => {
+            (ColumnDef::Plain(FieldDef { name: n0, .. }, ..),
+                ColumnDef::Plain(FieldDef { name: n1, .. }, ..)) => {
                 assert_eq!(n0, &ident("a"));
                 assert_eq!(n1, &ident("z"));
             }

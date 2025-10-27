@@ -2,24 +2,32 @@ use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::Type;
 
-pub fn default_init_expr(column_type: &Type) -> TokenStream {
-    quote! {
-        {
-            let value = <#column_type as Default>::default();
-            <#column_type as Sampleable>::nth_value(&value, pk.total_index() as usize)
+pub fn default_init_expr(column_type: &Type, is_pointer: bool) -> TokenStream {
+    if is_pointer {
+        quote! {
+            {
+                pk
+            }
+        }
+    } else {
+        quote! {
+            {
+                let value = <#column_type as Default>::default();
+                <#column_type as Sampleable>::nth_value(&value, pk.total_index() as usize)
+            }
         }
     }
 }
 
-pub fn default_init(column_name: &Ident, column_type: &Type) -> TokenStream {
-    let default_expr = default_init_expr(column_type);
+pub fn default_init(column_name: &Ident, column_type: &Type, is_pointer: bool) -> TokenStream {
+    let default_expr = default_init_expr(column_type, is_pointer);
     quote! {
         let #column_name = #default_expr;
     }
 }
 
-pub fn default_init_with_query(column_name: &Ident, column_type: &Type) -> TokenStream {
-    let default_expr = default_init_expr(column_type);
+pub fn default_init_with_query(column_name: &Ident, column_type: &Type, is_pointer: bool) -> TokenStream {
+    let default_expr = default_init_expr(column_type, is_pointer);
     quote! {
         let #column_name = #default_expr;
         if let Some(filter_op) = stream_query.#column_name.clone() && !filter_op.matches(&#column_name) {

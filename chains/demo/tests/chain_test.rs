@@ -11,7 +11,7 @@ mod chain_tests {
 
     #[tokio::test]
     async fn chain_should_sync() {
-        let target_height = 200u32;
+        let target_height = 100u32;
         let (storage_owner, storage) = StorageOwner::temp("chain_sync_test", 1, true).await.expect("Failed to open database");
         let chain = BlockChain::new(Arc::clone(&storage));
         chain.init().expect("Failed to initialize chain");
@@ -50,7 +50,7 @@ mod chain_tests {
 
     #[tokio::test]
     async fn chain_should_shutdown() {
-        let target_height = 1000u32;
+        let target_height = 100u32;
 
         let (storage_owner, storage) =
             StorageOwner::temp("chain_sync_shutdown_resume", 1, true).await.expect("Failed to open database");

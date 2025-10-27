@@ -22,7 +22,7 @@ pub struct Address(pub Vec<u8>);
 #[column]
 pub struct InputRef {
     pub tx_hash: TxHash,
-    pub index: u32,
+    pub index: u16,
 }
 
 #[entity]
@@ -80,6 +80,6 @@ pub struct Utxo {
 pub struct Input {
     #[fk(one2many, db_cache = 3)]
     pub id: TransactionPointer,
-    #[column(db_cache = 3)]
+    #[column(pointer, db_cache = 3)]
     pub utxo_pointer: TransactionPointer,
 }
