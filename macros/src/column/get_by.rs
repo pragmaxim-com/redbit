@@ -16,24 +16,9 @@ pub fn get_by_dict_def(
     let read_tx_context_ty = &entity_def.read_ctx_type;
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: &#read_tx_context_ty, val: &#column_type) -> Result<Vec<#entity_type>, AppError> {
-            let iter_opt = tx_context.#dict_table_var.get_keys(val)?;
-            match iter_opt {
+            match tx_context.#dict_table_var.get_keys(val)? {
                 None => Ok(Vec::new()),
-                Some(mut iter) => {
-                    let mut results = Vec::new();
-                    while let Some(x) = iter.next() {
-                        let pk = x?.value();
-                        match Self::compose(&tx_context, pk) {
-                            Ok(item) => {
-                                results.push(item);
-                            }
-                            Err(err) => {
-                                return Err(AppError::Internal(err.into()));
-                            }
-                        }
-                    }
-                    Ok(results)
-                }
+                Some(mut iter) => Self::compose_many(&tx_context, &mut iter)
             }
         }
     };
@@ -79,19 +64,7 @@ pub fn get_by_index_def(entity_def: &EntityDef, column_name: &Ident, column_type
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: &#read_ctx_type, val: &#column_type) -> Result<Vec<#entity_type>, AppError> {
             let mut iter = tx_context.#index_table_var.get_keys(val)?;
-            let mut results = Vec::new();
-            while let Some(x) = iter.next() {
-                let pk = x?.value();
-                match Self::compose(&tx_context, pk) {
-                    Ok(item) => {
-                        results.push(item);
-                    }
-                    Err(err) => {
-                        return Err(AppError::Internal(err.into()));
-                    }
-                }
-            }
-            Ok(results)
+            Self::compose_many(&tx_context, &mut iter)
         }
     };
 
