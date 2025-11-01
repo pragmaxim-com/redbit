@@ -25,7 +25,6 @@ impl<K: Key + 'static, V: Key + 'static> ReadOnlyIndexTable<K, V> {
 
     pub fn get_keys<'v>(&self, val: impl Borrow<V::SelfType<'v>>) -> redb::Result<MultimapValue<'static, K>> {
         self.pk_by_index.get(val.borrow())
-
     }
 
     pub fn range_keys<'a, KR: Borrow<V::SelfType<'a>>>(&self, range: impl RangeBounds<KR>) -> redb::Result<redb::MultimapRange<'static, V, K>> {

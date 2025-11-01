@@ -75,7 +75,9 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
         delete::delete_def(&entity_def, &delete_statements),
         delete::delete_many_def(&entity_def, &delete_many_statements),
         compose::compose_token_stream(&entity_def, &field_names, &struct_inits),
+        compose::compose_many_token_stream(&entity_def),
         compose::compose_with_filter_token_stream(&entity_def, &field_names, &struct_inits_with_query),
+        compose::compose_many_with_filter_token_stream(&entity_def),
     ];
     function_defs.extend(sample::sample_token_fns(&entity_def, &struct_default_inits, &struct_default_inits_with_query, &field_names));
     function_defs.extend(column_function_defs.clone());

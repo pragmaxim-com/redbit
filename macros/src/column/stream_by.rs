@@ -18,13 +18,7 @@ pub fn by_dict_def(
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: #read_ctx_type, val: #column_type, query: Option<#query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#entity_type, AppError>> + Send>>, AppError> {
             let multi_value = tx_context.#dict_table_var.get_keys(val)?;
-            let iter_box: Box<dyn Iterator<Item = Result<_, _>> + Send> =
-                if let Some(v) = multi_value {
-                    Box::new(v)
-                } else {
-                    Box::new(std::iter::empty())
-                };
-
+            let iter_box = multi_value.into_iter().flatten();
             let stream = futures::stream::unfold(
                 (iter_box, tx_context, query),
                 |(mut iter, tx_context, query)| async move {

@@ -23,6 +23,7 @@ pub use futures::stream::{self, StreamExt};
 pub use futures_util::stream::TryStreamExt;
 pub use http;
 pub use http::HeaderValue;
+pub use indexmap;
 pub use inventory;
 pub use lru::LruCache;
 pub use macros::column;
@@ -34,12 +35,11 @@ pub use macros::PointerKey;
 pub use macros::RootKey;
 pub use once_cell;
 pub use query::*;
-pub use indexmap;
 pub use rand;
 pub use redb;
 pub use redb::{
-    Database, Durability, Key, TypeName, Value, MultimapTable, MultimapTableDefinition, ReadOnlyMultimapTable, ReadOnlyTable, ReadTransaction,
-    ReadableDatabase, ReadableMultimapTable, ReadableTable, ReadableTableMetadata, Table, TableDefinition, TableError, TableStats, TransactionError, WriteTransaction,
+    Database, Durability, Key, MultimapTable, MultimapTableDefinition, MultimapValue, ReadOnlyMultimapTable, ReadOnlyTable, ReadTransaction, ReadableDatabase, ReadableMultimapTable,
+    ReadableTable, ReadableTableMetadata, Table, TableDefinition, TableError, TableStats, TransactionError, TypeName, Value, WriteTransaction,
 };
 pub use serde;
 pub use serde::Deserialize;
@@ -57,29 +57,29 @@ pub use std::collections::HashMap;
 pub use std::collections::VecDeque;
 pub use std::fmt::Debug;
 use std::hash::Hash;
-pub use std::time::Instant;
 pub use std::pin::Pin;
 pub use std::sync::Arc;
 pub use std::sync::Weak;
 pub use std::thread;
 pub use std::time::Duration;
+pub use std::time::Instant;
+pub use storage::async_boundary::CopyOwnedValue;
 pub use storage::context::{ReadTxContext, WriteTxContext};
-pub use storage::partitioning::{Partitioning, BytesPartitioner, Xxh3Partitioner, KeyPartitioner, ValuePartitioner};
+pub use storage::init::Storage;
+pub use storage::init::StorageOwner;
+pub use storage::partitioning::{BytesPartitioner, KeyPartitioner, Partitioning, ValuePartitioner, Xxh3Partitioner};
 pub use storage::table_dict_read::ReadOnlyDictTable;
 pub use storage::table_dict_read_sharded::ShardedReadOnlyDictTable;
-pub use storage::table_dict_write::{DictTable, DictFactory};
+pub use storage::table_dict_write::{DictFactory, DictTable};
 pub use storage::table_index_read::ReadOnlyIndexTable;
 pub use storage::table_index_read_sharded::ShardedReadOnlyIndexTable;
-pub use storage::table_index_write::{IndexTable, IndexFactory};
+pub use storage::table_index_write::{IndexFactory, IndexTable};
 pub use storage::table_plain_read::ReadOnlyPlainTable;
 pub use storage::table_plain_read_sharded::ShardedReadOnlyPlainTable;
 pub use storage::table_plain_write::PlainFactory;
-pub use storage::table_writer_api::{StartFuture, StopFuture, TaskResult, FlushFuture, WriterLike, WriteTableLike};
-pub use storage::async_boundary::CopyOwnedValue;
-pub use storage::tx_fsm::TxFSM;
 pub use storage::table_writer::ShardedTableWriter;
-pub use storage::init::Storage;
-pub use storage::init::StorageOwner;
+pub use storage::table_writer_api::{FlushFuture, StartFuture, StopFuture, TaskResult, WriteTableLike, WriterLike};
+pub use storage::tx_fsm::TxFSM;
 pub use urlencoding;
 pub use utoipa;
 pub use utoipa::openapi;
@@ -583,4 +583,16 @@ where
         );
         assert!(matches!(ord, Ordering::Less | Ordering::Equal), "{} must be sorted by key", label);
     }
+}
+
+pub fn collect_multimap_value<'a, V: Key + 'a>(mut mmv: MultimapValue<'a, V>) -> Result<Vec<V>, AppError>
+where
+        for<'b> <V as Value>::SelfType<'b>: ToOwned<Owned = V>,
+{
+    let mut results = Vec::new();
+    while let Some(item_res) = mmv.next() {
+        let guard = item_res?;
+        results.push(guard.value().to_owned());
+    }
+    Ok(results)
 }

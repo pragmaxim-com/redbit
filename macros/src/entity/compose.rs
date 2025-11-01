@@ -39,6 +39,31 @@ pub fn compose_token_stream(entity_def: &EntityDef, field_names: &[Ident], struc
     }
 }
 
+pub fn compose_many_token_stream(entity_def: &EntityDef) -> FunctionDef {
+    let entity_type = &entity_def.entity_type;
+    let pk_type: &Type = &entity_def.key_def.field_def().tpe;
+    let read_ctx_type: &Type = &entity_def.read_ctx_type;
+
+    FunctionDef {
+        fn_stream: quote! {
+            fn compose_many(tx_context: &#read_ctx_type, pk_values: &mut MultimapValue<#pk_type>) -> Result<Vec<#entity_type>, AppError> {
+                let mut results = Vec::new();
+                while let Some(pk_val) = pk_values.next() {
+                    let pk = pk_val?.value();
+                    match Self::compose(&tx_context, pk) {
+                        Ok(item) => results.push(item),
+                        Err(err) => return Err(AppError::Internal(err.into())),
+                    }
+                }
+                Ok(results)
+            }
+        },
+        endpoint: None,
+        test_stream: None,
+        bench_stream: None,
+    }
+}
+
 pub fn compose_with_filter_token_stream(entity_def: &EntityDef, field_names: &[Ident], struct_inits_with_query: &[TokenStream]) -> FunctionDef {
     let EntityDef { key_def, entity_type, query_type, read_ctx_type, ..} = &entity_def;
     let pk_type: &Type = &key_def.field_def().tpe;
@@ -71,5 +96,29 @@ pub fn compose_with_filter_token_stream(entity_def: &EntityDef, field_names: &[I
         }),
         bench_stream: None,
     }
-
 }
+
+pub fn compose_many_with_filter_token_stream(entity_def: &EntityDef) -> FunctionDef {
+    let pk_type: &Type = &entity_def.key_def.field_def().tpe;
+    let EntityDef { entity_type, query_type, read_ctx_type, ..} = &entity_def;
+    FunctionDef {
+        fn_stream: quote! {
+            fn compose_many_with_filter(tx_context: &#read_ctx_type, pk_values: &mut MultimapValue<#pk_type>, stream_query: &#query_type) -> Result<Vec<#entity_type>, AppError> {
+                let mut results = Vec::new();
+                while let Some(pk_val) = pk_values.next() {
+                    let pk = pk_val?.value();
+                    match Self::compose_with_filter(&tx_context, pk, stream_query) {
+                        Ok(Some(item)) => results.push(item),
+                        Ok(None) => {},
+                        Err(err) => return Err(AppError::Internal(err.into())),
+                    }
+                }
+                Ok(results)
+            }
+        },
+        endpoint: None,
+        test_stream: None,
+        bench_stream: None,
+    }
+}
+
