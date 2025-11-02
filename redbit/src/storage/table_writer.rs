@@ -277,8 +277,7 @@ mod index_sharded {
         {
             let want = 3usize; // querying [a1, a2, a3]
             let (tx, rx) = channel::unbounded::<Vec<(usize, Option<ValueOwned<u32>>)>>();
-            router.query_and_write(vec![a1.clone(), a2.clone(), a3.clone()], true, Arc::new(move |last_shards, batch| {
-                // non-blocking: just forward the shard batch
+            router.query_and_write(vec![a1.clone(), a2.clone(), a3.clone()], true, Arc::new(move |_last_shards, batch| {
                 tx.send(batch)?;
                 Ok(())
             })).expect("enqueue heads_before");

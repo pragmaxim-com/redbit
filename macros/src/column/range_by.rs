@@ -11,23 +11,12 @@ pub fn by_index_def(entity_def: &EntityDef, column_name: &Ident, column_type: &T
     let read_ctx_type = &entity_def.read_ctx_type;
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: &#read_ctx_type, from: &#column_type, until: &#column_type) -> Result<Vec<#entity_type>, AppError> {
-            let range_iter = tx_context.#index_table.range_keys::<#column_type>(from..until)?;
-            let mut results = Vec::new();
-            for entry_res in range_iter {
-                let (_, mut multi_iter) = entry_res?;
-                while let Some(x) = multi_iter.next() {
-                    let pk = x?.value();
-                    match Self::compose(&tx_context, pk) {
-                        Ok(item) => {
-                            results.push(item);
-                        }
-                        Err(err) => {
-                            return Err(AppError::Internal(err.into()));
-                        }
-                    }
-                }
-            }
-            Ok(results)
+            let iter = tx_context.#index_table.range_keys::<#column_type>(from..until)?
+                .flat_map(|r| match r {
+                    Ok((_k, value_iter)) => Either::Left(value_iter.map(|res| res.map(|kg| kg.value()))),
+                    Err(e) => Either::Right(std::iter::once(Err(e))),
+                });
+            Self::compose_many(&tx_context, iter, None)
         }
     };
 

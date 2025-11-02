@@ -14,31 +14,10 @@ pub fn fn_def(entity_def: &EntityDef, table: &Ident, range_query_ty: &Type, no_c
     let fn_name = format_ident!("stream_range");
     let fn_stream =
         quote! {
-            pub fn #fn_name(tx_context: #read_ctx_type, from: #pk_type, until: #pk_type, query: Option<#query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#entity_type, AppError>> + Send>>, AppError> {
+            pub fn #fn_name(tx_context: #read_ctx_type, from: #pk_type, until: #pk_type, query: Option<#query_type>) -> Result<impl futures::Stream<Item = Result<#entity_type, AppError>> + Send, AppError> {
                 let range = from..until;
-                let iter_box = Box::new(tx_context.#table.underlying.range::<#pk_type>(range)?);
-                let stream = futures::stream::unfold(
-                    (iter_box, tx_context, query),
-                    |(mut iter, tx_context, query)| async move {
-                        match iter.next() {
-                            Some(Ok((key, _val))) => {
-                                let pk = key.value();
-                                if let Some(ref stream_query) = query {
-                                    match Self::compose_with_filter(&tx_context, pk, stream_query) {
-                                        Ok(Some(entity)) => Some((Ok(entity), (iter, tx_context, query))),
-                                        Ok(None) => None,
-                                        Err(e) => Some((Err(e), (iter, tx_context, query))),
-                                    }
-                                } else {
-                                    Some((Self::compose(&tx_context, pk), (iter, tx_context, query)))
-                                }
-                            }
-                            Some(Err(e)) => Some((Err(AppError::from(e)), (iter, tx_context, query))),
-                            None => None,
-                        }
-                    },
-                ).boxed();
-                Ok(stream)
+                let iter = tx_context.#table.underlying.range::<#pk_type>(range)?.map(|res| res.map(|(kg, _)| kg.value()));
+                Self::compose_many_stream(tx_context, iter, query)
             }
         };
 

@@ -16,35 +16,11 @@ pub fn by_dict_def(
     let EntityDef { key_def, entity_name, entity_type, query_type, read_ctx_type, ..} = &entity_def;
     let pk_type = key_def.field_def().tpe;
     let fn_stream = quote! {
-        pub fn #fn_name(tx_context: #read_ctx_type, val: #column_type, query: Option<#query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#entity_type, AppError>> + Send>>, AppError> {
-            let multi_value = tx_context.#dict_table_var.get_keys(val)?;
-            let iter_box = multi_value.into_iter().flatten();
-            let stream = futures::stream::unfold(
-                (iter_box, tx_context, query),
-                |(mut iter, tx_context, query)| async move {
-                    match iter.next() {
-                        Some(Ok(guard)) => {
-                            let pk = guard.value().clone();
-                            if let Some(ref q) = query {
-                                match Self::compose_with_filter(&tx_context, pk, q) {
-                                    Ok(Some(entity)) => Some((Ok(entity), (iter, tx_context, query))),
-                                    Ok(None) => None,
-                                    Err(e) => Some((Err(e), (iter, tx_context, query))),
-                                }
-                            } else {
-                                Some((Self::compose(&tx_context, pk), (iter, tx_context, query)))
-                            }
-                        }
-                        Some(Err(e)) => Some((Err(AppError::from(e)), (iter, tx_context, query))),
-                        None => None,
-                    }
-                },
-            ).boxed();
-
-            Ok(stream)
+        pub fn #fn_name(tx_context: #read_ctx_type, val: #column_type, query: Option<#query_type>) -> Result<impl futures::Stream<Item = Result<#entity_type, AppError>> + Send, AppError> {
+            let iter = tx_context.#dict_table_var.get_keys(val)?.into_iter().flatten().map(|res| res.map(|kg| kg.value()));
+            Self::compose_many_stream(tx_context, iter, query)
         }
     };
-
 
     let test_with_filter_fn_name = format_ident!("{}_with_filter", fn_name);
     let test_stream = Some(quote! {
@@ -139,30 +115,9 @@ pub fn by_index_def(entity_def: &EntityDef, column_name: &Ident, column_type: &T
     let EntityDef { key_def, entity_name, entity_type, query_type, read_ctx_type, ..} = &entity_def;
     let pk_type = key_def.field_def().tpe;
     let fn_stream = quote! {
-        pub fn #fn_name(tx_context: #read_ctx_type, val: #column_type, query: Option<#query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#entity_type, AppError>> + Send>>, AppError> {
-            let iter = tx_context.#index_table.get_keys(val)?;
-
-            let stream = futures::stream::unfold((iter, tx_context, query), |(mut iter, tx_context, query)| async move {
-                match iter.next() {
-                    Some(Ok(guard)) => {
-                        let pk = guard.value();
-                        if let Some(ref stream_query) = query {
-                            match Self::compose_with_filter(&tx_context, pk, stream_query) {
-                                Ok(Some(entity)) => Some((Ok(entity), (iter, tx_context, query))),
-                                Ok(None) => None,
-                                Err(e) => Some((Err(e), (iter, tx_context, query))),
-                            }
-                        } else {
-                            Some((Self::compose(&tx_context, pk), (iter, tx_context, query)))
-                        }
-                    }
-                    Some(Err(e)) => Some((Err(AppError::from(e)), (iter, tx_context, query))),
-                    None => None,
-                }
-            })
-            .boxed();
-
-            Ok(stream)
+        pub fn #fn_name(tx_context: #read_ctx_type, val: #column_type, query: Option<#query_type>) -> Result<impl futures::Stream<Item = Result<#entity_type, AppError>> + Send, AppError> {
+            let iter = tx_context.#index_table.get_keys(val)?.map(|res| res.map(|kg| kg.value()));
+            Self::compose_many_stream(tx_context, iter, query)
         }
     };
 

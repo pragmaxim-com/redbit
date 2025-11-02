@@ -16,36 +16,14 @@ pub fn stream_range_by_index_def(entity_def: &EntityDef, column_name: &Ident, co
             from: #column_type,
             until: #column_type,
             query: Option<#query_type>,
-        ) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#entity_type, AppError>> + Send>>, AppError> {
-            let outer_iter = tx_context.#index_table.range_keys::<#column_type>(from..until)?;
-            let outer_stream = futures::stream::iter(outer_iter).map_err(AppError::from);
-            let pk_stream = outer_stream.map_ok(|(_key, value_iter)| {
-                futures::stream::iter(value_iter).map(|res| {
-                    res.map_err(AppError::from).map(|guard| guard.value().clone())
-                })
-            });
-            Ok(
-                pk_stream
-                    .try_flatten()
-                    .map(move |pk_res| {
-                        match pk_res {
-                            Ok(pk) => {
-                                if let Some(ref stream_query) = query {
-                                    match Self::compose_with_filter(&tx_context, pk, stream_query) {
-                                        Ok(Some(entity)) => Some(Ok(entity)),
-                                        Ok(None) => None,
-                                        Err(e) => Some(Err(e)),
-                                    }
-                                } else {
-                                    Some(Self::compose(&tx_context, pk)) // <- already Result<T, AppError>
-                                }
-                            }
-                            Err(e) => Some(Err(e)),
-                        }
-                    })
-                    .filter_map(std::future::ready) // remove None
-                    .boxed()
-            )
+        ) -> Result<impl futures::Stream<Item = Result<#entity_type, AppError>> + Send, AppError> {
+            let pk_iter =
+                tx_context.#index_table.range_keys::<#column_type>(from..until)?
+                .flat_map(|r| match r {
+                    Ok((_k, value_iter)) => Either::Left(value_iter.map(|res| res.map(|kg| kg.value()))),
+                    Err(e) => Either::Right(std::iter::once(Err(e))),
+                });
+            Self::compose_many_stream(tx_context, pk_iter, query)
         }
     };
 

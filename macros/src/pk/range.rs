@@ -12,23 +12,8 @@ pub fn fn_def(entity_def: &EntityDef, table: &Ident, no_columns: bool) -> Functi
         quote! {
             pub fn #fn_name(tx_context: &#read_ctx_type, from: #pk_type, until: #pk_type, query: Option<#query_type>) -> Result<Vec<#entity_type>, AppError> {
                 let range = from..until;
-                let mut iter = tx_context.#table.underlying.range::<#pk_type>(range)?;
-                let mut results = Vec::new();
-                if let Some(ref q) = query {
-                    while let Some(entry_res) = iter.next() {
-                        let pk = entry_res?.0.value();
-                        match Self::compose_with_filter(&tx_context, pk, q)? {
-                            Some(entity) => results.push(entity),
-                            None => {},
-                        }
-                    }
-                } else {
-                    while let Some(entry_res) = iter.next() {
-                        let pk = entry_res?.0.value();
-                        results.push(Self::compose(&tx_context, pk)?);
-                    }
-                }
-                Ok(results)
+                let iter = tx_context.#table.underlying.range::<#pk_type>(range)?.map(|res| res.map(|(kg, _)| kg.value()));
+                Self::compose_many(&tx_context, iter, query)
             }
         };
 

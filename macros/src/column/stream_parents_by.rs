@@ -23,44 +23,20 @@ pub fn by_dict_def(
 
     let fn_name = format_ident!("stream_{}s_by_{}", parent_ident.to_string().to_lowercase(), column_name);
     let fn_stream = quote! {
-        pub fn #fn_name(parent_tx_context: #parent_tx_context_type, val: #column_type, query: Option<#stream_parent_query_type>) -> Result<Pin<Box<dyn futures::Stream<Item = Result<#parent_type, AppError>> + Send>>, AppError> {
-            let multi_value_opt = parent_tx_context.#parent_one2many_field_name.#dict_table_var.get_keys(val)?;
-            let mut unique_parent_pointers =
-                match multi_value_opt {
-                    None => Vec::new(),
-                    Some(multi_value) => {
-                        let mut pointers = Vec::new();
-                        for pk_guard in multi_value {
-                            let pk = pk_guard?.value();
-                            pointers.push(pk.parent);
-                        }
-                        pointers
-                    }
-                };
-            unique_parent_pointers.dedup();
-            let stream = futures::stream::unfold(
-                (unique_parent_pointers.into_iter(), parent_tx_context, query),
-                |(mut iter, parent_tx_context, query)| async move {
-                    match iter.next() {
-                        Some(parent_pointer) => {
-                            if let Some(ref stream_query) = query {
-                                match #parent_type::compose_with_filter(&parent_tx_context, parent_pointer, stream_query) {
-                                    Ok(Some(entity)) => Some((Ok(entity), (iter, parent_tx_context, query))),
-                                    Ok(None) => None,
-                                    Err(e) => Some((Err(e), (iter, parent_tx_context, query))),
-                                }
-                            } else {
-                                Some((#parent_type::compose(&parent_tx_context, parent_pointer), (iter, parent_tx_context, query)))
-                            }
-                        }
-                        None => None,
-                    }
-                },
-            ).boxed();
-            Ok(stream)
+        pub fn #fn_name(parent_tx_context: #parent_tx_context_type, val: #column_type, query: Option<#stream_parent_query_type>) -> Result<impl futures::Stream<Item = Result<#parent_type, AppError>> + Send, AppError> {
+            let unique_parent_pk_iter = parent_tx_context.#parent_one2many_field_name.#dict_table_var.get_keys(val)?
+                .into_iter()
+                .flatten()
+                .map(|r| r.map(|g| g.value().parent))
+                .scan(HashSet::new(), |seen, r| {
+                    Some(match r {
+                        Ok(parent) => if seen.insert(parent) { Some(Ok(parent)) } else { None },
+                        Err(e) => Some(Err(e)),
+                    })
+                }).flatten();
+            #parent_type::compose_many_stream(parent_tx_context, unique_parent_pk_iter, query)
         }
     };
-
 
     let test_with_filter_fn_name = format_ident!("{}_with_filter", fn_name);
     let test_stream = Some(quote! {

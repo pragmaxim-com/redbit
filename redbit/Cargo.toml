@@ -46,3 +46,4 @@ log = "0.4.27"
 crossbeam = "0.8.4"
 xxhash-rust = { version = "0.8.12", features = ["xxh3"] }
 indexmap = "2.12.0"
+itertools = "0.14.0"
