@@ -13,21 +13,11 @@ pub fn fn_def(entity_def: &EntityDef, table: &Ident) -> FunctionDef {
     let fn_name = format_ident!("take");
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: &#read_ctx_type, n: usize) -> Result<Vec<#entity_type>, AppError> {
-            let mut iter = tx_context.#table.underlying.iter()?;
-            let mut results = Vec::new();
-            let mut count: usize = 0;
             if n > 100 {
                 Err(AppError::Internal("Cannot take more than 100 entities at once".into()))
             } else {
-                while let Some(entry_res) = iter.next() {
-                    if count >= n {
-                        break;
-                    }
-                    let pk = entry_res?.0.value();
-                    results.push(Self::compose(&tx_context, pk)?);
-                    count += 1;
-                }
-                Ok(results)
+                let iter =tx_context.#table.underlying.iter()?.take(n).map(|entry_res| entry_res.map(|(pk_guard, _)| pk_guard.value()));
+                Self::compose_many(&tx_context, iter, None)
             }
         }
     };

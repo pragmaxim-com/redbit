@@ -13,28 +13,24 @@ pub fn fn_def(entity_def: &EntityDef, table: &Ident) -> FunctionDef {
     let read_ctx_type = &entity_def.read_ctx_type;
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: &#read_ctx_type, n: usize) -> Result<Vec<#entity_type>, AppError> {
+            if n == 0 {
+                return Ok(Vec::new());
+            }
+            if n > 100 {
+                return Err(AppError::Internal("Cannot take more than 100 entities at once".into()));
+            }
             let Some((key_guard, _)) = tx_context.#table.underlying.last()? else {
                 return Ok(Vec::new());
             };
-            let key = key_guard.value();
-            let until = key.next_index();
+            let until = key_guard.value().next_index();
             let from = until.rollback_or_init(n as u32);
             let range = from..until;
-            let iter = tx_context.#table.underlying.range(range)?;
-            let mut queue = VecDeque::with_capacity(n);
 
-            for entry_res in iter {
-                let pk = entry_res?.0.value();
-                if queue.len() == n {
-                    queue.pop_front(); // remove oldest
-                }
-                queue.push_back(pk);
-            }
-
-            queue
-                .into_iter()
-                .map(|pk| Self::compose(tx_context, pk))
-                .collect::<Result<Vec<#entity_type>, AppError>>()
+            let mut pks = tx_context.#table.underlying.range(range)?.rev().take(n)
+                .map(|entry_res| entry_res.map(|(kg, _)| kg.value()))
+                .collect::<redb::Result<Vec<_>>>()?;
+            pks.reverse();
+            Self::compose_many(&tx_context, pks.into_iter().map(Ok), None)
         }
     };
 
