@@ -11,7 +11,7 @@ sudo apt-get install rustup
 ### Requirements
 
 With current [setup](src/model_v1.rs) you need at least 8 cores CPU and 12GB RAM to run both Ergo Node and Redbit but remaining RAM is used for page caching
-so it might swap or kernel with throttle our process. If you don't have enough RAM, set : 
+so it might swap or kernel could throttle our process. If you don't have enough RAM, set : 
 
 ```
 db_cache_size_gb = "low"

@@ -9,9 +9,9 @@ mod range;
 mod stream_range;
 mod pk_range;
 mod store;
-mod delete;
 mod parent_key;
 mod init;
+pub mod delete;
 pub mod pointer_impls;
 pub mod root_impls;
 

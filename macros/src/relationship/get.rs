@@ -126,7 +126,7 @@ pub fn one2opt_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
                  #child_type::begin_read_ctx(&state.storage)
                     .and_then(|tx_context| #entity_name::#fn_name(&tx_context, #pk_name)
                         .and_then(|opt| {
-                            opt.ok_or_else(|| AppError::NotFound(format!("No {} found", stringify!(#child_name)))) }) )
+                            opt.ok_or_else(|| AppError::NotFound(format!("Not {} found", stringify!(#child_name)))) }) )
                     .map(AppJson)
                 }
             },

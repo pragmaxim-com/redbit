@@ -173,12 +173,10 @@ pub fn emit_newtype_bincode_impls(newtype_ty: &Type) -> TokenStream2 {
 
             fn as_bytes<'a, 'b: 'a>(value: &'a Self::SelfType<'b>) -> Vec<u8>
             where Self: 'a, Self: 'b {
-                // Requires: #newtype_ty: bincode::Encode
                 bincode::encode_to_vec(value, bincode::config::standard()).unwrap()
             }
 
             fn type_name() -> redb::TypeName {
-                // Use the concrete type name; bincode layout depends on the type.
                 redb::TypeName::new(std::any::type_name::<#newtype_ty>())
             }
         }
@@ -235,7 +233,6 @@ pub(crate) fn emit_cachekey_integer_impls(newtype_ty: &Type, int_ty: &IntegerTyp
     let int_ty_tokens: TokenStream2 = syn::parse_str(int_str).expect("valid integer type");
 
     quote::quote! {
-        // Cache key = the inner integer (Copy, Eq, Hash). Zero allocations.
         impl CacheKey for #newtype_ty {
             type CK = #int_ty_tokens;
 
@@ -252,7 +249,6 @@ pub(crate) fn emit_cachekey_integer_impls(newtype_ty: &Type, int_ty: &IntegerTyp
 
 pub(crate) fn emit_cachekey_pointer_binarycodec_impls(pointer_ty: &Type) -> TokenStream2 {
     quote::quote! {
-        // Cache key = serialized bytes via BinaryCodec.
         impl CacheKey for #pointer_ty {
             type CK = Vec<u8>;
 
@@ -261,7 +257,6 @@ pub(crate) fn emit_cachekey_pointer_binarycodec_impls(pointer_ty: &Type) -> Toke
             where
                 #pointer_ty: 'a,
             {
-                // If your BinaryCodec uses `as_bytes`, switch to that.
                 <#pointer_ty as BinaryCodec>::as_le_bytes(v)
             }
         }
@@ -270,7 +265,6 @@ pub(crate) fn emit_cachekey_pointer_binarycodec_impls(pointer_ty: &Type) -> Toke
 
 pub(crate) fn emit_cachekey_bincode_impls(newtype_ty: &Type) -> TokenStream2 {
     quote::quote! {
-        // Cache key = bincode-encoded bytes. General and easy.
         impl CacheKey for #newtype_ty {
             type CK = Vec<u8>;
 

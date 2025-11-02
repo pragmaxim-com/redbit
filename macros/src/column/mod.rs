@@ -14,7 +14,7 @@ pub mod column_codec;
 pub mod info;
 pub mod transient;
 
-use crate::entity;
+use crate::{entity, pk};
 use crate::entity::context;
 use crate::entity::context::TxContextItem;
 use crate::entity::query::{FilterQueryItem, RangeQuery};
@@ -90,7 +90,7 @@ impl DbColumnMacros {
             struct_default_init_with_query: init::default_init_with_query(column_name, column_type, is_pointer),
             store_statement: store::store_statement(pk_name, column_name, &plain_table_def.var_name, used),
             delete_statement: delete::delete_statement(&plain_table_def.var_name),
-            delete_many_statement: delete::delete_many_statement(&plain_table_def.var_name),
+            delete_many_statement: pk::delete::delete_many_statement(&plain_table_def.var_name),
             function_defs: vec![],
         }
     }
