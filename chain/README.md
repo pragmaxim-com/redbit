@@ -1,12 +1,14 @@
 ## Chain
 
-Chain keeps you in sync with arbitrary blockchain if you implement the [api](src/api.rs).
+Chain is a read-optimized UTXO analytics engine as it builds utxo indexes with materialized prev-outs.
+Utxo state is built on the fly during indexing, addresses and scripts are stored as a dictionary for deduplication purposes.
+At the same time it is extremely space efficient as it uses hierarchical pointers to reference hashes.
 
 Chain tip is "eventually consistent" with the settlement layer through eager fork competition such that 
 superseded forks are immediately deleted from DB and replaced with more valuable fork when it appears.
 Ie. only one winning fork is kept in the DB at given moment. This allows for much better performance and space efficiency.
 
-Utxo state is built on the fly during indexing, addresses are stored as a dictionary for deduplication purposes.
+It keeps you in sync with arbitrary blockchain if you implement the [api](src/api.rs).
 
 ### Perf 
 

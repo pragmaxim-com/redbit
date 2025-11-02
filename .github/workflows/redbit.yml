@@ -4,6 +4,12 @@ on:
   push:
     branches:
       - master
+  pull_request:
+    branches:
+      - master
+    types:
+      - opened
+      - synchronize
   workflow_dispatch:
 
 permissions:
@@ -168,12 +174,14 @@ jobs:
           ' README.md > README.md.tmp && mv README.md.tmp README.md
 
       - name: Commit benchmark results to README
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions@users.noreply.github.com"
           git diff --quiet || (git add README.md && git commit -m "Auto-update README with example code" && git push)
 
   deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     needs: bench
     runs-on: ubuntu-latest
     permissions:
