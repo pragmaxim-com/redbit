@@ -49,14 +49,7 @@ pub fn generate_column_impls(
             cache_key_codec = emit_cachekey_byte_array_impls(new_type, len);
             iterable_code = quote! {
                 let mut arr = self.0;
-                for i in (0..#len).rev() {
-                    if arr[i] != 0xFF {
-                        arr[i] = arr[i].wrapping_add(1);
-                        break;
-                    } else {
-                        arr[i] = 0;
-                    }
-                }
+                redbit::utils::inc_le(&mut arr);
                 Self(arr)
             };
         }
@@ -188,19 +181,13 @@ pub fn generate_column_impls(
         }
 
         impl PartialSchema for #struct_ident {
-            fn schema() -> openapi::RefOr<openapi::schema::Schema> {
-                use openapi::schema::*;
-                Schema::Object(
-                    ObjectBuilder::new()
-                        .schema_type(#schema_type)
-                        .examples(#schema_example)
-                        .build()
-                ).into()
+            fn schema() -> openapi::RefOr<Schema> {
+                utils::schema(#schema_type, #schema_example, None)
             }
         }
 
         impl utoipa::ToSchema for #struct_ident {
-            fn schemas(schemas: &mut Vec<(String, openapi::RefOr<openapi::schema::Schema>)>) {
+            fn schemas(schemas: &mut Vec<(String, openapi::RefOr<Schema>)>) {
                 schemas.push((
                     stringify!(#struct_ident).to_string(),
                     <#struct_ident as PartialSchema>::schema()

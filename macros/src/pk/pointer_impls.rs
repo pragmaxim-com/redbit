@@ -99,16 +99,8 @@ pub fn new(struct_name: &Ident, parent_field: Field, index_field: Field) -> Toke
         }
 
         impl PartialSchema for #struct_name {
-            fn schema() -> openapi::RefOr<openapi::schema::Schema> {
-                use openapi::schema::*;
-                use openapi::extensions::ExtensionsBuilder;
-                Schema::Object(
-                    ObjectBuilder::new()
-                        .schema_type(SchemaType::Type(Type::String))
-                        .examples(vec![Self::default().url_encode()])
-                        .extensions(Some(ExtensionsBuilder::new().add("key", "fk").build()))
-                        .build()
-                ).into()
+            fn schema() -> openapi::RefOr<Schema> {
+                utils::schema(SchemaType::Type(Type::String), vec![Self::default().url_encode()], Some(ExtensionsBuilder::new().add("key", "fk").build()))
             }
         }
 

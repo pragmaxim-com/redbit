@@ -8,6 +8,7 @@ pub mod base64_serde_enc;
 pub mod retry;
 pub mod logger;
 pub mod storage;
+pub mod utils;
 
 pub use axum;
 pub use axum::body::Body;
@@ -23,9 +24,9 @@ pub use futures::stream::{self, StreamExt};
 pub use futures_util::stream::TryStreamExt;
 pub use http;
 pub use http::HeaderValue;
-pub use itertools::Either;
 pub use indexmap;
 pub use inventory;
+pub use itertools::Either;
 pub use lru::LruCache;
 pub use macros::column;
 pub use macros::entity;
@@ -52,12 +53,11 @@ pub use serde_json::json;
 pub use serde_urlencoded;
 pub use serde_with;
 pub use std::any::type_name;
-use std::borrow::Borrow;
 pub use std::cmp::Ordering;
 pub use std::collections::HashMap;
+pub use std::collections::HashSet;
 pub use std::collections::VecDeque;
 pub use std::fmt::Debug;
-use std::hash::Hash;
 pub use std::pin::Pin;
 pub use std::sync::Arc;
 pub use std::sync::Weak;
@@ -84,31 +84,27 @@ pub use storage::tx_fsm::TxFSM;
 pub use urlencoding;
 pub use utoipa;
 pub use utoipa::openapi;
+pub use utoipa::openapi::extensions::ExtensionsBuilder;
+pub use utoipa::openapi::schema::*;
 pub use utoipa::IntoParams;
 pub use utoipa::PartialSchema;
 pub use utoipa::ToSchema;
 pub use utoipa_axum;
 pub use utoipa_axum::router::OpenApiRouter;
 pub use utoipa_swagger_ui;
-pub use std::collections::HashSet;
 
 use crate::axum::extract::rejection::JsonRejection;
 use crate::axum::extract::FromRequest;
-use crate::axum::Router;
 use crate::utoipa::OpenApi;
-use crate::utoipa_swagger_ui::SwaggerUi;
+use std::hash::Hash;
 use axum::body::Bytes;
 use axum::extract::Request;
 use crossbeam::channel::{RecvError, SendError};
 use serde::de::DeserializeOwned;
-use std::net::SocketAddr;
 use std::ops::Add;
 use std::sync::PoisonError;
 use thiserror::Error;
-use tokio::net::TcpListener;
-use tokio::sync::watch;
 use tokio::task::JoinError;
-use tower_http::cors::CorsLayer;
 
 pub trait ColInnerType { type Repr; }
 
@@ -527,74 +523,4 @@ impl<T: PartialOrd + PartialEq> FilterOp<T> {
             FilterOp::Ge(expected) => value >= expected,
             FilterOp::In(options) => options.contains(value),        }
     }
-}
-
-pub fn build_router(state: RequestState, extras: Option<OpenApiRouter<RequestState>>, cors: Option<CorsLayer>) -> Router<()> {
-    let mut router: OpenApiRouter<RequestState> = OpenApiRouter::with_openapi(ApiDoc::openapi());
-    for info in inventory::iter::<StructInfo> {
-        router = router.merge((info.routes_fn)());
-    }
-
-    if let Some(extra) = extras {
-        router = router.merge(extra);
-    }
-    let (r, openapi) = router.split_for_parts();
-
-    let merged = r
-        .merge(SwaggerUi::new("/swagger-ui").url("/apidoc/openapi.json", openapi))
-        .with_state(state);
-    if let Some(cors_layer) = cors {
-        merged.layer(cors_layer)
-    } else {
-        merged
-    }
-}
-
-pub async fn serve(
-    state: RequestState,
-    socket_addr: SocketAddr,
-    extras: Option<OpenApiRouter<RequestState>>,
-    cors: Option<CorsLayer>,
-    shutdown: watch::Receiver<bool>,
-) {
-    let router: Router<()> = build_router(state, extras, cors);
-    let tcp = TcpListener::bind(socket_addr).await.unwrap();
-
-    // spawn shutdown watcher future
-    let mut shutdown = shutdown.clone();
-    axum::serve(tcp, router)
-        .with_graceful_shutdown(async move {
-            if shutdown.changed().await.is_ok() {
-                info!("Shutting down server...");
-            }
-        })
-        .await
-        .unwrap();
-}
-
-pub fn assert_sorted<T, I>(items: &[T], label: &str, mut extract: impl FnMut(&T) -> &I)
-where
-    I: Key + Borrow<I::SelfType<'static>> + 'static,
-{
-    for w in items.windows(2) {
-        let ia = extract(&w[0]);
-        let ib = extract(&w[1]);
-        let ord = <I as Key>::compare(
-            <I as Value>::as_bytes(ia.borrow()).as_ref(),
-            <I as Value>::as_bytes(ib.borrow()).as_ref(),
-        );
-        assert!(matches!(ord, Ordering::Less | Ordering::Equal), "{} must be sorted by key", label);
-    }
-}
-
-pub fn collect_multimap_value<'a, V: Key + 'a>(mut mmv: MultimapValue<'a, V>) -> Result<Vec<V>, AppError>
-where
-        for<'b> <V as Value>::SelfType<'b>: ToOwned<Owned = V>,
-{
-    let mut results = Vec::new();
-    while let Some(item_res) = mmv.next() {
-        let guard = item_res?;
-        results.push(guard.value().to_owned());
-    }
-    Ok(results)
 }

@@ -13,7 +13,7 @@ pub fn by_dict_def(entity_def: &EntityDef, column_name: &Ident, column_type: &Ty
     let read_ctx_ty = &entity_def.read_ctx_type;
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: &#read_ctx_ty, val: &#column_type) -> Result<Vec<#pk_type>, AppError> {
-            tx_context.#dict_table_var.get_keys(val)?.map_or(Ok(Vec::new()), redbit::collect_multimap_value)
+            tx_context.#dict_table_var.get_keys(val)?.map_or(Ok(Vec::new()), redbit::utils::collect_multimap_value)
         }
     };
 
@@ -59,7 +59,7 @@ pub fn by_index_def(entity_def: &EntityDef, column_name: &Ident, column_type: &T
     let fn_name = format_ident!("get_{}s_by_{}", pk_name, column_name);
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: &#read_ctx_type, val: &#column_type) -> Result<Vec<#pk_type>, AppError> {
-            redbit::collect_multimap_value(tx_context.#index_table.get_keys(val)?)
+            redbit::utils::collect_multimap_value(tx_context.#index_table.get_keys(val)?)
         }
     };
 

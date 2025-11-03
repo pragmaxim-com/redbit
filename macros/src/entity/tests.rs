@@ -90,7 +90,7 @@ pub fn test_suite(entity_def: &EntityDef, parent_def: Option<OneToManyParentDef>
             async fn get_delete_server() -> (StorageOwner, Arc<axum_test::TestServer>) {
                 let (storage_owner, storage) = random_storage_async().await;
                 initialize_storage(Arc::clone(&storage));
-                let router = build_router(RequestState { storage }, None, None);
+                let router = redbit::utils::build_router(RequestState { storage }, None, None);
                 (storage_owner, Arc::new(axum_test::TestServer::new(router).unwrap()))
             }
 
@@ -98,7 +98,7 @@ pub fn test_suite(entity_def: &EntityDef, parent_def: Option<OneToManyParentDef>
                 let (owner, server) = SERVER.get_or_init(|| async {
                     let (storage_owner, storage) = random_storage_async().await;
                     initialize_storage(Arc::clone(&storage));
-                    let router = build_router(RequestState { storage }, None, None);
+                    let router = redbit::utils::build_router(RequestState { storage }, None, None);
                     (storage_owner, Arc::new(axum_test::TestServer::new(router).unwrap()))
                 }).await;
 
