@@ -83,7 +83,7 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
     function_defs.extend(column_function_defs.clone());
     function_defs.extend(init::init(entity_name, key_def));
 
-    let table_info_struct = info::table_info_struct(&entity_def.info_type, &table_info_items);
+    let table_info_struct = info::table_info_struct(&entity_def, &table_info_items);
     let filter_query_struct = query::filter_query(&entity_def.query_type, &filter_queries);
     let tx_context_structs = context::tx_context(&entity_def.write_ctx_type, &entity_def.read_ctx_type, &tx_context_items);
     let range_query_structs = range_queries.into_iter().map(|rq| rq.stream).collect::<Vec<_>>();

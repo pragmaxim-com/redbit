@@ -20,10 +20,11 @@ pub fn table_info_type(entity_type: &Type) -> Type {
 pub fn table_info_fn(entity_def: &EntityDef) -> FunctionDef {
     let entity_name = &entity_def.entity_name;
     let table_info_type = &entity_def.info_type;
+    let tx_context_ty = &entity_def.read_ctx_type;
     let fn_name = format_ident!("table_info");
     let fn_stream = quote! {
         pub fn #fn_name(storage: &Arc<Storage>) -> Result<#table_info_type, AppError> {
-            #table_info_type::new_table_info(storage)
+            #table_info_type::new_table_info(&#tx_context_ty::begin_read_ctx(&storage)?)
         }
     };
 
@@ -63,16 +64,18 @@ pub struct TableInfoItem {
     pub init: TokenStream,
 }
 
-pub fn table_info_struct(table_info_ty: &Type, table_info_items: &[TableInfoItem]) -> TokenStream {
+pub fn table_info_struct(entity_def: &EntityDef, table_info_items: &[TableInfoItem]) -> TokenStream {
+    let table_info_ty = &entity_def.info_type;
     let definitions: Vec<TokenStream> = table_info_items.iter().map(|item| item.definition.clone()).collect();
     let inits: Vec<TokenStream> = table_info_items.iter().map(|item| item.init.clone()).collect();
+    let read_tx_context_ty = &entity_def.read_ctx_type;
     quote! {
         #[derive(Clone, Debug, IntoParams, Serialize, Deserialize, Default, ToSchema)]
         pub struct #table_info_ty {
             #(#definitions),*
         }
         impl #table_info_ty {
-            pub fn new_table_info(storage: &Arc<Storage>) -> Result<#table_info_ty, AppError> {
+            pub fn new_table_info(tx_context: &#read_tx_context_ty) -> Result<#table_info_ty, AppError> {
                 Ok(
                     Self {
                         #(#inits),*

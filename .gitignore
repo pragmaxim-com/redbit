@@ -1,6 +1,6 @@
 /.idea
 target/
-todo
+todo.txt
 todo.png
 Cargo.lock
 client_calls.ts
