@@ -16,7 +16,7 @@ pub fn by_dict_def(entity_def: &EntityDef, column_name: &Ident, column_type: &Ty
     let read_ctx_type = &entity_def.read_ctx_type;
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: #read_ctx_type, val: #column_type) -> Result<impl futures::Stream<Item = Result<#pk_type, AppError>> + Send, AppError> {
-            let iter = tx_context.#dict_table_var.get_keys(val)?.into_iter().flatten().map(|res| res.map(|g| g.value().clone()).map_err(AppError::from));
+            let iter = tx_context.#dict_table_var.dict_keys(val)?.into_iter().flatten().map(|res| res.map(|g| g.value().clone()).map_err(AppError::from));
             Ok(stream::iter(iter))
         }
     };
@@ -99,7 +99,7 @@ pub fn by_index_def(entity_def: &EntityDef, column_name: &Ident, column_type: &T
     let fn_name = format_ident!("stream_{}s_by_{}", pk_name, column_name);
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: #read_ctx_type, val: #column_type) -> Result<impl futures::Stream<Item = Result<#pk_type, AppError>> + Send, AppError> {
-            Ok(stream::iter(tx_context.#index_table.get_keys(&val)?).map(|res| res.map(|e| e.value().clone()).map_err(AppError::from)))
+            Ok(stream::iter(tx_context.#index_table.index_keys(&val)?).map(|res| res.map(|e| e.value().clone()).map_err(AppError::from)))
         }
     };
 

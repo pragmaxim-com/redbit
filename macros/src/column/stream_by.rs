@@ -17,7 +17,7 @@ pub fn by_dict_def(
     let pk_type = key_def.field_def().tpe;
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: #read_ctx_type, val: #column_type, query: Option<#query_type>) -> Result<impl futures::Stream<Item = Result<#entity_type, AppError>> + Send, AppError> {
-            let iter = tx_context.#dict_table_var.get_keys(val)?.into_iter().flatten().map(|res| res.map(|kg| kg.value()));
+            let iter = tx_context.#dict_table_var.dict_keys(val)?.into_iter().flatten().map(|res| res.map(|kg| kg.value()));
             Self::compose_many_stream(tx_context, iter, query)
         }
     };
@@ -116,7 +116,7 @@ pub fn by_index_def(entity_def: &EntityDef, column_name: &Ident, column_type: &T
     let pk_type = key_def.field_def().tpe;
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: #read_ctx_type, val: #column_type, query: Option<#query_type>) -> Result<impl futures::Stream<Item = Result<#entity_type, AppError>> + Send, AppError> {
-            let iter = tx_context.#index_table.get_keys(val)?.map(|res| res.map(|kg| kg.value()));
+            let iter = tx_context.#index_table.index_keys(val)?.map(|res| res.map(|kg| kg.value()));
             Self::compose_many_stream(tx_context, iter, query)
         }
     };

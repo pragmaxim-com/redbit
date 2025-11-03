@@ -1,71 +1,40 @@
-use std::collections::HashMap;
-use std::{env, fs};
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, Weak};
+use crate::storage::cache;
+use crate::{error, info, AppError, DbDef, DbDefWithCache, StructInfo};
 use futures_util::future::try_join_all;
 use redb::{Database, DatabaseError};
-use crate::{error, info, AppError, DbDef, DbDefWithCache, StructInfo};
-use crate::storage::cache;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Weak};
+use std::{env, fs};
 
 #[derive(Clone)]
-pub enum DbSetOwned {
-    Single(Arc<Database>),
-    Sharded(Vec<Arc<Database>>),
-}
+pub struct DbSetOwned(Vec<Arc<Database>>);
 
 #[derive(Clone)]
-pub enum DbSetWeak {
-    Single(Weak<Database>),
-    Sharded(Vec<Weak<Database>>),
-}
+pub struct DbSetWeak(Vec<Weak<Database>>);
 
 impl DbSetOwned {
-    pub fn new(name_index_dbs: Vec<(String, Option<usize>, Arc<Database>)>) -> HashMap<String, DbSetOwned> {
-        let mut singles: HashMap<String, Arc<Database>> = HashMap::new();
+    pub fn new(name_index_dbs: Vec<(String, usize, Arc<Database>)>) -> HashMap<String, DbSetOwned> {
         let mut shards:  HashMap<String, Vec<(usize, Arc<Database>)>> = HashMap::new();
-
-        for (name, idx_opt, db) in name_index_dbs {
-            match idx_opt {
-                None => {
-                    singles.insert(name, db);
-                }
-                Some(i) => {
-                    shards.entry(name).or_default().push((i, db));
-                }
-            }
+        for (name, idx, db) in name_index_dbs {
+            shards.entry(name).or_default().push((idx, db));
         }
-        let mut out = HashMap::with_capacity(singles.len() + shards.len());
-        for (name, db) in singles {
-            out.insert(name, DbSetOwned::Single(db));
-        }
+        let mut out = HashMap::with_capacity(shards.len());
         for (name, mut v) in shards {
             v.sort_by_key(|(i, _)| *i);
-            out.insert(name, DbSetOwned::Sharded(v.into_iter().map(|(_, db)| db).collect()));
+            out.insert(name, DbSetOwned(v.into_iter().map(|(_, db)| db).collect()));
         }
         out
     }
 
     pub fn downgrade(&self) -> DbSetWeak {
-        match self {
-            DbSetOwned::Single(db) => DbSetWeak::Single(Arc::downgrade(db)),
-            DbSetOwned::Sharded(dbs) => DbSetWeak::Sharded(dbs.iter().map(Arc::downgrade).collect()),
-        }
+        DbSetWeak(self.0.iter().map(Arc::downgrade).collect())
     }
 
     pub fn assert_last_ref(&self, name: &str) {
-        match self {
-            DbSetOwned::Single(db) => {
-                let sc = Arc::strong_count(db);
-                if sc != 1 {
-                    error!("Database {name} still has {sc} strong refs at shutdown");
-                }
-            },
-            DbSetOwned::Sharded(dbs) => {
-                let sc: usize = dbs.iter().map(|db|Arc::strong_count(db)).sum();
-                if sc != dbs.len() {
-                    error!("DbSet for {name} still has {sc} strong refs at shutdown instead of {}", dbs.len());
-                }
-            },
+        let sc: usize = self.0.iter().map(|db|Arc::strong_count(db)).sum();
+        if sc != self.0.len() {
+            error!("DbSet for {name} still has {sc} strong refs at shutdown instead of {}", self.0.len());
         }
     }
 }
@@ -76,33 +45,21 @@ pub struct Storage {
 }
 
 impl Storage {
-    /// Fetch a *single* DB (clone the Weak). Errors if column missing or sharded.
-    pub fn fetch_single_db(&self, name: &str) -> Result<Weak<Database>, AppError> {
-        match self.index_dbs.get(name) {
-            Some(DbSetWeak::Single(w)) => Ok(w.clone()),
-            Some(DbSetWeak::Sharded(_)) => Err(AppError::Custom(format!(
-                "column `{}`: expected single DB, found sharded", name
-            ))),
-            None => Err(AppError::Custom(format!("column `{}`: not found", name))),
-        }
-    }
-
     /// Fetch **all shards** (clone the Vec<Weak<_>>). Optionally enforce an expected shard count.
-    pub fn fetch_sharded_dbs(&self, name: &str, expected: Option<usize>) -> Result<Vec<Weak<Database>>, AppError> {
+    pub fn fetch_dbs(&self, name: &str, expected: Option<usize>) -> Result<Vec<Weak<Database>>, AppError> {
         match self.index_dbs.get(name) {
-            Some(DbSetWeak::Sharded(v)) => {
+            Some(DbSetWeak(v)) => {
                 let v = v.clone();
                 if let Some(exp) = expected {
                     if v.len() != exp {
                         return Err(AppError::Custom(format!(
-                            "column `{}`: shard count mismatch; expected {}, found {}",
-                            name, exp, v.len()
+                           "column `{}`: shard count mismatch; expected {}, found {}",
+                           name, exp, v.len()
                         )));
                     }
                 }
                 Ok(v)
             }
-            Some(DbSetWeak::Single(db)) => Ok(vec![db.clone()]),
             None => Err(AppError::Custom(format!("column `{}`: not found", name))),
         }
     }
@@ -166,68 +123,51 @@ impl StorageOwner {
         lines
     }
 
-    /// Create all DBs. `dbc.db_cache_in_mb` is already *per shard* for sharded, and
-    /// per *single* DB for `shards == 0`. Reject `shards == 1`.
     fn build_owned_map_create(db_dir: &Path, defs: &[DbDefWithCache]) -> redb::Result<HashMap<String, DbSetOwned>, AppError> {
         let mut out = HashMap::with_capacity(defs.len());
         for dbc in defs {
             dbc.validate()?;
-            match dbc.shards {
-                1 => {
-                    let db = Database::builder()
-                        .set_cache_size(dbc.db_cache_in_mb)
-                        .create(Self::db_file_path(db_dir, &dbc.name, None))?;
-                    out.insert(dbc.name.clone(), DbSetOwned::Single(Arc::new(db)));
-                }
-                shards => {
-                    let mut v = Vec::with_capacity(shards);
-                    for shard_idx in 0..shards {
-                        let db = Database::builder()
-                            .set_cache_size(dbc.db_cache_in_mb)
-                            .create(Self::db_file_path(db_dir, &dbc.name, Some(shard_idx)))?;
-                        v.push(Arc::new(db));
-                    }
-                    out.insert(dbc.name.clone(), DbSetOwned::Sharded(v));
-                }
+            let mut v = Vec::with_capacity(dbc.shards);
+            for shard_idx in 0..dbc.shards {
+                let suffix = match dbc.shards {
+                    1 => None,
+                    _ => Some(shard_idx),
+                };
+                let db = Database::builder()
+                    .set_cache_size(dbc.db_cache_in_mb)
+                    .create(Self::db_file_path(db_dir, &dbc.name, suffix))?;
+                v.push(Arc::new(db));
             }
+            out.insert(dbc.name.clone(), DbSetOwned(v));
         }
         Ok(out)
     }
 
-    /// Open all DBs in parallel. Reject `shards == 1`. Returns Single/Sharded depending on each definition.
     async fn build_owned_map_open(db_dir: &Path, defs: &[DbDefWithCache]) -> redb::Result<HashMap<String, DbSetOwned>, AppError> {
         for dbc in defs {
             dbc.validate()?;
         }
         let db_opening_tasks = defs.into_iter().flat_map(|dbc| {
-            match dbc.shards {
-                0 => {
-                    let name = dbc.name.clone();
-                    let path = Self::db_file_path(db_dir, &name, None);
-                    vec![tokio::task::spawn_blocking(move ||
-                        -> redb::Result<(String, Option<usize>, Arc<Database>), DatabaseError> {
+            (0..dbc.shards).map(move |idx| {
+                let name = dbc.name.clone();
+                let suffix = match dbc.shards {
+                    1 => None,
+                    _ => Some(idx),
+                };
+                let path = Self::db_file_path(db_dir, &name, suffix);
+                tokio::task::spawn_blocking(move ||
+                    -> redb::Result<(String, usize, Arc<Database>), DatabaseError> {
                         let db = Database::open(path)?;
-                        Ok((name, None, Arc::new(db)))
+                        Ok((name, idx, Arc::new(db)))
                     }
-                    )]
-                }
-                n => (0..n).map(move |i| {
-                    let name = dbc.name.clone();
-                    let path = Self::db_file_path(db_dir, &name, Some(i));
-                    tokio::task::spawn_blocking(move ||
-                        -> redb::Result<(String, Option<usize>, Arc<Database>), DatabaseError> {
-                        let db = Database::open(path)?;
-                        Ok((name, Some(i), Arc::new(db)))
-                    }
-                    )
-                }).collect::<Vec<_>>(),
-            }
+                )
+            }).collect::<Vec<_>>()
         });
 
         let opened = try_join_all(db_opening_tasks)
             .await?
             .into_iter()
-            .collect::<redb::Result<Vec<(String, Option<usize>, Arc<Database>)>, DatabaseError>>()?;
+            .collect::<redb::Result<Vec<(String, usize, Arc<Database>)>, DatabaseError>>()?;
 
         Ok(DbSetOwned::new(opened))
     }
@@ -240,7 +180,6 @@ impl StorageOwner {
     }
 
     pub async fn init(db_dir: PathBuf, db_defs: Vec<DbDef>, total_cache_size_gb: u8, log_info: bool) -> redb::Result<(bool, StorageOwner, Arc<Storage>), AppError> {
-        // allocator now outputs per-shard cache in MB + asserts shards >= 2
         let defs_with_cache: Vec<DbDefWithCache> = cache::allocate_cache_mb(&db_defs, (total_cache_size_gb as u64) * 1024);
 
         let result =
@@ -270,24 +209,16 @@ impl StorageOwner {
 
 #[cfg(all(test, not(feature = "integration")))]
 mod tests {
+    use crate::storage::init::{Storage, StorageOwner};
     use std::sync::Arc;
-    use crate::storage::init::{DbSetWeak, Storage, StorageOwner};
 
     fn count_weak_upgrades(storage: &Arc<Storage>) -> (usize, usize) {
         let mut total = 0usize;
         let mut alive = 0usize;
 
         for group in storage.index_dbs.values() {
-            match group {
-                DbSetWeak::Single(w) => {
-                    total += 1;
-                    if w.upgrade().is_some() { alive += 1; }
-                }
-                DbSetWeak::Sharded(ws) => {
-                    total += ws.len();
-                    alive += ws.iter().filter(|w| w.upgrade().is_some()).count();
-                }
-            }
+            total += group.0.len();
+            alive += group.0.iter().filter(|w| w.upgrade().is_some()).count();
         }
         (total, alive)
     }
@@ -323,12 +254,8 @@ mod tests {
             .await
             .expect("temp storage");
 
-        // Just verify we can iterate and see at least one weak in each group.
         for (name, group) in &storage.index_dbs {
-            let weak_count = match group {
-                DbSetWeak::Single(w) => if w.upgrade().is_some() { 1 } else { 0 },
-                DbSetWeak::Sharded(ws) => ws.len(),
-            };
+            let weak_count = group.0.len();
             assert!(weak_count > 0, "column `{name}` must hold at least one weak ref");
         }
     }

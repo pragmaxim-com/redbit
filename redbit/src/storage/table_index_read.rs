@@ -1,42 +1,136 @@
-use crate::{AppError, TableInfo};
-use redb::{AccessGuard, Database, Key, MultimapTableDefinition, MultimapValue, ReadOnlyMultimapTable, ReadOnlyTable, ReadableDatabase, ReadableTableMetadata, TableDefinition};
+use crate::{AppError, TableInfo, ValuePartitioner};
+use redb::{AccessGuard, Database, Key, MultimapTableDefinition, MultimapValue, Range, ReadOnlyMultimapTable, ReadOnlyTable, ReadableDatabase, ReadableTableMetadata, TableDefinition};
 use std::borrow::Borrow;
 use std::ops::RangeBounds;
 use std::sync::Weak;
+use crate::storage::table_writer_api::ReadTableLike;
 
-pub struct ReadOnlyIndexTable<K: Key + 'static, V: Key + 'static> {
+struct ReadOnlyIndexTableShard<K: Key + 'static, V: Key + 'static> {
     pk_by_index: ReadOnlyMultimapTable<V, K>,
     index_by_pk: ReadOnlyTable<K, V>,
 }
 
-impl<K: Key + 'static, V: Key + 'static> ReadOnlyIndexTable<K, V> {
-    pub fn new(index_db: Weak<Database>, pk_by_index_def: MultimapTableDefinition<V, K>, index_by_pk_def: TableDefinition<K, V>) -> redb::Result<Self, AppError> {
-        let db_arc = index_db.upgrade().ok_or_else(|| AppError::Custom("database closed".to_string()))?;
-        let index_tx = db_arc.begin_read()?;
+impl<K: Key + 'static, V: Key + 'static> ReadOnlyIndexTableShard<K, V> {
+    fn open(db_weak: &Weak<Database>, pk_by_index_def: MultimapTableDefinition<V, K>, index_by_pk_def: TableDefinition<K, V>) -> Result<Self, AppError> {
+        let db_arc = db_weak.upgrade().ok_or_else(|| AppError::Custom("database closed".to_string()))?;
+        let tx = db_arc.begin_read()?;
         Ok(Self {
-            pk_by_index: index_tx.open_multimap_table(pk_by_index_def)?,
-            index_by_pk: index_tx.open_table(index_by_pk_def)?,
+            pk_by_index: tx.open_multimap_table(pk_by_index_def)?,
+            index_by_pk: tx.open_table(index_by_pk_def)?,
         })
     }
+}
 
-    pub fn get_value<'k>(&self, key: impl Borrow<K::SelfType<'k>>,) -> redb::Result<Option<AccessGuard<'_, V>>> {
-        self.index_by_pk.get(key.borrow())
+pub struct ShardedReadOnlyIndexTable<K, V, VP>
+where
+    K: Key + 'static + Borrow<K::SelfType<'static>>,
+    V: Key + 'static + Borrow<V::SelfType<'static>>,
+    VP: ValuePartitioner<V>,
+{
+    shards: Vec<ReadOnlyIndexTableShard<K, V>>,
+    value_partitioner: VP,
+}
+
+impl<K, V, VP> ShardedReadOnlyIndexTable<K, V, VP>
+where
+    K: Key + 'static + Borrow<K::SelfType<'static>>,
+    V: Key + 'static + Borrow<V::SelfType<'static>>,
+    VP: ValuePartitioner<V>,
+{
+    pub fn new(value_partitioner: VP,
+           dbs: Vec<Weak<Database>>,
+           pk_by_index_def: MultimapTableDefinition<V, K>,
+           index_by_pk_def: TableDefinition<K, V>,
+    ) -> Result<Self, AppError> {
+        if dbs.len() < 1 {
+            return Err(AppError::Custom(format!(
+                "ShardedReadOnlyIndexTable expected at least one database, got {}",
+                dbs.len()
+            )));
+        }
+        let mut shards = Vec::with_capacity(dbs.len());
+        for db_weak in &dbs {
+            shards.push(ReadOnlyIndexTableShard::open(
+                db_weak,
+                pk_by_index_def,
+                index_by_pk_def,
+            )?);
+        }
+        Ok(Self {
+            shards,
+            value_partitioner,
+        })
+    }
+}
+
+impl<K, V, VP> ReadTableLike<K, V> for ShardedReadOnlyIndexTable<K, V, VP>
+where
+    K: Key + 'static + Borrow<K::SelfType<'static>>,
+    V: Key + 'static + Borrow<V::SelfType<'static>>,
+    VP: ValuePartitioner<V>,
+{
+
+    fn get_value<'k>(&self, key: impl Borrow<K::SelfType<'k>>) -> Result<Option<AccessGuard<'_, V>>, AppError> {
+        for shard in &self.shards {
+            if let Some(vg) = shard.index_by_pk.get(key.borrow())? {
+                return Ok(Some(vg));
+            }
+        }
+        Ok(None)
     }
 
-    pub fn get_keys<'v>(&self, val: impl Borrow<V::SelfType<'v>>) -> redb::Result<MultimapValue<'static, K>> {
-        self.pk_by_index.get(val.borrow())
+    fn index_keys<'v>(&self, val: impl Borrow<V::SelfType<'v>>) -> Result<MultimapValue<'static, K>, AppError> {
+        let shard =
+            if self.shards.len() == 1 {
+                &self.shards[0]
+            } else {
+                &self.shards[self.value_partitioner.partition_value(val.borrow())]
+            };
+        Ok(shard.pk_by_index.get(val.borrow())?)
     }
 
-    pub fn range_keys<'a, KR: Borrow<V::SelfType<'a>>>(&self, range: impl RangeBounds<KR>) -> redb::Result<redb::MultimapRange<'static, V, K>> {
-        self.pk_by_index.range(range)
+    fn index_range<'a, KR: Borrow<V::SelfType<'a>>>(&self, range: impl RangeBounds<KR>) -> Result<redb::MultimapRange<'static, V, K>, AppError> {
+        let shard =
+            if self.shards.len() == 1 {
+                &self.shards[0]
+            } else {
+                unimplemented!()
+            };
+        Ok(shard.pk_by_index.range(range)?)
     }
 
-    pub fn stats(&self) -> redb::Result<Vec<TableInfo>> {
-        Ok(
-            vec![
-                TableInfo::from_stats("pk_by_index", self.pk_by_index.len()?, self.pk_by_index.stats()?),
-                TableInfo::from_stats("index_by_pk", self.index_by_pk.len()?, self.index_by_pk.stats()?),
-            ]
-        )
+    /// Aggregated stats: sum len() across shards for pk_by_index, use the first shard's pk_by_index.stats() as representative.
+    fn stats(&self) -> Result<Vec<TableInfo>, AppError> {
+        debug_assert!(!self.shards.is_empty());
+        let mut total: u64 = 0;
+        for s in &self.shards {
+            total = total.saturating_add(s.pk_by_index.len()?);
+        }
+        let rep_stats = self.shards[0].pk_by_index.stats()?;
+        Ok(vec![TableInfo::from_stats(
+            "pk_by_index",
+            total,
+            rep_stats,
+        )])
+    }
+
+    fn iter_keys(&self) -> Result<Range<'_, K, V>, AppError> {
+        unimplemented!()
+    }
+
+    fn range<'a, KR: Borrow<K::SelfType<'a>>>(&self, _range: impl RangeBounds<KR>) -> Result<Range<'static, K, V>, AppError> {
+        unimplemented!()
+    }
+
+    fn last_key(&self) -> Result<Option<(AccessGuard<'_, K>, AccessGuard<'_, V>)>, AppError> {
+        unimplemented!()
+    }
+
+    fn first_key(&self) -> Result<Option<(AccessGuard<'_, K>, AccessGuard<'_, V>)>, AppError> {
+        unimplemented!()
+    }
+
+    fn dict_keys<'v>(&self, _val: impl Borrow<V::SelfType<'v>>) -> redb::Result<Option<MultimapValue<'static, K>>, AppError> {
+        unimplemented!()
     }
 }

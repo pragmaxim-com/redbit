@@ -163,7 +163,7 @@ where
 mod plain_sharded {
     use crate::impl_copy_owned_value_identity;
     use crate::storage::async_boundary::CopyOwnedValue;
-    use crate::storage::table_writer_api::WriterLike;
+    use crate::storage::table_writer_api::{ReadTableLike, WriterLike};
     use crate::storage::test_utils::addr;
     use crate::storage::{plain_test_utils, test_utils};
     use redb::Durability;
@@ -229,7 +229,7 @@ mod plain_sharded {
 #[cfg(all(test, not(feature = "integration")))]
 mod index_sharded {
     use crate::storage::async_boundary::ValueOwned;
-    use crate::storage::table_writer_api::WriterLike;
+    use crate::storage::table_writer_api::{ReadTableLike, WriterLike};
     use crate::storage::test_utils::{addr, Address};
     use crate::storage::{index_test_utils, test_utils};
     use crossbeam::channel;
@@ -326,7 +326,7 @@ mod index_sharded {
         writer.flush_deferred().expect("flush");
 
         let reader = index_test_utils::mk_sharded_reader::<Address>(n, weak_dbs, pk_by_index_def, index_by_pk_def);
-        let keys_iter = reader.get_keys(&a3).expect("get_keys a3");
+        let keys_iter = reader.index_keys(&a3).expect("get_keys a3");
         let mut keys: Vec<u32> = keys_iter.into_iter().map(|g| g.unwrap().value()).collect();
         keys.sort();
         assert_eq!(keys, vec![4, 80, 100]);
@@ -356,6 +356,7 @@ mod dict_sharded {
     use crate::storage::test_utils::addr;
     use crate::storage::{dict_test_utils, test_utils};
     use redb::Durability;
+    use crate::ReadTableLike;
 
     #[test]
     fn sharded_dict_two_ids_same_value_share_after_flush() {
@@ -381,7 +382,7 @@ mod dict_sharded {
         assert_eq!(b, val.0);
 
         // get_keys(value) returns both ids
-        let keys_opt = reader.get_keys(&val).expect("get_keys");
+        let keys_opt = reader.dict_keys(&val).expect("get_keys");
         let mut ids = keys_opt.expect("some").into_iter().map(|g| g.unwrap().value()).collect::<Vec<u32>>();
         ids.sort();
         assert_eq!(ids, vec![id1, id2]);
@@ -413,7 +414,7 @@ mod dict_sharded {
         let got2 = reader.get_value(&id2).expect("get id2").expect("some");
         assert_eq!(got2.value().0, val.0);
 
-        let keys_opt = reader.get_keys(&val).expect("get_keys");
+        let keys_opt = reader.dict_keys(&val).expect("get_keys");
         let ids = keys_opt.expect("some").into_iter().map(|g| g.unwrap().value()).collect::<Vec<u32>>();
         assert_eq!(ids, vec![id2]);
 

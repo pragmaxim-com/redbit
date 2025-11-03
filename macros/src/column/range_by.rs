@@ -11,7 +11,7 @@ pub fn by_index_def(entity_def: &EntityDef, column_name: &Ident, column_type: &T
     let read_ctx_type = &entity_def.read_ctx_type;
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: &#read_ctx_type, from: &#column_type, until: &#column_type) -> Result<Vec<#entity_type>, AppError> {
-            let iter = tx_context.#index_table.range_keys::<#column_type>(from..until)?
+            let iter = tx_context.#index_table.index_range::<#column_type>(from..until)?
                 .flat_map(|r| match r {
                     Ok((_k, value_iter)) => Either::Left(value_iter.map(|res| res.map(|kg| kg.value()))),
                     Err(e) => Either::Right(std::iter::once(Err(e))),

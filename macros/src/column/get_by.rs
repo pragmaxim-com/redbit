@@ -16,7 +16,7 @@ pub fn get_by_dict_def(
     let read_tx_context_ty = &entity_def.read_ctx_type;
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: &#read_tx_context_ty, val: &#column_type) -> Result<Vec<#entity_type>, AppError> {
-            let iter = tx_context.#dict_table_var.get_keys(val)?.into_iter().flatten().map(|res| res.map(|kg| kg.value()));
+            let iter = tx_context.#dict_table_var.dict_keys(val)?.into_iter().flatten().map(|res| res.map(|kg| kg.value()));
             Self::compose_many(&tx_context, iter, None)
         }
     };
@@ -61,7 +61,7 @@ pub fn get_by_index_def(entity_def: &EntityDef, column_name: &Ident, column_type
     let read_ctx_type = &entity_def.read_ctx_type;
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: &#read_ctx_type, val: &#column_type) -> Result<Vec<#entity_type>, AppError> {
-            let iter = tx_context.#index_table_var.get_keys(val)?.map(|res| res.map(|kg| kg.value()));
+            let iter = tx_context.#index_table_var.index_keys(val)?.map(|res| res.map(|kg| kg.value()));
             Self::compose_many(&tx_context, iter, None)
         }
     };

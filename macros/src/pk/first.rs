@@ -13,7 +13,7 @@ pub fn fn_def(entity_def: &EntityDef, table: &Ident) -> FunctionDef {
 
     let fn_stream = quote! {
         pub fn #fn_name(tx_context: &#read_ctx_type) -> Result<Option<#entity_type>, AppError> {
-            if let Some((k, _)) = tx_context.#table.underlying.first()? {
+            if let Some((k, _)) = tx_context.#table.first_key()? {
                 return Self::compose(&tx_context, k.value()).map(Some);
             }
             Ok(None)

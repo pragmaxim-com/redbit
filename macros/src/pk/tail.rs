@@ -19,14 +19,14 @@ pub fn fn_def(entity_def: &EntityDef, table: &Ident) -> FunctionDef {
             if n > 100 {
                 return Err(AppError::Internal("Cannot take more than 100 entities at once".into()));
             }
-            let Some((key_guard, _)) = tx_context.#table.underlying.last()? else {
+            let Some((key_guard, _)) = tx_context.#table.last_key()? else {
                 return Ok(Vec::new());
             };
             let until = key_guard.value().next_index();
             let from = until.rollback_or_init(n as u32);
             let range = from..until;
 
-            let mut pks = tx_context.#table.underlying.range(range)?.rev().take(n)
+            let mut pks = tx_context.#table.range(range)?.rev().take(n)
                 .map(|entry_res| entry_res.map(|(kg, _)| kg.value()))
                 .collect::<redb::Result<Vec<_>>>()?;
             pks.reverse();

@@ -24,7 +24,7 @@ pub fn by_dict_def(
     let fn_name = format_ident!("stream_{}s_by_{}", parent_ident.to_string().to_lowercase(), column_name);
     let fn_stream = quote! {
         pub fn #fn_name(parent_tx_context: #parent_tx_context_type, val: #column_type, query: Option<#stream_parent_query_type>) -> Result<impl futures::Stream<Item = Result<#parent_type, AppError>> + Send, AppError> {
-            let unique_parent_pk_iter = parent_tx_context.#parent_one2many_field_name.#dict_table_var.get_keys(val)?
+            let unique_parent_pk_iter = parent_tx_context.#parent_one2many_field_name.#dict_table_var.dict_keys(val)?
                 .into_iter()
                 .flatten()
                 .map(|r| r.map(|g| g.value().parent))
@@ -145,7 +145,7 @@ pub fn by_index_def(
     let fn_name = format_ident!("stream_{}s_by_{}", parent_ident.to_string().to_lowercase(), column_name);
     let fn_stream = quote! {
         pub fn #fn_name(parent_tx_context: #parent_tx_context_type, val: #column_type, query: Option<#stream_parent_query_type>) -> Result<impl futures::Stream<Item = Result<#parent_type, AppError>> + Send, AppError> {
-            let unique_parent_pk_iter = parent_tx_context.#parent_one2many_field_name.#index_table.get_keys(&val)?
+            let unique_parent_pk_iter = parent_tx_context.#parent_one2many_field_name.#index_table.index_keys(&val)?
                 .map(|r| r.map(|g| g.value().parent))
                 .scan(HashSet::new(), |seen, r| {
                     Some(match r {

@@ -1,63 +1,144 @@
-use crate::{AppError, TableInfo};
+use crate::storage::partitioning::ValuePartitioner;
+use crate::{AppError, ReadTableLike, TableInfo};
 use redb::Key;
 use redb::*;
 use std::borrow::Borrow;
+use std::ops::RangeBounds;
 use std::sync::Weak;
 
-pub struct ReadOnlyDictTable<K: Key + 'static, V: Key + 'static> {
+struct ReadOnlyDictTableShard<K: Key + 'static, V: Key + 'static> {
     dict_pk_to_ids: ReadOnlyMultimapTable<K, K>,
     value_by_dict_pk: ReadOnlyTable<K, V>,
     value_to_dict_pk: ReadOnlyTable<V, K>,
     dict_pk_by_id: ReadOnlyTable<K, K>,
 }
 
-impl<K: Key + 'static, V: Key + 'static> ReadOnlyDictTable<K, V> {
-    pub fn new(dict_db: Weak<Database>, dict_pk_to_ids_def: MultimapTableDefinition<K, K>, value_by_dict_pk_def: TableDefinition<K, V>, value_to_dict_pk_def: TableDefinition<V, K>, dict_pk_by_id_def: TableDefinition<K, K>) -> Result<Self, AppError> {
-        let db_arc = dict_db.upgrade().ok_or_else(|| AppError::Custom("database closed".to_string()))?;
-        let dict_tx = db_arc.begin_read()?;
+impl<K: Key + 'static, V: Key + 'static> ReadOnlyDictTableShard<K, V> {
+    fn open(
+        db_weak: &Weak<Database>,
+        dict_pk_to_ids_def: MultimapTableDefinition<K, K>,
+        value_by_dict_pk_def: TableDefinition<K, V>,
+        value_to_dict_pk_def: TableDefinition<V, K>,
+        dict_pk_by_id_def: TableDefinition<K, K>,
+    ) -> Result<Self, AppError> {
+        let db_arc = db_weak.upgrade().ok_or_else(|| AppError::Custom("database closed".to_string()))?;
+        let tx = db_arc.begin_read()?;
         Ok(Self {
-            dict_pk_to_ids: dict_tx.open_multimap_table(dict_pk_to_ids_def)?,
-            value_by_dict_pk: dict_tx.open_table(value_by_dict_pk_def)?,
-            value_to_dict_pk: dict_tx.open_table(value_to_dict_pk_def)?,
-            dict_pk_by_id: dict_tx.open_table(dict_pk_by_id_def)?,
+            dict_pk_to_ids: tx.open_multimap_table(dict_pk_to_ids_def)?,
+            value_by_dict_pk: tx.open_table(value_by_dict_pk_def)?,
+            value_to_dict_pk: tx.open_table(value_to_dict_pk_def)?,
+            dict_pk_by_id: tx.open_table(dict_pk_by_id_def)?,
         })
     }
+}
 
-    pub fn get_value<'k>(&self, key: impl Borrow<K::SelfType<'k>>,) -> Result<Option<AccessGuard<'_, V>>> {
-        let birth_guard_opt = self.dict_pk_by_id.get(key.borrow())?;
-        match birth_guard_opt {
-            Some(birth_guard) => {
-                let birth_id = birth_guard.value();
-                let val_guard = self.value_by_dict_pk.get(birth_id)?;
-                match val_guard {
-                    Some(vg) => Ok(Some(vg)),
-                    None => Ok(None),
-                }
-            },
-            None => Ok(None),
+pub struct ShardedReadOnlyDictTable<K, V, VP>
+where
+    K: Key + 'static + Borrow<K::SelfType<'static>>,
+    V: Key + 'static + Borrow<V::SelfType<'static>>,
+    VP: ValuePartitioner<V>,
+{
+    shards: Vec<ReadOnlyDictTableShard<K, V>>,
+    value_partitioner: VP,
+}
+
+impl<K, V, VP> ShardedReadOnlyDictTable<K, V, VP>
+where
+    K: Key + 'static + Borrow<K::SelfType<'static>>,
+    V: Key + 'static + Borrow<V::SelfType<'static>>,
+    VP: ValuePartitioner<V>
+{
+    /// Build a sharded reader. `dbs.len()` must equal `layout.get()`.
+    pub fn new(
+        val_partitioner: VP,
+        dbs: Vec<Weak<Database>>,
+        dict_pk_to_ids_def: MultimapTableDefinition<K, K>,
+        value_by_dict_pk_def: TableDefinition<K, V>,
+        value_to_dict_pk_def: TableDefinition<V, K>,
+        dict_pk_by_id_def: TableDefinition<K, K>,
+    ) -> Result<Self, AppError> {
+        if dbs.len() < 1 {
+            return Err(AppError::Custom(format!("ShardedReadOnlyDictTable expected at least 1 database, got {}", dbs.len())));
         }
-
+        let mut shards = Vec::with_capacity(dbs.len());
+        for db_weak in &dbs {
+            shards.push(ReadOnlyDictTableShard::open(
+                db_weak,
+                dict_pk_to_ids_def,
+                value_by_dict_pk_def,
+                value_to_dict_pk_def,
+                dict_pk_by_id_def,
+            )?);
+        }
+        Ok(Self { shards, value_partitioner: val_partitioner })
     }
-    pub fn get_keys<'v>(&self, val: impl Borrow<V::SelfType<'v>>) -> Result<Option<MultimapValue<'static, K>>> {
-        let birth_guard = self.value_to_dict_pk.get(val.borrow())?;
+}
+impl<K, V, VP> ReadTableLike<K, V> for ShardedReadOnlyDictTable<K, V, VP>
+where
+    K: Key + 'static + Borrow<K::SelfType<'static>>,
+    V: Key + 'static + Borrow<V::SelfType<'static>>,
+    VP: ValuePartitioner<V>
+{
+
+    fn get_value<'k>(&self, key: impl Borrow<K::SelfType<'k>>) -> Result<Option<AccessGuard<'_, V>>, AppError> {
+        for shard in &self.shards {
+            if let Some(birth_guard) = shard.dict_pk_by_id.get(key.borrow())? {
+                let birth_id = birth_guard.value();
+                let val_guard = shard.value_by_dict_pk.get(birth_id)?;
+                return Ok(val_guard);
+            }
+        }
+        Ok(None)
+    }
+
+    fn dict_keys<'v>(&self, val: impl Borrow<V::SelfType<'v>>) -> Result<Option<MultimapValue<'static, K>>, AppError> {
+        let shard = if self.shards.len() == 1 {
+            &self.shards[0]
+        } else {
+            &self.shards[self.value_partitioner.partition_value(val.borrow())]
+        };
+        let birth_guard = shard.value_to_dict_pk.get(val.borrow())?;
         match birth_guard {
             Some(g) => {
                 let birth_id = g.value();
-                let value = self.dict_pk_to_ids.get(&birth_id)?;
+                let value = shard.dict_pk_to_ids.get(&birth_id)?;
                 Ok(Some(value))
             },
             None => Ok(None),
         }
     }
 
-    pub fn stats(&self) -> Result<Vec<TableInfo>> {
-        Ok(
-            vec! [
-                TableInfo::from_stats("dict_pk_to_ids", self.dict_pk_to_ids.len()?, self.dict_pk_to_ids.stats()?),
-                TableInfo::from_stats("value_by_dict_pk", self.value_by_dict_pk.len()?, self.value_by_dict_pk.stats()?),
-                TableInfo::from_stats("value_to_dict_pk", self.value_to_dict_pk.len()?, self.value_to_dict_pk.stats()?),
-                TableInfo::from_stats("dict_pk_by_id", self.dict_pk_by_id.len()?, self.dict_pk_by_id.stats()?),
-            ]
-        )
+    fn stats(&self) -> Result<Vec<TableInfo>, AppError> {
+        debug_assert!(!self.shards.is_empty());
+        let mut total: u64 = 0;
+        for s in &self.shards {
+            total = total.saturating_add(s.value_by_dict_pk.len()?);
+        }
+        let rep_stats = self.shards[0].value_by_dict_pk.stats()?;
+        Ok(vec![TableInfo::from_stats("distinct_values", total, rep_stats)])
+    }
+
+    fn index_keys<'v>(&self, _val: impl Borrow<V::SelfType<'v>>) -> Result<MultimapValue<'static, K>, AppError> {
+        unimplemented!()
+    }
+
+    fn iter_keys(&self) -> Result<Range<'_, K, V>, AppError> {
+        unimplemented!()
+    }
+
+    fn range<'a, KR: Borrow<K::SelfType<'a>>>(&self, _range: impl RangeBounds<KR>) -> Result<Range<'static, K, V>, AppError> {
+        unimplemented!()
+    }
+
+    fn index_range<'a, KR: Borrow<V::SelfType<'a>>>(&self, _range: impl RangeBounds<KR>) -> Result<MultimapRange<'static, V, K>, AppError> {
+        unimplemented!()
+    }
+
+    fn last_key(&self) -> Result<Option<(AccessGuard<'_, K>, AccessGuard<'_, V>)>, AppError> {
+        unimplemented!()
+    }
+
+    fn first_key(&self) -> Result<Option<(AccessGuard<'_, K>, AccessGuard<'_, V>)>, AppError> {
+        unimplemented!()
     }
 }

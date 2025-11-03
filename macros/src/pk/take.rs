@@ -16,7 +16,7 @@ pub fn fn_def(entity_def: &EntityDef, table: &Ident) -> FunctionDef {
             if n > 100 {
                 Err(AppError::Internal("Cannot take more than 100 entities at once".into()))
             } else {
-                let iter =tx_context.#table.underlying.iter()?.take(n).map(|entry_res| entry_res.map(|(pk_guard, _)| pk_guard.value()));
+                let iter =tx_context.#table.iter_keys()?.take(n).map(|entry_res| entry_res.map(|(pk_guard, _)| pk_guard.value()));
                 Self::compose_many(&tx_context, iter, None)
             }
         }

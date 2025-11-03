@@ -1,8 +1,8 @@
 use crate::storage::async_boundary::{CopyOwnedValue, ValueBuf, ValueOwned};
 use crate::storage::router::Router;
-use crate::AppError;
+use crate::{AppError, TableInfo};
 use crossbeam::channel::{bounded, Receiver, Sender};
-use redb::{AccessGuard, Durability, Key, Value, WriteTransaction};
+use redb::{AccessGuard, Durability, Key, MultimapValue, Value, WriteTransaction};
 use std::borrow::Borrow;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
@@ -10,8 +10,6 @@ use std::ops::RangeBounds;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::fmt;
-
-
 
 #[derive(Clone, Debug)]
 pub struct TaskStats {
@@ -130,6 +128,18 @@ impl FlushFuture {
     }
 }
 
+pub trait ReadTableLike<K: Key + 'static, V: Key + 'static> {
+    fn index_keys<'v>(&self, val: impl Borrow<V::SelfType<'v>>) -> Result<MultimapValue<'static, K>, AppError>;
+    fn dict_keys<'v>(&self, val: impl Borrow<V::SelfType<'v>>) -> redb::Result<Option<MultimapValue<'static, K>>, AppError>;
+    fn get_value<'k>(&self, key: impl Borrow<K::SelfType<'k>>) -> Result<Option<AccessGuard<'_, V>>, AppError>;
+    fn iter_keys(&self) -> Result<redb::Range<'_, K, V>, AppError>;
+    fn range<'a, KR: Borrow<K::SelfType<'a>>>(&self, range: impl RangeBounds<KR>) -> Result<redb::Range<'static, K, V>, AppError>;
+    fn index_range<'a, KR: Borrow<V::SelfType<'a>>>(&self, range: impl RangeBounds<KR>) -> Result<redb::MultimapRange<'static, V, K>, AppError>;
+    fn last_key(&self) -> Result<Option<(AccessGuard<'_, K>, AccessGuard<'_, V>)>, AppError>;
+    fn first_key(&self) -> Result<Option<(AccessGuard<'_, K>, AccessGuard<'_, V>)>, AppError>;
+    fn stats(&self) -> Result<Vec<TableInfo>, AppError>;
+}
+
 pub trait WriteTableLike<K: CopyOwnedValue + 'static, V: Key + 'static> {
     fn insert_kv<'k, 'v>(&mut self, key: impl Borrow<K::SelfType<'k>>, value: impl Borrow<V::SelfType<'v>>) -> Result<(), AppError>;
     fn insert_many_sorted_by_key<'k, 'v, KR: Borrow<K::SelfType<'k>>, VR: Borrow<V::SelfType<'v>>>(&mut self, pairs: Vec<(KR, VR)>) -> Result<(), AppError>;
@@ -191,7 +201,7 @@ pub struct FlushState {
 }
 
 pub enum WriterCommand<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static> {
-    Begin(Sender<Result<(), AppError>>, Durability),              // start new WriteTransaction + open table
+    Begin(Sender<Result<(), AppError>>, Durability),
     WriteSortedInsertsOnFlush(Vec<(K, V)>),
     WriteInsertNow(K, V),
     AppendSortedInserts(Vec<(K, V)>),
@@ -203,10 +213,10 @@ pub enum WriterCommand<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'stat
         sink: Arc<dyn Fn(Option<usize>, Vec<(usize, Option<ValueOwned<K>>)>) -> Result<(), AppError> + Send + Sync + 'static>
     },
     Range(K, K, Sender<Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>>),
-    Flush(Sender<Result<TaskResult, AppError>>),              // commit current tx, stay alive (idle)
+    Flush(Sender<Result<TaskResult, AppError>>),
     FlushWhenReady { ack: Sender<Result<TaskResult, AppError>>, deferred: bool },
     ReadyForFlush(usize),
-    Shutdown(Sender<Result<(), AppError>>),           // graceful stop (no commit)
+    Shutdown(Sender<Result<(), AppError>>),
 }
 pub struct WriteResult {
     pub collect_took: u128,
@@ -227,7 +237,7 @@ pub enum Control {
     FlushWhenReady(Sender<Result<TaskResult, AppError>>),
     Error(Sender<Result<TaskResult, AppError>>, AppError),
     Shutdown(Sender<Result<(), AppError>>),
-    TxFinished, // new: emitted when Flush also committed the tx
+    TxFinished,
 }
 
 pub trait WriterLike<K: CopyOwnedValue, V: Value> {

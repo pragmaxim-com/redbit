@@ -18,7 +18,7 @@ pub fn stream_range_by_index_def(entity_def: &EntityDef, column_name: &Ident, co
             query: Option<#query_type>,
         ) -> Result<impl futures::Stream<Item = Result<#entity_type, AppError>> + Send, AppError> {
             let pk_iter =
-                tx_context.#index_table.range_keys::<#column_type>(from..until)?
+                tx_context.#index_table.index_range::<#column_type>(from..until)?
                 .flat_map(|r| match r {
                     Ok((_k, value_iter)) => Either::Left(value_iter.map(|res| res.map(|kg| kg.value()))),
                     Err(e) => Either::Right(std::iter::once(Err(e))),

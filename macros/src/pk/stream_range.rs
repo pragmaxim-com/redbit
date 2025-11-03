@@ -16,7 +16,7 @@ pub fn fn_def(entity_def: &EntityDef, table: &Ident, range_query_ty: &Type, no_c
         quote! {
             pub fn #fn_name(tx_context: #read_ctx_type, from: #pk_type, until: #pk_type, query: Option<#query_type>) -> Result<impl futures::Stream<Item = Result<#entity_type, AppError>> + Send, AppError> {
                 let range = from..until;
-                let iter = tx_context.#table.underlying.range::<#pk_type>(range)?.map(|res| res.map(|(kg, _)| kg.value()));
+                let iter = tx_context.#table.range::<#pk_type>(range)?.map(|res| res.map(|(kg, _)| kg.value()));
                 Self::compose_many_stream(tx_context, iter, query)
             }
         };
