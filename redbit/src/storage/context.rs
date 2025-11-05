@@ -5,7 +5,9 @@ use std::sync::Arc;
 use std::time::Instant;
 
 pub trait WriteTxContext {
-    fn new_write_ctx(storage: &Arc<Storage>) -> redb::Result<Self, AppError> where Self: Sized;
+    type Defs: TxContext<WriteCtx = Self>;
+
+    fn new_write_ctx(defs: &Self::Defs, storage: &Arc<Storage>) -> redb::Result<Self, AppError> where Self: Sized;
     fn begin_writing_async(&self, durability: Durability) -> redb::Result<Vec<StartFuture>, AppError>;
     fn stop_writing_async(self) -> redb::Result<Vec<StopFuture>, AppError>;
     fn commit_ctx_async(&self) -> Result<Vec<FlushFuture>, AppError>;
@@ -25,8 +27,8 @@ pub trait WriteTxContext {
         }
         Ok(())
     }
-    fn begin_write_ctx(storage: &Arc<Storage>, durability: Durability) -> redb::Result<Self, AppError> where Self: Sized {
-        let ctx = Self::new_write_ctx(storage)?;
+    fn begin_write_ctx(defs: &Self::Defs, storage: &Arc<Storage>, durability: Durability) -> redb::Result<Self, AppError> where Self: Sized {
+        let ctx = Self::new_write_ctx(defs, storage)?;
         ctx.begin_writing(durability)?;
         Ok(ctx)
     }
@@ -81,7 +83,55 @@ pub trait WriteTxContext {
 }
 
 pub trait ReadTxContext {
-    fn begin_read_ctx(storage: &Arc<Storage>) -> redb::Result<Self, AppError>
+    type Defs: TxContext<ReadCtx = Self>;
+
+    fn begin_read_ctx(defs: &Self::Defs, storage: &Arc<Storage>) -> redb::Result<Self, AppError>
     where
         Self: Sized;
+}
+
+pub trait TxContext {
+    type ReadCtx: ReadTxContext<Defs = Self>;
+    type WriteCtx: WriteTxContext<Defs = Self>;
+
+    fn definition() -> redb::Result<Self, AppError>
+    where
+        Self: Sized;
+
+    fn begin_read_ctx(&self, storage: &Arc<Storage>) -> redb::Result<Self::ReadCtx, AppError> {
+        <Self::ReadCtx as ReadTxContext>::begin_read_ctx(self, storage)
+    }
+
+    fn new_write_ctx(&self, storage: &Arc<Storage>) -> redb::Result<Self::WriteCtx, AppError> {
+        <Self::WriteCtx as WriteTxContext>::new_write_ctx(self, storage)
+    }
+    fn begin_write_ctx(&self, storage: &Arc<Storage>, durability: Durability) -> redb::Result<Self::WriteCtx, AppError> where Self: Sized {
+        let ctx = Self::new_write_ctx(self, storage)?;
+        ctx.begin_writing(durability)?;
+        Ok(ctx)
+    }
+}
+
+pub trait ToReadField {
+    type ReadField;
+    fn to_read_field(&self, storage: &Arc<Storage>) -> redb::Result<Self::ReadField, AppError>;
+}
+
+pub trait ToWriteField {
+    type WriteField;
+    fn to_write_field(&self, storage: &Arc<Storage>) -> redb::Result<Self::WriteField, AppError>;
+}
+
+impl<C: TxContext> ToReadField for C {
+    type ReadField = C::ReadCtx;
+    fn to_read_field(&self, storage: &Arc<Storage>) -> redb::Result<Self::ReadField, AppError> {
+        self.begin_read_ctx(storage)
+    }
+}
+
+impl<C: TxContext> ToWriteField for C {
+    type WriteField = C::WriteCtx;
+    fn to_write_field(&self, storage: &Arc<Storage>) -> redb::Result<Self::WriteField, AppError> {
+        self.new_write_ctx(storage)
+    }
 }

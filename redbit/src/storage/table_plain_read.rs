@@ -1,16 +1,17 @@
-use crate::storage::table_writer_api::ReadTableLike;
-use crate::{AppError, KeyPartitioner, TableInfo};
+use crate::storage::table_plain::PlainFactory;
+use crate::storage::table_writer_api::{ReadTableFactory, ReadTableLike, ShardedTableReader, TableFactory};
+use crate::{AppError, CopyOwnedValue, KeyPartitioner, Partitioning, TableInfo, ValuePartitioner};
 use redb::{AccessGuard, Database, Key, MultimapRange, MultimapValue, ReadOnlyTable, ReadableDatabase, ReadableTable, ReadableTableMetadata, TableDefinition};
 use std::borrow::Borrow;
 use std::ops::RangeBounds;
 use std::sync::Weak;
 
-struct ReadOnlyPlainTableShard<K: Key + 'static, V: Key + 'static> {
+pub struct ReadOnlyPlainTable<K: Key + 'static, V: Key + 'static> {
     underlying: ReadOnlyTable<K, V>,
 }
 
-impl<K: Key + 'static, V: Key + 'static> ReadOnlyPlainTableShard<K, V> {
-    fn open(db_weak: &Weak<Database>, underlying_def: TableDefinition<K, V>) -> Result<Self, AppError> {
+impl<K: Key + 'static, V: Key + 'static> ReadOnlyPlainTable<K, V> {
+    pub fn new(db_weak: &Weak<Database>, underlying_def: TableDefinition<K, V>) -> Result<Self, AppError> {
         let db_arc = db_weak.upgrade().ok_or_else(|| AppError::Custom("database closed".to_string()))?;
         let tx = db_arc.begin_read()?;
         Ok(Self {
@@ -25,29 +26,43 @@ where
     V: Key + 'static + Borrow<V::SelfType<'static>>,
     PK: KeyPartitioner<K>,
 {
-    shards: Vec<ReadOnlyPlainTableShard<K, V>>,
+    shards: Vec<ReadOnlyPlainTable<K, V>>,
     pk_partitioner: PK,
 }
 
 impl<K, V, PK> ShardedReadOnlyPlainTable<K, V, PK>
 where
-    K: Key + 'static + Borrow<K::SelfType<'static>>,
+    K: CopyOwnedValue + 'static + Borrow<K::SelfType<'static>>,
     V: Key + 'static + Borrow<V::SelfType<'static>>,
     PK: KeyPartitioner<K>,
 {
     /// Build a sharded reader. Requires at least 2 DBs.
-    pub fn new(pk_partitioner: PK, dbs: Vec<Weak<Database>>, underlying_def: TableDefinition<K, V>) -> Result<Self, AppError> {
-        if dbs.len() < 1 {
-            return Err(AppError::Custom(format!(
-                "ShardedReadOnlyPlainTable expected at least 1 database, got {}",
-                dbs.len()
-            )));
-        }
+    pub fn new(pk_partitioner: PK, dbs: Vec<Weak<Database>>, factory: &PlainFactory<K, V>) -> Result<Self, AppError> {
         let mut shards = Vec::with_capacity(dbs.len());
         for db_weak in &dbs {
-            shards.push(ReadOnlyPlainTableShard::open(db_weak, underlying_def)?);
+            shards.push(factory.open_for_read(db_weak)?);
         }
         Ok(Self { shards, pk_partitioner })
+    }
+}
+
+impl<K, V, KP, VP> ReadTableFactory<K, V, KP, VP> for PlainFactory<K, V>
+where
+    K: CopyOwnedValue + 'static + Borrow<K::SelfType<'static>>,
+    V: Key + 'static + Borrow<V::SelfType<'static>>,
+    KP: KeyPartitioner<K> + Sync + Send + Clone + 'static,
+    VP: ValuePartitioner<V> + Sync + Send + Clone + 'static,
+{
+    fn build_sharded_reader(&self, dbs: Vec<Weak<Database>>, partitioning: &Partitioning<KP, VP>) -> Result<ShardedTableReader<K, V, KP, VP>, AppError> {
+        match partitioning {
+            Partitioning::ByKey(kp) => {
+                let table = ShardedReadOnlyPlainTable::new(kp.clone(), dbs, self)?;
+                Ok(ShardedTableReader::Plain(table))
+            }
+            Partitioning::ByValue(_) => {
+                Err(AppError::Custom("PlainFactory does not support value partitioning".to_string()))
+            }
+        }
     }
 }
 

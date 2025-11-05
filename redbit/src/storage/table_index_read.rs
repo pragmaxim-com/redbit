@@ -1,17 +1,18 @@
-use crate::{AppError, TableInfo, ValuePartitioner};
+use crate::storage::table_index::IndexFactory;
+use crate::storage::table_writer_api::{ReadTableFactory, ReadTableLike, ShardedTableReader, TableFactory};
+use crate::{AppError, CacheKey, CopyOwnedValue, KeyPartitioner, Partitioning, TableInfo, ValuePartitioner};
 use redb::{AccessGuard, Database, Key, MultimapTableDefinition, MultimapValue, Range, ReadOnlyMultimapTable, ReadOnlyTable, ReadableDatabase, ReadableTableMetadata, TableDefinition};
 use std::borrow::Borrow;
 use std::ops::RangeBounds;
 use std::sync::Weak;
-use crate::storage::table_writer_api::ReadTableLike;
 
-struct ReadOnlyIndexTableShard<K: Key + 'static, V: Key + 'static> {
+pub struct ReadOnlyIndexTable<K: Key + 'static, V: Key + 'static> {
     pk_by_index: ReadOnlyMultimapTable<V, K>,
     index_by_pk: ReadOnlyTable<K, V>,
 }
 
-impl<K: Key + 'static, V: Key + 'static> ReadOnlyIndexTableShard<K, V> {
-    fn open(db_weak: &Weak<Database>, pk_by_index_def: MultimapTableDefinition<V, K>, index_by_pk_def: TableDefinition<K, V>) -> Result<Self, AppError> {
+impl<K: Key + 'static, V: Key + 'static> ReadOnlyIndexTable<K, V> {
+    pub fn new(db_weak: &Weak<Database>, pk_by_index_def: MultimapTableDefinition<V, K>, index_by_pk_def: TableDefinition<K, V>) -> Result<Self, AppError> {
         let db_arc = db_weak.upgrade().ok_or_else(|| AppError::Custom("database closed".to_string()))?;
         let tx = db_arc.begin_read()?;
         Ok(Self {
@@ -27,39 +28,42 @@ where
     V: Key + 'static + Borrow<V::SelfType<'static>>,
     VP: ValuePartitioner<V>,
 {
-    shards: Vec<ReadOnlyIndexTableShard<K, V>>,
+    shards: Vec<ReadOnlyIndexTable<K, V>>,
     value_partitioner: VP,
 }
 
 impl<K, V, VP> ShardedReadOnlyIndexTable<K, V, VP>
 where
-    K: Key + 'static + Borrow<K::SelfType<'static>>,
-    V: Key + 'static + Borrow<V::SelfType<'static>>,
+    K: CopyOwnedValue + 'static + Borrow<K::SelfType<'static>>,
+    V: CacheKey + 'static + Borrow<V::SelfType<'static>>,
     VP: ValuePartitioner<V>,
 {
-    pub fn new(value_partitioner: VP,
-           dbs: Vec<Weak<Database>>,
-           pk_by_index_def: MultimapTableDefinition<V, K>,
-           index_by_pk_def: TableDefinition<K, V>,
-    ) -> Result<Self, AppError> {
-        if dbs.len() < 1 {
-            return Err(AppError::Custom(format!(
-                "ShardedReadOnlyIndexTable expected at least one database, got {}",
-                dbs.len()
-            )));
-        }
+    pub fn new(value_partitioner: VP, dbs: Vec<Weak<Database>>, factory: &IndexFactory<K, V>) -> Result<Self, AppError> {
         let mut shards = Vec::with_capacity(dbs.len());
         for db_weak in &dbs {
-            shards.push(ReadOnlyIndexTableShard::open(
-                db_weak,
-                pk_by_index_def,
-                index_by_pk_def,
-            )?);
+            shards.push(factory.open_for_read(db_weak)?);
         }
-        Ok(Self {
-            shards,
-            value_partitioner,
-        })
+        Ok(Self { shards, value_partitioner })
+    }
+}
+
+impl<K, V, KP, VP> ReadTableFactory<K, V, KP, VP> for IndexFactory<K, V>
+where
+    K: CopyOwnedValue + 'static + Borrow<K::SelfType<'static>>,
+    V: CacheKey + 'static + Borrow<V::SelfType<'static>>,
+    KP: KeyPartitioner<K> + Sync + Send + Clone + 'static,
+    VP: ValuePartitioner<V> + Sync + Send + Clone + 'static,
+{
+    fn build_sharded_reader(&self, dbs: Vec<Weak<Database>>, partitioning: &Partitioning<KP, VP>) -> Result<ShardedTableReader<K, V, KP, VP>, AppError> {
+        match partitioning {
+            Partitioning::ByKey(_) => {
+                Err(AppError::Custom("IndexFactory does not support key partitioning".to_string()))
+            }
+            Partitioning::ByValue(vp) => {
+                let table = ShardedReadOnlyIndexTable::<K, V, VP>::new(vp.clone(), dbs, self)?;
+                Ok(ShardedTableReader::Index(table))
+            }
+        }
     }
 }
 

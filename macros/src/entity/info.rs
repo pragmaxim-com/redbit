@@ -20,11 +20,11 @@ pub fn table_info_type(entity_type: &Type) -> Type {
 pub fn table_info_fn(entity_def: &EntityDef) -> FunctionDef {
     let entity_name = &entity_def.entity_name;
     let table_info_type = &entity_def.info_type;
-    let tx_context_ty = &entity_def.read_ctx_type;
+    let tx_context_ty = &entity_def.ctx_type;
     let fn_name = format_ident!("table_info");
     let fn_stream = quote! {
         pub fn #fn_name(storage: &Arc<Storage>) -> Result<#table_info_type, AppError> {
-            #table_info_type::new_table_info(&#tx_context_ty::begin_read_ctx(&storage)?)
+            #table_info_type::new_table_info(&#tx_context_ty::definition()?.begin_read_ctx(&storage)?)
         }
     };
 

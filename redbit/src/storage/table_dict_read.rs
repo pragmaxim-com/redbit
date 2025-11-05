@@ -1,20 +1,22 @@
 use crate::storage::partitioning::ValuePartitioner;
-use crate::{AppError, ReadTableLike, TableInfo};
+use crate::storage::table_dict::DictFactory;
+use crate::storage::table_writer_api::{ReadTableFactory, ShardedTableReader, TableFactory};
+use crate::{AppError, CacheKey, CopyOwnedValue, KeyPartitioner, Partitioning, ReadTableLike, TableInfo};
 use redb::Key;
 use redb::*;
 use std::borrow::Borrow;
 use std::ops::RangeBounds;
 use std::sync::Weak;
 
-struct ReadOnlyDictTableShard<K: Key + 'static, V: Key + 'static> {
+pub struct ReadOnlyDictTable<K: Key + 'static, V: Key + 'static> {
     dict_pk_to_ids: ReadOnlyMultimapTable<K, K>,
     value_by_dict_pk: ReadOnlyTable<K, V>,
     value_to_dict_pk: ReadOnlyTable<V, K>,
     dict_pk_by_id: ReadOnlyTable<K, K>,
 }
 
-impl<K: Key + 'static, V: Key + 'static> ReadOnlyDictTableShard<K, V> {
-    fn open(
+impl<K: Key + 'static, V: Key + 'static> ReadOnlyDictTable<K, V> {
+    pub fn new(
         db_weak: &Weak<Database>,
         dict_pk_to_ids_def: MultimapTableDefinition<K, K>,
         value_by_dict_pk_def: TableDefinition<K, V>,
@@ -38,41 +40,46 @@ where
     V: Key + 'static + Borrow<V::SelfType<'static>>,
     VP: ValuePartitioner<V>,
 {
-    shards: Vec<ReadOnlyDictTableShard<K, V>>,
+    shards: Vec<ReadOnlyDictTable<K, V>>,
     value_partitioner: VP,
 }
 
 impl<K, V, VP> ShardedReadOnlyDictTable<K, V, VP>
 where
-    K: Key + 'static + Borrow<K::SelfType<'static>>,
-    V: Key + 'static + Borrow<V::SelfType<'static>>,
+    K: CopyOwnedValue + 'static + Borrow<K::SelfType<'static>>,
+    V: CacheKey + 'static + Borrow<V::SelfType<'static>>,
     VP: ValuePartitioner<V>
 {
-    /// Build a sharded reader. `dbs.len()` must equal `layout.get()`.
-    pub fn new(
-        val_partitioner: VP,
-        dbs: Vec<Weak<Database>>,
-        dict_pk_to_ids_def: MultimapTableDefinition<K, K>,
-        value_by_dict_pk_def: TableDefinition<K, V>,
-        value_to_dict_pk_def: TableDefinition<V, K>,
-        dict_pk_by_id_def: TableDefinition<K, K>,
-    ) -> Result<Self, AppError> {
-        if dbs.len() < 1 {
-            return Err(AppError::Custom(format!("ShardedReadOnlyDictTable expected at least 1 database, got {}", dbs.len())));
-        }
+    pub fn new(value_partitioner: VP, dbs: Vec<Weak<Database>>, factory: &DictFactory<K, V>) -> Result<Self, AppError> {
         let mut shards = Vec::with_capacity(dbs.len());
         for db_weak in &dbs {
-            shards.push(ReadOnlyDictTableShard::open(
-                db_weak,
-                dict_pk_to_ids_def,
-                value_by_dict_pk_def,
-                value_to_dict_pk_def,
-                dict_pk_by_id_def,
-            )?);
+            shards.push(factory.open_for_read(db_weak)?);
         }
-        Ok(Self { shards, value_partitioner: val_partitioner })
+        Ok(Self { shards, value_partitioner })
     }
 }
+
+
+impl<K, V, KP, VP> ReadTableFactory<K, V, KP, VP> for DictFactory<K, V>
+where
+    K: CopyOwnedValue + 'static + Borrow<K::SelfType<'static>>,
+    V: CacheKey + 'static + Borrow<V::SelfType<'static>>,
+    KP: KeyPartitioner<K> + Sync + Send + Clone + 'static,
+    VP: ValuePartitioner<V> + Sync + Send + Clone + 'static,
+{
+    fn build_sharded_reader(&self, dbs: Vec<Weak<Database>>, partitioning: &Partitioning<KP, VP>) -> std::result::Result<ShardedTableReader<K, V, KP, VP>, AppError> {
+        match partitioning {
+            Partitioning::ByKey(_) => {
+                Err(AppError::Custom("DictFactory does not support key partitioning".to_string()))
+            }
+            Partitioning::ByValue(vp) => {
+                Ok(ShardedTableReader::Dict(ShardedReadOnlyDictTable::new(vp.clone(), dbs, self)?))
+            }
+        }
+    }
+}
+
+
 impl<K, V, VP> ReadTableLike<K, V> for ShardedReadOnlyDictTable<K, V, VP>
 where
     K: Key + 'static + Borrow<K::SelfType<'static>>,

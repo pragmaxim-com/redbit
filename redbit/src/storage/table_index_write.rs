@@ -1,78 +1,10 @@
-use crate::storage::table_writer_api::{TableFactory, WriteTableLike};
-use crate::{AppError, CacheKey};
-use redb::{Key, MultimapTable, MultimapTableDefinition, ReadableMultimapTable, Table, TableDefinition, WriteTransaction};
-use std::borrow::Borrow;
-use std::num::NonZeroUsize;
-use std::ops::RangeBounds;
-use lru::LruCache;
 use crate::storage::async_boundary::{CopyOwnedValue, ValueBuf, ValueOwned};
-
-#[derive(Clone)]
-pub struct IndexFactory<K: Key + 'static, V: Key + 'static> {
-    pub(crate) name: String,
-    pub(crate) pk_by_index_def: MultimapTableDefinition<'static, V, K>,
-    pub(crate) index_by_pk_def: TableDefinition<'static, K, V>,
-    pub(crate) lru_capacity: Option<usize>,
-}
-
-impl<K: Key + 'static, V: Key + 'static> IndexFactory<K, V> {
-    pub fn new(name: &str, lru_capacity: usize, pk_by_index_def: MultimapTableDefinition<'static, V, K>, index_by_pk_def: TableDefinition<'static, K, V>) -> Self {
-        let lru_cache_size_opt =
-            if lru_capacity < 1 {
-                None
-            } else {
-                Some(lru_capacity)
-            };
-        Self {
-            name: name.to_string(),
-            pk_by_index_def,
-            index_by_pk_def,
-            lru_capacity: lru_cache_size_opt
-        }
-    }
-}
-
-pub struct IndexTable<'txn, 'c, K: CopyOwnedValue + 'static, V: CacheKey + 'static> {
-    pub(crate) pk_by_index: MultimapTable<'txn, V, K>,
-    pub(crate) index_by_pk: Table<'txn, K, V>,
-    pub(crate) cache: Option<&'c mut LruCache<V::CK, K::Unit>>,
-}
-
-impl<'txn, 'c, K: CopyOwnedValue + 'static, V: CacheKey + 'static> IndexTable<'txn, 'c, K, V> {
-    pub fn new(write_tx: &'txn WriteTransaction, cache: Option<&'c mut LruCache<V::CK, K::Unit>>, pk_by_index_def: MultimapTableDefinition<'static, V, K>, index_by_pk_def: TableDefinition<'static, K, V>) -> Result<Self, AppError> {
-        Ok(Self {
-            pk_by_index: write_tx.open_multimap_table(pk_by_index_def)?,
-            index_by_pk: write_tx.open_table(index_by_pk_def)?,
-            cache
-        })
-    }
-}
-
-impl<K: CopyOwnedValue + 'static, V: CacheKey + 'static> TableFactory<K, V> for IndexFactory<K, V> {
-    type CacheCtx = Option<LruCache<V::CK, K::Unit>>;
-    type Table<'txn, 'c> = IndexTable<'txn, 'c, K, V>;
-
-    fn name(&self) -> String {
-        self.name.clone()
-    }
-
-    fn new_cache(&self) -> Self::CacheCtx {
-        self.lru_capacity.map(|cap| LruCache::new(NonZeroUsize::new(cap).expect("lru_capacity for index must be > 0")))
-    }
-
-    fn open<'txn, 'c>(
-        &self,
-        tx: &'txn WriteTransaction,
-        cache: &'c mut Self::CacheCtx,
-    ) -> Result<Self::Table<'txn, 'c>, AppError> {
-        IndexTable::new(
-            tx,
-            cache.as_mut(),
-            self.pk_by_index_def,
-            self.index_by_pk_def,
-        )
-    }
-}
+use crate::storage::table_index::IndexTable;
+use crate::storage::table_writer_api::WriteTableLike;
+use crate::{AppError, CacheKey};
+use redb::{Key, ReadableMultimapTable};
+use std::borrow::Borrow;
+use std::ops::RangeBounds;
 
 impl<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: CacheKey + 'static> WriteTableLike<K, V> for IndexTable<'txn, 'c, K, V> {
     fn insert_kv<'k, 'v>(&mut self, key: impl Borrow<K::SelfType<'k>>, value: impl Borrow<V::SelfType<'v>>) -> Result<(), AppError>  {
@@ -152,9 +84,9 @@ impl<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: CacheKey + 'static> WriteTa
 #[cfg(all(test, not(feature = "integration")))]
 mod tests {
     use super::*;
-    use crate::storage::test_utils::TxHash;
-    use crate::storage::index_test_utils::{setup_index_defs, mk_index};
+    use crate::storage::index_test_utils::{mk_index, setup_index_defs};
     use crate::storage::test_utils;
+    use crate::storage::test_utils::TxHash;
 
     // Insert two PKs for the same TxHash; head should be the smallest PK.
     #[test]

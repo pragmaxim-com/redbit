@@ -1,69 +1,12 @@
 use crate::storage::async_boundary::{CopyOwnedValue, ValueBuf, ValueOwned};
-use crate::storage::table_writer_api::{TableFactory, WriteTableLike};
+use crate::storage::table_writer_api::WriteTableLike;
 use crate::{AppError, CacheKey};
 use lru::LruCache;
 use redb::*;
 use redb::{Table, WriteTransaction};
 use std::borrow::Borrow;
-use std::num::NonZeroUsize;
 use std::ops::RangeBounds;
 
-#[derive(Clone)]
-pub struct DictFactory<K: CopyOwnedValue + 'static, V: CacheKey + 'static> {
-    pub name: String,
-    pub dict_pk_to_ids_def: MultimapTableDefinition<'static, K, K>,
-    pub value_by_dict_pk_def: TableDefinition<'static, K, V>,
-    pub value_to_dict_pk_def: TableDefinition<'static, V, K>,
-    pub dict_pk_by_id_def: TableDefinition<'static, K, K>,
-    pub lru_capacity: Option<usize>,
-}
-
-impl<K: CopyOwnedValue + 'static, V: CacheKey + 'static> DictFactory<K, V> {
-    pub fn new(name: &str, lru_capacity: usize, dict_pk_to_ids_def: MultimapTableDefinition<'static, K, K>, value_by_dict_pk_def: TableDefinition<'static, K, V>, value_to_dict_pk_def: TableDefinition<'static, V, K>, dict_pk_by_id_def: TableDefinition<'static, K, K>) -> Self {
-        let lru_cache_size_opt =
-            if lru_capacity < 1 {
-                None
-            } else {
-                Some(lru_capacity)
-            };
-        Self {
-            name: name.to_string(),
-            dict_pk_to_ids_def,
-            value_by_dict_pk_def,
-            value_to_dict_pk_def,
-            dict_pk_by_id_def,
-            lru_capacity: lru_cache_size_opt
-        }
-    }
-}
-
-impl<K: CopyOwnedValue + 'static, V: CacheKey + 'static> TableFactory<K, V> for DictFactory<K, V> {
-    type CacheCtx = Option<LruCache<V::CK, K::Unit>>;
-    type Table<'txn, 'c> = DictTable<'txn, 'c, K, V>;
-
-    fn name(&self) -> String {
-        self.name.clone()
-    }
-
-    fn new_cache(&self) -> Self::CacheCtx {
-        self.lru_capacity.map(|cap| LruCache::new(NonZeroUsize::new(cap).expect("lru_capacity for dictionary must be > 0")))
-    }
-
-    fn open<'txn, 'c>(
-        &self,
-        tx: &'txn WriteTransaction,
-        cache: &'c mut Self::CacheCtx,
-    ) -> Result<Self::Table<'txn, 'c>, AppError> {
-        DictTable::new(
-            tx,
-            cache.as_mut(),
-            self.dict_pk_to_ids_def,
-            self.value_by_dict_pk_def,
-            self.value_to_dict_pk_def,
-            self.dict_pk_by_id_def,
-        )
-    }
-}
 pub struct DictTable<'txn, 'c, K: CopyOwnedValue + 'static, V: CacheKey + 'static> {
     pub(crate) dict_pk_to_keys: MultimapTable<'txn, K, K>,
     pub(crate) value_by_dict_pk: Table<'txn, K, V>,
@@ -234,10 +177,10 @@ impl<'txn, 'c, K: CopyOwnedValue + 'static, V: CacheKey + 'static> WriteTableLik
 #[cfg(all(test, not(feature = "integration")))]
 mod tests {
     use crate::storage::dict_test_utils::*;
-    use redb::{MultimapTable, ReadableMultimapTable, ReadableTable, ReadableTableMetadata};
-    use crate::DictTable;
     use crate::storage::table_writer_api::WriteTableLike;
     use crate::storage::test_utils::{addr, Address};
+    use crate::DictTable;
+    use redb::{MultimapTable, ReadableMultimapTable, ReadableTable, ReadableTableMetadata};
 
     /// Read the birth id for a given external id.
     pub(crate) fn birth_id_of(dict: &DictTable<'_, '_, u32, Address>, id: u32) -> u32 {

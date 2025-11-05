@@ -190,7 +190,7 @@ where
                         drop(db_arc);
 
                         let mut cache_local = factory.new_cache();
-                        let table = match factory.open(&tx, &mut cache_local) {
+                        let table = match factory.open_for_write(&tx, &mut cache_local) {
                             Ok(t) => { let _ = ack.send(Ok(())); t },
                             Err(e) => { let _ = ack.send(Err(e)); continue 'outer; }
                         };

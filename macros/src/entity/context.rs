@@ -3,6 +3,7 @@ use crate::table::{DictTableDefs, IndexTableDefs, PlainTableDef};
 use proc_macro2::{Ident, Literal, TokenStream};
 use quote::{format_ident, quote};
 use syn::Type;
+use crate::field_parser::EntityDef;
 
 pub static TX_CONTEXT: &str = "TxContext";
 
@@ -29,8 +30,19 @@ pub fn entity_tx_context_type(entity_type: &Type, tx_type: TxType) -> Type {
     syn::parse_quote!(#tx_context_type)
 }
 
+pub fn entity_tx_context_def_type(entity_type: &Type) -> Type {
+    let entity_ident = match entity_type {
+        Type::Path(p) => p.path.segments.last().unwrap().ident.clone(),
+        _ => panic!("Unsupported entity type for tx context"),
+    };
+    let tx_context_type = format_ident!("{}{}", entity_ident, format_ident!("{}", TX_CONTEXT));
+    syn::parse_quote!(#tx_context_type)
+}
+
 #[derive(Clone)]
 pub struct TxContextItem {
+    pub definition: TokenStream,
+    pub def_constructor: TokenStream,
     pub write_definition: TokenStream,
     pub write_constructor: TokenStream,
     pub write_begin: TokenStream,
@@ -41,7 +53,30 @@ pub struct TxContextItem {
     pub read_constructor: TokenStream,
 }
 
-pub fn write_tx_context(entity_tx_context_ty: &Type, tx_contexts: &[TxContextItem]) -> TokenStream {
+pub fn def_tx_context(entity_def: &EntityDef, tx_contexts: &[TxContextItem]) -> TokenStream {
+    let definitions: Vec<TokenStream> = tx_contexts.iter().map(|item| item.definition.clone()).collect();
+    let constructors: Vec<TokenStream> = tx_contexts.iter().map(|item| item.def_constructor.clone()).collect();
+    let entity_tx_context_ty = &entity_def.ctx_type;
+    let read_entity_tx_context_ty = &entity_def.read_ctx_type;
+    let write_entity_tx_context_ty = &entity_def.write_ctx_type;
+    let tx_context_name = format_ident!("{}", TX_CONTEXT);
+    quote! {
+        pub struct #entity_tx_context_ty {
+            #(#definitions),*
+        }
+        impl #tx_context_name for #entity_tx_context_ty {
+            type ReadCtx = #read_entity_tx_context_ty;
+            type WriteCtx = #write_entity_tx_context_ty;
+            fn definition() -> Result<Self, AppError> {
+                Ok(Self {
+                    #(#constructors),*
+                })
+            }
+        }
+    }
+}
+
+pub fn write_tx_context(entity_def: &EntityDef, tx_contexts: &[TxContextItem]) -> TokenStream {
     let definitions: Vec<TokenStream> = tx_contexts.iter().map(|item| item.write_definition.clone()).collect();
     let constructors: Vec<TokenStream> = tx_contexts.iter().map(|item| item.write_constructor.clone()).collect();
     let begins: Vec<TokenStream> = tx_contexts.iter().map(|item| item.write_begin.clone()).collect();
@@ -49,12 +84,15 @@ pub fn write_tx_context(entity_tx_context_ty: &Type, tx_contexts: &[TxContextIte
     let async_flushes: Vec<TokenStream> = tx_contexts.iter().flat_map(|item| item.async_flush.clone()).collect();
     let deferred_flushes: Vec<TokenStream> = tx_contexts.iter().flat_map(|item| item.deferred_flush.clone()).collect();
     let write_tx_context_name = tx_context_name(TxType::Write);
+    let write_tx_context_ty = &entity_def.write_ctx_type;
+    let entity_tx_context_ty = &entity_def.ctx_type;
     quote! {
-        pub struct #entity_tx_context_ty {
+        pub struct #write_tx_context_ty {
             #(#definitions),*
         }
-        impl #write_tx_context_name for #entity_tx_context_ty {
-           fn new_write_ctx(storage: &Arc<Storage>) -> Result<Self, AppError> {
+        impl #write_tx_context_name for #write_tx_context_ty {
+           type Defs = #entity_tx_context_ty;
+           fn new_write_ctx(defs: &Self::Defs, storage: &Arc<Storage>) -> redb::Result<Self, AppError> {
                 Ok(Self {
                     #(#constructors),*
                 })
@@ -83,16 +121,19 @@ pub fn write_tx_context(entity_tx_context_ty: &Type, tx_contexts: &[TxContextIte
     }
 }
 
-pub fn read_tx_context(entity_tx_context_ty: &Type, tx_contexts: &[TxContextItem]) -> TokenStream {
+pub fn read_tx_context(entity_def: &EntityDef, tx_contexts: &[TxContextItem]) -> TokenStream {
     let definitions: Vec<TokenStream> = tx_contexts.iter().map(|item| item.read_definition.clone()).collect();
     let constructors: Vec<TokenStream> = tx_contexts.iter().map(|item| item.read_constructor.clone()).collect();
+    let entity_tx_context_ty = &entity_def.ctx_type;
+    let read_tx_context_ty = &entity_def.read_ctx_type;
     let read_tx_context_name = tx_context_name(TxType::Read);
     quote! {
-        pub struct #entity_tx_context_ty {
+        pub struct #read_tx_context_ty {
             #(#definitions),*
         }
-        impl #read_tx_context_name for #entity_tx_context_ty {
-           fn begin_read_ctx(storage: &Arc<Storage>) -> Result<Self, AppError> {
+        impl #read_tx_context_name for #read_tx_context_ty {
+            type Defs = #entity_tx_context_ty;
+            fn begin_read_ctx(defs: &Self::Defs, storage: &Arc<Storage>) -> Result<Self, AppError> {
                 Ok(Self {
                     #(#constructors),*
                 })
@@ -101,10 +142,12 @@ pub fn read_tx_context(entity_tx_context_ty: &Type, tx_contexts: &[TxContextItem
     }
 }
 
-pub fn tx_context(write_tx_context_ty: &Type, read_tx_context_ty: &Type, tx_contexts: &[TxContextItem]) -> TokenStream {
-    let write_ctx = write_tx_context(write_tx_context_ty, tx_contexts);
-    let read_ctx = read_tx_context(read_tx_context_ty, tx_contexts);
+pub fn tx_context(entity_def: &EntityDef, tx_contexts: &[TxContextItem]) -> TokenStream {
+    let write_ctx = write_tx_context(&entity_def, tx_contexts);
+    let read_ctx = read_tx_context(&entity_def, tx_contexts);
+    let ctx = def_tx_context(&entity_def, tx_contexts);
     quote! {
+        #ctx
         #write_ctx
         #read_ctx
     }
@@ -115,8 +158,13 @@ pub fn tx_context_plain_item(def: &PlainTableDef) -> TxContextItem {
     let name_lit    = Literal::string(&var_ident.to_string());
     let key_ty      = &def.key_type;
     let val_ty: Type = def.value_type.clone().unwrap_or_else(|| syn::parse_str::<Type>("()").unwrap());
-    let table_name  = &def.underlying.name;
+    let table_def = &def.underlying.definition;
     let shards      = def.column_props.shards;
+
+    let definition =
+        quote! {
+            pub #var_ident: RedbitTableDefinition<#key_ty, #val_ty, PlainFactory<#key_ty, #val_ty>, BytesPartitioner, Xxh3Partitioner>
+        };
 
     let write_definition =
         quote! {
@@ -125,27 +173,21 @@ pub fn tx_context_plain_item(def: &PlainTableDef) -> TxContextItem {
 
     let read_definition =
         quote! {
-            pub #var_ident: ShardedReadOnlyPlainTable<#key_ty, #val_ty, BytesPartitioner>
+            pub #var_ident: ShardedTableReader<#key_ty, #val_ty, BytesPartitioner, Xxh3Partitioner>
         };
 
-    let write_constructor =
-        quote! {
-            #var_ident: ShardedTableWriter::new(
-                Partitioning::by_key(#shards),
-                storage.fetch_dbs(#name_lit, Some(#shards))?,
-                PlainFactory::new(#name_lit, #table_name),
-            )?
-        };
-
-    let read_constructor =
-        quote! {
-            #var_ident: ShardedReadOnlyPlainTable::new(
-                BytesPartitioner::new(#shards),
-                storage.fetch_dbs(#name_lit, Some(#shards))?,
-                #table_name
-            )?
-        };
-
+    let def_constructor = quote! {
+        #var_ident: RedbitTableDefinition::new(
+            Partitioning::by_key(#shards),
+            PlainFactory::new(#name_lit, #table_def),
+        )
+    };
+    let write_constructor = quote! {
+        #var_ident: defs.#var_ident.to_write_field(storage)?
+    };
+    let read_constructor = quote! {
+        #var_ident: defs.#var_ident.to_read_field(storage)?
+    };
     let write_begin = quote! { self.#var_ident.begin_async(durability)? };
     let async_flush =
         if def.root_pk {
@@ -157,6 +199,8 @@ pub fn tx_context_plain_item(def: &PlainTableDef) -> TxContextItem {
     let write_shutdown = quote! { self.#var_ident.shutdown_async()? };
 
     TxContextItem {
+        definition,
+        def_constructor,
         write_definition,
         write_constructor,
         write_begin,
@@ -173,10 +217,15 @@ pub fn tx_context_index_item(defs: &IndexTableDefs) -> TxContextItem {
     let name_lit     = Literal::string(&var_ident.to_string());
     let key_ty       = &defs.key_type;
     let val_ty       = &defs.value_type;
-    let pk_by_index  = &defs.pk_by_index.name;
-    let index_by_pk  = &defs.index_by_pk.name;
+    let pk_by_index  = &defs.pk_by_index.definition;
+    let index_by_pk  = &defs.index_by_pk.definition;
     let lru_cache    = defs.column_props.lru_cache_size;
     let shards       = defs.column_props.shards;          // compile-time choice
+
+    let definition =
+        quote! {
+            pub #var_ident: RedbitTableDefinition<#key_ty, #val_ty, IndexFactory<#key_ty, #val_ty>, BytesPartitioner, Xxh3Partitioner>
+        };
 
     let write_definition =
         quote! {
@@ -185,33 +234,29 @@ pub fn tx_context_index_item(defs: &IndexTableDefs) -> TxContextItem {
 
     let read_definition =
         quote! {
-            pub #var_ident: ShardedReadOnlyIndexTable<#key_ty, #val_ty, Xxh3Partitioner>
+            pub #var_ident: ShardedTableReader<#key_ty, #val_ty, BytesPartitioner, Xxh3Partitioner>
         };
 
-    let write_constructor = quote! {
-        #var_ident: ShardedTableWriter::new(
+    let def_constructor = quote! {
+        #var_ident: RedbitTableDefinition::new(
             Partitioning::by_value(#shards),
-            storage.fetch_dbs(#name_lit, Some(#shards))?,
             IndexFactory::new(#name_lit, #lru_cache, #pk_by_index, #index_by_pk),
-        )?
+        )
     };
-
-    let read_constructor =
-        quote! {
-            #var_ident: ShardedReadOnlyIndexTable::new(
-                Xxh3Partitioner::new(#shards),
-                storage.fetch_dbs(#name_lit, Some(#shards))?,
-                #pk_by_index,
-                #index_by_pk,
-            )?
-        };
-
+    let write_constructor = quote! {
+        #var_ident: defs.#var_ident.to_write_field(storage)?
+    };
+    let read_constructor = quote! {
+        #var_ident: defs.#var_ident.to_read_field(storage)?
+    };
     let write_begin    = quote! { self.#var_ident.begin_async(durability)? };
     let async_flush = Some(quote! { self.#var_ident.flush_async()? });
     let deferred_flush = Some(quote! { self.#var_ident.flush_deferred()? });
     let write_shutdown = quote! { self.#var_ident.shutdown_async()? };
 
     TxContextItem {
+        definition,
+        def_constructor,
         write_definition,
         write_constructor,
         write_begin,
@@ -229,40 +274,39 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
     let key_ty      = &defs.key_type;
     let val_ty      = &defs.value_type;
     let lru_cache    = defs.column_props.lru_cache_size;
-    let shards     = defs.column_props.shards;
-    let dict_pk_to_ids = &defs.dict_pk_to_ids_table_def.name;
-    let value_by_dict  = &defs.value_by_dict_pk_table_def.name;
-    let value_to_dict  = &defs.value_to_dict_pk_table_def.name;
-    let dict_pk_by_pk  = &defs.dict_pk_by_pk_table_def.name;
+    let shards       = defs.column_props.shards;
+    let dict_pk_to_ids = &defs.dict_pk_to_ids_table_def.definition;
+    let value_by_dict  = &defs.value_by_dict_pk_table_def.definition;
+    let value_to_dict  = &defs.value_to_dict_pk_table_def.definition;
+    let dict_pk_by_pk  = &defs.dict_pk_by_pk_table_def.definition;
 
-    let write_definition = quote! {
+    let definition =
+        quote! {
+            pub #var_ident: RedbitTableDefinition<#key_ty, #val_ty, DictFactory<#key_ty, #val_ty>, BytesPartitioner, Xxh3Partitioner>
+        };
+
+    let write_definition =
+        quote! {
             pub #var_ident: ShardedTableWriter<#key_ty, #val_ty, DictFactory<#key_ty, #val_ty>, BytesPartitioner, Xxh3Partitioner>
         };
 
     let read_definition =
         quote! {
-            pub #var_ident: ShardedReadOnlyDictTable<#key_ty, #val_ty, Xxh3Partitioner>
+            pub #var_ident: ShardedTableReader<#key_ty, #val_ty, BytesPartitioner, Xxh3Partitioner>
         };
 
-    let write_constructor = quote! {
-        #var_ident: ShardedTableWriter::new(
+    let def_constructor = quote! {
+        #var_ident: RedbitTableDefinition::new(
             Partitioning::by_value(#shards),
-            storage.fetch_dbs(#name_lit, Some(#shards))?,
             DictFactory::new(#name_lit, #lru_cache, #dict_pk_to_ids, #value_by_dict, #value_to_dict, #dict_pk_by_pk),
-        )?
+        )
     };
-
-    let read_constructor =
-        quote! {
-            #var_ident: ShardedReadOnlyDictTable::new(
-                Xxh3Partitioner::new(#shards),
-                storage.fetch_dbs(#name_lit, Some(#shards))?,
-                #dict_pk_to_ids,
-                #value_by_dict,
-                #value_to_dict,
-                #dict_pk_by_pk
-            )?
-        };
+    let write_constructor = quote! {
+        #var_ident: defs.#var_ident.to_write_field(storage)?
+    };
+    let read_constructor = quote! {
+        #var_ident: defs.#var_ident.to_read_field(storage)?
+    };
 
     let write_begin    = quote! { self.#var_ident.begin_async(durability)? };
     let async_flush = Some(quote! { self.#var_ident.flush_async()? });
@@ -270,6 +314,8 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
     let write_shutdown = quote! { self.#var_ident.shutdown_async()? };
 
     TxContextItem {
+        definition,
+        def_constructor,
         write_definition,
         write_constructor,
         write_begin,
@@ -281,11 +327,13 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
     }
 }
 
-pub fn begin_write_fn_def(tx_context_ty: &Type) -> FunctionDef {
+pub fn begin_write_fn_def(entity_def: &EntityDef) -> FunctionDef {
+    let tx_context_ty = &entity_def.ctx_type;
+    let write_tx_context_ty = &entity_def.write_ctx_type;
     let fn_name = format_ident!("begin_write_ctx");
     let fn_stream = quote! {
-        pub fn #fn_name(storage: &Arc<Storage>, durability: Durability) -> Result<#tx_context_ty, AppError> {
-            #tx_context_ty::#fn_name(&storage, durability)
+        pub fn #fn_name(storage: &Arc<Storage>, durability: Durability) -> Result<#write_tx_context_ty, AppError> {
+            #tx_context_ty::definition()?.#fn_name(&storage, durability)
         }
     };
 
@@ -298,11 +346,13 @@ pub fn begin_write_fn_def(tx_context_ty: &Type) -> FunctionDef {
 
 }
 
-pub fn new_write_fn_def(tx_context_ty: &Type) -> FunctionDef {
+pub fn new_write_fn_def(entity_def: &EntityDef) -> FunctionDef {
+    let tx_context_ty = &entity_def.ctx_type;
+    let write_tx_context_ty = &entity_def.write_ctx_type;
     let fn_name = format_ident!("new_write_ctx");
     let fn_stream = quote! {
-        pub fn #fn_name(storage: &Arc<Storage>) -> Result<#tx_context_ty, AppError> {
-            #tx_context_ty::#fn_name(&storage)
+        pub fn #fn_name(storage: &Arc<Storage>) -> Result<#write_tx_context_ty, AppError> {
+            #tx_context_ty::definition()?.#fn_name(&storage)
         }
     };
 
@@ -312,14 +362,15 @@ pub fn new_write_fn_def(tx_context_ty: &Type) -> FunctionDef {
         test_stream: None,
         bench_stream: None,
     }
-
 }
 
-pub fn begin_read_fn_def(tx_context_ty: &Type) -> FunctionDef {
+pub fn begin_read_fn_def(entity_def: &EntityDef) -> FunctionDef {
+    let tx_context_ty = &entity_def.ctx_type;
+    let read_tx_context_ty = &entity_def.read_ctx_type;
     let fn_name = format_ident!("begin_read_ctx");
     let fn_stream = quote! {
-        pub fn #fn_name(storage: &Arc<Storage>) -> Result<#tx_context_ty, AppError> {
-            #tx_context_ty::begin_read_ctx(&storage)
+        pub fn #fn_name(storage: &Arc<Storage>) -> Result<#read_tx_context_ty, AppError> {
+            #tx_context_ty::definition()?.#fn_name(&storage)
         }
     };
 

@@ -12,6 +12,9 @@ pub mod context;
 pub mod init;
 pub mod async_boundary;
 pub mod table_writer_api;
+pub mod table_dict;
+pub mod table_index;
+pub mod table_plain;
 mod cache_bench;
 mod router;
 mod sort_buffer;
@@ -49,7 +52,7 @@ pub mod test_utils {
         }
     }
     impl Key for TxHash {
-        fn compare(data1: &[u8], data2: &[u8]) -> std::cmp::Ordering {
+        fn compare(data1: &[u8], data2: &[u8]) -> Ordering {
             data1.cmp(data2)
         }
     }
@@ -142,29 +145,28 @@ pub mod test_utils {
 
 #[cfg(all(test, not(feature = "integration")))]
 pub mod plain_test_utils {
-    use crate::storage::table_plain_write::PlainTable;
     use crate::*;
     use redb::{Database, TableDefinition, WriteTransaction};
     use std::borrow::Borrow;
+    use crate::storage::table_plain::{PlainFactory, PlainTable};
+    use crate::storage::table_writer_api::RedbitTableDefinition;
 
-    pub(crate) fn mk_sharded_reader<V: CacheKey + Send + Clone + 'static + Borrow<V::SelfType<'static>>>(n: usize, weak_dbs: Vec<Weak<Database>>, plain_def: TableDefinition<'static, u32, V>) -> ShardedReadOnlyPlainTable<u32, V, BytesPartitioner> {
+    pub(crate) fn mk_sharded_reader<V: CacheKey + Send + Clone + 'static + Borrow<V::SelfType<'static>>>(name: &str, n: usize, weak_dbs: Vec<Weak<Database>>, plain_def: TableDefinition<'static, u32, V>) -> ShardedReadOnlyPlainTable<u32, V, BytesPartitioner> {
         ShardedReadOnlyPlainTable::new(
             BytesPartitioner::new(n),
             weak_dbs.clone(),
-            plain_def,
+            &PlainFactory::new(name, plain_def),
         ).expect("reader")
     }
 
     pub(crate) fn mk_sharded_writer<V: CacheKey + Send + Clone + 'static + Borrow<V::SelfType<'static>>>(name: &str, n: usize, weak_dbs: Vec<Weak<Database>>) -> (ShardedTableWriter<u32, V, PlainFactory<u32, V>, BytesPartitioner, Xxh3Partitioner>, TableDefinition<'static, u32, V>) {
         let plain_def = TableDefinition::<u32, V>::new("plain_underlying");
 
-        // Writer/Reader
-        let writer = ShardedTableWriter::new(
+        let def = RedbitTableDefinition::new(
             Partitioning::by_key(n),
-            weak_dbs.clone(),
             PlainFactory::new(name, plain_def),
-        ).expect("writer");
-
+        );
+        let writer = def.writer_from_dbs(weak_dbs.clone()).expect("Building writer failed");
         (writer, plain_def)
     }
 
@@ -195,13 +197,14 @@ pub mod index_test_utils {
     use redb::{Database, MultimapTableDefinition, TableDefinition, WriteTransaction};
     use std::borrow::Borrow;
     use std::num::NonZeroUsize;
+    use crate::storage::table_index::{IndexFactory, IndexTable};
+    use crate::storage::table_writer_api::RedbitTableDefinition;
 
-    pub(crate) fn mk_sharded_reader<V: CacheKey + Send + Clone + 'static + Borrow<V::SelfType<'static>>>(n: usize, weak_dbs: Vec<Weak<Database>>, pk_by_index_def: MultimapTableDefinition<'static, V, u32>, index_by_pk_def: TableDefinition<'static, u32, V>) -> ShardedReadOnlyIndexTable<u32, V, Xxh3Partitioner> {
+    pub(crate) fn mk_sharded_reader<V: CacheKey + Send + Clone + 'static + Borrow<V::SelfType<'static>>>(name: &str, n: usize, lru_cache: usize, weak_dbs: Vec<Weak<Database>>, pk_by_index_def: MultimapTableDefinition<'static, V, u32>, index_by_pk_def: TableDefinition<'static, u32, V>) -> ShardedReadOnlyIndexTable<u32, V, Xxh3Partitioner> {
         ShardedReadOnlyIndexTable::new(
             Xxh3Partitioner::new(n),
             weak_dbs.clone(),
-            pk_by_index_def,
-            index_by_pk_def,
+            &IndexFactory::new(name, lru_cache, pk_by_index_def, index_by_pk_def)
         ).expect("reader")
     }
 
@@ -209,12 +212,11 @@ pub mod index_test_utils {
         let pk_by_index_def = MultimapTableDefinition::<V, u32>::new("pk_by_index");
         let index_by_pk_def = TableDefinition::<u32, V>::new("index_by_pk");
 
-        let writer = ShardedTableWriter::new(
+        let def = RedbitTableDefinition::new(
             Partitioning::by_value(n),
-            weak_dbs.clone(),
             IndexFactory::new(name, lru_cache, pk_by_index_def, index_by_pk_def),
-        ).expect("writer");
-
+        );
+        let writer = def.writer_from_dbs(weak_dbs.clone()).expect("Building writer failed");
         (writer, pk_by_index_def, index_by_pk_def)
     }
 
@@ -256,15 +258,21 @@ pub mod dict_test_utils {
     use lru::LruCache;
     use std::borrow::Borrow;
     use std::num::NonZeroUsize;
+    use crate::storage::table_dict::DictFactory;
+    use crate::storage::table_writer_api::RedbitTableDefinition;
 
-    pub (crate) fn mk_sharder_reader<V: CacheKey + Send + Clone + 'static + Borrow<V::SelfType<'static>>>(n: usize, weak_dbs: Vec<Weak<Database>>, dict_pk_to_ids: MultimapTableDefinition<'static, u32, u32>, value_by_dict_pk: TableDefinition<'static, u32, V>, value_to_dict_pk: TableDefinition<'static, V, u32>, dict_pk_by_id: TableDefinition<'static, u32, u32>) -> ShardedReadOnlyDictTable<u32, V, Xxh3Partitioner> {
+    pub (crate) fn mk_sharder_reader<V: CacheKey + Send + Clone + 'static + Borrow<V::SelfType<'static>>>(name: &str, n: usize, weak_dbs: Vec<Weak<Database>>, dict_pk_to_ids: MultimapTableDefinition<'static, u32, u32>, value_by_dict_pk: TableDefinition<'static, u32, V>, value_to_dict_pk: TableDefinition<'static, V, u32>, dict_pk_by_id: TableDefinition<'static, u32, u32>) -> ShardedReadOnlyDictTable<u32, V, Xxh3Partitioner> {
         ShardedReadOnlyDictTable::new(
             Xxh3Partitioner::new(n),
             weak_dbs.clone(),
-            dict_pk_to_ids,
-            value_by_dict_pk,
-            value_to_dict_pk,
-            dict_pk_by_id,
+            &DictFactory::new(
+                name,
+                8192, // LRU cap
+                dict_pk_to_ids,
+                value_by_dict_pk,
+                value_to_dict_pk,
+                dict_pk_by_id,
+            ),
         ).expect("reader")
     }
 
@@ -276,9 +284,8 @@ pub mod dict_test_utils {
         let dict_pk_by_id    = TableDefinition::<u32, u32>::new("dict_pk_by_id");
 
         // Writer by value (so identical values go to the same shard):
-        let writer = ShardedTableWriter::new(
+        let def = RedbitTableDefinition::new(
             Partitioning::by_value(n),
-            weak_dbs.clone(),
             DictFactory::new(
                 name,
                 8192, // LRU cap
@@ -287,8 +294,8 @@ pub mod dict_test_utils {
                 value_to_dict_pk,
                 dict_pk_by_id,
             ),
-        ).expect("writer");
-
+        );
+        let writer = def.writer_from_dbs(weak_dbs.clone()).expect("Building writer failed");
         (writer, dict_pk_to_ids, value_by_dict_pk, value_to_dict_pk, dict_pk_by_id)
     }
 

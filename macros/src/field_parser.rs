@@ -40,6 +40,7 @@ pub struct EntityDef {
     pub entity_type: Type,
     pub query_type: Type,
     pub info_type: Type,
+    pub ctx_type: Type,
     pub read_ctx_type: Type,
     pub write_ctx_type: Type,
 }
@@ -53,10 +54,11 @@ impl EntityDef {
 impl EntityDef {
     pub fn new(key_def: KeyDef, entity_name: Ident, entity_type: Type) -> Self {
         let query_type = query::filter_query_type(&entity_type);
+        let ctx_type = context::entity_tx_context_def_type(&entity_type);
         let read_ctx_type = context::entity_tx_context_type(&entity_type, TxType::Read);
         let write_ctx_type = context::entity_tx_context_type(&entity_type, TxType::Write);
         let info_type = info::table_info_type(&entity_type);
-        EntityDef { key_def, entity_name, entity_type, query_type, info_type, read_ctx_type, write_ctx_type }
+        EntityDef { key_def, entity_name, entity_type, query_type, info_type, ctx_type, read_ctx_type, write_ctx_type }
     }
 }
 

@@ -2,7 +2,6 @@ use crate::field::FieldMacros;
 use crate::field_parser::{FieldDef, KeyDef};
 use crate::rest::Rest;
 use crate::storage;
-use crate::storage::StorageDef;
 use crate::table::{DictTableDefs, IndexTableDefs, PlainTableDef};
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
@@ -68,9 +67,9 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
         store::persist_def(&entity_def, &store_statements),
         store::store_many_def(&entity_def, &store_statements),
         store::store_def(&entity_def, &store_statements),
-        context::begin_write_fn_def(&entity_def.write_ctx_type),
-        context::new_write_fn_def(&entity_def.write_ctx_type),
-        context::begin_read_fn_def(&entity_def.read_ctx_type),
+        context::begin_write_fn_def(&entity_def),
+        context::new_write_fn_def(&entity_def),
+        context::begin_read_fn_def(&entity_def),
         delete::remove_def(&entity_def, &delete_statements),
         delete::delete_def(&entity_def, &delete_statements),
         delete::delete_many_def(&entity_def, &delete_many_statements),
@@ -85,12 +84,12 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
 
     let table_info_struct = info::table_info_struct(&entity_def, &table_info_items);
     let filter_query_struct = query::filter_query(&entity_def.query_type, &filter_queries);
-    let tx_context_structs = context::tx_context(&entity_def.write_ctx_type, &entity_def.read_ctx_type, &tx_context_items);
+    let tx_context_structs = context::tx_context(&entity_def, &tx_context_items);
     let range_query_structs = range_queries.into_iter().map(|rq| rq.stream).collect::<Vec<_>>();
 
     let api_functions: Vec<TokenStream> = function_defs.iter().map(|f| f.fn_stream.clone()).collect::<Vec<_>>();
 
-    let StorageDef { db_defs, table_defs } = storage::get_db_defs(&plain_table_defs, &dict_table_defs, &index_table_defs);
+    let db_defs = storage::get_db_defs(&plain_table_defs, &dict_table_defs, &index_table_defs);
 
     let Rest { endpoint_handlers, routes: api_routes } =
         Rest::new(&function_defs);
@@ -107,8 +106,6 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
             #tx_context_structs
             // Query structs to map query params into
             #(#range_query_structs)*
-            // table definitions are not in the impl object because they are accessed globally with semantic meaning
-            #(#table_defs)*
             // axum endpoints cannot be in the impl object https://docs.rs/axum/latest/axum/attr.debug_handler.html#limitations
             #(#endpoint_handlers)*
 

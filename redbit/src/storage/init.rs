@@ -46,20 +46,9 @@ pub struct Storage {
 
 impl Storage {
     /// Fetch **all shards** (clone the Vec<Weak<_>>). Optionally enforce an expected shard count.
-    pub fn fetch_dbs(&self, name: &str, expected: Option<usize>) -> Result<Vec<Weak<Database>>, AppError> {
+    pub fn fetch_dbs(&self, name: &str) -> Result<Vec<Weak<Database>>, AppError> {
         match self.index_dbs.get(name) {
-            Some(DbSetWeak(v)) => {
-                let v = v.clone();
-                if let Some(exp) = expected {
-                    if v.len() != exp {
-                        return Err(AppError::Custom(format!(
-                           "column `{}`: shard count mismatch; expected {}, found {}",
-                           name, exp, v.len()
-                        )));
-                    }
-                }
-                Ok(v)
-            }
+            Some(DbSetWeak(v)) => Ok(v.clone()),
             None => Err(AppError::Custom(format!("column `{}`: not found", name))),
         }
     }

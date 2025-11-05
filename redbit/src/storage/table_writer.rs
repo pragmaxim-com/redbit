@@ -1,15 +1,15 @@
 use crate::storage::async_boundary::CopyOwnedValue;
-use crate::storage::partitioning::{KeyPartitioner, Partitioning, ValuePartitioner};
-use crate::storage::router::{Router, ShardedRouter};
+use crate::storage::partitioning::{KeyPartitioner, ValuePartitioner};
+use crate::storage::router::Router;
 use crate::storage::table_writer_api::*;
 use crate::{AppError, TxFSM};
 use crossbeam::channel::bounded;
-use redb::{Database, Durability, Key};
+use redb::{Durability, Key};
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::{marker::PhantomData, sync::Weak};
+use std::marker::PhantomData;
 
 pub struct ShardedTableWriter<
     K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
@@ -31,15 +31,8 @@ impl<
     F: TableFactory<K, V> + Send + Clone + 'static,
     KP: KeyPartitioner<K> + Sync + Send + Clone + 'static,
     VP: ValuePartitioner<V> + Sync + Send + Clone + 'static,
-> ShardedTableWriter<K,V,F, KP, VP> {
-    pub fn new(partitioning: Partitioning<KP, VP>, dbs: Vec<Weak<Database>>, factory: F) -> Result<Self, AppError> {
-        let mut shards = Vec::with_capacity(dbs.len());
-        for db_weak in dbs.into_iter() {
-            shards.push(TxFSM::<K,V,F>::new(db_weak, factory.clone())?);
-        }
-        let senders: Vec<_> = shards.iter().map(|w| w.sender()).collect();
-        let router = Arc::new(ShardedRouter::new(partitioning.clone(), senders));
-        let deferred = AtomicBool::new(false);
+> ShardedTableWriter<K,V,F,KP,VP> {
+    pub fn new(shards: Vec<TxFSM<K, V, F>>, router: Arc<dyn Router<K, V>>, deferred: AtomicBool) -> Result<Self, AppError> {
         Ok(Self { router, deferred, shards, sync_buf: RefCell::new(Vec::new()), _pd: PhantomData })
     }
 }
@@ -184,7 +177,7 @@ mod plain_sharded {
         }
         writer.flush().expect("flush");
 
-        let reader = plain_test_utils::mk_sharded_reader(n, weak_dbs, plain_def);
+        let reader = plain_test_utils::mk_sharded_reader(name, n, weak_dbs, plain_def);
         for k in 1u32..=24 {
             let got = reader.get_value(&k).expect("get").expect("some");
             assert_eq!(got.value().0, vec![k as u8, (k + 1) as u8, (k * 3) as u8]);
@@ -212,7 +205,7 @@ mod plain_sharded {
         }
         writer.flush().expect("flush");
 
-        let reader = plain_test_utils::mk_sharded_reader(n, weak_dbs, plain_def);
+        let reader = plain_test_utils::mk_sharded_reader(name, n, weak_dbs, plain_def);
         for k in 1u32..=40 {
             let got = reader.get_value(&k).expect("get");
             if k % 3 == 0 {
@@ -325,7 +318,7 @@ mod index_sharded {
 
         writer.flush_deferred().expect("flush");
 
-        let reader = index_test_utils::mk_sharded_reader::<Address>(n, weak_dbs, pk_by_index_def, index_by_pk_def);
+        let reader = index_test_utils::mk_sharded_reader::<Address>(name, n, 0, weak_dbs, pk_by_index_def, index_by_pk_def);
         let keys_iter = reader.index_keys(&a3).expect("get_keys a3");
         let mut keys: Vec<u32> = keys_iter.into_iter().map(|g| g.unwrap().value()).collect();
         keys.sort();
@@ -355,8 +348,8 @@ mod dict_sharded {
     use crate::storage::table_writer_api::WriterLike;
     use crate::storage::test_utils::addr;
     use crate::storage::{dict_test_utils, test_utils};
-    use redb::Durability;
     use crate::ReadTableLike;
+    use redb::Durability;
 
     #[test]
     fn sharded_dict_two_ids_same_value_share_after_flush() {
@@ -375,7 +368,7 @@ mod dict_sharded {
         writer.insert_on_flush(20u32, addr(&[1, 2, 3])).expect("insert other");
         writer.flush().expect("flush");
 
-        let reader = dict_test_utils::mk_sharder_reader(n, weak_dbs, dict_pk_to_ids, value_by_dict_pk, value_to_dict_pk, dict_pk_by_id);
+        let reader = dict_test_utils::mk_sharder_reader(name, n, weak_dbs, dict_pk_to_ids, value_by_dict_pk, value_to_dict_pk, dict_pk_by_id);
         let a = reader.get_value(&id1).expect("get id1").expect("some").value().0;
         let b = reader.get_value(&id2).expect("get id2").expect("some").value().0;
         assert_eq!(a, val.0);
@@ -409,7 +402,7 @@ mod dict_sharded {
         assert!(writer.router.delete_kv(id1).expect("del id1"));
         writer.flush().expect("flush");
 
-        let reader = dict_test_utils::mk_sharder_reader(n, weak_dbs, dict_pk_to_ids, value_by_dict_pk, value_to_dict_pk, dict_pk_by_id);
+        let reader = dict_test_utils::mk_sharder_reader(name, n, weak_dbs, dict_pk_to_ids, value_by_dict_pk, value_to_dict_pk, dict_pk_by_id);
         assert!(reader.get_value(&id1).expect("get id1").is_none());
         let got2 = reader.get_value(&id2).expect("get id2").expect("some");
         assert_eq!(got2.value().0, val.0);

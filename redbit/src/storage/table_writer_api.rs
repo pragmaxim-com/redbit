@@ -1,15 +1,18 @@
 use crate::storage::async_boundary::{CopyOwnedValue, ValueBuf, ValueOwned};
-use crate::storage::router::Router;
-use crate::{AppError, TableInfo};
+use crate::storage::context::{ToReadField, ToWriteField};
+use crate::storage::router::{Router, ShardedRouter};
+use crate::{AppError, KeyPartitioner, Partitioning, ShardedReadOnlyDictTable, ShardedReadOnlyIndexTable, ShardedReadOnlyPlainTable, ShardedTableWriter, Storage, TableInfo, TxFSM, ValuePartitioner};
 use crossbeam::channel::{bounded, Receiver, Sender};
-use redb::{AccessGuard, Durability, Key, MultimapValue, Value, WriteTransaction};
+use redb::{AccessGuard, Database, Durability, Key, MultimapValue, Value, WriteTransaction};
 use std::borrow::Borrow;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::ops::RangeBounds;
-use std::sync::Arc;
-use std::thread::JoinHandle;
 use std::fmt;
+use std::marker::PhantomData;
+use std::ops::RangeBounds;
+use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, Weak};
+use std::thread::JoinHandle;
 
 #[derive(Clone, Debug)]
 pub struct TaskStats {
@@ -189,9 +192,25 @@ pub trait WriteTableLike<K: CopyOwnedValue + 'static, V: Key + 'static> {
 pub trait TableFactory<K: CopyOwnedValue + 'static, V: Key + 'static> {
     type CacheCtx;
     type Table<'txn, 'c>: WriteTableLike<K, V>;
+    type ReadOnlyTable;
     fn name(&self) -> String;
     fn new_cache(&self) -> Self::CacheCtx;
-    fn open<'txn, 'c>(&self, tx: &'txn WriteTransaction, cache: &'c mut Self::CacheCtx) -> Result<Self::Table<'txn, 'c>, AppError>;
+    fn open_for_write<'txn, 'c>(&self, tx: &'txn WriteTransaction, cache: &'c mut Self::CacheCtx) -> Result<Self::Table<'txn, 'c>, AppError>;
+    fn open_for_read(&self, db_weak: &Weak<Database>) -> redb::Result<Self::ReadOnlyTable, AppError>;
+}
+
+pub trait ReadTableFactory<K, V, KP, VP>: TableFactory<K, V>
+where
+    K: CopyOwnedValue + 'static + Borrow<K::SelfType<'static>>,
+    V: Key + 'static + Borrow<V::SelfType<'static>>,
+    KP: KeyPartitioner<K> + Sync + Send + Clone + 'static,
+    VP: ValuePartitioner<V> + Sync + Send + Clone + 'static,
+{
+    fn build_sharded_reader(
+        &self,
+        dbs: Vec<Weak<Database>>,
+        part: &Partitioning<KP, VP>,
+    ) -> Result<ShardedTableReader<K, V, KP, VP>, AppError>;
 }
 
 pub struct FlushState {
@@ -252,4 +271,185 @@ pub trait WriterLike<K: CopyOwnedValue, V: Value> {
     fn flush_deferred(&self) -> Result<Vec<FlushFuture>, AppError>;
     fn shutdown(self) -> Result<(), AppError> where Self: Sized;
     fn shutdown_async(self) -> Result<Vec<StopFuture>, AppError> where Self: Sized;
+}
+
+pub struct RedbitTableDefinition<K, V, F, KP, VP>
+where
+    K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
+    V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
+    F: ReadTableFactory<K, V, KP, VP> + Send + Clone + 'static,
+    KP: KeyPartitioner<K> + Sync + Send + Clone + 'static,
+    VP: ValuePartitioner<V> + Sync + Send + Clone + 'static,
+{
+    partitioning: Partitioning<KP, VP>,
+    factory: F,
+    k_phantom: PhantomData<K>,
+    v_phantom: PhantomData<V>,
+}
+
+impl<K, V, F, KP, VP> ToReadField for RedbitTableDefinition<K, V, F, KP, VP>
+where
+    K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
+    V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
+    F: ReadTableFactory<K, V, KP, VP> + Send + Clone + 'static,
+    KP: KeyPartitioner<K> + Sync + Send + Clone + 'static,
+    VP: ValuePartitioner<V> + Sync + Send + Clone + 'static,
+{
+    type ReadField = ShardedTableReader<K, V, KP, VP>;
+
+    fn to_read_field(&self, storage: &Arc<Storage>) -> redb::Result<Self::ReadField, AppError> {
+        self.reader(storage)
+    }
+}
+impl<K, V, F, KP, VP> ToWriteField for RedbitTableDefinition<K, V, F, KP, VP>
+where
+    K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
+    V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
+    F: ReadTableFactory<K, V, KP, VP> + Send + Clone + 'static,
+    KP: KeyPartitioner<K> + Sync + Send + Clone + 'static,
+    VP: ValuePartitioner<V> + Sync + Send + Clone + 'static,
+{
+    type WriteField = ShardedTableWriter<K, V, F, KP, VP>;
+
+    fn to_write_field(&self, storage: &Arc<Storage>) -> redb::Result<Self::WriteField, AppError> {
+        self.writer(storage)
+    }
+}
+
+impl<K, V, F, KP, VP> RedbitTableDefinition<K, V, F, KP, VP>
+where
+    K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
+    V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
+    F: ReadTableFactory<K, V, KP, VP> + Send + Clone + 'static,
+    KP: KeyPartitioner<K> + Sync + Send + Clone + 'static,
+    VP: ValuePartitioner<V> + Sync + Send + Clone + 'static,
+{
+    pub fn new(partitioning: Partitioning<KP, VP>, factory: F) -> Self {
+        Self {
+            partitioning,
+            factory,
+            k_phantom: PhantomData,
+            v_phantom: PhantomData,
+        }
+    }
+
+    pub fn writer_from_dbs(&self, dbs: Vec<Weak<Database>>) -> Result<ShardedTableWriter<K,V,F,KP,VP>, AppError> {
+        let mut shards = Vec::with_capacity(dbs.len());
+        for db_weak in dbs.into_iter() {
+            shards.push(TxFSM::<K,V,F>::new(db_weak, self.factory.clone())?);
+        }
+        let senders: Vec<_> = shards.iter().map(|w| w.sender()).collect();
+        let router = Arc::new(ShardedRouter::new(self.partitioning.clone(), senders));
+        let deferred = AtomicBool::new(false);
+        ShardedTableWriter::new(shards, router, deferred)
+    }
+
+    pub fn writer(&self, storage: &Arc<Storage>) -> Result<ShardedTableWriter<K,V,F,KP,VP>, AppError> {
+        let dbs = storage.fetch_dbs(self.factory.name().as_str())?;
+        self.writer_from_dbs(dbs)
+    }
+
+    pub fn reader_from_dbs(&self, dbs: Vec<Weak<Database>>) -> Result<ShardedTableReader<K, V, KP, VP>, AppError> {
+        if dbs.len() < 1 {
+            return Err(AppError::Custom(format!(
+                "ShardedReadOnlyTable expected at least one database, got {}",
+                dbs.len()
+            )));
+        }
+        self.factory.build_sharded_reader(dbs, &self.partitioning)
+    }
+
+    pub fn reader(&self, storage: &Arc<Storage>) -> Result<ShardedTableReader<K, V, KP, VP>, AppError> {
+        let dbs = storage.fetch_dbs(self.factory.name().as_str())?;
+        self.reader_from_dbs(dbs)
+    }
+}
+
+pub enum ShardedTableReader<K, V, KP, VP>
+where
+    K: Key + 'static + Borrow<K::SelfType<'static>>,
+    V: Key + 'static + Borrow<V::SelfType<'static>>,
+    KP: KeyPartitioner<K> + Sync + Send + Clone + 'static,
+    VP: ValuePartitioner<V> + Sync + Send + Clone + 'static,
+{
+    Plain(ShardedReadOnlyPlainTable<K, V, KP>),
+    Index(ShardedReadOnlyIndexTable<K, V, VP>),
+    Dict(ShardedReadOnlyDictTable<K, V, VP>),
+}
+
+impl<K, V, KP, VP> ReadTableLike<K, V> for ShardedTableReader<K, V, KP, VP>
+where
+    K: Key + 'static + Borrow<K::SelfType<'static>>,
+    V: Key + 'static + Borrow<V::SelfType<'static>>,
+    KP: KeyPartitioner<K> + Sync + Send + Clone + 'static,
+    VP: ValuePartitioner<V> + Sync + Send + Clone + 'static,
+{
+    fn index_keys<'v>(&self, val: impl Borrow<V::SelfType<'v>>) -> Result<MultimapValue<'static, K>, AppError> {
+        match self {
+            ShardedTableReader::Index(t) => t.index_keys(val),
+            _ => Err(AppError::Custom("index_keys unsupported for this table kind".into())),
+        }
+    }
+
+    fn dict_keys<'v>(&self, val: impl Borrow<V::SelfType<'v>>) -> Result<Option<MultimapValue<'static, K>>, AppError> {
+        match self {
+            ShardedTableReader::Dict(t) => t.dict_keys(val),
+            _ => Err(AppError::Custom("dict_keys unsupported for this table kind".into())),
+        }
+    }
+
+    fn get_value<'k>(&self, key: impl Borrow<K::SelfType<'k>>) -> Result<Option<AccessGuard<'_, V>>, AppError> {
+        match self {
+            ShardedTableReader::Plain(t) => t.get_value(key),
+            ShardedTableReader::Index(t) => t.get_value(key),
+            ShardedTableReader::Dict(t) => t.get_value(key),
+        }
+    }
+
+    fn iter_keys(&self) -> Result<redb::Range<'_, K, V>, AppError> {
+        match self {
+            ShardedTableReader::Plain(t) => t.iter_keys(),
+            ShardedTableReader::Index(t) => t.iter_keys(),
+            ShardedTableReader::Dict(t) => t.iter_keys(),
+        }
+    }
+
+    fn range<'a, KR: Borrow<K::SelfType<'a>>>(&self, r: impl RangeBounds<KR>) -> Result<redb::Range<'static, K, V>, AppError> {
+        match self {
+            ShardedTableReader::Plain(t) => t.range(r),
+            ShardedTableReader::Index(t) => t.range(r),
+            ShardedTableReader::Dict(t) => t.range(r),
+        }
+    }
+
+    fn index_range<'a, KR: Borrow<V::SelfType<'a>>>(&self, r: impl RangeBounds<KR>) -> Result<redb::MultimapRange<'static, V, K>, AppError> {
+        match self {
+            ShardedTableReader::Index(t) => t.index_range(r),
+            _ => Err(AppError::Custom("index_range unsupported for this table kind".into())),
+        }
+    }
+
+    fn first_key(&self) -> Result<Option<(AccessGuard<'_, K>, AccessGuard<'_, V>)>, AppError> {
+        match self {
+            ShardedTableReader::Plain(t) => t.first_key(),
+            ShardedTableReader::Index(t) => t.first_key(),
+            ShardedTableReader::Dict(t) => t.first_key(),
+        }
+    }
+
+    fn last_key(&self) -> Result<Option<(AccessGuard<'_, K>, AccessGuard<'_, V>)>, AppError> {
+        match self {
+            ShardedTableReader::Plain(t) => t.last_key(),
+            ShardedTableReader::Index(t) => t.last_key(),
+            ShardedTableReader::Dict(t) => t.last_key(),
+        }
+    }
+
+    fn stats(&self) -> Result<Vec<TableInfo>, AppError> {
+        match self {
+            ShardedTableReader::Plain(t) => t.stats(),
+            ShardedTableReader::Index(t) => t.stats(),
+            ShardedTableReader::Dict(t) => t.stats(),
+        }
+    }
 }

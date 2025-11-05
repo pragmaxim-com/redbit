@@ -2,19 +2,7 @@ use crate::table::{DictTableDefs, IndexTableDefs, PlainTableDef};
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 
-pub struct StorageDef {
-    pub db_defs: TokenStream,
-    pub table_defs: Vec<TokenStream>,
-}
-
-pub fn get_db_defs(plain_table_defs: &[PlainTableDef], dict_table_defs: &[DictTableDefs], index_table_defs: &[IndexTableDefs]) -> StorageDef {
-    let table_defs: Vec<TokenStream> = plain_table_defs
-        .iter()
-        .map(|table_def| table_def.underlying.definition.clone())
-        .chain(index_table_defs.iter().flat_map(|defs| defs.all_table_defs().into_iter().map(|def| def.definition)))
-        .chain(dict_table_defs.iter().flat_map(|defs| defs.all_table_defs().into_iter().map(|def| def.definition)))
-        .collect();
-
+pub fn get_db_defs(plain_table_defs: &[PlainTableDef], dict_table_defs: &[DictTableDefs], index_table_defs: &[IndexTableDefs]) -> TokenStream {
     let idents: Vec<Ident> =
         plain_table_defs.iter().map(|d| d.var_name.clone())
             .chain(index_table_defs.iter().map(|d| d.var_name.clone()))
@@ -38,11 +26,9 @@ pub fn get_db_defs(plain_table_defs: &[PlainTableDef], dict_table_defs: &[DictTa
             .chain(dict_table_defs.iter().map(|d| d.column_props.shards))
             .collect();
 
-
-    let db_defs = quote! {
+    quote! {
         pub fn db_defs() -> Vec<DbDef> {
             vec![#( DbDef { name: String::from(stringify!(#idents)), shards: #shards, db_cache_weight_or_zero: #db_caches, lru_cache_size_or_zero: #lru_cache_sizes } ),*]
         }
-    };
-    StorageDef { db_defs, table_defs }
+    }
 }
