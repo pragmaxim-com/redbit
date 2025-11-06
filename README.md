@@ -13,7 +13,7 @@ make them catch up with others even if they are HOT, see [chain](chain/README.md
 ✅ Parallel persistence, there is a long-running write thread spawned for each entity column (no blocking) \
 ✅ Querying and ranging by secondary index \
 ✅ Optional dictionaries for low cardinality fields or for building unique values (addresses) \
-✅ Sharding of columns which parallelizes their indexing (high quantity/volume columns) \
+✅ Sharding of columns which parallelizes their indexing (high quantity/volume columns) :
   ```rust
   #[column(shards = 4)]
   #[column(index, shards = 4)]
@@ -70,6 +70,17 @@ to avoid benchmarking our SSD by random-access writes, ie. to rapidly reduce wri
   - systematically combine durable and non-durable writes to leverage Linux VM (page cache) and reduce amount of fsync calls
   - sort all data in batches before writing it to reduce tree building overhead
     - solved by parallelizing writes to all columns into long-running batching threads
+
+### Why Macros? 
+
+1. Rust's type system is not as expressive as e.g. Haskell's or Scala's for performance reasons
+2. Rust's macro system is powerful and straightforward to use
+
+So, I find model driven development with code generation a great fit for Rust. It performs very well unless we generate 50k lines of code
+which would be the case of deeply nested entities with many indexes and dictionaries.
+
+The core idea is about deriving R/W entity methods and nested entity definition `println!("{:#?}", Block::definition()?);` from struct annotations. 
+Definition holds all the entity meta information, and it is used to create rich R/W transaction contexts that are used by derived entity R/W methods.
 
 ### Development
 

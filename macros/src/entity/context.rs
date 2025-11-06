@@ -47,7 +47,6 @@ pub struct TxContextItem {
     pub write_definition: TokenStream,
     pub write_begin: TokenStream,
     pub async_flush: Option<TokenStream>,
-    pub deferred_flush: Option<TokenStream>,
     pub write_shutdown: TokenStream,
     pub read_definition: TokenStream,
 }
@@ -60,6 +59,7 @@ pub fn def_tx_context(entity_def: &EntityDef, tx_contexts: &[TxContextItem]) -> 
     let write_entity_tx_context_ty = &entity_def.write_ctx_type;
     let tx_context_name = format_ident!("{}", TX_CONTEXT);
     quote! {
+        #[derive(Debug)]
         pub struct #entity_tx_context_ty {
             #(#definitions),*
         }
@@ -84,7 +84,6 @@ pub fn write_tx_context(entity_def: &EntityDef, tx_contexts: &[TxContextItem]) -
     let begins: Vec<TokenStream> = tx_contexts.iter().map(|item| item.write_begin.clone()).collect();
     let shutdowns: Vec<TokenStream> = tx_contexts.iter().map(|item| item.write_shutdown.clone()).collect();
     let async_flushes: Vec<TokenStream> = tx_contexts.iter().flat_map(|item| item.async_flush.clone()).collect();
-    let deferred_flushes: Vec<TokenStream> = tx_contexts.iter().flat_map(|item| item.deferred_flush.clone()).collect();
     let write_tx_context_name = tx_context_name(TxType::Write);
     let write_tx_context_ty = &entity_def.write_ctx_type;
     let entity_tx_context_ty = &entity_def.ctx_type;
@@ -112,11 +111,6 @@ pub fn write_tx_context(entity_def: &EntityDef, tx_contexts: &[TxContextItem]) -
            fn commit_ctx_async(&self) -> Result<Vec<FlushFuture>, AppError> {
                 let mut futures: Vec<FlushFuture> = Vec::new();
                 #( futures.extend(#async_flushes); )*
-                Ok(futures)
-           }
-           fn commit_ctx_deferred(&self) -> Result<Vec<FlushFuture>, AppError> {
-                let mut futures: Vec<FlushFuture> = Vec::new();
-                #( futures.extend(#deferred_flushes); )*
                 Ok(futures)
            }
         }
@@ -164,7 +158,8 @@ pub fn tx_context_plain_item(def: &PlainTableDef) -> TxContextItem {
     let key_ty      = &def.key_type;
     let val_ty: Type = def.value_type.clone().unwrap_or_else(|| syn::parse_str::<Type>("()").unwrap());
     let table_def = &def.underlying.definition;
-    let shards      = def.column_props.shards;
+    let shards= def.column_props.shards;
+    let root_pk= def.root_pk;
 
     let definition =
         quote! {
@@ -183,18 +178,13 @@ pub fn tx_context_plain_item(def: &PlainTableDef) -> TxContextItem {
 
     let def_constructor = quote! {
         #var_ident: RedbitTableDefinition::new(
+            #root_pk,
             Partitioning::by_key(#shards),
             PlainFactory::new(#name_lit, #table_def),
         )
     };
     let write_begin = quote! { self.#var_ident.begin_async(durability)? };
-    let async_flush =
-        if def.root_pk {
-            Some(quote! { self.#var_ident.flush_two_phased()? })
-        } else {
-            Some(quote! { self.#var_ident.flush_async()? })
-        };
-    let deferred_flush = Some(quote! { self.#var_ident.flush_deferred()? });
+    let async_flush = Some(quote! { self.#var_ident.flush_async()? });
     let write_shutdown = quote! { self.#var_ident.shutdown_async()? };
 
     TxContextItem {
@@ -204,7 +194,6 @@ pub fn tx_context_plain_item(def: &PlainTableDef) -> TxContextItem {
         write_definition,
         write_begin,
         async_flush,
-        deferred_flush,
         write_shutdown,
         read_definition,
     }
@@ -237,13 +226,13 @@ pub fn tx_context_index_item(defs: &IndexTableDefs) -> TxContextItem {
 
     let def_constructor = quote! {
         #var_ident: RedbitTableDefinition::new(
+            false,
             Partitioning::by_value(#shards),
             IndexFactory::new(#name_lit, #lru_cache, #pk_by_index, #index_by_pk),
         )
     };
     let write_begin    = quote! { self.#var_ident.begin_async(durability)? };
     let async_flush = Some(quote! { self.#var_ident.flush_async()? });
-    let deferred_flush = Some(quote! { self.#var_ident.flush_deferred()? });
     let write_shutdown = quote! { self.#var_ident.shutdown_async()? };
 
     TxContextItem {
@@ -253,7 +242,6 @@ pub fn tx_context_index_item(defs: &IndexTableDefs) -> TxContextItem {
         write_definition,
         write_begin,
         async_flush,
-        deferred_flush,
         write_shutdown,
         read_definition,
     }
@@ -288,13 +276,13 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
 
     let def_constructor = quote! {
         #var_ident: RedbitTableDefinition::new(
+            false,
             Partitioning::by_value(#shards),
             DictFactory::new(#name_lit, #lru_cache, #dict_pk_to_ids, #value_by_dict, #value_to_dict, #dict_pk_by_pk),
         )
     };
     let write_begin    = quote! { self.#var_ident.begin_async(durability)? };
     let async_flush = Some(quote! { self.#var_ident.flush_async()? });
-    let deferred_flush = Some(quote! { self.#var_ident.flush_deferred()? });
     let write_shutdown = quote! { self.#var_ident.shutdown_async()? };
 
     TxContextItem {
@@ -304,7 +292,6 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
         write_definition,
         write_begin,
         async_flush,
-        deferred_flush,
         write_shutdown,
         read_definition,
     }
@@ -327,6 +314,23 @@ pub fn begin_write_fn_def(entity_def: &EntityDef) -> FunctionDef {
         bench_stream: None,
     }
 
+}
+
+pub fn definition(entity_def: &EntityDef) -> FunctionDef {
+    let tx_context_ty = &entity_def.ctx_type;
+    let fn_name = format_ident!("definition");
+    let fn_stream = quote! {
+        pub fn #fn_name() -> Result<#tx_context_ty, AppError> {
+            #tx_context_ty::definition()
+        }
+    };
+
+    FunctionDef {
+        fn_stream,
+        endpoint: None,
+        test_stream: None,
+        bench_stream: None,
+    }
 }
 
 pub fn new_write_fn_def(entity_def: &EntityDef) -> FunctionDef {

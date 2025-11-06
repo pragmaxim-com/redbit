@@ -163,6 +163,7 @@ pub mod plain_test_utils {
         let plain_def = TableDefinition::<u32, V>::new("plain_underlying");
 
         let def = RedbitTableDefinition::new(
+            false,
             Partitioning::by_key(n),
             PlainFactory::new(name, plain_def),
         );
@@ -213,6 +214,7 @@ pub mod index_test_utils {
         let index_by_pk_def = TableDefinition::<u32, V>::new("index_by_pk");
 
         let def = RedbitTableDefinition::new(
+            false,
             Partitioning::by_value(n),
             IndexFactory::new(name, lru_cache, pk_by_index_def, index_by_pk_def),
         );
@@ -285,6 +287,7 @@ pub mod dict_test_utils {
 
         // Writer by value (so identical values go to the same shard):
         let def = RedbitTableDefinition::new(
+            false,
             Partitioning::by_value(n),
             DictFactory::new(
                 name,

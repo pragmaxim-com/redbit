@@ -11,7 +11,7 @@ pub fn fn_def(entity_def: &EntityDef, table_var: &Ident) -> FunctionDef {
 
     let fn_stream = quote! {
         fn #fn_name(tx_context: &#write_ctx_type, from: #pk_type, until: #pk_type) -> Result<Vec<#pk_type>, AppError> {
-            let entries = tx_context.#table_var.router.range(from, until)?;
+            let entries = tx_context.#table_var.range(from, until)?;
             let mut results = Vec::new();
             for (key, _) in entries {
                 let pointer: #pk_type = key.as_value();

@@ -1,4 +1,4 @@
-use crate::storage::async_boundary::CopyOwnedValue;
+use crate::storage::async_boundary::{CopyOwnedValue, ValueBuf, ValueOwned};
 use crate::storage::partitioning::{KeyPartitioner, ValuePartitioner};
 use crate::storage::router::Router;
 use crate::storage::table_writer_api::*;
@@ -18,8 +18,9 @@ pub struct ShardedTableWriter<
     KP: KeyPartitioner<K>,
     VP: ValuePartitioner<V>,
 > {
+    root_pk: bool,
     shards: Vec<TxFSM<K, V, F>>,
-    pub router: Arc<dyn Router<K, V>>,
+    router: Arc<dyn Router<K, V>>,
     deferred: AtomicBool,
     sync_buf: RefCell<Vec<(K, V)>>,
     _pd: PhantomData<(KP,VP)>,
@@ -32,8 +33,8 @@ impl<
     KP: KeyPartitioner<K> + Sync + Send + Clone + 'static,
     VP: ValuePartitioner<V> + Sync + Send + Clone + 'static,
 > ShardedTableWriter<K,V,F,KP,VP> {
-    pub fn new(shards: Vec<TxFSM<K, V, F>>, router: Arc<dyn Router<K, V>>, deferred: AtomicBool) -> Result<Self, AppError> {
-        Ok(Self { router, deferred, shards, sync_buf: RefCell::new(Vec::new()), _pd: PhantomData })
+    pub fn new(root_pk: bool, shards: Vec<TxFSM<K, V, F>>, router: Arc<dyn Router<K, V>>, deferred: AtomicBool) -> Result<Self, AppError> {
+        Ok(Self { root_pk, router, deferred, shards, sync_buf: RefCell::new(Vec::new()), _pd: PhantomData })
     }
 }
 
@@ -70,6 +71,23 @@ where
         Ok(v)
     }
 
+    fn delete_kv(&self, key: K) -> Result<bool, AppError> {
+        self.router.delete_kv(key)
+    }
+
+    fn query_and_write(
+        &self,
+        values: Vec<V>,
+        is_last: bool,
+        sink: Arc<dyn Fn(Option<usize>, Vec<(usize, Option<ValueOwned<K>>)>) -> Result<(), AppError> + Send + Sync + 'static>,
+    ) -> Result<(), AppError> {
+        self.router.query_and_write(values, is_last, sink)
+    }
+
+    fn range(&self, from: K, until: K) -> Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError> {
+        self.router.range(from, until)
+    }
+
     fn insert_on_flush(&self, key: K, value: V) -> Result<(), AppError> {
         Ok(self.sync_buf.borrow_mut().push((key, value)))
     }
@@ -85,7 +103,12 @@ where
         }
         for w in &self.shards {
             let (ack_tx, ack_rx) = bounded::<Result<TaskResult, AppError>>(1);
-            w.topic.send(WriterCommand::Flush(ack_tx))?;
+            let deferred = self.deferred.load(Ordering::SeqCst);
+            if deferred {
+                w.topic.send(WriterCommand::FlushWhenReady(ack_tx))?;
+            } else {
+                w.topic.send(WriterCommand::Flush(ack_tx))?;
+            }
             acks.push(FlushFuture::eager(ack_rx));
         }
         let mut tasks = Vec::with_capacity(acks.len());
@@ -101,33 +124,18 @@ where
         }
         let mut v: Vec<FlushFuture> = Vec::with_capacity(self.shards.len());
         for w in &self.shards {
-            let (ack_tx, ack_rx) = bounded::<Result<TaskResult, AppError>>(1);
-            w.topic.send(WriterCommand::Flush(ack_tx))?;
-            v.push(FlushFuture::eager(ack_rx));
-        }
-        Ok(v)
-    }
-
-    fn flush_two_phased(&self) -> Result<Vec<FlushFuture>, AppError> {
-        if !self.sync_buf.borrow().is_empty() {
-            self.router.write_sorted_inserts_on_flush(std::mem::take(&mut *self.sync_buf.borrow_mut()))?;
-        }
-        let mut v: Vec<FlushFuture> = Vec::with_capacity(self.shards.len());
-        for w in &self.shards {
-            v.push(FlushFuture::lazy(w.sender()))
-        }
-        Ok(v)
-    }
-
-    fn flush_deferred(&self) -> Result<Vec<FlushFuture>, AppError> {
-        if !self.sync_buf.borrow().is_empty() {
-            self.router.write_sorted_inserts_on_flush(std::mem::take(&mut *self.sync_buf.borrow_mut()))?;
-        }
-        let mut v = Vec::with_capacity(self.shards.len());
-        for w in &self.shards {
-            let (ack_tx, ack_rx) = bounded::<Result<TaskResult, AppError>>(1);
-            w.topic.send(WriterCommand::FlushWhenReady { ack: ack_tx, deferred: self.deferred.load(Ordering::SeqCst)})?;
-            v.push(FlushFuture::eager(ack_rx))
+            if self.root_pk {
+                v.push(FlushFuture::lazy(w.sender())) // two_phased_commit
+            } else {
+                let (ack_tx, ack_rx) = bounded::<Result<TaskResult, AppError>>(1);
+                let deferred = self.deferred.load(Ordering::SeqCst);
+                if deferred {
+                    w.topic.send(WriterCommand::FlushWhenReady(ack_tx))?;
+                } else {
+                    w.topic.send(WriterCommand::Flush(ack_tx))?;
+                }
+                v.push(FlushFuture::eager(ack_rx));
+            }
         }
         Ok(v)
     }
@@ -201,7 +209,7 @@ mod plain_sharded {
         writer.flush().expect("flush");
         writer.begin(Durability::None).expect("begin");
         for k in (3u32..=40).step_by(3) {
-            assert!(writer.router.delete_kv(k).expect("delete"));
+            assert!(writer.delete_kv(k).expect("delete"));
         }
         writer.flush().expect("flush");
 
@@ -267,12 +275,12 @@ mod index_sharded {
         writer.begin(Durability::None).expect("begin");
         // ----- heads before delete -----
         let router = writer.router.clone();
+        let (tx, rx) = channel::unbounded::<Vec<(usize, Option<ValueOwned<u32>>)>>();
         {
             let want = 3usize; // querying [a1, a2, a3]
-            let (tx, rx) = channel::unbounded::<Vec<(usize, Option<ValueOwned<u32>>)>>();
             router.query_and_write(vec![a1.clone(), a2.clone(), a3.clone()], true, Arc::new(move |_last_shards, batch| {
-                tx.send(batch)?;
-                Ok(())
+               if tx.send(batch).is_err() { eprintln!("send failed — receiver gone"); }
+               Ok(())
             })).expect("enqueue heads_before");
 
             let mut acc: Vec<Option<ValueOwned<u32>>> = vec![None; want];
@@ -292,13 +300,12 @@ mod index_sharded {
         }
         assert!(router.delete_kv(4u32).expect("del 4"));
 
-        // ----- head after delete (only a3) -----
+        let (tx, rx) = channel::unbounded::<Vec<(usize, Option<ValueOwned<u32>>)>>();
         {
             let want = 1usize;
-            let (tx, rx) = channel::unbounded::<Vec<(usize, Option<ValueOwned<u32>>)>>();
 
             router.query_and_write(vec![a3.clone()], true, Arc::new(move |_last_shards, batch| {
-                tx.send(batch)?;
+                if tx.send(batch).is_err() { eprintln!("send failed — receiver gone"); }
                 Ok(())
             })).expect("enqueue head_after");
 
@@ -315,14 +322,13 @@ mod index_sharded {
 
             assert_eq!(acc[0].as_ref().map(|v| v.as_value()), Some(80u32));
         }
-
-        writer.flush_deferred().expect("flush");
+        writer.flush().expect("flush");
 
         let reader = index_test_utils::mk_sharded_reader::<Address>(name, n, 0, weak_dbs, pk_by_index_def, index_by_pk_def);
         let keys_iter = reader.index_keys(&a3).expect("get_keys a3");
         let mut keys: Vec<u32> = keys_iter.into_iter().map(|g| g.unwrap().value()).collect();
         keys.sort();
-        assert_eq!(keys, vec![4, 80, 100]);
+        assert_eq!(keys, vec![80, 100]);
 
         writer.shutdown().expect("shutdown");
     }
@@ -336,7 +342,7 @@ mod index_sharded {
 
         writer.begin(Durability::None).expect("begin");
         // no inserts; delete should be false
-        assert!(!writer.router.delete_kv(123456u32).expect("delete absent"));
+        assert!(!writer.delete_kv(123456u32).expect("delete absent"));
         writer.flush().expect("flush");
         writer.shutdown().expect("shutdown");
     }
@@ -399,7 +405,7 @@ mod dict_sharded {
         writer.insert_on_flush(id2, val.clone()).expect("ins id2");
         writer.flush().expect("flush");
         writer.begin(Durability::None).expect("begin");
-        assert!(writer.router.delete_kv(id1).expect("del id1"));
+        assert!(writer.delete_kv(id1).expect("del id1"));
         writer.flush().expect("flush");
 
         let reader = dict_test_utils::mk_sharder_reader(name, n, weak_dbs, dict_pk_to_ids, value_by_dict_pk, value_to_dict_pk, dict_pk_by_id);

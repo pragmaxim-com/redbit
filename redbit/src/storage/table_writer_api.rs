@@ -233,7 +233,7 @@ pub enum WriterCommand<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'stat
     },
     Range(K, K, Sender<Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>>),
     Flush(Sender<Result<TaskResult, AppError>>),
-    FlushWhenReady { ack: Sender<Result<TaskResult, AppError>>, deferred: bool },
+    FlushWhenReady(Sender<Result<TaskResult, AppError>>),
     ReadyForFlush(usize),
     Shutdown(Sender<Result<(), AppError>>),
 }
@@ -261,18 +261,25 @@ pub enum Control {
 
 pub trait WriterLike<K: CopyOwnedValue, V: Value> {
     fn acquire_router(&self) -> Arc<dyn Router<K, V>>;
+    fn delete_kv(&self, key: K) -> Result<bool, AppError>;
     fn begin(&self, durability: Durability) -> Result<(), AppError>;
     fn begin_async(&self, durability: Durability) -> Result<Vec<StartFuture>, AppError>;
     fn insert_on_flush(&self, key: K, value: V) -> Result<(), AppError>;
     fn insert_now(&self, key: K, value: V) -> Result<(), AppError>;
+    fn query_and_write(
+        &self,
+        values: Vec<V>,
+        is_last: bool,
+        sink: Arc<dyn Fn(Option<usize>, Vec<(usize, Option<ValueOwned<K>>)>) -> Result<(), AppError> + Send + Sync + 'static>,
+    ) -> Result<(), AppError>;
+    fn range(&self, from: K, until: K) -> Result<Vec<(ValueBuf<K>, ValueBuf<V>)>, AppError>;
     fn flush(&self) -> Result<TaskResult, AppError>;
     fn flush_async(&self) -> Result<Vec<FlushFuture>, AppError>;
-    fn flush_two_phased(&self) -> Result<Vec<FlushFuture>, AppError>;
-    fn flush_deferred(&self) -> Result<Vec<FlushFuture>, AppError>;
     fn shutdown(self) -> Result<(), AppError> where Self: Sized;
     fn shutdown_async(self) -> Result<Vec<StopFuture>, AppError> where Self: Sized;
 }
 
+#[derive(Debug)]
 pub struct RedbitTableDefinition<K, V, F, KP, VP>
 where
     K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
@@ -281,6 +288,7 @@ where
     KP: KeyPartitioner<K> + Sync + Send + Clone + 'static,
     VP: ValuePartitioner<V> + Sync + Send + Clone + 'static,
 {
+    root_pk: bool,
     partitioning: Partitioning<KP, VP>,
     factory: F,
     k_phantom: PhantomData<K>,
@@ -324,8 +332,9 @@ where
     KP: KeyPartitioner<K> + Sync + Send + Clone + 'static,
     VP: ValuePartitioner<V> + Sync + Send + Clone + 'static,
 {
-    pub fn new(partitioning: Partitioning<KP, VP>, factory: F) -> Self {
+    pub fn new(root_pk: bool, partitioning: Partitioning<KP, VP>, factory: F) -> Self {
         Self {
+            root_pk,
             partitioning,
             factory,
             k_phantom: PhantomData,
@@ -341,7 +350,7 @@ where
         let senders: Vec<_> = shards.iter().map(|w| w.sender()).collect();
         let router = Arc::new(ShardedRouter::new(self.partitioning.clone(), senders));
         let deferred = AtomicBool::new(false);
-        ShardedTableWriter::new(shards, router, deferred)
+        ShardedTableWriter::new(self.root_pk, shards, router, deferred)
     }
 
     pub fn writer(&self, storage: &Arc<Storage>) -> Result<ShardedTableWriter<K,V,F,KP,VP>, AppError> {

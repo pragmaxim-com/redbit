@@ -98,26 +98,22 @@ where
                 ack.send(Ok(r))?;
                 Ok(Control::Continue)
             }
-            WriterCommand::FlushWhenReady { ack, deferred } => {
-                if !deferred {
-                    self.step(WriterCommand::Flush(ack))
-                } else {
-                    match &mut self.deferred {
-                        Some(FlushState { sender, .. }) => {
-                            if sender.is_some() {
-                                return Ok(Control::Error(ack, AppError::Custom("flush already pending".to_string())));
-                            }
-                            *sender = Some(ack.clone())
-                        },
-                        None => self.deferred = Some(FlushState { sender: Some(ack.clone()), sum: 0, shards: None }),
-                    }
-                    if let Some(FlushState { sender: Some(_), sum, shards: Some(total) }) = &self.deferred {
-                        if *sum == *total {
-                            return self.step(WriterCommand::Flush(ack));
+            WriterCommand::FlushWhenReady(ack) => {
+                match &mut self.deferred {
+                    Some(FlushState { sender, .. }) => {
+                        if sender.is_some() {
+                            return Ok(Control::Error(ack, AppError::Custom("flush already pending".to_string())));
                         }
-                    }
-                    Ok(Control::Continue)
+                        *sender = Some(ack.clone())
+                    },
+                    None => self.deferred = Some(FlushState { sender: Some(ack.clone()), sum: 0, shards: None }),
                 }
+                if let Some(FlushState { sender: Some(_), sum, shards: Some(total) }) = &self.deferred {
+                    if *sum == *total {
+                        return self.step(WriterCommand::Flush(ack));
+                    }
+                }
+                Ok(Control::Continue)
             }
             WriterCommand::ReadyForFlush(total) => {
                 match &mut self.deferred {

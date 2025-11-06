@@ -2,12 +2,13 @@ use crate::storage::table_dict_read::ReadOnlyDictTable;
 use crate::storage::table_writer_api::TableFactory;
 use crate::{AppError, CacheKey, CopyOwnedValue, DictTable};
 use lru::LruCache;
-use redb::{Database, MultimapTableDefinition, TableDefinition, WriteTransaction};
+use redb::{Database, Key, MultimapTableDefinition, TableDefinition, WriteTransaction};
+use std::fmt::Debug;
 use std::num::NonZeroUsize;
 use std::sync::Weak;
 
 #[derive(Clone)]
-pub struct DictFactory<K: CopyOwnedValue + 'static, V: CacheKey + 'static> {
+pub struct DictFactory<K: Key + 'static, V: Key + 'static> {
     pub name: String,
     pub dict_pk_to_ids_def: MultimapTableDefinition<'static, K, K>,
     pub value_by_dict_pk_def: TableDefinition<'static, K, V>,
@@ -16,7 +17,13 @@ pub struct DictFactory<K: CopyOwnedValue + 'static, V: CacheKey + 'static> {
     pub lru_capacity: Option<usize>,
 }
 
-impl<K: CopyOwnedValue + 'static, V: CacheKey + 'static> DictFactory<K, V> {
+impl<K: Key + 'static, V: Key + 'static> Debug for DictFactory<K, V> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DictFactory").field("name", &self.name).finish()
+    }
+}
+
+impl<K: Key + 'static, V: Key + 'static> DictFactory<K, V> {
     pub fn new(name: &str, lru_capacity: usize, dict_pk_to_ids_def: MultimapTableDefinition<'static, K, K>, value_by_dict_pk_def: TableDefinition<'static, K, V>, value_to_dict_pk_def: TableDefinition<'static, V, K>, dict_pk_by_id_def: TableDefinition<'static, K, K>) -> Self {
         let lru_cache_size_opt =
             if lru_capacity < 1 {

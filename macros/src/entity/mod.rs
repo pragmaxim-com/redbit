@@ -67,6 +67,7 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
         store::persist_def(&entity_def, &store_statements),
         store::store_many_def(&entity_def, &store_statements),
         store::store_def(&entity_def, &store_statements),
+        context::definition(&entity_def),
         context::begin_write_fn_def(&entity_def),
         context::new_write_fn_def(&entity_def),
         context::begin_read_fn_def(&entity_def),

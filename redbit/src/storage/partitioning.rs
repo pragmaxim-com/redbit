@@ -26,7 +26,7 @@ where V: Key + 'static + Borrow<V::SelfType<'static>> {
 }
 */
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Partitioning<KP, VP> {
     ByKey(KP),
     ByValue(VP),
@@ -47,7 +47,7 @@ pub trait ValuePartitioner<V: Key + 'static + Borrow<V::SelfType<'static>>> {
 
 /// Fast, deterministic partitioner for arbitrary byte values.
 /// O(len), no allocations; stable across runs with a fixed `seed`.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Xxh3Partitioner(usize);
 
 impl Xxh3Partitioner {
@@ -79,7 +79,7 @@ pub trait KeyPartitioner<K: Key + 'static + Borrow<K::SelfType<'static>>> {
 }
 
 // ---------- Struct adapter (kept) ----------
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct BytesPartitioner(usize);
 
 impl BytesPartitioner {

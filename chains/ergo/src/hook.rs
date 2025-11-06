@@ -4,7 +4,7 @@ pub(crate) fn write_from_input_refs_using_utxos(tx_context: &TransactionWriteTxC
     let ids_router  = tx_context.inputs.input_id.acquire_router();
     let ptrs_router = tx_context.inputs.input_utxo_pointer_by_id.acquire_router();
     let tx_hashes = input_refs.iter().map(|(box_id, _)| *box_id).collect::<Vec<_>>();
-    tx_context.utxos.utxo_box_id_index.router.query_and_write(tx_hashes, is_last, Arc::new(move |last_shards, out| {
+    tx_context.utxos.utxo_box_id_index.query_and_write(tx_hashes, is_last, Arc::new(move |last_shards, out| {
         let mut ids = Vec::with_capacity(out.len());
         let mut pointers = Vec::with_capacity(out.len());
         for (index, tx_pointer_buf_opt) in out.into_iter() {

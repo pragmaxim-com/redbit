@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::sync::Weak;
 use redb::{Database, Key, Table, TableDefinition, WriteTransaction};
 use crate::{AppError, CopyOwnedValue};
@@ -8,6 +9,12 @@ use crate::storage::table_writer_api::TableFactory;
 pub struct PlainFactory<K: Key + 'static, V: Key + 'static> {
     pub(crate) name: String,
     pub(crate) table_def: TableDefinition<'static, K, V>,
+}
+
+impl<K: Key + 'static, V: Key + 'static> Debug for PlainFactory<K, V> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PlainFactory").field("name", &self.name).finish()
+    }
 }
 
 impl<K: Key + 'static, V: Key + 'static> PlainFactory<K, V> {
