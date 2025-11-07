@@ -24,13 +24,14 @@ pub fn fn_def(entity_def: &EntityDef, table: &Ident) -> FunctionDef {
 
     let test_stream = Some(quote! {
         #[test]
-        fn #fn_name() {
+        fn #fn_name() -> Result<(), AppError> {
             let (storage_owner, storage) = &*STORAGE;
             let pk_value = #pk_type::default();
-            let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
-            let entity = #entity_name::#fn_name(&tx_context, pk_value).expect("Failed to get entity by PK").expect("Expected entity to exist");
+            let tx_context = #entity_name::begin_read_ctx(&storage)?;
+            let entity = #entity_name::#fn_name(&tx_context, pk_value)?.expect("Expected entity to exist");
             let expected_enity = #entity_type::sample();
             assert_eq!(entity, expected_enity, "Entity PK does not match the requested PK");
+            Ok(())
         }
     });
 

@@ -10,12 +10,13 @@ pub fn one2one_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
 
     let test_stream = Some(quote! {
         #[test]
-        fn #fn_name() {
+        fn #fn_name() -> Result<(), AppError> {
             let (storage_owner, storage) = &*STORAGE;
             let pk_value = #pk_type::default();
-            let tx_context = #child_type::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
-            let child = #entity_name::#fn_name(&tx_context, pk_value).expect("Failed to get child by PK");
+            let tx_context = #child_type::begin_read_ctx(&storage)?;
+            let child = #entity_name::#fn_name(&tx_context, pk_value)?;
             assert_eq!(child.#pk_name, pk_value, "Child PK does not match the requested PK");
+            Ok(())
         }
     });
 
@@ -79,12 +80,13 @@ pub fn one2opt_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, p
 
     let test_stream = Some(quote! {
         #[test]
-        fn #fn_name() {
+        fn #fn_name() -> Result<(), AppError> {
             let (storage_owner, storage) = &*STORAGE;
             let pk_value = #pk_type::default();
-            let tx_context = #child_type::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
-            let maybe_child = #entity_name::#fn_name(&tx_context, pk_value).expect("Failed to get child by PK");
+            let tx_context = #child_type::begin_read_ctx(&storage)?;
+            let maybe_child = #entity_name::#fn_name(&tx_context, pk_value)?;
             assert!(maybe_child.is_none() || maybe_child.unwrap().#pk_name == pk_value, "Unexpected child PK");
+            Ok(())
         }
     });
 
@@ -148,12 +150,13 @@ pub fn one2many_def(entity_name: &Ident, child_name: &Ident, child_type: &Type, 
 
     let test_stream = Some(quote! {
         #[test]
-        fn #fn_name() {
+        fn #fn_name() -> Result<(), AppError> {
             let (storage_owner, storage) = &*STORAGE;
             let pk_value = #pk_type::default();
-            let tx_context = #child_type::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
-            let children = #entity_name::#fn_name(&tx_context, pk_value).expect("Failed to get children by PK");
+            let tx_context = #child_type::begin_read_ctx(&storage)?;
+            let children = #entity_name::#fn_name(&tx_context, pk_value)?;
             assert_eq!(children.len(), 3, "Expected 3 children for {}", stringify!(#child_name));
+            Ok(())
         }
     });
 

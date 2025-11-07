@@ -21,13 +21,14 @@ pub fn fn_def(entity_def: &EntityDef, table: &Ident) -> FunctionDef {
 
     let test_stream = Some(quote! {
         #[test]
-        fn #fn_name() {
+        fn #fn_name() -> Result<(), AppError> {
             let (storage_owner, storage) = &*STORAGE;
             let entity_count: usize = 3;
-            let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
-            let entity = #entity_name::last(&tx_context).expect("Failed to get last entity by PK").expect("Expected last entity to exist");
+            let tx_context = #entity_name::begin_read_ctx(&storage)?;
+            let entity = #entity_name::last(&tx_context)?.expect("Expected last entity to exist");
             let expected_entity = #entity_type::sample_many(Default::default(), entity_count).last().expect("Expected at least one entity").clone();
             assert_eq!(entity, expected_entity, "Last entity does not match expected");
+            Ok(())
         }
     });
 

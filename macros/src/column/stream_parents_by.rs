@@ -41,28 +41,30 @@ pub fn by_dict_def(
     let test_with_filter_fn_name = format_ident!("{}_with_filter", fn_name);
     let test_stream = Some(quote! {
         #[tokio::test]
-        async fn #fn_name() {
+        async fn #fn_name() -> Result<(), AppError> {
             let (storage_owner, storage) = &*STORAGE;
             let val = #column_type::default();
-            let tx_context = #parent_type::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
-            let entity_stream = #entity_name::#fn_name(tx_context, val, None).expect("Failed to get parent entities by dictionary index");
-            let parent_entities = entity_stream.try_collect::<Vec<#parent_type>>().await.expect("Failed to collect parent entity stream");
+            let tx_context = #parent_type::begin_read_ctx(&storage)?;
+            let entity_stream = #entity_name::#fn_name(tx_context, val, None)?;
+            let parent_entities = entity_stream.try_collect::<Vec<#parent_type>>().await?;
             let expected_entities = vec![#parent_type::sample()];
             assert_eq!(expected_entities, parent_entities, "Expected parent entities to be returned for the given dictionary index");
+            Ok(())
         }
         #[tokio::test]
-        async fn #test_with_filter_fn_name() {
+        async fn #test_with_filter_fn_name() -> Result<(), AppError> {
             let (storage_owner, storage) = &*STORAGE;
             let val = #column_type::default();
             let pk = #pk_type::default();
             let parent_pk = pk.parent();
             let query = #stream_parent_query_type::sample();
-            let tx_context = #parent_type::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
-            let entity_stream = #entity_name::#fn_name(tx_context, val, Some(query.clone())).expect("Failed to get parent entities by index");
-            let parent_entities = entity_stream.try_collect::<Vec<#parent_type>>().await.expect("Failed to collect parent entity stream");
-            let expected_entity = #parent_type::sample_with_query(parent_pk, &query).expect("Failed to create sample entity with query");
+            let tx_context = #parent_type::begin_read_ctx(&storage)?;
+            let entity_stream = #entity_name::#fn_name(tx_context, val, Some(query.clone()))?;
+            let parent_entities = entity_stream.try_collect::<Vec<#parent_type>>().await?;
+            let expected_entity = #parent_type::sample_with_query(parent_pk, &query).expect("Failed to create sample parent entity");
             assert_eq!(parent_entities.len(), 1, "Expected only one parent entity to be returned for the given dictionary index with filter");
             assert_eq!(parent_entities[0], expected_entity, "Dict result is not equal to sample because it is filtered, query: {:?}", query);
+            Ok(())
         }
     });
 
@@ -160,28 +162,30 @@ pub fn by_index_def(
     let test_with_filter_fn_name = format_ident!("{}_with_filter", fn_name);
     let test_stream = Some(quote! {
         #[tokio::test]
-        async fn #fn_name() {
+        async fn #fn_name() -> Result<(), AppError> {
             let (storage_owner, storage) = &*STORAGE;
             let val = #column_type::default();
-            let tx_context = #parent_type::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
-            let entity_stream = #entity_name::#fn_name(tx_context, val, None).expect("Failed to get parent entities by index");
-            let parent_entities = entity_stream.try_collect::<Vec<#parent_type>>().await.expect("Failed to collect parent entity stream");
+            let tx_context = #parent_type::begin_read_ctx(&storage)?;
+            let entity_stream = #entity_name::#fn_name(tx_context, val, None)?;
+            let parent_entities = entity_stream.try_collect::<Vec<#parent_type>>().await?;
             let expected_entities = vec![#parent_type::sample()];
             assert_eq!(expected_entities, parent_entities, "Expected parent entities to be returned for the given index");
+            Ok(())
         }
         #[tokio::test]
-        async fn #test_with_filter_fn_name() {
+        async fn #test_with_filter_fn_name() -> Result<(), AppError> {
             let (storage_owner, storage) = &*STORAGE;
             let val = #column_type::default();
             let pk = #pk_type::default();
             let parent_pk = pk.parent();
             let query = #stream_parent_query_type::sample();
-            let tx_context = #parent_type::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
-            let entity_stream = #entity_name::#fn_name(tx_context, val, Some(query.clone())).expect("Failed to get parent entities by index");
-            let parent_entities = entity_stream.try_collect::<Vec<#parent_type>>().await.expect("Failed to collect parent entity stream");
-            let expected_entity = #parent_type::sample_with_query(parent_pk, &query).expect("Failed to create sample entity with query");
+            let tx_context = #parent_type::begin_read_ctx(&storage)?;
+            let entity_stream = #entity_name::#fn_name(tx_context, val, Some(query.clone()))?;
+            let parent_entities = entity_stream.try_collect::<Vec<#parent_type>>().await?;
+            let expected_entity = #parent_type::sample_with_query(parent_pk, &query).expect("Failed to create sample entity");
             assert_eq!(parent_entities.len(), 1, "Expected only one parent entity to be returned for the given index with filter");
             assert_eq!(parent_entities[0], expected_entity, "Indexed result is not equal to sample because it is filtered, query: {:?}", query);
+            Ok(())
         }
     });
 

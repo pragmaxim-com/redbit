@@ -22,9 +22,10 @@ pub fn sample_token_fns(
             endpoint: None,
             test_stream: Some(quote! {
                 #[test]
-                fn sample_json() {
+                fn sample_json() -> Result<(), AppError> {
                     let entity = #entity_name::sample();
-                    serde_json::to_string(&entity).expect("Failed to serialize sample entity to JSON");
+                    serde_json::to_string(&entity)?;
+                    Ok(())
                 }
             }),
             bench_stream: None
@@ -45,9 +46,10 @@ pub fn sample_token_fns(
             endpoint: None,
             test_stream: Some(quote! {
                 #[test]
-                fn sample_many_json() {
+                fn sample_many_json() -> Result<(), AppError> {
                     let entities = #entity_name::sample_many(Default::default(), 3);
-                    serde_json::to_string(&entities).expect("Failed to serialize sample entities to JSON");
+                    serde_json::to_string(&entities)?;
+                    Ok(())
                 }
             }),
             bench_stream: None
@@ -67,10 +69,11 @@ pub fn sample_token_fns(
             endpoint: None,
             test_stream: Some(quote! {
                 #[test]
-                fn sample_many_with_query_json() {
+                fn sample_many_with_query_json() -> Result<(), AppError> {
                     let query = #query_type::sample();
                     let entities = #entity_name::sample_many_with_query(Default::default(), &query, 3);
-                    serde_json::to_string(&entities).expect("Failed to serialize sample entities to JSON");
+                    serde_json::to_string(&entities)?;
+                    Ok(())
                 }
             }),
             bench_stream: None
@@ -103,11 +106,12 @@ pub fn sample_token_fns(
             endpoint: None,
             test_stream: Some(quote! {
                 #[test]
-                fn sample_with_query_json() {
+                fn sample_with_query_json() -> Result<(), AppError> {
                     let pk = #pk_type::default();
                     let query = #query_type::sample();
                     let entity = #entity_name::sample_with_query(pk, &query);
-                    serde_json::to_string(&entity).expect("Failed to serialize sample entity with query to JSON");
+                    serde_json::to_string(&entity)?;
+                    Ok(())
                 }
             }),
             bench_stream: None

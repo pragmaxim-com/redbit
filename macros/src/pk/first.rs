@@ -22,12 +22,13 @@ pub fn fn_def(entity_def: &EntityDef, table: &Ident) -> FunctionDef {
 
     let test_stream = Some(quote! {
         #[test]
-        fn #fn_name() {
+        fn #fn_name() -> Result<(), AppError> {
             let (storage_owner, storage) = &*STORAGE;
-            let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
-            let entity = #entity_name::first(&tx_context).expect("Failed to get first entity by PK").expect("Expected first entity to exist");
+            let tx_context = #entity_name::begin_read_ctx(&storage)?;
+            let entity = #entity_name::first(&tx_context)?.expect("Expected first entity to exist");
             let expected_enity = #entity_type::sample();
             assert_eq!(entity, expected_enity, "First entity does not match expected");
+            Ok(())
         }
     });
 

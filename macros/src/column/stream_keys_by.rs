@@ -23,13 +23,14 @@ pub fn by_dict_def(entity_def: &EntityDef, column_name: &Ident, column_type: &Ty
 
     let test_stream = Some(quote! {
         #[tokio::test]
-        async fn #fn_name() {
+        async fn #fn_name() -> Result<(), AppError> {
             let (storage_owner, storage) = &*STORAGE;
             let val = #column_type::default();
-            let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
-            let pk_stream = #entity_name::#fn_name(tx_context, val).expect("Stream creation failed");
-            let pks = pk_stream.try_collect::<Vec<#pk_type>>().await.expect("Failed to collect stream");
+            let tx_context = #entity_name::begin_read_ctx(&storage)?;
+            let pk_stream = #entity_name::#fn_name(tx_context, val)?;
+            let pks = pk_stream.try_collect::<Vec<#pk_type>>().await?;
             assert_eq!(vec![#pk_type::default()], pks);
+            Ok(())
         }
     });
 
@@ -106,13 +107,14 @@ pub fn by_index_def(entity_def: &EntityDef, column_name: &Ident, column_type: &T
 
     let test_stream = Some(quote! {
         #[tokio::test]
-        async fn #fn_name() {
+        async fn #fn_name() -> Result<(), AppError> {
             let (storage_owner, storage) = &*STORAGE;
             let val = #column_type::default();
-            let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
-            let pk_stream = #entity_name::#fn_name(tx_context, val).expect("Stream creation failed");
-            let pks = pk_stream.try_collect::<Vec<#pk_type>>().await.expect("Failed to collect stream");
+            let tx_context = #entity_name::begin_read_ctx(&storage)?;
+            let pk_stream = #entity_name::#fn_name(tx_context, val)?;
+            let pks = pk_stream.try_collect::<Vec<#pk_type>>().await?;
             assert_eq!(vec![#pk_type::default()], pks);
+            Ok(())
         }
     });
 

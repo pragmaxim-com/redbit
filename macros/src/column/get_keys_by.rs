@@ -19,13 +19,14 @@ pub fn by_dict_def(entity_def: &EntityDef, column_name: &Ident, column_type: &Ty
 
     let test_stream = Some(quote! {
         #[test]
-        fn #fn_name() {
+        fn #fn_name() -> Result<(), AppError> {
             let (storage_owner, storage) = &*STORAGE;
             let val = #column_type::default();
-            let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
-            let entity_pks = #entity_name::#fn_name(&tx_context, &val).expect("Failed to get entity pks by dictionary index");
+            let tx_context = #entity_name::begin_read_ctx(&storage)?;
+            let entity_pks = #entity_name::#fn_name(&tx_context, &val)?;
             let expected_entity_pks = vec![#pk_type::default()];
             assert_eq!(expected_entity_pks, entity_pks, "Expected entity pks to be returned for the given dictionary index");
+            Ok(())
         }
     });
 
@@ -65,13 +66,14 @@ pub fn by_index_def(entity_def: &EntityDef, column_name: &Ident, column_type: &T
 
     let test_stream = Some(quote! {
         #[test]
-        fn #fn_name() {
+        fn #fn_name() -> Result<(), AppError> {
             let (storage_owner, storage) = &*STORAGE;
             let val = #column_type::default();
-            let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
-            let entity_pks = #entity_name::#fn_name(&tx_context, &val).expect("Failed to get entity pks by index");
+            let tx_context = #entity_name::begin_read_ctx(&storage)?;
+            let entity_pks = #entity_name::#fn_name(&tx_context, &val)?;
             let expected_entity_pks = vec![#pk_type::default()];
             assert_eq!(expected_entity_pks, entity_pks, "Expected entity pks to be returned for the given index");
+            Ok(())
         }
     });
 

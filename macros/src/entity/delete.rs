@@ -53,11 +53,11 @@ pub fn remove_def(entity_def: &EntityDef, delete_statements: &[TokenStream]) -> 
 
     let test_stream = Some(quote! {
         #[test]
-        fn #fn_name() {
+        fn #fn_name() -> Result<(), AppError> {
             let (storage_owner, storage) = random_storage();
             let entity_count: usize = 3;
             let entities = #entity_type::sample_many(Default::default(), entity_count);
-            let ctx = #entity_name::begin_write_ctx(&storage, Durability::None).expect("Failed to begin write transaction context");
+            let ctx = #entity_name::begin_write_ctx(&storage, Durability::None)?;
             ctx.two_phase_commit_or_rollback_and_close_with(|tx_context| {
                 #entity_name::store_many(&tx_context, entities.clone(), true)?;
                 Ok(())
@@ -65,12 +65,13 @@ pub fn remove_def(entity_def: &EntityDef, delete_statements: &[TokenStream]) -> 
 
             for test_entity in entities {
                 let pk = test_entity.#pk_name;
-                let removed = #entity_name::#fn_name(Arc::clone(&storage), pk).expect("Failed to delete and commit instance");
-                let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
-                let is_empty = #entity_name::get(&tx_context, pk).expect("Failed to get instance").is_none();
+                let removed = #entity_name::#fn_name(Arc::clone(&storage), pk)?;
+                let tx_context = #entity_name::begin_read_ctx(&storage)?;
+                let is_empty = #entity_name::get(&tx_context, pk)?.is_none();
                 assert!(removed, "Instance should be deleted");
                 assert!(is_empty, "Instance should be deleted");
             }
+            Ok(())
         }
     });
 

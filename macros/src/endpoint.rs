@@ -127,7 +127,7 @@ impl EndpointDef {
                             let response = server.method(#method_name, &final_path).json(&body_sample).await;
                             #deser_return_value_assert
                         }
-                        if (!#body_required) {
+                        if !#body_required {
                             let response = server.method(#method_name, &final_path).await;
                             #deser_return_value_assert
                         }
@@ -164,7 +164,7 @@ impl EndpointDef {
                         let response = server.method(#method_name, &#path_expr).json(&body_sample).await;
                         #deser_return_value_assert
                     }
-                    if (!#body_required) {
+                    if !#body_required {
                         let response = server.method(#method_name, &#path_expr).await;
                         #deser_return_value_assert
                     }

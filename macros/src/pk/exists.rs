@@ -23,12 +23,13 @@ pub fn fn_def(entity_def: &EntityDef, table: &Ident) -> FunctionDef {
 
     let test_stream = Some(quote! {
         #[test]
-        fn #fn_name() {
+        fn #fn_name() -> Result<(), AppError> {
             let (storage_owner, storage) = &*STORAGE;
             let pk_value = #pk_type::default();
-            let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
-            let entity_exists = #entity_name::#fn_name(&tx_context, pk_value).expect("Failed to check entity exists");
+            let tx_context = #entity_name::begin_read_ctx(&storage)?;
+            let entity_exists = #entity_name::#fn_name(&tx_context, pk_value)?;
             assert!(entity_exists, "Entity is supposed to exist for the given PK");
+            Ok(())
         }
     });
 

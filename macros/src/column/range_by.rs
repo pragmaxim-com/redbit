@@ -22,14 +22,15 @@ pub fn by_index_def(entity_def: &EntityDef, column_name: &Ident, column_type: &T
 
     let test_stream = Some(quote! {
         #[test]
-        fn #fn_name() {
+        fn #fn_name() -> Result<(), AppError> {
             let (storage_owner, storage) = &*STORAGE;
             let from_value = #column_type::default();
             let until_value = #column_type::default().next_value();
-            let tx_context = #entity_name::begin_read_ctx(&storage).expect("Failed to begin read transaction context");
-            let entities = #entity_name::#fn_name(&tx_context, &from_value, &until_value).expect("Failed to get entities by range");
+            let tx_context = #entity_name::begin_read_ctx(&storage)?;
+            let entities = #entity_name::#fn_name(&tx_context, &from_value, &until_value)?;
             let expected_entities = vec![#entity_type::sample()];
             assert_eq!(expected_entities, entities, "Expected entities to be returned for the given range by index");
+            Ok(())
         }
     });
 
