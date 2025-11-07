@@ -45,8 +45,6 @@ pub struct TxContextItem {
     pub definition: TokenStream,
     pub def_constructor: TokenStream,
     pub write_definition: TokenStream,
-    pub write_begin: TokenStream,
-    pub async_flush: Option<TokenStream>,
     pub write_shutdown: TokenStream,
     pub read_definition: TokenStream,
 }
@@ -81,38 +79,32 @@ pub fn write_tx_context(entity_def: &EntityDef, tx_contexts: &[TxContextItem]) -
         tx_contexts.iter()
             .map(|item| item.var_name.clone())
             .map(|var_name| quote!{#var_name: defs.#var_name.to_write_field(storage)?}).collect();
-    let begins: Vec<TokenStream> = tx_contexts.iter().map(|item| item.write_begin.clone()).collect();
+    let var_names: Vec<Ident> = tx_contexts.iter().map(|item| item.var_name.clone()).collect();
     let shutdowns: Vec<TokenStream> = tx_contexts.iter().map(|item| item.write_shutdown.clone()).collect();
-    let async_flushes: Vec<TokenStream> = tx_contexts.iter().flat_map(|item| item.async_flush.clone()).collect();
     let write_tx_context_name = tx_context_name(TxType::Write);
     let write_tx_context_ty = &entity_def.write_ctx_type;
     let entity_tx_context_ty = &entity_def.ctx_type;
+    let len = tx_contexts.len();
     quote! {
         pub struct #write_tx_context_ty {
             #(#definitions),*
         }
         impl #write_tx_context_name for #write_tx_context_ty {
            type Defs = #entity_tx_context_ty;
+           type WriterRefs<'a> = [&'a dyn WriteComponentRef; #len];
            fn new_write_ctx(defs: &Self::Defs, storage: &Arc<Storage>) -> redb::Result<Self, AppError> {
                 Ok(Self {
                     #(#constructors),*
                 })
             }
-           fn begin_writing_async(&self, durability: Durability) -> Result<Vec<StartFuture>, AppError> {
-                let mut futures: Vec<StartFuture> = Vec::new();
-                #( futures.extend(#begins); )*
-                Ok(futures)
+            fn writer_refs(&self) -> Self::WriterRefs<'_> {
+                [ #( &self.#var_names ),* ]
             }
-           fn stop_writing_async(self) -> Result<Vec<StopFuture>, AppError> {
+            fn stop_writing_async(self) -> Result<Vec<StopFuture>, AppError> {
                 let mut futures: Vec<StopFuture> = Vec::new();
                 #( futures.extend(#shutdowns); )*
                 Ok(futures)
-           }
-           fn commit_ctx_async(&self) -> Result<Vec<FlushFuture>, AppError> {
-                let mut futures: Vec<FlushFuture> = Vec::new();
-                #( futures.extend(#async_flushes); )*
-                Ok(futures)
-           }
+            }
         }
     }
 }
@@ -183,8 +175,6 @@ pub fn tx_context_plain_item(def: &PlainTableDef) -> TxContextItem {
             PlainFactory::new(#name_lit, #table_def),
         )
     };
-    let write_begin = quote! { self.#var_ident.begin_async(durability)? };
-    let async_flush = Some(quote! { self.#var_ident.flush_async()? });
     let write_shutdown = quote! { self.#var_ident.shutdown_async()? };
 
     TxContextItem {
@@ -192,8 +182,6 @@ pub fn tx_context_plain_item(def: &PlainTableDef) -> TxContextItem {
         definition,
         def_constructor,
         write_definition,
-        write_begin,
-        async_flush,
         write_shutdown,
         read_definition,
     }
@@ -231,8 +219,6 @@ pub fn tx_context_index_item(defs: &IndexTableDefs) -> TxContextItem {
             IndexFactory::new(#name_lit, #lru_cache, #pk_by_index, #index_by_pk),
         )
     };
-    let write_begin    = quote! { self.#var_ident.begin_async(durability)? };
-    let async_flush = Some(quote! { self.#var_ident.flush_async()? });
     let write_shutdown = quote! { self.#var_ident.shutdown_async()? };
 
     TxContextItem {
@@ -240,8 +226,6 @@ pub fn tx_context_index_item(defs: &IndexTableDefs) -> TxContextItem {
         definition,
         def_constructor,
         write_definition,
-        write_begin,
-        async_flush,
         write_shutdown,
         read_definition,
     }
@@ -281,8 +265,6 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
             DictFactory::new(#name_lit, #lru_cache, #dict_pk_to_ids, #value_by_dict, #value_to_dict, #dict_pk_by_pk),
         )
     };
-    let write_begin    = quote! { self.#var_ident.begin_async(durability)? };
-    let async_flush = Some(quote! { self.#var_ident.flush_async()? });
     let write_shutdown = quote! { self.#var_ident.shutdown_async()? };
 
     TxContextItem {
@@ -290,8 +272,6 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
         definition,
         def_constructor,
         write_definition,
-        write_begin,
-        async_flush,
         write_shutdown,
         read_definition,
     }

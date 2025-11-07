@@ -113,12 +113,14 @@ pub fn remove_def(entity_def: &EntityDef, delete_statements: &[TokenStream]) -> 
             handler_impl_stream: quote! {
                 impl IntoResponse {
                     match #entity_name::#fn_name(Arc::clone(&state.storage), #pk_name) {
-                        Ok(true) => {
-                            Response::builder().status(StatusCode::OK).body(Body::empty()).unwrap().into_response()
-                        },
-                        Ok(false) => {
-                            Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap().into_response()
-                        },
+                        Ok(found) => {
+                            let status = if found { StatusCode::OK } else { StatusCode::NOT_FOUND };
+                            Response::builder()
+                                .status(status)
+                                .body(Body::empty())
+                                .unwrap()
+                                .into_response()
+                        }
                         Err(err) => err.into_response(),
                     }
                 }

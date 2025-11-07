@@ -38,6 +38,23 @@ impl<
     }
 }
 
+impl<K,V,F,KP,VP> WriteComponentRef for ShardedTableWriter<K,V,F,KP,VP>
+where
+    K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
+    V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
+    F: TableFactory<K,V> + Send + Clone + 'static,
+    KP: KeyPartitioner<K> + Sync + Send + Clone + 'static,
+    VP: ValuePartitioner<V> + Sync + Send + Clone + 'static,
+{
+    fn begin_async_ref(&self, d: Durability) -> redb::Result<Vec<StartFuture>, AppError> {
+        self.begin_async(d)
+    }
+    fn commit_with_ref(&self) -> Result<Vec<FlushFuture>, AppError> {
+        self.flush_async()
+    }
+}
+
+
 impl<K, V, F, KP, VP> WriterLike<K, V> for ShardedTableWriter<K, V, F, KP, VP>
 where
     K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,

@@ -26,7 +26,6 @@ impl EndpointDef {
         let utoipa_responses = &self.utoipa_responses.clone();
         let param_binding = &self.axum_bindings();
         let utoipa_params = &self.utoipa_params();
-        let route = quote! { .merge(OpenApiRouter::new().routes(utoipa_axum::routes!(#handler_fn_name))) };
         let handler = quote! {
             #[utoipa::path(#method_ident, path = #endpoint_path, #utoipa_params, #utoipa_responses, tag = #endpoint_tag)]
             #[axum::debug_handler]
@@ -38,7 +37,7 @@ impl EndpointDef {
 
         Endpoint {
             handler,
-            route,
+            handler_fn_name,
             tests: self.generate_tests()
         }
     }

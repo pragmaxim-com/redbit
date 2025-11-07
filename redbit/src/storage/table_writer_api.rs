@@ -259,6 +259,10 @@ pub enum Control {
     TxFinished,
 }
 
+pub trait WriteComponentRef {
+    fn begin_async_ref(&self, d: Durability) -> redb::Result<Vec<StartFuture>, AppError>;
+    fn commit_with_ref(&self) -> Result<Vec<FlushFuture>, AppError>;
+}
 pub trait WriterLike<K: CopyOwnedValue, V: Value> {
     fn acquire_router(&self) -> Arc<dyn Router<K, V>>;
     fn delete_kv(&self, key: K) -> Result<bool, AppError>;

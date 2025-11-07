@@ -39,13 +39,8 @@ pub fn default_init_with_query(column_name: &Ident, column_type: &Type, is_point
 pub fn plain_init_expr(table: &Ident) -> TokenStream {
     quote! {
         {
-            let guard = tx_context.#table.get_value(pk)?;
-            guard.ok_or_else(|| AppError::NotFound(format!(
-                    "table `{}`: no row for primary key {:?}",
-                    stringify!(#table),
-                    pk
-                ))
-            )?.value()
+            let g = tx_context.#table.get_value(pk)?;
+            g.ok_or_else(|| AppError::NotFound(format!("{}: missing pk {:?}", stringify!(#table), pk)))?.value()
         }
     }
 }
@@ -70,13 +65,8 @@ pub fn plain_init_with_query(column_name: &Ident, table: &Ident) -> TokenStream 
 pub fn index_init_expr(plain_table_var: &Ident) -> TokenStream {
     quote! {
         {
-            let guard = tx_context.#plain_table_var.get_value(pk)?;
-            guard.ok_or_else(|| AppError::NotFound(format!(
-                    "table `{}`: no row for primary key {:?}",
-                    stringify!(#plain_table_var),
-                    pk
-                ))
-            )?.value()
+            let g = tx_context.#plain_table_var.get_value(pk)?;
+            g.ok_or_else(|| AppError::NotFound(format!("{}: missing pk {:?}", stringify!(#plain_table_var), pk)))?.value()
         }
     }
 }
@@ -101,13 +91,8 @@ pub fn index_init(column_name: &Ident, table: &Ident) -> TokenStream {
 pub fn dict_init_expr(dict_table_var: &Ident) -> TokenStream {
     quote! {
         {
-            let value_guard_opt = tx_context.#dict_table_var.get_value(pk)?;
-            value_guard_opt.ok_or_else(|| AppError::NotFound(format!(
-                    "dict_table `{}`: no row for primary key {:?}",
-                    stringify!(#dict_table_var),
-                    pk
-                ))
-            )?.value()
+            let g = tx_context.#dict_table_var.get_value(pk)?;
+            g.ok_or_else(|| AppError::NotFound(format!("{}: missing pk {:?}", stringify!(#dict_table_var), pk)))?.value()
         }
     }
 }

@@ -70,13 +70,15 @@ pub fn fn_def(entity_def: &EntityDef, table: &Ident) -> FunctionDef {
             handler_impl_stream: quote! {
                 impl IntoResponse {
                     match #entity_name::begin_read_ctx(&state.storage)
-                          .and_then(|tx_context| #entity_name::#fn_name(&tx_context, #pk_name)) {
-                            Ok(true) => {
-                                Response::builder().status(StatusCode::OK).body(Body::empty()).unwrap().into_response()
-                            },
-                            Ok(false) => {
-                                Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).unwrap().into_response()
-                            },
+                        .and_then(|tx_context| #entity_name::#fn_name(&tx_context, #pk_name)) {
+                            Ok(found) => {
+                                let status = if found { StatusCode::OK } else { StatusCode::NOT_FOUND };
+                                Response::builder()
+                                    .status(status)
+                                    .body(Body::empty())
+                                    .unwrap()
+                                    .into_response()
+                            }
                             Err(err) => err.into_response(),
                         }
                 }

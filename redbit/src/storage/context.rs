@@ -3,14 +3,35 @@ use redb::Durability;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
+use crate::storage::table_writer_api::WriteComponentRef;
 
 pub trait WriteTxContext {
     type Defs: TxContext<WriteCtx = Self>;
 
     fn new_write_ctx(defs: &Self::Defs, storage: &Arc<Storage>) -> redb::Result<Self, AppError> where Self: Sized;
-    fn begin_writing_async(&self, durability: Durability) -> redb::Result<Vec<StartFuture>, AppError>;
     fn stop_writing_async(self) -> redb::Result<Vec<StopFuture>, AppError>;
-    fn commit_ctx_async(&self) -> Result<Vec<FlushFuture>, AppError>;
+
+    type WriterRefs<'a>: IntoIterator<Item = &'a dyn WriteComponentRef>
+    where
+        Self: 'a;
+
+    fn writer_refs(&self) -> Self::WriterRefs<'_>;
+
+    fn begin_writing_async(&self, d: Durability) -> redb::Result<Vec<StartFuture>, AppError> {
+        let mut v = Vec::new();
+        for c in self.writer_refs() {
+            v.extend(c.begin_async_ref(d)?);
+        }
+        Ok(v)
+    }
+
+    fn commit_ctx_async(&self) -> Result<Vec<FlushFuture>, AppError> {
+        let mut v = Vec::new();
+        for c in self.writer_refs() {
+            v.extend(c.commit_with_ref()?);
+        }
+        Ok(v)
+    }
 
     fn begin_writing(&self, durability: Durability) -> redb::Result<(), AppError> {
         let futures = self.begin_writing_async(durability)?;
@@ -79,6 +100,15 @@ pub trait WriteTxContext {
         }
     }
 
+}
+
+impl<C: WriteTxContext + Send + 'static> WriteComponentRef for C {
+    fn begin_async_ref(&self, d: Durability) -> redb::Result<Vec<StartFuture>, AppError> {
+        self.begin_writing_async(d)
+    }
+    fn commit_with_ref(&self) -> Result<Vec<FlushFuture>, AppError> {
+        self.commit_ctx_async()
+    }
 }
 
 pub trait ReadTxContext {

@@ -6,7 +6,7 @@ use syn::Type;
 #[derive(Clone)]
 pub struct Endpoint {
     pub handler: TokenStream,
-    pub route: TokenStream,
+    pub handler_fn_name: Ident,
     pub tests: Vec<TokenStream>,
 }
 
@@ -82,12 +82,15 @@ pub struct Rest {
 impl Rest {
     pub fn new(fn_defs: &[FunctionDef]) -> Self {
         let endpoints: Vec<Endpoint> = fn_defs.iter().filter_map(|fn_def| fn_def.endpoint.clone()).collect();
-        let route_chains: Vec<TokenStream> = endpoints.iter().map(|e| e.route.clone()).collect();
         let endpoint_handlers: Vec<TokenStream> = endpoints.iter().map(|e| e.handler.clone()).collect();
+        let handler_fn_names: Vec<Ident> = endpoints.iter().map(|e| e.handler_fn_name.clone()).collect();
+        let route_array = handler_fn_names.iter().map(|name| {
+            quote! { utoipa_axum::routes!(#name) }
+        });
+
         let routes = quote! {
             pub fn routes() -> OpenApiRouter<RequestState> {
-                OpenApiRouter::new()
-                    #(#route_chains)*
+                redbit::utils::merge_route_sets([ #( #route_array ),* ])
             }
         };
         Rest {

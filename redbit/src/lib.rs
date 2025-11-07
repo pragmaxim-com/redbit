@@ -77,7 +77,7 @@ pub use storage::table_index_read::ShardedReadOnlyIndexTable;
 pub use storage::table_plain::PlainFactory;
 pub use storage::table_plain_read::ShardedReadOnlyPlainTable;
 pub use storage::table_writer::ShardedTableWriter;
-pub use storage::table_writer_api::{FlushFuture, StartFuture, StopFuture, TaskResult, ShardedTableReader, RedbitTableDefinition, ReadTableLike, WriteTableLike, WriterLike};
+pub use storage::table_writer_api::{FlushFuture, StartFuture, StopFuture, TaskResult, ShardedTableReader, RedbitTableDefinition, ReadTableLike, WriteComponentRef, WriteTableLike, WriterLike};
 pub use storage::tx_fsm::TxFSM;
 pub use urlencoding;
 pub use utoipa;
