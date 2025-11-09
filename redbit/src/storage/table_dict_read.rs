@@ -1,7 +1,7 @@
 use crate::storage::partitioning::ValuePartitioner;
 use crate::storage::table_dict::DictFactory;
-use crate::storage::table_writer_api::{ReadTableFactory, ShardedTableReader, TableFactory};
-use crate::{AppError, CacheKey, CopyOwnedValue, KeyPartitioner, Partitioning, ReadTableLike, TableInfo};
+use crate::storage::table_writer_api::{ReadTableFactory, ShardedTableReader, TableFactory, TableInfo};
+use crate::{AppError, CacheKey, CopyOwnedValue, KeyPartitioner, Partitioning, ReadTableLike};
 use redb::Key;
 use redb::*;
 use std::borrow::Borrow;

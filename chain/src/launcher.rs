@@ -26,7 +26,7 @@ pub async fn maybe_run_server(
             .allow_origin(cors::Any) // or use a specific origin: `AllowOrigin::exact("http://localhost:5173".parse().unwrap())`
             .allow_methods(cors::Any)
             .allow_headers(cors::Any));
-        redbit::utils::serve(RequestState { storage: Arc::clone(&storage) }, http_conf.bind_address, extras, Some(cors), shutdown).await
+        redbit::rest::serve(RequestState { storage: Arc::clone(&storage) }, http_conf.bind_address, extras, Some(cors), shutdown).await
     } else {
         info!("HTTP server is disabled, skipping");
         ready(()).await

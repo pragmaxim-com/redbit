@@ -1,6 +1,6 @@
 use crate::storage::table_plain::PlainFactory;
-use crate::storage::table_writer_api::{ReadTableFactory, ReadTableLike, ShardedTableReader, TableFactory};
-use crate::{AppError, CopyOwnedValue, KeyPartitioner, Partitioning, TableInfo, ValuePartitioner};
+use crate::storage::table_writer_api::{ReadTableFactory, ReadTableLike, ShardedTableReader, TableFactory, TableInfo};
+use crate::{AppError, CopyOwnedValue, KeyPartitioner, Partitioning, ValuePartitioner};
 use redb::{AccessGuard, Database, Key, MultimapRange, MultimapValue, ReadOnlyTable, ReadableDatabase, ReadableTable, ReadableTableMetadata, TableDefinition};
 use std::borrow::Borrow;
 use std::ops::RangeBounds;

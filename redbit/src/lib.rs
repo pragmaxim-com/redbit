@@ -2,13 +2,13 @@
 extern crate test;
 
 pub mod query;
-pub mod utf8_serde_enc;
-pub mod hex_serde_enc;
-pub mod base64_serde_enc;
 pub mod retry;
 pub mod logger;
 pub mod storage;
 pub mod utils;
+pub mod error;
+pub mod rest;
+pub mod codec;
 
 pub use axum;
 pub use axum::body::Body;
@@ -64,20 +64,21 @@ pub use std::sync::Weak;
 pub use std::thread;
 pub use std::time::Duration;
 pub use std::time::Instant;
+pub use rest::{RequestState, ErrorResponse, MaybeJson, AppJson, FilterOp};
+pub use error::{AppError, ParsePointerError};
 pub use storage::async_boundary::CopyOwnedValue;
-pub use storage::context::{ReadTxContext, WriteTxContext, TxContext, ToWriteField, ToReadField};
-pub use storage::init::Storage;
-pub use storage::init::StorageOwner;
+pub use storage::context::{ReadTxContext, ToReadField, ToWriteField, TxContext, WriteTxContext};
+pub use storage::init::{Storage, DbDef, StorageOwner};
 pub use storage::partitioning::{BytesPartitioner, KeyPartitioner, Partitioning, ValuePartitioner, Xxh3Partitioner};
 pub use storage::table_dict::DictFactory;
 pub use storage::table_dict_read::ShardedReadOnlyDictTable;
-pub use storage::table_dict_write::{DictTable};
+pub use storage::table_dict_write::DictTable;
 pub use storage::table_index::IndexFactory;
 pub use storage::table_index_read::ShardedReadOnlyIndexTable;
 pub use storage::table_plain::PlainFactory;
 pub use storage::table_plain_read::ShardedReadOnlyPlainTable;
 pub use storage::table_writer::ShardedTableWriter;
-pub use storage::table_writer_api::{FlushFuture, StartFuture, StopFuture, TaskResult, ShardedTableReader, RedbitTableDefinition, ReadTableLike, WriteComponentRef, WriteTableLike, WriterLike};
+pub use storage::table_writer_api::{FlushFuture, RedbitTableDefinition, ShardedTableReader, StartFuture, StopFuture, TaskResult, TableInfo, ReadTableLike, WriteComponentRef, WriteTableLike, WriterLike};
 pub use storage::tx_fsm::TxFSM;
 pub use urlencoding;
 pub use utoipa;
@@ -91,18 +92,8 @@ pub use utoipa_axum;
 pub use utoipa_axum::router::OpenApiRouter;
 pub use utoipa_swagger_ui;
 
-use crate::axum::extract::rejection::JsonRejection;
-use crate::axum::extract::FromRequest;
-use crate::utoipa::OpenApi;
 use std::hash::Hash;
-use axum::body::Bytes;
-use axum::extract::Request;
-use crossbeam::channel::{RecvError, SendError};
-use serde::de::DeserializeOwned;
 use std::ops::Add;
-use std::sync::PoisonError;
-use thiserror::Error;
-use tokio::task::JoinError;
 
 pub trait ColInnerType { type Repr; }
 
@@ -158,15 +149,6 @@ pub trait Sampleable: Default + Sized + Clone {
             n -= 1;
         }
         value
-    }
-    fn sample_many(n: usize) -> Vec<Self> {
-        let mut values = Vec::with_capacity(n);
-        let mut value = Self::default();
-        for _ in 0..n {
-            values.push(value.clone());
-            value = value.next_value();
-        }
-        values
     }
     fn sample_many_from(n: usize, from: usize) -> Vec<Self> {
         let start = from.saturating_mul(n); // O(1)
@@ -263,33 +245,6 @@ pub trait BinaryCodec {
     fn size() -> usize;
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct TableInfo {
-    pub table_name: String,
-    pub table_entries: u64,
-    pub tree_height: u32,
-    pub leaf_pages: u64,
-    pub branch_pages: u64,
-    pub stored_leaf_bytes: u64,
-    pub metadata_bytes: u64,
-    pub fragmented_bytes: u64,
-}
-
-impl TableInfo {
-    pub fn from_stats(table_name: &str, table_entries: u64, stats: TableStats) -> Self {
-        TableInfo {
-            table_name: table_name.to_string(),
-            table_entries,
-            tree_height: stats.tree_height(),
-            leaf_pages: stats.leaf_pages(),
-            branch_pages: stats.branch_pages(),
-            stored_leaf_bytes: stats.stored_bytes(),
-            metadata_bytes: stats.metadata_bytes(),
-            fragmented_bytes: stats.fragmented_bytes(),
-        }
-    }
-}
-
 pub trait ByteVecColumnSerde {
     fn decoded_example() -> Vec<u8>;
     fn encoded_example() -> String;
@@ -304,188 +259,6 @@ pub trait ByteVecColumnSerde {
     }
 }
 
-#[derive(Debug, Error)]
-pub enum AppError {
-
-    #[error("Database error: {0}")]
-    Database(#[from] redb::DatabaseError),
-
-    #[error("redb error: {0}")]
-    Redb(#[from] redb::Error),
-
-    #[error("redb transaction error: {0}")]
-    RedbTransaction(#[from] redb::TransactionError),
-
-    #[error("redb storage error: {0}")]
-    RedbStorage(#[from] redb::StorageError),
-
-    #[error("redb table error: {0}")]
-    RedbTable(#[from] redb::TableError),
-
-    #[error("redb commit error: {0}")]
-    RedbCommit(#[from] redb::CommitError),
-
-    #[error("serde error: {0}")]
-    SerdeError(#[from] serde_json::Error),
-
-    #[error("HTTP error: {0}")]
-    Http(#[from] http::Error),
-
-    #[error("IO error: {0}")]
-    Io(#[from] std::io::Error),
-
-    #[error("Json rejection: {0}")]
-    JsonRejection(#[from] JsonRejection),
-
-    #[error("Join: {0}")]
-    JoinError(#[from] JoinError),
-
-    #[error("Recv: {0}")]
-    RecvError(#[from] RecvError),
-
-    #[error("Not Found: {0}")]
-    NotFound(String),
-
-    #[error("Bad Request: {0}")]
-    BadRequest(String),
-
-    #[error("Internal error: {0}")]
-    Internal(#[source] Box<dyn std::error::Error + Send + Sync>),
-
-    #[error("Custom error: {0}")]
-    Custom(String),
-}
-
-impl AppError {
-    fn status_code(&self) -> StatusCode {
-        match self {
-            AppError::NotFound(_)      => StatusCode::NOT_FOUND,
-            AppError::BadRequest(_)    => StatusCode::BAD_REQUEST,
-            AppError::JsonRejection(r) => r.status(),
-            _                          => StatusCode::INTERNAL_SERVER_ERROR,
-        }
-    }
-}
-
-impl<T> From<SendError<T>> for AppError
-{
-    fn from(e: SendError<T>) -> Self {
-        AppError::Custom(format!("send error: {:?}", e.to_string()))
-    }
-}
-
-impl<T> From<PoisonError<T>> for AppError
-{
-    fn from(e: PoisonError<T>) -> Self {
-        AppError::Custom(format!("Poison error: {:?}", e.to_string()))
-    }
-}
-
-#[derive(Debug, Error)]
-pub enum ParsePointerError {
-    #[error("invalid pointer format")]
-    Format,
-    #[error("invalid integer: {0}")]
-    ParseInt(#[from] std::num::ParseIntError),
-}
-
-impl From<AppError> for axum::Error {
-    fn from(val: AppError) -> Self {
-        axum::Error::new(val.to_string())
-    }
-}
-
-// Create our own JSON extractor by wrapping `axum::Json`. This makes it easy to override the
-// rejection and provide our own which formats errors to match our application.
-//
-// `axum::Json` responds with plain text if the input is invalid.
-#[derive(FromRequest, Deserialize)]
-#[from_request(via(crate::axum::Json), rejection(AppError))]
-pub struct AppJson<T>(pub T);
-
-impl<T> IntoResponse for AppJson<T>
-where
-    axum::Json<T>: IntoResponse,
-{
-    fn into_response(self) -> Response {
-        axum::Json(self.0).into_response()
-    }
-}
-
-#[derive(Deserialize)]
-pub struct MaybeJson<T>(pub Option<T>);
-
-impl<S, T> FromRequest<S> for MaybeJson<T>
-where
-    T: DeserializeOwned,
-    S: Send + Sync,
-{
-    type Rejection = AppError;
-
-    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
-        let body_bytes = match Bytes::from_request(req, state).await {
-            Ok(bytes) => bytes,
-            Err(_) => return Ok(MaybeJson(None)),
-        };
-
-        if body_bytes.is_empty() {
-            return Ok(MaybeJson(None));
-        }
-
-        let parsed = serde_json::from_slice::<T>(&body_bytes)?;
-
-        Ok(MaybeJson(Some(parsed)))
-    }
-}
-
-#[derive(Serialize, ToSchema)]
-pub struct ErrorResponse {
-    pub message: String,
-    pub code: u16,
-}
-
-impl IntoResponse for AppError {
-    fn into_response(self) -> Response {
-        let status = self.status_code();
-        let message = match self {
-            AppError::JsonRejection(rej) => rej.body_text(),
-            other                        => other.to_string(),
-        };
-        (status, AppJson(ErrorResponse { message, code: status.as_u16() })).into_response()
-    }
-}
-
-#[derive(Clone)]
-pub struct RequestState {
-    pub storage: Arc<Storage>,
-}
-
-#[derive(Clone, Debug)]
-pub struct DbDef { pub name: String, pub shards: usize, pub db_cache_weight_or_zero: usize, pub lru_cache_size_or_zero: usize }
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DbDefWithCache { pub name: String, pub shards: usize, pub db_cache_weight: usize, pub db_cache_in_mb: usize, pub lru_cache: usize }
-impl DbDefWithCache {
-    pub fn new(dn_def: DbDef, db_cache_in_mb: usize) -> Self {
-        DbDefWithCache {
-            name: dn_def.name.clone(),
-            shards: dn_def.shards,
-            db_cache_weight: dn_def.db_cache_weight_or_zero,
-            lru_cache: dn_def.lru_cache_size_or_zero,
-            db_cache_in_mb,
-        }
-    }
-    pub fn validate(&self) -> Result<(), AppError> {
-        if self.shards == 0 {
-            Err(AppError::Custom(format!(
-                "column `{}`: shards == 0 is not supported; use 1 (single) or >= 2 (sharded)", self.name
-            )))
-        } else {
-            Ok(())
-        }
-    }
-}
-
-
 pub struct StructInfo {
     pub name: &'static str,
     pub root: bool,
@@ -494,31 +267,3 @@ pub struct StructInfo {
 }
 
 inventory::collect!(StructInfo);
-
-#[derive(OpenApi)]
-#[openapi(info(license(name = "MIT")))]
-pub struct ApiDoc;
-
-#[derive(Debug, Clone, ToSchema, Serialize, Deserialize)]
-pub enum FilterOp<T> {
-    Eq(T),
-    Ne(T),
-    Lt(T),
-    Le(T),
-    Gt(T),
-    Ge(T),
-    In(Vec<T>),
-}
-
-impl<T: PartialOrd + PartialEq> FilterOp<T> {
-    pub fn matches(&self, value: &T) -> bool {
-        match self {
-            FilterOp::Eq(expected) => value == expected,
-            FilterOp::Ne(expected) => value != expected,
-            FilterOp::Lt(expected) => value < expected,
-            FilterOp::Le(expected) => value <= expected,
-            FilterOp::Gt(expected) => value > expected,
-            FilterOp::Ge(expected) => value >= expected,
-            FilterOp::In(options) => options.contains(value),        }
-    }
-}

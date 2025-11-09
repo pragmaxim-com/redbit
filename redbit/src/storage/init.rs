@@ -1,11 +1,36 @@
 use crate::storage::cache;
-use crate::{error, info, AppError, DbDef, DbDefWithCache, StructInfo};
+use crate::{error, info, AppError, StructInfo};
 use futures_util::future::try_join_all;
 use redb::{Database, DatabaseError};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Weak};
 use std::{env, fs};
+
+#[derive(Clone, Debug)]
+pub struct DbDef { pub name: String, pub shards: usize, pub db_cache_weight_or_zero: usize, pub lru_cache_size_or_zero: usize }
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DbDefWithCache { pub name: String, pub shards: usize, pub db_cache_weight: usize, pub db_cache_in_mb: usize, pub lru_cache: usize }
+impl DbDefWithCache {
+    pub fn new(dn_def: DbDef, db_cache_in_mb: usize) -> Self {
+        DbDefWithCache {
+            name: dn_def.name.clone(),
+            shards: dn_def.shards,
+            db_cache_weight: dn_def.db_cache_weight_or_zero,
+            lru_cache: dn_def.lru_cache_size_or_zero,
+            db_cache_in_mb,
+        }
+    }
+    pub fn validate(&self) -> Result<(), AppError> {
+        if self.shards == 0 {
+            Err(AppError::Custom(format!(
+                "column `{}`: shards == 0 is not supported; use 1 (single) or >= 2 (sharded)", self.name
+            )))
+        } else {
+            Ok(())
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct DbSetOwned(Vec<Arc<Database>>);

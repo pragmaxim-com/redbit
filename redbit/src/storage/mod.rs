@@ -15,7 +15,6 @@ pub mod table_writer_api;
 pub mod table_dict;
 pub mod table_index;
 pub mod table_plain;
-mod cache_bench;
 mod router;
 mod sort_buffer;
 

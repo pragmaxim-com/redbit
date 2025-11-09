@@ -86,7 +86,7 @@ pub fn new(struct_name: &Ident, index_field: Field) -> TokenStream {
 
         impl PartialSchema for #struct_name {
             fn schema() -> openapi::RefOr<Schema> {
-                utils::schema(SchemaType::Type(Type::Integer), vec![0], Some(ExtensionsBuilder::new().add("key", "pk").build()))
+                rest::schema(SchemaType::Type(Type::Integer), vec![0], Some(ExtensionsBuilder::new().add("key", "pk").build()))
             }
         }
 

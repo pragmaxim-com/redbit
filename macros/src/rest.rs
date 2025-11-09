@@ -90,7 +90,7 @@ impl Rest {
 
         let routes = quote! {
             pub fn routes() -> OpenApiRouter<RequestState> {
-                redbit::utils::merge_route_sets([ #( #route_array ),* ])
+                redbit::rest::merge_route_sets([ #( #route_array ),* ])
             }
         };
         Rest {

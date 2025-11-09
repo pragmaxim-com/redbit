@@ -31,7 +31,7 @@ pub fn generate_column_impls(
             let(encoding, example) = match binary_encoding.as_ref() {
                 "hex" => ("serde_with::hex::Hex", quote! { Self([0u8; #len]) }),
                 "base64" => ("serde_with::base64::Base64", quote! { Self([0u8; #len]) }),
-                "utf-8" => ("redbit::utf8_serde_enc::Utf8", quote! { Self([0u8; #len]) }),
+                "utf-8" => ("redbit::codec::Utf8", quote! { Self([0u8; #len]) }),
                 custom=> {
                     let (encoding, example) =
                         custom
@@ -55,9 +55,9 @@ pub fn generate_column_impls(
         }
         InnerKind::VecU8 => {
             let encoding = match binary_encoding.as_ref() {
-                "hex"               => "redbit::hex_serde_enc::Hex",
-                "base64"            => "redbit::base64_serde_enc::Base64",
-                "utf-8"             => "redbit::utf8_serde_enc::Utf8",
+                "hex"               => "redbit::codec::Hex",
+                "base64"            => "redbit::codec::Base64",
+                "utf-8"             => "redbit::codec::Utf8",
                 custom=> custom,
 
             };
@@ -182,7 +182,7 @@ pub fn generate_column_impls(
 
         impl PartialSchema for #struct_ident {
             fn schema() -> openapi::RefOr<Schema> {
-                utils::schema(#schema_type, #schema_example, None)
+                rest::schema(#schema_type, #schema_example, None)
             }
         }
 

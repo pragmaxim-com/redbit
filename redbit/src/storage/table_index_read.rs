@@ -1,6 +1,6 @@
 use crate::storage::table_index::IndexFactory;
-use crate::storage::table_writer_api::{ReadTableFactory, ReadTableLike, ShardedTableReader, TableFactory};
-use crate::{AppError, CacheKey, CopyOwnedValue, KeyPartitioner, Partitioning, TableInfo, ValuePartitioner};
+use crate::storage::table_writer_api::{ReadTableFactory, ReadTableLike, ShardedTableReader, TableFactory, TableInfo};
+use crate::{AppError, CacheKey, CopyOwnedValue, KeyPartitioner, Partitioning, ValuePartitioner};
 use redb::{AccessGuard, Database, Key, MultimapTableDefinition, MultimapValue, Range, ReadOnlyMultimapTable, ReadOnlyTable, ReadableDatabase, ReadableTableMetadata, TableDefinition};
 use std::borrow::Borrow;
 use std::ops::RangeBounds;

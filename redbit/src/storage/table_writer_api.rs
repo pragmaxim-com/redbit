@@ -1,9 +1,9 @@
 use crate::storage::async_boundary::{CopyOwnedValue, ValueBuf, ValueOwned};
 use crate::storage::context::{ToReadField, ToWriteField};
 use crate::storage::router::{Router, ShardedRouter};
-use crate::{AppError, KeyPartitioner, Partitioning, ShardedReadOnlyDictTable, ShardedReadOnlyIndexTable, ShardedReadOnlyPlainTable, ShardedTableWriter, Storage, TableInfo, TxFSM, ValuePartitioner};
+use crate::{AppError, Deserialize, KeyPartitioner, Partitioning, Serialize, ShardedReadOnlyDictTable, ShardedReadOnlyIndexTable, ShardedReadOnlyPlainTable, ShardedTableWriter, Storage, ToSchema, TxFSM, ValuePartitioner};
 use crossbeam::channel::{bounded, Receiver, Sender};
-use redb::{AccessGuard, Database, Durability, Key, MultimapValue, Value, WriteTransaction};
+use redb::{AccessGuard, Database, Durability, Key, MultimapValue, TableStats, Value, WriteTransaction};
 use std::borrow::Borrow;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
@@ -128,6 +128,34 @@ impl FlushFuture {
             }
         }
         Ok(by_name)
+    }
+}
+
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct TableInfo {
+    pub table_name: String,
+    pub table_entries: u64,
+    pub tree_height: u32,
+    pub leaf_pages: u64,
+    pub branch_pages: u64,
+    pub stored_leaf_bytes: u64,
+    pub metadata_bytes: u64,
+    pub fragmented_bytes: u64,
+}
+
+impl TableInfo {
+    pub fn from_stats(table_name: &str, table_entries: u64, stats: TableStats) -> Self {
+        TableInfo {
+            table_name: table_name.to_string(),
+            table_entries,
+            tree_height: stats.tree_height(),
+            leaf_pages: stats.leaf_pages(),
+            branch_pages: stats.branch_pages(),
+            stored_leaf_bytes: stats.stored_bytes(),
+            metadata_bytes: stats.metadata_bytes(),
+            fragmented_bytes: stats.fragmented_bytes(),
+        }
     }
 }
 
