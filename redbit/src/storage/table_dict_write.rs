@@ -1,13 +1,13 @@
-use crate::storage::async_boundary::{CopyOwnedValue, ValueBuf, ValueOwned};
+use crate::storage::async_boundary::{ValueBuf, ValueOwned};
 use crate::storage::table_writer_api::WriteTableLike;
-use crate::{AppError, CacheKey};
+use crate::{AppError, CacheKey, DbKey};
 use lru::LruCache;
 use redb::*;
 use redb::{Table, WriteTransaction};
 use std::borrow::Borrow;
 use std::ops::RangeBounds;
 
-pub struct DictTable<'txn, 'c, K: CopyOwnedValue + 'static, V: CacheKey + 'static> {
+pub struct DictTable<'txn, 'c, K: DbKey, V: CacheKey> {
     pub(crate) dict_pk_to_keys: MultimapTable<'txn, K, K>,
     pub(crate) value_by_dict_pk: Table<'txn, K, V>,
     pub(crate) value_to_dict_pk: Table<'txn, V, K>,
@@ -15,7 +15,7 @@ pub struct DictTable<'txn, 'c, K: CopyOwnedValue + 'static, V: CacheKey + 'stati
     pub(crate) cache: Option<&'c mut LruCache<V::CK, K::Unit>>,
 }
 
-impl<'txn, 'c, K: CopyOwnedValue + 'static, V: CacheKey + 'static> DictTable<'txn, 'c, K, V> {
+impl<'txn, 'c, K: DbKey, V: CacheKey> DictTable<'txn, 'c, K, V> {
     pub fn new(
         write_tx: &'txn WriteTransaction,
         cache: Option<&'c mut LruCache<V::CK, K::Unit>>,
@@ -33,7 +33,7 @@ impl<'txn, 'c, K: CopyOwnedValue + 'static, V: CacheKey + 'static> DictTable<'tx
         })
     }
 }
-impl<'txn, 'c, K: CopyOwnedValue + 'static, V: CacheKey + 'static> WriteTableLike<K, V> for DictTable<'txn, 'c, K, V> {
+impl<'txn, 'c, K: DbKey, V: CacheKey> WriteTableLike<K, V> for DictTable<'txn, 'c, K, V> {
     fn insert_kv<'k, 'v>(&mut self, key: impl Borrow<K::SelfType<'k>>, value: impl Borrow<V::SelfType<'v>>) -> Result<(), AppError>  {
         let key_ref: &K::SelfType<'k> = key.borrow();
         let val_ref: &V::SelfType<'v> = value.borrow();

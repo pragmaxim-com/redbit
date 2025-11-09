@@ -1,39 +1,18 @@
+use crate::DbKey;
+use redb::Value;
 use std::marker::PhantomData;
-use redb::{Key, Value};
 
-pub trait CopyOwnedValue: Key + Copy {
-    type Unit: Copy + Send + 'static;
-
-    /// Convert from a borrowed view to the copyable unit (no move).
-    fn to_unit_ref<'a>(v: &Self::SelfType<'a>) -> Self::Unit
-    where
-        Self: 'a;
-
-    fn as_value_from_unit<'a>(u: &'a Self::Unit) -> Self::SelfType<'a>
-    where
-        Self: 'a;
-
-    fn to_unit<'a>(v: Self::SelfType<'a>) -> Self::Unit
-    where
-        Self: 'a;
-
-    fn from_unit<'a>(u: Self::Unit) -> Self::SelfType<'a>
-    where
-        Self: 'a;
-
-}
-
-pub struct ValueOwned<V: CopyOwnedValue> {
+pub struct ValueOwned<V: DbKey> {
     unit: V::Unit,
     _pd:  PhantomData<V>,
 }
 
-impl<V: CopyOwnedValue> Clone for ValueOwned<V> {
+impl<V: DbKey> Clone for ValueOwned<V> {
     #[inline] fn clone(&self) -> Self { *self }
 }
-impl<V: CopyOwnedValue> Copy for ValueOwned<V> {}
+impl<V: DbKey> Copy for ValueOwned<V> {}
 
-impl<V: CopyOwnedValue> ValueOwned<V> {
+impl<V: DbKey> ValueOwned<V> {
     #[inline]
     pub fn from_guard(g: redb::AccessGuard<'_, V>) -> Self {
         let v = g.value();

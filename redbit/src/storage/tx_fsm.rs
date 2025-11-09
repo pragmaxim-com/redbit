@@ -1,10 +1,8 @@
-use crate::storage::async_boundary::CopyOwnedValue;
 use crate::storage::sort_buffer::MergeBuffer;
 use crate::storage::table_writer_api::*;
-use crate::{error, AppError};
+use crate::{error, AppError, DbKey, DbVal};
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use redb::{Database, Key};
-use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::marker::PhantomData;
 use std::sync::Weak;
@@ -12,12 +10,7 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::time::Instant;
 
-struct TxState<'txn, 'c, K, V, F>
-where
-    K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
-    V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
-    F: TableFactory<K, V>,
-{
+struct TxState<'txn, 'c, K: DbKey + Send, V: DbVal + Send, F: TableFactory<K, V>> {
     table: F::Table<'txn, 'c>,
     async_merge_buf: RefCell<MergeBuffer<K, V>>,
     deferred: Option<FlushState>,
@@ -25,12 +18,7 @@ where
     collecting_start: Instant,
 }
 
-impl<'txn, 'c, K, V, F> TxState<'txn, 'c, K, V, F>
-where
-    K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
-    V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
-    F: TableFactory<K, V>,
-{
+impl<'txn, 'c, K: DbKey + Send, V: DbVal + Send, F: TableFactory<K, V>> TxState<'txn, 'c, K, V, F> {
     fn flush(&mut self, sender: Sender<Result<TaskResult, AppError>>) -> Result<Control, AppError> {
         if let Some(error) = self.write_error.take() {
             return Ok(Control::Error(sender, error));
@@ -147,18 +135,13 @@ where
 }
 
 // ========================= TableWriter (outer loop; drop st before moving tx) =========================
-pub struct TxFSM<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static, F> {
+pub struct TxFSM<K: DbKey + Send, V: Key + Send + 'static, F> {
     pub(crate) topic: Sender<WriterCommand<K, V>>,
     pub(crate) handle: JoinHandle<()>,
     _marker: PhantomData<F>,
 }
 
-impl<K, V, F> TxFSM<K, V, F>
-where
-    K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
-    V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
-    F: TableFactory<K, V> + Send + 'static,
-{
+impl<K: DbKey + Send, V: DbVal + Send, F: TableFactory<K, V> + Send + 'static> TxFSM<K, V, F> {
     pub fn new(db_weak: Weak<Database>, factory: F) -> Result<Self, AppError> {
         let (topic, receiver): (Sender<WriterCommand<K, V>>, Receiver<WriterCommand<K, V>>) = unbounded();
         let handle = thread::spawn(move || {

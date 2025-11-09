@@ -66,7 +66,6 @@ pub use std::time::Duration;
 pub use std::time::Instant;
 pub use rest::{RequestState, ErrorResponse, MaybeJson, AppJson, FilterOp};
 pub use error::{AppError, ParsePointerError};
-pub use storage::async_boundary::CopyOwnedValue;
 pub use storage::context::{ReadTxContext, ToReadField, ToWriteField, TxContext, WriteTxContext};
 pub use storage::init::{Storage, DbDef, StorageOwner};
 pub use storage::partitioning::{BytesPartitioner, KeyPartitioner, Partitioning, ValuePartitioner, Xxh3Partitioner};
@@ -92,6 +91,7 @@ pub use utoipa_axum;
 pub use utoipa_axum::router::OpenApiRouter;
 pub use utoipa_swagger_ui;
 
+use std::borrow::Borrow;
 use std::hash::Hash;
 use std::ops::Add;
 
@@ -191,7 +191,7 @@ impl_sampleable_for_primitive!(u8, u16, u32, u64, usize, i8, i16, i32, i64, isiz
 #[macro_export]
 macro_rules! impl_copy_owned_value_identity {
         ($t:ty) => {
-            impl CopyOwnedValue for $t
+            impl DbKey for $t
             where
                 <$t as redb::Value>::SelfType<'static>: Copy + Send + 'static,
             {
@@ -232,7 +232,43 @@ pub trait UrlEncoded {
     fn url_encode(&self) -> String;
 }
 
-pub trait CacheKey: Key {
+pub trait DbKey: Key + Copy + 'static
+where
+    Self: Borrow<<Self as Value>::SelfType<'static>> {
+    type Unit: Copy + Send + 'static;
+
+    fn to_unit_ref<'a>(v: &Self::SelfType<'a>) -> Self::Unit
+    where
+        Self: 'a;
+
+    fn as_value_from_unit<'a>(u: &'a Self::Unit) -> Self::SelfType<'a>
+    where
+        Self: 'a;
+
+    fn to_unit<'a>(v: Self::SelfType<'a>) -> Self::Unit
+    where
+        Self: 'a;
+
+    fn from_unit<'a>(u: Self::Unit) -> Self::SelfType<'a>
+    where
+        Self: 'a;
+
+}
+
+pub trait DbVal: Key + 'static
+where for<'a> Self: Borrow<<Self as Value>::SelfType<'a>>
+{
+}
+
+impl<T> DbVal for T
+where
+    T: Key + 'static,
+    for<'a> T: Borrow<<T as Value>::SelfType<'a>>,
+{
+}
+pub trait CacheKey: DbVal
+where for<'a> Self: Borrow<<Self as Value>::SelfType<'a>>,
+{
     type CK: Eq + Hash + Clone;
     fn cache_key<'a>(v: &Self::SelfType<'a>) -> Self::CK
     where

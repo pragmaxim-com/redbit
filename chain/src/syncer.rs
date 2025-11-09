@@ -1,6 +1,5 @@
-use crate::api::{BlockChainLike, BlockLike};
-use crate::api::{BlockHeaderLike, SizeLike};
-use crate::api::{BlockProvider, ChainError};
+use crate::api::{BlockChainLike, BlockLike, BlockHeaderLike, SizeLike};
+use crate::api::BlockProvider;
 use crate::combine::ShutdownReason;
 use crate::monitor::ProgressMonitor;
 use crate::reorder_buffer::ReorderBuffer;
@@ -16,6 +15,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc::error::TryRecvError;
 use tokio::sync::{mpsc, watch};
 use tokio_stream::wrappers::ReceiverStream;
+use crate::err::ChainError;
 
 pub struct ChainSyncer<FB: SizeLike + 'static, TB: BlockLike + 'static, CTX: WriteTxContext> {
     pub block_provider: Arc<dyn BlockProvider<FB, TB>>,

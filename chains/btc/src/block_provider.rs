@@ -3,7 +3,7 @@ use crate::model_v1::{Address, Block, BlockHash, BlockPointer, Header, Height, I
 use crate::rest_client::{BtcCBOR, BtcClient};
 use crate::BitcoinConfig;
 use async_trait::async_trait;
-use chain::api::{BlockProvider, ChainError};
+use chain::api::BlockProvider;
 use chain::block_stream::{BlockStream, RestBlockStream};
 use chain::chain_config;
 use chain::monitor::BoxWeight;
@@ -15,6 +15,7 @@ use std::{fs, sync::Arc};
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
+use chain::err::ChainError;
 
 pub struct BtcBlockProvider {
     pub client: Arc<BtcClient>,

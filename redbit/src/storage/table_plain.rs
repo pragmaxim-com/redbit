@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 use std::sync::Weak;
 use redb::{Database, Key, Table, TableDefinition, WriteTransaction};
-use crate::{AppError, CopyOwnedValue};
+use crate::{AppError, DbKey, DbVal};
 use crate::storage::table_plain_read::ReadOnlyPlainTable;
 use crate::storage::table_writer_api::TableFactory;
 
@@ -38,7 +38,7 @@ impl<'txn, K: Key + 'static, V: Key + 'static> PlainTable<'txn, K, V> {
     }
 }
 
-impl<K: CopyOwnedValue + 'static, V: Key + 'static> TableFactory<K, V> for PlainFactory<K, V> {
+impl<K: DbKey, V: DbVal + 'static> TableFactory<K, V> for PlainFactory<K, V> {
     type CacheCtx = ();
     type Table<'txn, 'c> = PlainTable<'txn, K, V>;
     type ReadOnlyTable = ReadOnlyPlainTable<K, V>;

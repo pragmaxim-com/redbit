@@ -4,7 +4,7 @@ use redbit::retry::{retry_with_delay_async, retry_with_delay_sync};
 use reqwest::{blocking, Client};
 use std::sync::Arc;
 use std::time::Duration;
-use chain::ChainError;
+use chain::err::ChainError;
 use chain::block_stream::RestClient;
 use crate::{BitcoinConfig, ExplorerError};
 

@@ -1,7 +1,7 @@
 use crate::storage::partitioning::ValuePartitioner;
 use crate::storage::table_dict::DictFactory;
 use crate::storage::table_writer_api::{ReadTableFactory, ShardedTableReader, TableFactory, TableInfo};
-use crate::{AppError, CacheKey, CopyOwnedValue, KeyPartitioner, Partitioning, ReadTableLike};
+use crate::{AppError, CacheKey, DbKey, KeyPartitioner, Partitioning, ReadTableLike, DbVal};
 use redb::Key;
 use redb::*;
 use std::borrow::Borrow;
@@ -34,22 +34,12 @@ impl<K: Key + 'static, V: Key + 'static> ReadOnlyDictTable<K, V> {
     }
 }
 
-pub struct ShardedReadOnlyDictTable<K, V, VP>
-where
-    K: Key + 'static + Borrow<K::SelfType<'static>>,
-    V: Key + 'static + Borrow<V::SelfType<'static>>,
-    VP: ValuePartitioner<V>,
-{
+pub struct ShardedReadOnlyDictTable<K: DbKey, V: DbVal, VP: ValuePartitioner<V>> {
     shards: Vec<ReadOnlyDictTable<K, V>>,
     value_partitioner: VP,
 }
 
-impl<K, V, VP> ShardedReadOnlyDictTable<K, V, VP>
-where
-    K: CopyOwnedValue + 'static + Borrow<K::SelfType<'static>>,
-    V: CacheKey + 'static + Borrow<V::SelfType<'static>>,
-    VP: ValuePartitioner<V>
-{
+impl<K: DbKey, V: CacheKey, VP: ValuePartitioner<V>> ShardedReadOnlyDictTable<K, V, VP> {
     pub fn new(value_partitioner: VP, dbs: Vec<Weak<Database>>, factory: &DictFactory<K, V>) -> Result<Self, AppError> {
         let mut shards = Vec::with_capacity(dbs.len());
         for db_weak in &dbs {
@@ -59,14 +49,7 @@ where
     }
 }
 
-
-impl<K, V, KP, VP> ReadTableFactory<K, V, KP, VP> for DictFactory<K, V>
-where
-    K: CopyOwnedValue + 'static + Borrow<K::SelfType<'static>>,
-    V: CacheKey + 'static + Borrow<V::SelfType<'static>>,
-    KP: KeyPartitioner<K> + Sync + Send + Clone + 'static,
-    VP: ValuePartitioner<V> + Sync + Send + Clone + 'static,
-{
+impl<K: DbKey, V: CacheKey, KP: KeyPartitioner<K>, VP: ValuePartitioner<V>> ReadTableFactory<K, V, KP, VP> for DictFactory<K, V> {
     fn build_sharded_reader(&self, dbs: Vec<Weak<Database>>, partitioning: &Partitioning<KP, VP>) -> std::result::Result<ShardedTableReader<K, V, KP, VP>, AppError> {
         match partitioning {
             Partitioning::ByKey(_) => {
@@ -80,12 +63,7 @@ where
 }
 
 
-impl<K, V, VP> ReadTableLike<K, V> for ShardedReadOnlyDictTable<K, V, VP>
-where
-    K: Key + 'static + Borrow<K::SelfType<'static>>,
-    V: Key + 'static + Borrow<V::SelfType<'static>>,
-    VP: ValuePartitioner<V>
-{
+impl<K: DbKey, V: DbVal, VP: ValuePartitioner<V>> ReadTableLike<K, V> for ShardedReadOnlyDictTable<K, V, VP> {
 
     fn get_value<'k>(&self, key: impl Borrow<K::SelfType<'k>>) -> Result<Option<AccessGuard<'_, V>>, AppError> {
         for shard in &self.shards {

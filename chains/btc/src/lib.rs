@@ -8,12 +8,12 @@ pub mod codec;
 pub mod hook;
 
 use bitcoin::block::Bip34Error;
-use chain::ChainError;
 
 use crate::model_v1::chrono::DateTime;
-use std::fmt::Display;
-use chain::settings::Parallelism;
 use crate::model_v1::{BlockHash, Deserialize, Timestamp};
+use chain::err::ChainError;
+use chain::settings::Parallelism;
+use std::fmt::Display;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct BitcoinConfig {

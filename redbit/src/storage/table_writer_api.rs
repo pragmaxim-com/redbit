@@ -1,7 +1,7 @@
-use crate::storage::async_boundary::{CopyOwnedValue, ValueBuf, ValueOwned};
+use crate::storage::async_boundary::{ValueBuf, ValueOwned};
 use crate::storage::context::{ToReadField, ToWriteField};
 use crate::storage::router::{Router, ShardedRouter};
-use crate::{AppError, Deserialize, KeyPartitioner, Partitioning, Serialize, ShardedReadOnlyDictTable, ShardedReadOnlyIndexTable, ShardedReadOnlyPlainTable, ShardedTableWriter, Storage, ToSchema, TxFSM, ValuePartitioner};
+use crate::{AppError, Deserialize, KeyPartitioner, Partitioning, DbVal, Serialize, ShardedReadOnlyDictTable, ShardedReadOnlyIndexTable, ShardedReadOnlyPlainTable, ShardedTableWriter, Storage, ToSchema, TxFSM, ValuePartitioner, DbKey};
 use crossbeam::channel::{bounded, Receiver, Sender};
 use redb::{AccessGuard, Database, Durability, Key, MultimapValue, TableStats, Value, WriteTransaction};
 use std::borrow::Borrow;
@@ -94,7 +94,7 @@ impl FlushFuture {
     }
 
     /// Helper: produce the shared "fire" closure that sends WriterCommand::Flush
-    fn flush<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static>(
+    fn flush<K: DbKey + Send, V: Key + Send + 'static>(
         tx: Sender<WriterCommand<K, V>>,
     ) -> Box<dyn FnOnce() -> Result<Receiver<Result<TaskResult, AppError>>, AppError> + Send> {
         Box::new(move || {
@@ -106,7 +106,7 @@ impl FlushFuture {
         })
     }
 
-    pub fn lazy<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static>(tx: Sender<WriterCommand<K, V>>) -> Self {
+    pub fn lazy<K: DbKey + Send, V: Key + Send + 'static>(tx: Sender<WriterCommand<K, V>>) -> Self {
         FlushFuture::Lazy(Self::flush(tx))
     }
 
@@ -171,7 +171,7 @@ pub trait ReadTableLike<K: Key + 'static, V: Key + 'static> {
     fn stats(&self) -> Result<Vec<TableInfo>, AppError>;
 }
 
-pub trait WriteTableLike<K: CopyOwnedValue + 'static, V: Key + 'static> {
+pub trait WriteTableLike<K: DbKey, V: Key + 'static> {
     fn insert_kv<'k, 'v>(&mut self, key: impl Borrow<K::SelfType<'k>>, value: impl Borrow<V::SelfType<'v>>) -> Result<(), AppError>;
     fn insert_many_sorted_by_key<'k, 'v, KR: Borrow<K::SelfType<'k>>, VR: Borrow<V::SelfType<'v>>>(&mut self, pairs: Vec<(KR, VR)>) -> Result<(), AppError>;
     fn delete_kv<'k>(&mut self, key: impl Borrow<K::SelfType<'k>>) -> Result<bool, AppError>;
@@ -217,7 +217,7 @@ pub trait WriteTableLike<K: CopyOwnedValue + 'static, V: Key + 'static> {
     }
 }
 
-pub trait TableFactory<K: CopyOwnedValue + 'static, V: Key + 'static> {
+pub trait TableFactory<K: DbKey, V: Key + 'static> {
     type CacheCtx;
     type Table<'txn, 'c>: WriteTableLike<K, V>;
     type ReadOnlyTable;
@@ -227,13 +227,7 @@ pub trait TableFactory<K: CopyOwnedValue + 'static, V: Key + 'static> {
     fn open_for_read(&self, db_weak: &Weak<Database>) -> redb::Result<Self::ReadOnlyTable, AppError>;
 }
 
-pub trait ReadTableFactory<K, V, KP, VP>: TableFactory<K, V>
-where
-    K: CopyOwnedValue + 'static + Borrow<K::SelfType<'static>>,
-    V: Key + 'static + Borrow<V::SelfType<'static>>,
-    KP: KeyPartitioner<K> + Sync + Send + Clone + 'static,
-    VP: ValuePartitioner<V> + Sync + Send + Clone + 'static,
-{
+pub trait ReadTableFactory<K: DbKey, V: DbVal, KP: KeyPartitioner<K>, VP: ValuePartitioner<V>>: TableFactory<K, V> {
     fn build_sharded_reader(
         &self,
         dbs: Vec<Weak<Database>>,
@@ -247,7 +241,7 @@ pub struct FlushState {
     pub shards: Option<usize>
 }
 
-pub enum WriterCommand<K: CopyOwnedValue, V: Key> {
+pub enum WriterCommand<K: DbKey, V: Key> {
     Begin(Sender<Result<(), AppError>>, Durability),
     WriteSortedInsertsOnFlush(Vec<(K, V)>),
     WriteInsertNow(K, V),
@@ -291,7 +285,7 @@ pub trait WriteComponentRef {
     fn begin_async_ref(&self, d: Durability) -> redb::Result<Vec<StartFuture>, AppError>;
     fn commit_with_ref(&self) -> Result<Vec<FlushFuture>, AppError>;
 }
-pub trait WriterLike<K: CopyOwnedValue, V: Value> {
+pub trait WriterLike<K: DbKey, V: Value> {
     fn acquire_router(&self) -> Arc<dyn Router<K, V>>;
     fn delete_kv(&self, key: K) -> Result<bool, AppError>;
     fn begin(&self, durability: Durability) -> Result<(), AppError>;
@@ -312,13 +306,8 @@ pub trait WriterLike<K: CopyOwnedValue, V: Value> {
 }
 
 #[derive(Debug)]
-pub struct RedbitTableDefinition<K, V, F, KP, VP>
-where
-    K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
-    V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
-    F: TableFactory<K, V> + Send + 'static,
-    KP: KeyPartitioner<K>,
-    VP: ValuePartitioner<V>,
+pub struct RedbitTableDefinition<K: DbKey + Send, V: DbVal + Send, KP: KeyPartitioner<K>, VP: ValuePartitioner<V>, F>
+    where F: ReadTableFactory<K, V, KP, VP> + Send + Clone,
 {
     root_pk: bool,
     partitioning: Partitioning<KP, VP>,
@@ -327,13 +316,8 @@ where
     v_phantom: PhantomData<V>,
 }
 
-impl<K, V, F, KP, VP> ToReadField for RedbitTableDefinition<K, V, F, KP, VP>
-where
-    K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
-    V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
-    F: ReadTableFactory<K, V, KP, VP> + Send + Clone + 'static,
-    KP: KeyPartitioner<K> + Sync + Send + Clone + 'static,
-    VP: ValuePartitioner<V> + Sync + Send + Clone + 'static,
+impl<K: DbKey + Send, V: DbVal + Send, KP: KeyPartitioner<K>, VP: ValuePartitioner<V>, F> ToReadField for RedbitTableDefinition<K, V, KP, VP, F>
+    where F: ReadTableFactory<K, V, KP, VP> + Send + Clone + 'static,
 {
     type ReadField = ShardedTableReader<K, V, KP, VP>;
 
@@ -341,28 +325,18 @@ where
         self.reader(storage)
     }
 }
-impl<K, V, F, KP, VP> ToWriteField for RedbitTableDefinition<K, V, F, KP, VP>
-where
-    K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
-    V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
-    F: ReadTableFactory<K, V, KP, VP> + Send + Clone + 'static,
-    KP: KeyPartitioner<K> + Sync + Send + Clone + 'static,
-    VP: ValuePartitioner<V> + Sync + Send + Clone + 'static,
+impl<K: DbKey + Send, V: DbVal + Send, KP: KeyPartitioner<K>, VP: ValuePartitioner<V>, F> ToWriteField for RedbitTableDefinition<K, V, KP, VP, F>
+    where F: ReadTableFactory<K, V, KP, VP> + Send + Clone + 'static,
 {
-    type WriteField = ShardedTableWriter<K, V, F, KP, VP>;
+    type WriteField = ShardedTableWriter<K, V, KP, VP, F>;
 
     fn to_write_field(&self, storage: &Arc<Storage>) -> redb::Result<Self::WriteField, AppError> {
         self.writer(storage)
     }
 }
 
-impl<K, V, F, KP, VP> RedbitTableDefinition<K, V, F, KP, VP>
-where
-    K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
-    V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
-    F: ReadTableFactory<K, V, KP, VP> + Send + Clone + 'static,
-    KP: KeyPartitioner<K> + Sync + Send + Clone + 'static,
-    VP: ValuePartitioner<V> + Sync + Send + Clone + 'static,
+impl<K: DbKey + Send, V: DbVal + Send, KP: KeyPartitioner<K>, VP: ValuePartitioner<V>, F> RedbitTableDefinition<K, V, KP, VP, F>
+    where F: ReadTableFactory<K, V, KP, VP> + Send + Clone + 'static,
 {
     pub fn new(root_pk: bool, partitioning: Partitioning<KP, VP>, factory: F) -> Self {
         Self {
@@ -374,7 +348,7 @@ where
         }
     }
 
-    pub fn writer_from_dbs(&self, dbs: Vec<Weak<Database>>) -> Result<ShardedTableWriter<K,V,F,KP,VP>, AppError> {
+    pub fn writer_from_dbs(&self, dbs: Vec<Weak<Database>>) -> Result<ShardedTableWriter<K,V,KP,VP,F>, AppError> {
         let mut shards = Vec::with_capacity(dbs.len());
         for db_weak in dbs.into_iter() {
             shards.push(TxFSM::<K,V,F>::new(db_weak, self.factory.clone())?);
@@ -385,7 +359,7 @@ where
         ShardedTableWriter::new(self.root_pk, shards, router, deferred)
     }
 
-    pub fn writer(&self, storage: &Arc<Storage>) -> Result<ShardedTableWriter<K,V,F,KP,VP>, AppError> {
+    pub fn writer(&self, storage: &Arc<Storage>) -> Result<ShardedTableWriter<K,V,KP,VP,F>, AppError> {
         let dbs = storage.fetch_dbs(self.factory.name().as_str())?;
         self.writer_from_dbs(dbs)
     }
@@ -406,25 +380,13 @@ where
     }
 }
 
-pub enum ShardedTableReader<K, V, KP, VP>
-where
-    K: Key + 'static + Borrow<K::SelfType<'static>>,
-    V: Key + 'static + Borrow<V::SelfType<'static>>,
-    KP: KeyPartitioner<K> + Sync + Send + Clone + 'static,
-    VP: ValuePartitioner<V> + Sync + Send + Clone + 'static,
-{
+pub enum ShardedTableReader<K: DbKey, V: DbVal, KP: KeyPartitioner<K>, VP: ValuePartitioner<V>> {
     Plain(ShardedReadOnlyPlainTable<K, V, KP>),
     Index(ShardedReadOnlyIndexTable<K, V, VP>),
     Dict(ShardedReadOnlyDictTable<K, V, VP>),
 }
 
-impl<K, V, KP, VP> ReadTableLike<K, V> for ShardedTableReader<K, V, KP, VP>
-where
-    K: Key + 'static + Borrow<K::SelfType<'static>>,
-    V: Key + 'static + Borrow<V::SelfType<'static>>,
-    KP: KeyPartitioner<K> + Sync + Send + Clone + 'static,
-    VP: ValuePartitioner<V> + Sync + Send + Clone + 'static,
-{
+impl<K: DbKey, V: DbVal, KP: KeyPartitioner<K>, VP: ValuePartitioner<V>> ReadTableLike<K, V> for ShardedTableReader<K, V, KP, VP> {
     fn index_keys<'v>(&self, val: impl Borrow<V::SelfType<'v>>) -> Result<MultimapValue<'static, K>, AppError> {
         match self {
             ShardedTableReader::Index(t) => t.index_keys(val),

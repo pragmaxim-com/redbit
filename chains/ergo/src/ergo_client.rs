@@ -7,7 +7,7 @@ use redbit::retry::retry_with_delay_async;
 use reqwest::{blocking, header::{HeaderMap, HeaderValue, ACCEPT, CONTENT_TYPE}, Client, Response, Url};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use chain::ChainError;
+use chain::err::ChainError;
 
 #[derive(Default, Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 #[repr(C)]

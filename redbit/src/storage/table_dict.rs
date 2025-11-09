@@ -1,6 +1,6 @@
 use crate::storage::table_dict_read::ReadOnlyDictTable;
 use crate::storage::table_writer_api::TableFactory;
-use crate::{AppError, CacheKey, CopyOwnedValue, DictTable};
+use crate::{AppError, CacheKey, DbKey, DictTable};
 use lru::LruCache;
 use redb::{Database, Key, MultimapTableDefinition, TableDefinition, WriteTransaction};
 use std::fmt::Debug;
@@ -42,7 +42,7 @@ impl<K: Key + 'static, V: Key + 'static> DictFactory<K, V> {
     }
 }
 
-impl<K: CopyOwnedValue + 'static, V: CacheKey + 'static> TableFactory<K, V> for DictFactory<K, V> {
+impl<K: DbKey, V: CacheKey> TableFactory<K, V> for DictFactory<K, V> {
     type CacheCtx = Option<LruCache<V::CK, K::Unit>>;
     type Table<'txn, 'c> = DictTable<'txn, 'c, K, V>;
     type ReadOnlyTable = ReadOnlyDictTable<K, V>;

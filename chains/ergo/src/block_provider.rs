@@ -2,7 +2,7 @@ use crate::ergo_client::{ErgoCBOR, ErgoClient};
 use crate::model_v1::{Address, Asset, AssetAction, AssetName, Block, BlockHash, BlockHeader, BlockPointer, Height, Timestamp, Transaction, TransactionPointer, TxHash, Utxo, UtxoPointer, Weight};
 use crate::{model_v1, AssetType, ErgoConfig};
 use async_trait::async_trait;
-use chain::api::{BlockProvider, ChainError};
+use chain::api::BlockProvider;
 use chain::block_stream::{BlockStream, RestBlockStream};
 use chain::chain_config;
 use chain::monitor::BoxWeight;
@@ -23,6 +23,7 @@ use std::{str::FromStr, sync::Arc};
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
+use chain::err::ChainError;
 
 pub struct ErgoBlockProvider {
     pub client: Arc<ErgoClient>,

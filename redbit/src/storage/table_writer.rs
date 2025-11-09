@@ -1,22 +1,21 @@
-use crate::storage::async_boundary::{CopyOwnedValue, ValueBuf, ValueOwned};
+use crate::storage::async_boundary::{ValueBuf, ValueOwned};
 use crate::storage::partitioning::{KeyPartitioner, ValuePartitioner};
 use crate::storage::router::Router;
 use crate::storage::table_writer_api::*;
-use crate::{AppError, TxFSM};
+use crate::{AppError, DbKey, DbVal, TxFSM};
 use crossbeam::channel::bounded;
-use redb::{Durability, Key};
-use std::borrow::Borrow;
+use redb::Durability;
 use std::cell::RefCell;
+use std::marker::PhantomData;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::marker::PhantomData;
 
 pub struct ShardedTableWriter<
-    K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
-    V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
-    F: TableFactory<K, V>,
+    K: DbKey + Send,
+    V: DbVal + Send,
     KP: KeyPartitioner<K>,
     VP: ValuePartitioner<V>,
+    F: TableFactory<K, V>,
 > {
     root_pk: bool,
     shards: Vec<TxFSM<K, V, F>>,
@@ -26,25 +25,16 @@ pub struct ShardedTableWriter<
     _pd: PhantomData<(KP,VP)>,
 }
 
-impl<
-    K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
-    V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
-    F: TableFactory<K, V>,
-    KP: KeyPartitioner<K>,
-    VP: ValuePartitioner<V>,
-> ShardedTableWriter<K,V,F,KP,VP> {
+impl<K: DbKey + Send, V: DbVal + Send, KP: KeyPartitioner<K>, VP: ValuePartitioner<V>,F> ShardedTableWriter<K,V,KP,VP,F>
+    where F: TableFactory<K, V>,
+{
     pub fn new(root_pk: bool, shards: Vec<TxFSM<K, V, F>>, router: Arc<dyn Router<K, V>>, deferred: AtomicBool) -> Result<Self, AppError> {
         Ok(Self { root_pk, router, deferred, shards, sync_buf: RefCell::new(Vec::new()), _pd: PhantomData })
     }
 }
 
-impl<K,V,F,KP,VP> WriteComponentRef for ShardedTableWriter<K,V,F,KP,VP>
-where
-    K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
-    V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
-    F: TableFactory<K, V> + Send + 'static,
-    KP: KeyPartitioner<K>,
-    VP: ValuePartitioner<V>,
+impl<K: DbKey + Send, V: DbVal + Send, KP: KeyPartitioner<K>, VP: ValuePartitioner<V>,F> WriteComponentRef for ShardedTableWriter<K,V,KP,VP,F>
+    where F: TableFactory<K, V> + Send + 'static,
 {
     fn begin_async_ref(&self, d: Durability) -> redb::Result<Vec<StartFuture>, AppError> {
         self.begin_async(d)
@@ -55,15 +45,9 @@ where
 }
 
 
-impl<K, V, F, KP, VP> WriterLike<K, V> for ShardedTableWriter<K, V, F, KP, VP>
-where
-    K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
-    V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
-    F: TableFactory<K, V> + Send + 'static,
-    KP: KeyPartitioner<K>,
-    VP: ValuePartitioner<V>,
+impl<K: DbKey + Send, V: DbVal + Send, KP: KeyPartitioner<K>, VP: ValuePartitioner<V>,F> WriterLike<K, V> for ShardedTableWriter<K,V,KP,VP,F>
+    where F: TableFactory<K, V> + Send + 'static,
 {
-
     fn acquire_router(&self) -> Arc<dyn Router<K, V>> {
         self.deferred.store(true, Ordering::SeqCst);
         self.router.clone()
@@ -179,8 +163,8 @@ where
 
 #[cfg(all(test, not(feature = "integration")))]
 mod plain_sharded {
+    use crate::DbKey;
     use crate::impl_copy_owned_value_identity;
-    use crate::storage::async_boundary::CopyOwnedValue;
     use crate::storage::table_writer_api::{ReadTableLike, WriterLike};
     use crate::storage::test_utils::addr;
     use crate::storage::{plain_test_utils, test_utils};

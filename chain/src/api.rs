@@ -1,57 +1,14 @@
 use async_trait::async_trait;
-use config::ConfigError;
-use hex::FromHexError;
-use redb::{Durability, StorageError};
+use redb::Durability;
 use redbit::storage::table_writer_api::TaskResult;
-use redbit::{AppError, WriteTxContext};
+use redbit::WriteTxContext;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::sync::Arc;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::watch;
-use tokio::task::{JoinError, JoinHandle};
-
-#[derive(Debug, thiserror::Error)]
-pub enum ChainError {
-    #[error("Join error: {0}")]
-    JoinError(#[from] JoinError),
-
-    #[error("Shutdown: {0}")]
-    Shutdown(String),
-
-    #[error("Database error: {0}")]
-    Redb(#[from] redb::Error),
-
-    #[error("Transaction error: {0}")]
-    RedbTransaction(#[from] redb::TransactionError),
-
-    #[error("Transaction error: {0}")]
-    RedbTable(#[from] redb::TableError),
-
-    #[error("Commit error: {0}")]
-    RedbCommit(#[from] redb::CommitError),
-
-    #[error("Storage error: {0}")]
-    StorageError(#[from] StorageError),
-
-    #[error("Application error: {0}")]
-    App(#[from] AppError),
-
-    #[error("Invalid hex: {0}")]
-    Hex(#[from] FromHexError),
-
-    #[error("Config error: {0}")]
-    ConfigError(#[from] ConfigError),
-
-    #[error("{0}")]
-    Custom(String),
-}
-
-impl ChainError {
-    pub fn new(msg: impl Into<String>) -> Self {
-        ChainError::Custom(msg.into())
-    }
-}
+use tokio::task::JoinHandle;
+use crate::err::ChainError;
 
 pub type Height = u32;
 

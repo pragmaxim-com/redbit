@@ -126,15 +126,15 @@ pub fn block_like(block_type: Type, pk_name: &Ident, pk_type: &Type, field_defs:
 
         #[async_trait::async_trait]
         impl chain::BlockChainLike<#block_type, #write_tx_context> for BlockChain {
-            fn init(&self) -> Result<(), chain::ChainError> {
+            fn init(&self) -> Result<(), ChainError> {
                 Ok(#block_type::init(Arc::clone(&self.storage))?)
             }
 
-            fn new_indexing_ctx(&self) -> Result<#write_tx_context, chain::ChainError> {
-                #block_type::new_write_ctx(&self.storage).map_err(|e| chain::ChainError::Custom(format!("Failed to create new indexing context: {}", e)))
+            fn new_indexing_ctx(&self) -> Result<#write_tx_context, ChainError> {
+                #block_type::new_write_ctx(&self.storage).map_err(|e| ChainError::Custom(format!("Failed to create new indexing context: {}", e)))
             }
 
-            fn delete(&self) -> Result<(), chain::ChainError> {
+            fn delete(&self) -> Result<(), ChainError> {
                 let tx_context = #header_type::begin_read_ctx(&self.storage)?;
                 if let Some(tip_header) = #header_type::last(&tx_context)? {
                     let pks = #pk_type::from_many(&(0..=tip_header.#pk_name.0).collect::<Vec<u32>>());
@@ -147,19 +147,19 @@ pub fn block_like(block_type: Type, pk_name: &Ident, pk_type: &Type, field_defs:
                 Ok(())
             }
 
-            fn get_last_header(&self) -> Result<Option<#header_type>, chain::ChainError> {
+            fn get_last_header(&self) -> Result<Option<#header_type>, ChainError> {
                 let tx_context = #header_type::begin_read_ctx(&self.storage)?;
                 let last = #header_type::last(&tx_context)?;
                 Ok(last)
             }
 
-            fn get_header_by_hash(&self, hash: <<Block as BlockLike>::Header as BlockHeaderLike>::Hash) -> Result<Vec<#header_type>, chain::ChainError> {
+            fn get_header_by_hash(&self, hash: <<Block as BlockLike>::Header as BlockHeaderLike>::Hash) -> Result<Vec<#header_type>, ChainError> {
                 let tx_context = #header_type::begin_read_ctx(&self.storage)?;
                 let header = #header_type::get_by_hash(&tx_context, &hash)?;
                 Ok(header)
             }
 
-            fn store_blocks(&self, indexing_context: &#write_tx_context, blocks: Vec<#block_type>, durability: Durability) -> Result<HashMap<String, TaskResult>, chain::ChainError> {
+            fn store_blocks(&self, indexing_context: &#write_tx_context, blocks: Vec<#block_type>, durability: Durability) -> Result<HashMap<String, TaskResult>, ChainError> {
                 let _ = indexing_context.begin_writing(durability)?;
                 let tasks = indexing_context.two_phase_commit_with(|tx_context| {
                     #block_type::store_many(&tx_context, blocks, true)?;
@@ -168,7 +168,7 @@ pub fn block_like(block_type: Type, pk_name: &Ident, pk_type: &Type, field_defs:
                 Ok(tasks)
             }
 
-            fn update_blocks(&self, indexing_context: &#write_tx_context, blocks: Vec<#block_type>) -> Result<HashMap<String, TaskResult>, chain::ChainError> {
+            fn update_blocks(&self, indexing_context: &#write_tx_context, blocks: Vec<#block_type>) -> Result<HashMap<String, TaskResult>, ChainError> {
                 let _ = indexing_context.begin_writing(Durability::Immediate)?;
                 let _ = indexing_context.two_phase_commit_with(|tx_context| {
                     for block in &blocks {
@@ -180,7 +180,7 @@ pub fn block_like(block_type: Type, pk_name: &Ident, pk_type: &Type, field_defs:
                 Ok(result)
             }
 
-            async fn validate_chain(&self, validation_from_height: u32) -> Result<Vec<#header_type>, chain::ChainError> {
+            async fn validate_chain(&self, validation_from_height: u32) -> Result<Vec<#header_type>, ChainError> {
                 use futures::StreamExt;
                 let tx_context = #header_type::begin_read_ctx(&self.storage)?; // kept as-is even if unused
                 let mut affected_headers: Vec<#header_type> = Vec::new();
@@ -190,14 +190,14 @@ pub fn block_like(block_type: Type, pk_name: &Ident, pk_type: &Type, field_defs:
                     // get the first header (nothing to validate yet)
                     let mut prev = match stream.next().await {
                         Some(Ok(h)) => h,
-                        Some(Err(e)) => return Err(chain::ChainError::new(format!("Stream error: {}", e))),
+                        Some(Err(e)) => return Err(ChainError::new(format!("Stream error: {}", e))),
                         None => return Ok(Vec::new()), // empty chain
                     };
 
                     while let Some(item) = stream.next().await {
                         let curr = match item {
                             Ok(h) => h,
-                            Err(e) => return Err(chain::ChainError::new(format!("Stream error: {}", e))),
+                            Err(e) => return Err(ChainError::new(format!("Stream error: {}", e))),
                         };
 
                         if prev.hash != curr.prev_hash {

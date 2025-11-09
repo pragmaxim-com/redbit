@@ -155,12 +155,12 @@ pub fn tx_context_plain_item(def: &PlainTableDef) -> TxContextItem {
 
     let definition =
         quote! {
-            pub #var_ident: RedbitTableDefinition<#key_ty, #val_ty, PlainFactory<#key_ty, #val_ty>, BytesPartitioner, Xxh3Partitioner>
+            pub #var_ident: RedbitTableDefinition<#key_ty, #val_ty, BytesPartitioner, Xxh3Partitioner, PlainFactory<#key_ty, #val_ty>>
         };
 
     let write_definition =
         quote! {
-            pub #var_ident: ShardedTableWriter<#key_ty, #val_ty, PlainFactory<#key_ty, #val_ty>, BytesPartitioner, Xxh3Partitioner>
+            pub #var_ident: ShardedTableWriter<#key_ty, #val_ty, BytesPartitioner, Xxh3Partitioner, PlainFactory<#key_ty, #val_ty>>
         };
 
     let read_definition =
@@ -199,12 +199,12 @@ pub fn tx_context_index_item(defs: &IndexTableDefs) -> TxContextItem {
 
     let definition =
         quote! {
-            pub #var_ident: RedbitTableDefinition<#key_ty, #val_ty, IndexFactory<#key_ty, #val_ty>, BytesPartitioner, Xxh3Partitioner>
+            pub #var_ident: RedbitTableDefinition<#key_ty, #val_ty, BytesPartitioner, Xxh3Partitioner, IndexFactory<#key_ty, #val_ty>>
         };
 
     let write_definition =
         quote! {
-            pub #var_ident: ShardedTableWriter<#key_ty, #val_ty, IndexFactory<#key_ty, #val_ty>, BytesPartitioner, Xxh3Partitioner>
+            pub #var_ident: ShardedTableWriter<#key_ty, #val_ty, BytesPartitioner, Xxh3Partitioner, IndexFactory<#key_ty, #val_ty>>
         };
 
     let read_definition =
@@ -245,12 +245,12 @@ pub fn tx_context_dict_item(defs: &DictTableDefs) -> TxContextItem {
 
     let definition =
         quote! {
-            pub #var_ident: RedbitTableDefinition<#key_ty, #val_ty, DictFactory<#key_ty, #val_ty>, BytesPartitioner, Xxh3Partitioner>
+            pub #var_ident: RedbitTableDefinition<#key_ty, #val_ty, BytesPartitioner, Xxh3Partitioner, DictFactory<#key_ty, #val_ty>>
         };
 
     let write_definition =
         quote! {
-            pub #var_ident: ShardedTableWriter<#key_ty, #val_ty, DictFactory<#key_ty, #val_ty>, BytesPartitioner, Xxh3Partitioner>
+            pub #var_ident: ShardedTableWriter<#key_ty, #val_ty, BytesPartitioner, Xxh3Partitioner, DictFactory<#key_ty, #val_ty>>
         };
 
     let read_definition =

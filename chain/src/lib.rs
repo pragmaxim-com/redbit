@@ -11,9 +11,12 @@ pub mod stats;
 pub mod chain_config;
 pub mod size_batcher;
 pub mod block_stream;
+pub mod err;
 mod reorder_buffer;
 
-pub use api::{BlockHeaderLike, SizeLike, BlockLike, BlockChainLike, ChainError};
+pub use err::ChainError;
+
+pub use api::{BlockHeaderLike, SizeLike, BlockLike, BlockChainLike};
 
 #[cfg(test)]
 pub mod test_utils {

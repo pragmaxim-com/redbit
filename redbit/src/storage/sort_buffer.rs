@@ -1,4 +1,4 @@
-use crate::CopyOwnedValue;
+use crate::{DbKey, DbVal};
 use redb::Key;
 use std::borrow::Borrow;
 use std::cmp::{Ordering, Reverse};
@@ -17,8 +17,8 @@ impl<K, V> Default for MergeBuffer<K, V> {
 
 impl<K, V> MergeBuffer<K, V>
 where
-    K: CopyOwnedValue + Borrow<K::SelfType<'static>> + 'static,
-    V: Key + Borrow<V::SelfType<'static>> + 'static,
+    K: DbKey,
+    V: DbVal
 {
     pub fn new() -> Self { Self { levels: Vec::new() } }
 
@@ -362,8 +362,8 @@ where
 
 pub fn merge_sorted_by_key_gallop<K, V>(a: Vec<(K, V)>, b: Vec<(K, V)>) -> Vec<(K, V)>
 where
-    K: CopyOwnedValue + Borrow<K::SelfType<'static>> + 'static,
-    V: Key + Borrow<V::SelfType<'static>> + 'static,
+    K: DbKey,
+    V: DbVal,
 {
     use std::cmp::Ordering;
 
@@ -445,11 +445,11 @@ mod tests {
 
     #[inline]
     fn sort_u32_addr_by_key(v: &mut Vec<(u32, Address)>) {
-        use redb::{Key as RedbKey, Value as RedbValue};
+        use redb::{Key as DbVal, Value as RedbValue};
         v.sort_by(|(x,_),(y,_)| {
             let xb = <u32 as RedbValue>::as_bytes(x);
             let yb = <u32 as RedbValue>::as_bytes(y);
-            <u32 as RedbKey>::compare(xb.as_ref(), yb.as_ref())
+            <u32 as DbVal>::compare(xb.as_ref(), yb.as_ref())
         });
     }
 
@@ -769,13 +769,13 @@ mod tests {
 
     #[inline]
     fn assert_sorted(v: &[(u32, Address)]) {
-        use redb::{Key as RedbKey, Value as RedbValue};
+        use redb::{Key as DbVal, Value as RedbValue};
         use std::cmp::Ordering;
         for w in v.windows(2) {
             let (a, _) = &w[0]; let (b, _) = &w[1];
             let ab = <u32 as RedbValue>::as_bytes(a);
             let bb = <u32 as RedbValue>::as_bytes(b);
-            let ord = <u32 as RedbKey>::compare(ab.as_ref(), bb.as_ref());
+            let ord = <u32 as DbVal>::compare(ab.as_ref(), bb.as_ref());
             assert!(matches!(ord, Ordering::Less | Ordering::Equal));
         }
     }
@@ -816,13 +816,13 @@ mod tests {
 
         #[inline]
         fn assert_sorted(v: &[(u32, Address)]) {
-            use redb::{Key as RedbKey, Value as RedbValue};
+            use redb::{Key as DbVal, Value as RedbValue};
             use std::cmp::Ordering;
             for w in v.windows(2) {
                 let (a,_) = &w[0]; let (b,_) = &w[1];
                 let ab = <u32 as RedbValue>::as_bytes(a);
                 let bb = <u32 as RedbValue>::as_bytes(b);
-                assert!(matches!(<u32 as RedbKey>::compare(ab.as_ref(), bb.as_ref()),
+                assert!(matches!(<u32 as DbVal>::compare(ab.as_ref(), bb.as_ref()),
                              Ordering::Less | Ordering::Equal));
             }
         }
@@ -942,7 +942,7 @@ mod bench {
     extern crate test;
 
     use crate::impl_copy_owned_value_identity;
-    use crate::storage::async_boundary::CopyOwnedValue;
+    use crate::storage::async_boundary::DbKey;
     use crate::storage::sort_buffer::MergeBuffer;
     use crate::storage::test_utils::TxHash;
     use test::Bencher;
@@ -1088,7 +1088,7 @@ mod bench {
     fn merge_two_sorted_eager(mut a: Vec<(TxHash, u32)>, mut b: Vec<(TxHash, u32)>)
                               -> Vec<(TxHash, u32)>
     {
-        use redb::{Key as RedbKey, Value as RedbValue};
+        use redb::{Key as DbVal, Value as RedbValue};
         use std::cmp::Ordering;
         let mut out = Vec::with_capacity(a.len() + b.len());
         let mut ia = 0usize;
@@ -1098,7 +1098,7 @@ mod bench {
             let (kb, _) = &b[ib];
             let ab = <TxHash as RedbValue>::as_bytes(ka);
             let bb = <TxHash as RedbValue>::as_bytes(kb);
-            match <TxHash as RedbKey>::compare(ab.as_ref(), bb.as_ref()) {
+            match <TxHash as DbVal>::compare(ab.as_ref(), bb.as_ref()) {
                 Ordering::Less | Ordering::Equal => { out.push(a[ia].clone()); ia += 1; }
                 Ordering::Greater                => { out.push(b[ib].clone()); ib += 1; }
             }

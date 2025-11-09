@@ -1,7 +1,7 @@
 use crate::api::{BlockChainLike, BlockLike, BlockProvider, SizeLike};
 use crate::scheduler::Scheduler;
 use crate::settings::{AppConfig, DbCacheSize, HttpSettings, IndexerSettings};
-use crate::{chain_config, combine, ChainError};
+use crate::{chain_config, combine};
 use futures::future::ready;
 use redbit::storage::init::{Storage, StorageOwner};
 use redbit::{error, info, AppError, OpenApiRouter, RequestState, WriteTxContext};
@@ -11,6 +11,7 @@ use std::time::Duration;
 use tokio::sync::watch;
 use tower_http::cors;
 use tower_http::cors::CorsLayer;
+use crate::err::ChainError;
 use crate::syncer::ChainSyncer;
 
 pub async fn maybe_run_server(

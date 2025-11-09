@@ -1,6 +1,6 @@
 use crate::storage::table_index::IndexFactory;
 use crate::storage::table_writer_api::{ReadTableFactory, ReadTableLike, ShardedTableReader, TableFactory, TableInfo};
-use crate::{AppError, CacheKey, CopyOwnedValue, KeyPartitioner, Partitioning, ValuePartitioner};
+use crate::{AppError, CacheKey, DbKey, KeyPartitioner, Partitioning, DbVal, ValuePartitioner};
 use redb::{AccessGuard, Database, Key, MultimapTableDefinition, MultimapValue, Range, ReadOnlyMultimapTable, ReadOnlyTable, ReadableDatabase, ReadableTableMetadata, TableDefinition};
 use std::borrow::Borrow;
 use std::ops::RangeBounds;
@@ -22,22 +22,12 @@ impl<K: Key + 'static, V: Key + 'static> ReadOnlyIndexTable<K, V> {
     }
 }
 
-pub struct ShardedReadOnlyIndexTable<K, V, VP>
-where
-    K: Key + 'static + Borrow<K::SelfType<'static>>,
-    V: Key + 'static + Borrow<V::SelfType<'static>>,
-    VP: ValuePartitioner<V>,
-{
+pub struct ShardedReadOnlyIndexTable<K: DbKey, V: DbVal, VP: ValuePartitioner<V>> {
     shards: Vec<ReadOnlyIndexTable<K, V>>,
     value_partitioner: VP,
 }
 
-impl<K, V, VP> ShardedReadOnlyIndexTable<K, V, VP>
-where
-    K: CopyOwnedValue + 'static + Borrow<K::SelfType<'static>>,
-    V: CacheKey + 'static + Borrow<V::SelfType<'static>>,
-    VP: ValuePartitioner<V>,
-{
+impl<K: DbKey, V: CacheKey, VP: ValuePartitioner<V>> ShardedReadOnlyIndexTable<K, V, VP> {
     pub fn new(value_partitioner: VP, dbs: Vec<Weak<Database>>, factory: &IndexFactory<K, V>) -> Result<Self, AppError> {
         let mut shards = Vec::with_capacity(dbs.len());
         for db_weak in &dbs {
@@ -47,13 +37,7 @@ where
     }
 }
 
-impl<K, V, KP, VP> ReadTableFactory<K, V, KP, VP> for IndexFactory<K, V>
-where
-    K: CopyOwnedValue + 'static + Borrow<K::SelfType<'static>>,
-    V: CacheKey + 'static + Borrow<V::SelfType<'static>>,
-    KP: KeyPartitioner<K> + Sync + Send + Clone + 'static,
-    VP: ValuePartitioner<V> + Sync + Send + Clone + 'static,
-{
+impl<K: DbKey, V: CacheKey, KP: KeyPartitioner<K>, VP: ValuePartitioner<V>> ReadTableFactory<K, V, KP, VP> for IndexFactory<K, V> {
     fn build_sharded_reader(&self, dbs: Vec<Weak<Database>>, partitioning: &Partitioning<KP, VP>) -> Result<ShardedTableReader<K, V, KP, VP>, AppError> {
         match partitioning {
             Partitioning::ByKey(_) => {
@@ -67,12 +51,7 @@ where
     }
 }
 
-impl<K, V, VP> ReadTableLike<K, V> for ShardedReadOnlyIndexTable<K, V, VP>
-where
-    K: Key + 'static + Borrow<K::SelfType<'static>>,
-    V: Key + 'static + Borrow<V::SelfType<'static>>,
-    VP: ValuePartitioner<V>,
-{
+impl<K: DbKey, V: DbVal, VP: ValuePartitioner<V>> ReadTableLike<K, V> for ShardedReadOnlyIndexTable<K, V, VP> {
 
     fn get_value<'k>(&self, key: impl Borrow<K::SelfType<'k>>) -> Result<Option<AccessGuard<'_, V>>, AppError> {
         for shard in &self.shards {

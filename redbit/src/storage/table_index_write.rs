@@ -1,12 +1,12 @@
-use crate::storage::async_boundary::{CopyOwnedValue, ValueBuf, ValueOwned};
+use crate::storage::async_boundary::{ValueBuf, ValueOwned};
 use crate::storage::table_index::IndexTable;
 use crate::storage::table_writer_api::WriteTableLike;
-use crate::{AppError, CacheKey};
-use redb::{Key, ReadableMultimapTable};
+use crate::{AppError, CacheKey, DbKey};
+use redb::ReadableMultimapTable;
 use std::borrow::Borrow;
 use std::ops::RangeBounds;
 
-impl<'txn, 'c, K: Key + CopyOwnedValue + 'static, V: CacheKey + 'static> WriteTableLike<K, V> for IndexTable<'txn, 'c, K, V> {
+impl<'txn, 'c, K: DbKey, V: CacheKey> WriteTableLike<K, V> for IndexTable<'txn, 'c, K, V> {
     fn insert_kv<'k, 'v>(&mut self, key: impl Borrow<K::SelfType<'k>>, value: impl Borrow<V::SelfType<'v>>) -> Result<(), AppError>  {
         let key_ref: &K::SelfType<'k> = key.borrow();
         let val_ref: &V::SelfType<'v> = value.borrow();
@@ -160,7 +160,7 @@ mod tests {
 
         // Cache key (typed) + unit value for K
         let ckey = <TxHash as CacheKey>::cache_key(&value_hash);
-        let kunit = <u32 as CopyOwnedValue>::to_unit(k);
+        let kunit = <u32 as DbKey>::to_unit(k);
 
         // Seed cache so get_any_for_index hits fast path
         assert!(cache.cap().get() >= 1);

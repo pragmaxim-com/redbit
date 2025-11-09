@@ -1,14 +1,14 @@
 use crossbeam::channel::{bounded, Sender, TrySendError};
-use std::sync::Arc;
-use std::borrow::Borrow;
 use redb::{Key, Value};
+use std::borrow::Borrow;
+use std::sync::Arc;
 
-use crate::{AppError, CopyOwnedValue, KeyPartitioner, Partitioning, ValuePartitioner};
 use crate::storage::async_boundary::{ValueBuf, ValueOwned};
 use crate::storage::table_writer_api::WriterCommand;
+use crate::{AppError, DbKey, KeyPartitioner, Partitioning, DbVal, ValuePartitioner};
 
 #[inline]
-fn fast_send<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static>(
+fn fast_send<K: DbKey + Send, V: Key + Send + 'static>(
     tx: &Sender<WriterCommand<K, V>>,
     msg: WriterCommand<K, V>
 ) -> Result<(), AppError> {
@@ -19,7 +19,7 @@ fn fast_send<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static>(
     }
 }
 
-pub trait Router<K: CopyOwnedValue, V: Value>: Send + Sync {
+pub trait Router<K: DbKey, V: Value>: Send + Sync {
     fn shards(&self) -> usize;
     fn merge_unsorted_inserts(&self, pairs: Vec<(K, V)>, last_shards: Option<usize>) -> Result<(), AppError>;
     fn ready_for_flush(&self, shards: usize) -> Result<(), AppError>;
@@ -35,17 +35,17 @@ pub trait Router<K: CopyOwnedValue, V: Value>: Send + Sync {
     ) -> Result<(), AppError>;
 }
 
-pub struct ShardedRouter<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static, KP, VP> {
+pub struct ShardedRouter<K: DbKey + Send, V: Key + Send + 'static, KP, VP> {
     part: Partitioning<KP, VP>,
     senders: Arc<[Sender<WriterCommand<K, V>>]>,
 }
 
 impl<K, V, KP, VP> ShardedRouter<K, V, KP, VP>
 where
-    K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
-    V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
-    KP: KeyPartitioner<K> + Send + Sync + Clone + 'static,
-    VP: ValuePartitioner<V> + Send + Sync + Clone + 'static,
+    K: DbKey + Send,
+    V: DbVal + Send,
+    KP: KeyPartitioner<K>,
+    VP: ValuePartitioner<V>,
 {
     pub fn new(part: Partitioning<KP, VP>, senders: Vec<Sender<WriterCommand<K, V>>>) -> Self {
         Self { part, senders: senders.into() }
@@ -87,10 +87,10 @@ where
 
 impl<K, V, KP, VP> Router<K, V> for ShardedRouter<K, V, KP, VP>
 where
-    K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
-    V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
-    KP: KeyPartitioner<K> + Send + Sync + Clone + 'static,
-    VP: ValuePartitioner<V> + Send + Sync + Clone + 'static,
+    K: DbKey + Send,
+    V: DbVal + Send,
+    KP: KeyPartitioner<K>,
+    VP: ValuePartitioner<V>,
 {
     fn shards(&self) -> usize {
         self.senders.len()

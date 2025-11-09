@@ -20,12 +20,12 @@ mod sort_buffer;
 
 #[cfg(all(test, not(feature = "integration")))]
 pub mod test_utils {
-    use crate::CacheKey;
+    use crate::{impl_copy_owned_value_identity, DbKey, CacheKey};
     use redb::{Database, Key, TypeName, Value};
     use std::cmp::Ordering;
     use std::sync::{Arc, Weak};
 
-    #[derive(Debug, Clone, Copy)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct TxHash(pub [u8; 32]);
     impl Value for TxHash {
         type SelfType<'a> = TxHash where Self: 'a;
@@ -55,6 +55,7 @@ pub mod test_utils {
             data1.cmp(data2)
         }
     }
+    impl_copy_owned_value_identity!(TxHash);
     impl CacheKey for TxHash {
         type CK = [u8; 32];
         #[inline]
@@ -146,11 +147,10 @@ pub mod test_utils {
 pub mod plain_test_utils {
     use crate::*;
     use redb::{Database, TableDefinition, WriteTransaction};
-    use std::borrow::Borrow;
     use crate::storage::table_plain::{PlainFactory, PlainTable};
     use crate::storage::table_writer_api::RedbitTableDefinition;
 
-    pub(crate) fn mk_sharded_reader<V: CacheKey + Send + Clone + 'static + Borrow<V::SelfType<'static>>>(name: &str, n: usize, weak_dbs: Vec<Weak<Database>>, plain_def: TableDefinition<'static, u32, V>) -> ShardedReadOnlyPlainTable<u32, V, BytesPartitioner> {
+    pub(crate) fn mk_sharded_reader<V: CacheKey + Send + Clone>(name: &str, n: usize, weak_dbs: Vec<Weak<Database>>, plain_def: TableDefinition<'static, u32, V>) -> ShardedReadOnlyPlainTable<u32, V, BytesPartitioner> {
         ShardedReadOnlyPlainTable::new(
             BytesPartitioner::new(n),
             weak_dbs.clone(),
@@ -158,7 +158,7 @@ pub mod plain_test_utils {
         ).expect("reader")
     }
 
-    pub(crate) fn mk_sharded_writer<V: CacheKey + Send + Clone + 'static + Borrow<V::SelfType<'static>>>(name: &str, n: usize, weak_dbs: Vec<Weak<Database>>) -> (ShardedTableWriter<u32, V, PlainFactory<u32, V>, BytesPartitioner, Xxh3Partitioner>, TableDefinition<'static, u32, V>) {
+    pub(crate) fn mk_sharded_writer<V: CacheKey + Send + Clone>(name: &str, n: usize, weak_dbs: Vec<Weak<Database>>) -> (ShardedTableWriter<u32, V, BytesPartitioner, Xxh3Partitioner, PlainFactory<u32, V>>, TableDefinition<'static, u32, V>) {
         let plain_def = TableDefinition::<u32, V>::new("plain_underlying");
 
         let def = RedbitTableDefinition::new(
@@ -170,7 +170,7 @@ pub mod plain_test_utils {
         (writer, plain_def)
     }
 
-    pub(crate) fn setup_plain_defs<V: CacheKey + Send + Clone + 'static + Borrow<V::SelfType<'static>>>() -> (
+    pub(crate) fn setup_plain_defs<V: CacheKey + Send + Clone>() -> (
         Database,
         WriteTransaction,
         TableDefinition<'static, u32, V>,
@@ -195,12 +195,11 @@ pub mod index_test_utils {
     use crate::*;
     use lru::LruCache;
     use redb::{Database, MultimapTableDefinition, TableDefinition, WriteTransaction};
-    use std::borrow::Borrow;
     use std::num::NonZeroUsize;
     use crate::storage::table_index::{IndexFactory, IndexTable};
     use crate::storage::table_writer_api::RedbitTableDefinition;
 
-    pub(crate) fn mk_sharded_reader<V: CacheKey + Send + Clone + 'static + Borrow<V::SelfType<'static>>>(name: &str, n: usize, lru_cache: usize, weak_dbs: Vec<Weak<Database>>, pk_by_index_def: MultimapTableDefinition<'static, V, u32>, index_by_pk_def: TableDefinition<'static, u32, V>) -> ShardedReadOnlyIndexTable<u32, V, Xxh3Partitioner> {
+    pub(crate) fn mk_sharded_reader<V: CacheKey + Send + Clone>(name: &str, n: usize, lru_cache: usize, weak_dbs: Vec<Weak<Database>>, pk_by_index_def: MultimapTableDefinition<'static, V, u32>, index_by_pk_def: TableDefinition<'static, u32, V>) -> ShardedReadOnlyIndexTable<u32, V, Xxh3Partitioner> {
         ShardedReadOnlyIndexTable::new(
             Xxh3Partitioner::new(n),
             weak_dbs.clone(),
@@ -208,7 +207,7 @@ pub mod index_test_utils {
         ).expect("reader")
     }
 
-    pub(crate) fn mk_sharded_writer<V: CacheKey + Send + Clone + 'static + Borrow<V::SelfType<'static>>>(name: &str, n: usize, lru_cache: usize, weak_dbs: Vec<Weak<Database>>) -> (ShardedTableWriter<u32, V, IndexFactory<u32, V>, BytesPartitioner, Xxh3Partitioner>, MultimapTableDefinition<'static, V, u32>, TableDefinition<'static, u32, V>) {
+    pub(crate) fn mk_sharded_writer<V: CacheKey + Send + Clone>(name: &str, n: usize, lru_cache: usize, weak_dbs: Vec<Weak<Database>>) -> (ShardedTableWriter<u32, V, BytesPartitioner, Xxh3Partitioner, IndexFactory<u32, V>>, MultimapTableDefinition<'static, V, u32>, TableDefinition<'static, u32, V>) {
         let pk_by_index_def = MultimapTableDefinition::<V, u32>::new("pk_by_index");
         let index_by_pk_def = TableDefinition::<u32, V>::new("index_by_pk");
 
@@ -221,7 +220,7 @@ pub mod index_test_utils {
         (writer, pk_by_index_def, index_by_pk_def)
     }
 
-    pub(crate) fn setup_index_defs<K: CopyOwnedValue + Send + Clone + 'static + Borrow<K::SelfType<'static>>, V: CacheKey + Send + Clone + 'static + Borrow<V::SelfType<'static>>>
+    pub(crate) fn setup_index_defs<K: DbKey + Send, V: CacheKey + Send + Clone>
         (name: &str, lru_cap: usize) -> (
         Arc<Database>,
         TxFSM<K, V, IndexFactory<K, V>>,
@@ -238,7 +237,7 @@ pub mod index_test_utils {
         (owner_db, writer, lru, pk_by_index, index_by_pk)
     }
 
-    pub(crate) fn mk_index<'txn, 'c, K: CopyOwnedValue, V: CacheKey>(
+    pub(crate) fn mk_index<'txn, 'c, K: DbKey, V: CacheKey>(
         tx: &'txn WriteTransaction,
         cache: &'c mut LruCache<V::CK, K::Unit>,
         pk_by_index_def: MultimapTableDefinition<'static, V, K>,
@@ -257,12 +256,11 @@ pub mod index_test_utils {
 pub mod dict_test_utils {
     use crate::*;
     use lru::LruCache;
-    use std::borrow::Borrow;
     use std::num::NonZeroUsize;
     use crate::storage::table_dict::DictFactory;
     use crate::storage::table_writer_api::RedbitTableDefinition;
 
-    pub (crate) fn mk_sharder_reader<V: CacheKey + Send + Clone + 'static + Borrow<V::SelfType<'static>>>(name: &str, n: usize, weak_dbs: Vec<Weak<Database>>, dict_pk_to_ids: MultimapTableDefinition<'static, u32, u32>, value_by_dict_pk: TableDefinition<'static, u32, V>, value_to_dict_pk: TableDefinition<'static, V, u32>, dict_pk_by_id: TableDefinition<'static, u32, u32>) -> ShardedReadOnlyDictTable<u32, V, Xxh3Partitioner> {
+    pub (crate) fn mk_sharder_reader<V: CacheKey + Send + Clone>(name: &str, n: usize, weak_dbs: Vec<Weak<Database>>, dict_pk_to_ids: MultimapTableDefinition<'static, u32, u32>, value_by_dict_pk: TableDefinition<'static, u32, V>, value_to_dict_pk: TableDefinition<'static, V, u32>, dict_pk_by_id: TableDefinition<'static, u32, u32>) -> ShardedReadOnlyDictTable<u32, V, Xxh3Partitioner> {
         ShardedReadOnlyDictTable::new(
             Xxh3Partitioner::new(n),
             weak_dbs.clone(),
@@ -277,7 +275,7 @@ pub mod dict_test_utils {
         ).expect("reader")
     }
 
-    pub(crate) fn mk_sharded_writer<V: CacheKey + Send + Clone + 'static + Borrow<V::SelfType<'static>>>(name: &str, n: usize, weak_dbs: Vec<Weak<Database>>) -> (ShardedTableWriter<u32, V, DictFactory<u32, V>, BytesPartitioner, Xxh3Partitioner>, MultimapTableDefinition<'static, u32, u32>, TableDefinition<'static, u32, V>, TableDefinition<'static, V, u32>, TableDefinition<'static, u32, u32>) {
+    pub(crate) fn mk_sharded_writer<V: CacheKey + Send + Clone>(name: &str, n: usize, weak_dbs: Vec<Weak<Database>>) -> (ShardedTableWriter<u32, V, BytesPartitioner, Xxh3Partitioner, DictFactory<u32, V>>, MultimapTableDefinition<'static, u32, u32>, TableDefinition<'static, u32, V>, TableDefinition<'static, V, u32>, TableDefinition<'static, u32, u32>) {
         // Table defs
         let dict_pk_to_ids   = MultimapTableDefinition::<u32, u32>::new("dict_pk_to_ids");
         let value_by_dict_pk = TableDefinition::<u32, V>::new("value_by_dict_pk");
@@ -301,7 +299,7 @@ pub mod dict_test_utils {
         (writer, dict_pk_to_ids, value_by_dict_pk, value_to_dict_pk, dict_pk_by_id)
     }
 
-    pub(crate) fn setup_dict_defs<K: CopyOwnedValue + Send + Clone + 'static + Borrow<K::SelfType<'static>>, V: CacheKey + Send + Clone + 'static + Borrow<V::SelfType<'static>>>(cap: usize) -> (
+    pub(crate) fn setup_dict_defs<K: DbKey + Send, V: CacheKey + Send + Clone>(cap: usize) -> (
         Database,
         WriteTransaction,
         LruCache<V::CK, K::Unit>,
@@ -323,7 +321,7 @@ pub mod dict_test_utils {
         (random_db, write_tx, lru_cache, dict_pk_to_ids, value_by_dict_pk, value_to_dict_pk, dict_pk_by_id)
     }
 
-    pub(crate) fn mk_dict<'txn, 'c, K: CopyOwnedValue, V: CacheKey>(
+    pub(crate) fn mk_dict<'txn, 'c, K: DbKey, V: CacheKey>(
         tx: &'txn WriteTransaction,
         cache: &'c mut LruCache<V::CK, K::Unit>,
         dict_pk_to_ids: MultimapTableDefinition<'static, K, K>,

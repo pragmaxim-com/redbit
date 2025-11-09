@@ -1,6 +1,6 @@
 use crate::storage::table_plain::PlainFactory;
 use crate::storage::table_writer_api::{ReadTableFactory, ReadTableLike, ShardedTableReader, TableFactory, TableInfo};
-use crate::{AppError, CopyOwnedValue, KeyPartitioner, Partitioning, ValuePartitioner};
+use crate::{AppError, DbKey, KeyPartitioner, Partitioning, DbVal, ValuePartitioner};
 use redb::{AccessGuard, Database, Key, MultimapRange, MultimapValue, ReadOnlyTable, ReadableDatabase, ReadableTable, ReadableTableMetadata, TableDefinition};
 use std::borrow::Borrow;
 use std::ops::RangeBounds;
@@ -20,24 +20,14 @@ impl<K: Key + 'static, V: Key + 'static> ReadOnlyPlainTable<K, V> {
     }
 }
 
-pub struct ShardedReadOnlyPlainTable<K, V, PK>
-where
-    K: Key + 'static + Borrow<K::SelfType<'static>>,
-    V: Key + 'static + Borrow<V::SelfType<'static>>,
-    PK: KeyPartitioner<K>,
-{
+pub struct ShardedReadOnlyPlainTable<K: DbKey, V: DbVal, KP: KeyPartitioner<K>> {
     shards: Vec<ReadOnlyPlainTable<K, V>>,
-    pk_partitioner: PK,
+    pk_partitioner: KP,
 }
 
-impl<K, V, PK> ShardedReadOnlyPlainTable<K, V, PK>
-where
-    K: CopyOwnedValue + 'static + Borrow<K::SelfType<'static>>,
-    V: Key + 'static + Borrow<V::SelfType<'static>>,
-    PK: KeyPartitioner<K>,
-{
+impl<K: DbKey, V: DbVal, KP: KeyPartitioner<K>> ShardedReadOnlyPlainTable<K, V, KP> {
     /// Build a sharded reader. Requires at least 2 DBs.
-    pub fn new(pk_partitioner: PK, dbs: Vec<Weak<Database>>, factory: &PlainFactory<K, V>) -> Result<Self, AppError> {
+    pub fn new(pk_partitioner: KP, dbs: Vec<Weak<Database>>, factory: &PlainFactory<K, V>) -> Result<Self, AppError> {
         let mut shards = Vec::with_capacity(dbs.len());
         for db_weak in &dbs {
             shards.push(factory.open_for_read(db_weak)?);
@@ -46,13 +36,7 @@ where
     }
 }
 
-impl<K, V, KP, VP> ReadTableFactory<K, V, KP, VP> for PlainFactory<K, V>
-where
-    K: CopyOwnedValue + 'static + Borrow<K::SelfType<'static>>,
-    V: Key + 'static + Borrow<V::SelfType<'static>>,
-    KP: KeyPartitioner<K> + Sync + Send + Clone + 'static,
-    VP: ValuePartitioner<V> + Sync + Send + Clone + 'static,
-{
+impl<K: DbKey, V: DbVal, KP: KeyPartitioner<K>, VP: ValuePartitioner<V>> ReadTableFactory<K, V, KP, VP> for PlainFactory<K, V> {
     fn build_sharded_reader(&self, dbs: Vec<Weak<Database>>, partitioning: &Partitioning<KP, VP>) -> Result<ShardedTableReader<K, V, KP, VP>, AppError> {
         match partitioning {
             Partitioning::ByKey(kp) => {
@@ -66,12 +50,7 @@ where
     }
 }
 
-impl<K, V, PK> ReadTableLike<K, V> for ShardedReadOnlyPlainTable<K, V, PK>
-where
-    K: Key + 'static + Borrow<K::SelfType<'static>>,
-    V: Key + 'static + Borrow<V::SelfType<'static>>,
-    PK: KeyPartitioner<K>,
-{
+impl<K: DbKey, V: DbVal, KP: KeyPartitioner<K>> ReadTableLike<K, V> for ShardedReadOnlyPlainTable<K, V, KP> {
     fn get_value<'k>(&self, key: impl Borrow<K::SelfType<'k>>) -> Result<Option<AccessGuard<'_, V>>, AppError> {
         let shard =
             if self.shards.len() == 1 {

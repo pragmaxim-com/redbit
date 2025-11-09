@@ -1,7 +1,7 @@
 use crate::model_v1::{Block, BlockHash, Header, Height, Weight};
 use anyhow::Result;
 use async_trait::async_trait;
-use chain::api::{BlockProvider, ChainError, SizeLike};
+use chain::api::{BlockProvider, SizeLike};
 use chain::block_stream::{BlockStream, RestBlockStream, RestClient};
 use chain::settings::{AppConfig, Parallelism};
 use redbit::info;
@@ -10,6 +10,7 @@ use std::sync::{Arc, RwLock};
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
+use chain::err::ChainError;
 
 impl SizeLike for Block {
     fn size(&self) -> usize {

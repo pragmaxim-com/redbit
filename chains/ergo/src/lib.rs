@@ -7,11 +7,11 @@ pub mod model_v1;
 pub mod codec;
 pub mod hook;
 
-use chain::ChainError;
 use std::error::Error;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use crate::model_v1::chrono::DateTime;
 use std::fmt::Display;
+use chain::err::ChainError;
 use chain::settings::Parallelism;
 use crate::model_v1::{BlockHash, Deserialize, Timestamp};
 

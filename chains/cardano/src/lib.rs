@@ -9,11 +9,10 @@ pub mod hook;
 
 use crate::model_v1::chrono::DateTime;
 use crate::model_v1::{BlockHash, Deserialize, Timestamp};
-use chain::ChainError;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use pallas::network::miniprotocols::{blockfetch, chainsync, localstate};
 use std::fmt::Display;
-
+use chain::err::ChainError;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct CardanoConfig {

@@ -1,12 +1,13 @@
 use crate::api::Height;
 use crate::settings::Parallelism;
 use crate::size_batcher::SizeBatcher;
-use crate::{combine, BlockHeaderLike, BlockLike, ChainError, SizeLike};
+use crate::{combine, BlockHeaderLike, BlockLike, SizeLike};
 use redbit::{info, StreamExt};
 use std::sync::Arc;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
+use crate::err::ChainError;
 
 #[async_trait::async_trait]
 pub trait RestClient<CBOR> {

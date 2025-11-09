@@ -1,6 +1,6 @@
 use crate::storage::table_index_read::ReadOnlyIndexTable;
 use crate::storage::table_writer_api::TableFactory;
-use crate::{AppError, CacheKey, CopyOwnedValue};
+use crate::{AppError, CacheKey, DbKey};
 use lru::LruCache;
 use redb::{Database, Key, MultimapTable, MultimapTableDefinition, Table, TableDefinition, WriteTransaction};
 use std::fmt::Debug;
@@ -39,13 +39,13 @@ impl<K: Key + 'static, V: Key + 'static> IndexFactory<K, V> {
     }
 }
 
-pub struct IndexTable<'txn, 'c, K: CopyOwnedValue + 'static, V: CacheKey + 'static> {
+pub struct IndexTable<'txn, 'c, K: DbKey, V: CacheKey> {
     pub(crate) pk_by_index: MultimapTable<'txn, V, K>,
     pub(crate) index_by_pk: Table<'txn, K, V>,
     pub(crate) cache: Option<&'c mut LruCache<V::CK, K::Unit>>,
 }
 
-impl<'txn, 'c, K: CopyOwnedValue + 'static, V: CacheKey + 'static> IndexTable<'txn, 'c, K, V> {
+impl<'txn, 'c, K: DbKey, V: CacheKey> IndexTable<'txn, 'c, K, V> {
     pub fn new(write_tx: &'txn WriteTransaction, cache: Option<&'c mut LruCache<V::CK, K::Unit>>, pk_by_index_def: MultimapTableDefinition<'static, V, K>, index_by_pk_def: TableDefinition<'static, K, V>) -> Result<Self, AppError> {
         Ok(Self {
             pk_by_index: write_tx.open_multimap_table(pk_by_index_def)?,
@@ -55,7 +55,7 @@ impl<'txn, 'c, K: CopyOwnedValue + 'static, V: CacheKey + 'static> IndexTable<'t
     }
 }
 
-impl<K: CopyOwnedValue + 'static, V: CacheKey + 'static> TableFactory<K, V> for IndexFactory<K, V> {
+impl<K: DbKey, V: CacheKey> TableFactory<K, V> for IndexFactory<K, V> {
     type CacheCtx = Option<LruCache<V::CK, K::Unit>>;
     type Table<'txn, 'c> = IndexTable<'txn, 'c, K, V>;
     type ReadOnlyTable = ReadOnlyIndexTable<K, V>;

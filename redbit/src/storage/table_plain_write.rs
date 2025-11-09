@@ -1,13 +1,13 @@
-use crate::storage::async_boundary::{CopyOwnedValue, ValueBuf, ValueOwned};
+use crate::storage::async_boundary::{ValueBuf, ValueOwned};
 use crate::storage::table_writer_api::WriteTableLike;
-use crate::AppError;
+use crate::{AppError, DbKey};
 use redb::*;
 use redb::Key;
 use std::borrow::Borrow;
 use std::ops::RangeBounds;
 use crate::storage::table_plain::PlainTable;
 
-impl<'txn, K: CopyOwnedValue + 'static, V: Key + 'static> WriteTableLike<K, V> for PlainTable<'txn, K, V> {
+impl<'txn, K: DbKey, V: Key + 'static> WriteTableLike<K, V> for PlainTable<'txn, K, V> {
     fn insert_kv<'k, 'v>(&mut self, key: impl Borrow<K::SelfType<'k>>, value: impl Borrow<V::SelfType<'v>>) -> Result<(), AppError>  {
         self.table.insert(key, value)?;
         Ok(())

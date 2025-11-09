@@ -2,7 +2,7 @@ use super::cardano_client::{CardanoCBOR, CardanoClient};
 use crate::model_v1::*;
 use crate::{AssetType, CardanoConfig, ExplorerError};
 use async_trait::async_trait;
-use chain::api::{BlockProvider, ChainError};
+use chain::api::BlockProvider;
 use chain::monitor::BoxWeight;
 use chain::settings::AppConfig;
 use chain::size_batcher::SizeBatcher;
@@ -16,6 +16,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
+use chain::err::ChainError;
 
 pub struct CardanoBlockProvider {
     client: CardanoClient,

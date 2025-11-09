@@ -1,7 +1,7 @@
 use redb::{Key, Value};
 use std::borrow::Borrow;
 use xxhash_rust::xxh3::{xxh3_64};
-
+use crate::{DbKey, DbVal};
 /*
 use wyhash::wyhash;
 
@@ -41,7 +41,7 @@ impl Partitioning<BytesPartitioner, Xxh3Partitioner> {
     }
 }
 
-pub trait ValuePartitioner<V: Key + 'static + Borrow<V::SelfType<'static>>> {
+pub trait ValuePartitioner<V: DbVal>: Clone + Send + Sync + 'static {
     fn partition_value<'v>(&self, value: impl Borrow<V::SelfType<'v>>) -> usize;
 }
 
@@ -62,10 +62,7 @@ impl Xxh3Partitioner {
     }
 }
 
-impl<V> ValuePartitioner<V> for Xxh3Partitioner
-where
-    V: Key + 'static + Borrow<V::SelfType<'static>>,
-{
+impl<V: DbVal> ValuePartitioner<V> for Xxh3Partitioner {
     #[inline]
     fn partition_value<'v>(&self, value: impl Borrow<V::SelfType<'v>>) -> usize {
         let bytes_view = <V as Value>::as_bytes(value.borrow());
@@ -74,7 +71,7 @@ where
 }
 
 // ---------- Partitioning trait ----------
-pub trait KeyPartitioner<K: Key + 'static + Borrow<K::SelfType<'static>>> {
+pub trait KeyPartitioner<K: DbKey>: Clone + Send + Sync + 'static {
     fn partition_key<'k>(&self, key: impl Borrow<K::SelfType<'k>>) -> usize;
 }
 
@@ -94,10 +91,7 @@ impl BytesPartitioner {
     }
 }
 
-impl<K> KeyPartitioner<K> for BytesPartitioner
-where
-    K: Key + 'static + Borrow<K::SelfType<'static>>,
-{
+impl<K: DbKey> KeyPartitioner<K> for BytesPartitioner {
     #[inline]
     fn partition_key<'k>(&self, key: impl Borrow<K::SelfType<'k>>) -> usize {
         partition_key_redb::<K>(self.0, key.borrow())
@@ -140,10 +134,9 @@ fn le_mod_fold_chunk(m: u128, pow: &mut u128, acc: &mut u128, chunk: &[u8]) {
 
 #[cfg(all(test, not(feature = "integration")))]
 mod tests {
+    use crate::storage::test_utils;
+    use crate::storage::test_utils::TxHash;
     use super::*;
-    use redb::{TypeName, Value};
-    use std::borrow::Cow;
-    use std::cmp::Ordering;
 
     #[inline]
     fn manual_reduce_le(bytes: &[u8], n: usize) -> usize {
@@ -168,22 +161,6 @@ mod tests {
         out
     }
 
-    // ---- mock redb::Key types ----
-
-    #[derive(Clone, Debug, PartialEq, Eq)]
-    struct BorrowKey(Vec<u8>);
-    impl Value for BorrowKey {
-        type SelfType<'a> = BorrowKey where Self: 'a;
-        type AsBytes<'a> = Cow<'a, [u8]> where Self: 'a;
-        fn fixed_width() -> Option<usize> { None }
-        fn from_bytes<'a>(data: &'a [u8]) -> Self::SelfType<'a> where Self: 'a { BorrowKey(data.to_vec()) }
-        fn as_bytes<'a, 'b: 'a>(value: &'a Self::SelfType<'b>) -> Self::AsBytes<'a> where Self: 'b { Cow::Borrowed(&value.0) }
-        fn type_name() -> TypeName { TypeName::new("BorrowKey") }
-    }
-    impl Key for BorrowKey { fn compare(a: &[u8], b: &[u8]) -> Ordering { a.cmp(b) } }
-
-    // ---- tests ----
-
     #[test]
     fn bytes_partition_in_range_and_deterministic() {
         for &n in &[1usize, 3, 6, 8, 17, 32] {
@@ -206,13 +183,15 @@ mod tests {
             for len in [0usize, 2, 7, 19, 64] {
                 let b = make_bytes(len, 123);
 
-                let kb = BorrowKey(b.clone());
+                let kb = test_utils::txh(&b);
+                let kb_bytes: &[u8] = &kb.0;
 
-                // function form: pass borrow of SelfType<'_>
-                assert_eq!(partition_key_redb::<BorrowKey>(n, &kb), partition_bytes_le(n, &b));
+                assert_eq!(partition_key_redb::<TxHash>(n, &kb), partition_bytes_le(n, kb_bytes));
 
-                // trait form: accepts impl Borrow<SelfType<'_>>
-                assert_eq!(<BytesPartitioner as KeyPartitioner<BorrowKey>>::partition_key(&p, kb.borrow()), p.partition_bytes(&b));
+                assert_eq!(
+                    <BytesPartitioner as KeyPartitioner<TxHash>>::partition_key(&p, kb.borrow()),
+                    p.partition_bytes(kb_bytes)
+                );
             }
         }
     }
@@ -223,11 +202,12 @@ mod tests {
         let p = BytesPartitioner::new(n);
         for len in [0usize, 1, 2, 31, 128] {
             let b = make_bytes(len, 555);
-            let kb = BorrowKey(b.clone());
-            assert_eq!(partition_bytes_le(n, &b), 0);
-            assert_eq!(partition_key_redb::<BorrowKey>(n, &kb), 0);
+            let kb = test_utils::txh(&b);
+            let kb_bytes: &[u8] = &kb.0;
+            assert_eq!(partition_bytes_le(n, kb_bytes), 0);
+            assert_eq!(partition_key_redb::<TxHash>(n, &kb), 0);
             assert_eq!(p.partition_bytes(&b), 0);
-            assert_eq!(<BytesPartitioner as KeyPartitioner<BorrowKey>>::partition_key(&p, kb.borrow()), 0);
+            assert_eq!(<BytesPartitioner as KeyPartitioner<TxHash>>::partition_key(&p, kb.borrow()), 0);
         }
     }
 
@@ -242,14 +222,16 @@ mod tests {
 
                 assert_eq!(partition_bytes_le(n, &base), partition_bytes_le(n, &alt));
 
-                let kb = BorrowKey(base.clone());
-                let ka = BorrowKey(alt.clone());
-                assert_eq!(partition_key_redb::<BorrowKey>(n, &kb), partition_key_redb::<BorrowKey>(n, &ka));
-                assert_eq!(partition_key_redb::<BorrowKey>(n, &kb), partition_bytes_le(n, &base));
+                let kb = test_utils::txh(&base);
+                let ka = test_utils::txh(&alt);
+                let kb_bytes: &[u8] = &kb.0;
+                let ka_bytes: &[u8] = &ka.0;
+                assert_eq!(partition_key_redb::<TxHash>(n, &kb), partition_key_redb::<TxHash>(n, &ka));
+                assert_eq!(partition_key_redb::<TxHash>(n, &kb), partition_bytes_le(n, kb_bytes));
 
                 let only_lowk = |bytes: &[u8]| manual_reduce_le(&bytes[..k as usize], n);
-                assert_eq!(partition_bytes_le(n, &base), only_lowk(&base));
-                assert_eq!(partition_bytes_le(n, &alt),  only_lowk(&alt));
+                assert_eq!(partition_bytes_le(n, kb_bytes), only_lowk(kb_bytes));
+                assert_eq!(partition_bytes_le(n, ka_bytes),  only_lowk(ka_bytes));
             }
         }
     }
@@ -289,21 +271,23 @@ mod tests {
         for &n in &[3usize, 5, 7, 8, 17, 32, 64] {
             assert_eq!(partition_bytes_le(n, &data), manual_reduce_le(&data, n));
         }
-        let kb = BorrowKey(data.clone());
+        let kb = test_utils::txh(&data);
+        let kb_bytes: &[u8] = &kb.0;
         for &n in &[7usize, 16, 31, 64] {
-            assert_eq!(partition_key_redb::<BorrowKey>(n, &kb), partition_bytes_le(n, &data));
+            assert_eq!(partition_key_redb::<TxHash>(n, &kb), partition_bytes_le(n, kb_bytes));
         }
     }
 
     #[test]
     fn empty_bytes_are_supported() {
-        let empty: [u8; 0] = [];
+        let empty: &[u8] = &[];
         for &n in &[1usize, 2, 8, 13] {
-            assert_eq!(partition_bytes_le(n, &empty), manual_reduce_le(&empty, n));
+            assert_eq!(partition_bytes_le(n, empty), manual_reduce_le(empty, n));
         }
-        let kb = BorrowKey(empty.to_vec());
+        let kb = test_utils::txh(empty);
+        let kb_bytes: &[u8] = &kb.0;
         for &n in &[2usize, 8, 13] {
-            assert_eq!(partition_key_redb::<BorrowKey>(n, &kb), manual_reduce_le(&empty, n));
+            assert_eq!(partition_key_redb::<TxHash>(n, &kb), manual_reduce_le(kb_bytes, n));
         }
     }
 }
