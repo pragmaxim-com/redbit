@@ -247,7 +247,7 @@ pub struct FlushState {
     pub shards: Option<usize>
 }
 
-pub enum WriterCommand<K: CopyOwnedValue + Send + 'static, V: Key + Send + 'static> {
+pub enum WriterCommand<K: CopyOwnedValue, V: Key> {
     Begin(Sender<Result<(), AppError>>, Durability),
     WriteSortedInsertsOnFlush(Vec<(K, V)>),
     WriteInsertNow(K, V),
@@ -316,9 +316,9 @@ pub struct RedbitTableDefinition<K, V, F, KP, VP>
 where
     K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
     V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
-    F: ReadTableFactory<K, V, KP, VP> + Send + Clone + 'static,
-    KP: KeyPartitioner<K> + Sync + Send + Clone + 'static,
-    VP: ValuePartitioner<V> + Sync + Send + Clone + 'static,
+    F: TableFactory<K, V> + Send + 'static,
+    KP: KeyPartitioner<K>,
+    VP: ValuePartitioner<V>,
 {
     root_pk: bool,
     partitioning: Partitioning<KP, VP>,

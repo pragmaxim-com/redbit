@@ -29,9 +29,9 @@ pub struct ShardedTableWriter<
 impl<
     K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
     V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
-    F: TableFactory<K, V> + Send + Clone + 'static,
-    KP: KeyPartitioner<K> + Sync + Send + Clone + 'static,
-    VP: ValuePartitioner<V> + Sync + Send + Clone + 'static,
+    F: TableFactory<K, V>,
+    KP: KeyPartitioner<K>,
+    VP: ValuePartitioner<V>,
 > ShardedTableWriter<K,V,F,KP,VP> {
     pub fn new(root_pk: bool, shards: Vec<TxFSM<K, V, F>>, router: Arc<dyn Router<K, V>>, deferred: AtomicBool) -> Result<Self, AppError> {
         Ok(Self { root_pk, router, deferred, shards, sync_buf: RefCell::new(Vec::new()), _pd: PhantomData })
@@ -42,9 +42,9 @@ impl<K,V,F,KP,VP> WriteComponentRef for ShardedTableWriter<K,V,F,KP,VP>
 where
     K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
     V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
-    F: TableFactory<K,V> + Send + Clone + 'static,
-    KP: KeyPartitioner<K> + Sync + Send + Clone + 'static,
-    VP: ValuePartitioner<V> + Sync + Send + Clone + 'static,
+    F: TableFactory<K, V> + Send + 'static,
+    KP: KeyPartitioner<K>,
+    VP: ValuePartitioner<V>,
 {
     fn begin_async_ref(&self, d: Durability) -> redb::Result<Vec<StartFuture>, AppError> {
         self.begin_async(d)
@@ -59,9 +59,9 @@ impl<K, V, F, KP, VP> WriterLike<K, V> for ShardedTableWriter<K, V, F, KP, VP>
 where
     K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
     V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
-    F: TableFactory<K, V> + Send + Clone + 'static,
-    KP: KeyPartitioner<K> + Sync + Send + Clone + 'static,
-    VP: ValuePartitioner<V> + Sync + Send + Clone + 'static,
+    F: TableFactory<K, V> + Send + 'static,
+    KP: KeyPartitioner<K>,
+    VP: ValuePartitioner<V>,
 {
 
     fn acquire_router(&self) -> Arc<dyn Router<K, V>> {

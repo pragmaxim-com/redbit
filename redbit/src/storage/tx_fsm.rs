@@ -157,7 +157,7 @@ impl<K, V, F> TxFSM<K, V, F>
 where
     K: CopyOwnedValue + Send + 'static + Borrow<K::SelfType<'static>>,
     V: Key + Send + 'static + Borrow<V::SelfType<'static>>,
-    F: TableFactory<K, V> + Send + Clone + 'static,
+    F: TableFactory<K, V> + Send + 'static,
 {
     pub fn new(db_weak: Weak<Database>, factory: F) -> Result<Self, AppError> {
         let (topic, receiver): (Sender<WriterCommand<K, V>>, Receiver<WriterCommand<K, V>>) = unbounded();
