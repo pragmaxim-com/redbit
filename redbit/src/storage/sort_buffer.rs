@@ -940,14 +940,9 @@ mod tests {
 #[cfg(all(test, feature = "bench"))]
 mod bench {
     extern crate test;
-
-    use crate::impl_copy_owned_value_identity;
-    use crate::storage::async_boundary::DbKey;
     use crate::storage::sort_buffer::MergeBuffer;
     use crate::storage::test_utils::TxHash;
     use test::Bencher;
-
-    impl_copy_owned_value_identity!(TxHash);
 
     // =========================
     // Bench configuration knobs

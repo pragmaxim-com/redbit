@@ -9,6 +9,7 @@ pub mod utils;
 pub mod error;
 pub mod rest;
 pub mod codec;
+mod macro_rules;
 
 pub use axum;
 pub use axum::body::Body;
@@ -91,7 +92,7 @@ pub use utoipa_axum;
 pub use utoipa_axum::router::OpenApiRouter;
 pub use utoipa_swagger_ui;
 
-use std::borrow::Borrow;
+use std::borrow::{Borrow, Cow};
 use std::hash::Hash;
 use std::ops::Add;
 
@@ -188,46 +189,6 @@ macro_rules! impl_sampleable_for_primitive {
 
 impl_sampleable_for_primitive!(u8, u16, u32, u64, usize, i8, i16, i32, i64, isize);
 
-#[macro_export]
-macro_rules! impl_copy_owned_value_identity {
-        ($t:ty) => {
-            impl DbKey for $t
-            where
-                <$t as redb::Value>::SelfType<'static>: Copy + Send + 'static,
-            {
-                type Unit = <$t as redb::Value>::SelfType<'static>;
-                #[inline]
-                fn to_unit<'a>(v: <$t as redb::Value>::SelfType<'a>) -> Self::Unit
-                where
-                    Self: 'a,
-                {
-                    v
-                }
-                #[inline]
-                fn from_unit<'a>(u: Self::Unit) -> <$t as redb::Value>::SelfType<'a>
-                where
-                    Self: 'a,
-                {
-                    u
-                }
-                #[inline]
-                fn to_unit_ref<'a>(v: &<$t as redb::Value>::SelfType<'a>) -> Self::Unit
-                where
-                    Self: 'a,
-                {
-                    *v
-                }
-                #[inline]
-                fn as_value_from_unit<'a>(u: &'a Self::Unit) -> <$t as redb::Value>::SelfType<'a>
-                where
-                    Self: 'a,
-                {
-                    *u
-                }
-            }
-        };
-    }
-
 pub trait UrlEncoded {
     fn url_encode(&self) -> String;
 }
@@ -278,6 +239,9 @@ where for<'a> Self: Borrow<<Self as Value>::SelfType<'a>>,
 pub trait BinaryCodec {
     fn from_le_bytes(bytes: &[u8]) -> Self;
     fn as_le_bytes(&self) -> Vec<u8>;
+    fn as_le_bytes_cow(&self) -> Cow<'_, [u8]> {
+        Cow::Owned(self.as_le_bytes())
+    }
     fn size() -> usize;
 }
 
