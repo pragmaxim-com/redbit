@@ -171,14 +171,14 @@ jobs:
             }
             /<!-- END_BENCH -->/ { print; in_bench = 0; next }
             !in_bench { print }
-          ' README.md > README.md.tmp && mv README.md.tmp README.md
+          ' chains/README.md > chains/README.md.tmp && mv chains/README.md.tmp chains/README.md
 
       - name: Commit benchmark results to README
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions@users.noreply.github.com"
-          git diff --quiet || (git add README.md && git commit -m "Auto-update README with example code" && git push)
+          git diff --quiet || (git add chains/README.md && git commit -m "Auto-update README with example code" && git push)
 
   deploy:
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
