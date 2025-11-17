@@ -45,8 +45,8 @@ pub fn generate_column_impls(
             struct_attr = Some(syn::parse_quote! { #[serde_as(as = #binary_encoding_literal)] });
             url_encoded_code = quote! { serde_json::to_string(&self).unwrap().trim_matches('"').to_string() };
             extra_derive_impls.push(syn::parse_quote!(Copy));
-            custom_db_codec = emit_newtype_byte_array_impls(new_type, len);
-            cache_key_codec = emit_cachekey_byte_array_impls(new_type, len);
+            custom_db_codec = quote! { impl_redb_newtype_array!(#new_type, #len); };
+            cache_key_codec = quote! { impl_cachekey_array!(#new_type, #len); };
             iterable_code = quote! {
                 let mut arr = self.0;
                 redbit::utils::inc_le(&mut arr);
@@ -66,8 +66,8 @@ pub fn generate_column_impls(
             default_code = quote! { Self(<#ty as ByteVecColumnSerde>::decoded_example()) };
             struct_attr = Some(syn::parse_quote! { #[serde_as(as = #binary_encoding_literal)] });
             url_encoded_code = quote! { serde_json::to_string(&self).unwrap().trim_matches('"').to_string() };
-            custom_db_codec = emit_newtype_byte_vec_impls(new_type);
-            cache_key_codec = emit_cachekey_byte_vec_impls(new_type);
+            custom_db_codec =  quote ! { impl_redb_newtype_vec!(#new_type); };
+            cache_key_codec = quote! { impl_cachekey_vec!(#new_type); };
             iterable_code = quote! {
                 Self(<#ty as ByteVecColumnSerde>::next_value(&self.0))
             };
@@ -179,21 +179,8 @@ pub fn generate_column_impls(
                 #iterable_code
             }
         }
-
-        impl PartialSchema for #struct_ident {
-            fn schema() -> openapi::RefOr<Schema> {
-                rest::schema(#schema_type, #schema_example, None)
-            }
-        }
-
-        impl utoipa::ToSchema for #struct_ident {
-            fn schemas(schemas: &mut Vec<(String, openapi::RefOr<Schema>)>) {
-                schemas.push((
-                    stringify!(#struct_ident).to_string(),
-                    <#struct_ident as PartialSchema>::schema()
-                ));
-            }
-        }
+        impl_utoipa_partial_schema!(#struct_ident, #schema_type, #schema_example, None);
+        impl_utoipa_to_schema!(#struct_ident);
     };
 
     (impls, struct_attr, extra_derive_impls)

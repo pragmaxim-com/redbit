@@ -1,4 +1,3 @@
-use crate::column::column_codec;
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::{parse_str, Field, Type};
@@ -9,83 +8,12 @@ pub fn new(struct_name: &Ident, parent_field: Field, index_field: Field) -> Toke
     let index_name = &index_field.ident;
     let index_type = &index_field.ty;
     let struct_type: Type = parse_str(&format!("{}", struct_name)).expect("Invalid Struct type");
-    let custom_db_codec = column_codec::emit_pointer_redb_impls(&struct_type);
-    let cache_key_codec = column_codec::emit_cachekey_pointer_binarycodec_impls(&struct_type);
     quote! {
-        #custom_db_codec
-        #cache_key_codec
-        impl IndexedPointer for #struct_name {
-            type Index = #index_type;
-            fn index(&self) -> Self::Index { self.#index_name }
-            fn next_index(&self) -> Self { #struct_name { #parent_name: self.#parent_name.clone(), #index_name: self.#index_name + 1 } }
-            fn nth_index(&self, n: usize) -> Self { #struct_name { #parent_name: self.#parent_name.clone(), #index_name: self.#index_name + n as #index_type} }
-            fn rollback_or_init(&self, n: u32) -> Self {
-                #struct_name { #parent_name: self.#parent_name.rollback_or_init(n), #index_name: 0 }
-            }
-        }
-        impl ChildPointer for #struct_name {
-            type Parent = #parent_type;
-            fn is_pointer(&self) -> bool { true }
-            fn parent(&self) -> Self::Parent { self.#parent_name }
-            fn from_parent(#parent_name: Self::Parent, #index_name: #index_type) -> Self { #struct_name { #parent_name, #index_name } }
-            fn total_index(&self) -> u128 {
-                let parent_total = self.parent().total_index();
-                let idx: u128 = self.index().into();
-                parent_total * 3 + idx
-            }
-            fn depth(&self) -> usize {
-                1 + self.parent().depth()
-            }
-        }
-
-        impl BinaryCodec for #struct_name {
-            fn from_le_bytes(bytes: &[u8]) -> Self {
-                let parent_size = <#parent_type as BinaryCodec>::size();
-                let index_size = std::mem::size_of::<#index_type>();
-                assert_eq!(bytes.len(), parent_size + index_size, "invalid byte length for child pointer");
-                let (parent_bytes, index_bytes) = bytes.split_at(parent_size);
-                let parent = <#parent_type as BinaryCodec>::from_le_bytes(parent_bytes);
-                let index_arr: [u8; std::mem::size_of::<#index_type>()] = index_bytes.try_into().unwrap();
-                let index = <#index_type>::from_le_bytes(index_arr);
-                #struct_name { #parent_name: parent, #index_name: index }
-            }
-            fn as_le_bytes(&self) -> Vec<u8> {
-                let mut buf = self.#parent_name.as_le_bytes();
-                buf.extend_from_slice(&self.#index_name.to_le_bytes());
-                buf
-            }
-            fn size() -> usize {
-                <#parent_type as BinaryCodec>::size() + std::mem::size_of::<#index_type>()
-            }
-        }
-
-        impl_copy_owned_value_identity!(#struct_name);
-        
         impl Into<String> for #struct_name {
             fn into(self) -> String {
                 self.url_encode()
             }
         }
-
-        impl TryFrom<String> for #struct_name {
-            type Error = ParsePointerError;
-            fn try_from(s: String) -> Result<Self, Self::Error> {
-                let mut parts = s.rsplitn(2, '-');
-                let idx_str    = parts.next().ok_or(ParsePointerError::Format)?;
-                let parent_str = parts.next().ok_or(ParsePointerError::Format)?;
-                let parent     = parent_str.parse::<#parent_type>()?;
-                let idx        = idx_str.parse::<#index_type>()?;
-                Ok(#struct_name { #parent_name: parent, #index_name: idx })
-            }
-        }
-
-        impl core::str::FromStr for #struct_name {
-            type Err = ParsePointerError;
-            fn from_str(s: &str) -> Result<Self, Self::Err> {
-                Self::try_from(s.to_string())
-            }
-        }
-
         impl UrlEncoded for #struct_name {
             fn url_encode(&self) -> String {
                 format!("{}-{}", self.#parent_name.url_encode(), self.#index_name)
@@ -97,18 +25,19 @@ pub fn new(struct_name: &Ident, parent_field: Field, index_field: Field) -> Toke
                 self.next_index()
             }
         }
-
-        impl PartialSchema for #struct_name {
-            fn schema() -> openapi::RefOr<Schema> {
-                rest::schema(SchemaType::Type(Type::String), vec![Self::default().url_encode()], Some(ExtensionsBuilder::new().add("key", "fk").build()))
-            }
-        }
-
-        impl ToSchema for #struct_name {
-            fn schemas(schemas: &mut Vec<(String, openapi::RefOr<openapi::schema::Schema>)>) {
-                schemas.push((stringify!(#struct_name).to_string(), <#struct_name as PartialSchema>::schema()));
-                <#parent_type as ToSchema>::schemas(schemas);
-            }
-        }
+        impl_redb_newtype_binary!(#struct_type);
+        impl_cachekey_binary!(#struct_type);
+        impl_indexed_pointer!(#struct_name, #index_type, #parent_name, #index_name);
+        impl_child_pointer!(#struct_name, #parent_type, #parent_name, #index_type, #index_name);
+        impl_binary_codec!(#struct_name, #parent_type, #index_type, #parent_name, #index_name);
+        impl_copy_owned_value_identity!(#struct_name);
+        impl_tryfrom_pointer!(#struct_name, #parent_type, #parent_name, #index_type, #index_name);
+        impl_utoipa_partial_schema!(
+            #struct_name,
+            SchemaType::Type(Type::String),
+            vec![Self::default().url_encode()],
+            Some(ExtensionsBuilder::new().add("key", "fk").build())
+        );
+        impl_utoipa_to_schema!(#struct_name, #parent_type);
     }
 }
