@@ -22,6 +22,7 @@ members = [
     "chains/btc",
     "chains/cardano",
     "chains/ergo",
+    "chains/ltc",
 ]
 default-members = ["macros", "redbit", "chain"]
 

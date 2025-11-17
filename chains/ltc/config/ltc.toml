@@ -1,0 +1,2 @@
+api_host = "http://127.0.0.1:9332"
+fetching_parallelism = "high"   # low / mild / high
