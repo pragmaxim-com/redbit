@@ -55,6 +55,7 @@ jobs:
         run: |
           cargo test --package demo --features integration,ci
           cargo test --package btc --features integration,ci
+          cargo test --package ltc --features integration,ci
           cargo test --package cardano --features integration,ci
           cargo test --package ergo --features integration,ci
 
@@ -78,6 +79,7 @@ jobs:
         run: |
           RUST_LOG=error cargo bench -q --package demo --bench demo_benchmark -- --quiet
           RUST_LOG=error cargo bench -q --package btc --bench btc_benchmark  -- --quiet
+          RUST_LOG=error cargo bench -q --package ltc --bench ltc_benchmark  -- --quiet
           RUST_LOG=error cargo bench -q --package cardano --bench cardano_benchmark -- --quiet
           RUST_LOG=error cargo bench -q --package ergo --bench ergo_benchmark  -- --quiet
 

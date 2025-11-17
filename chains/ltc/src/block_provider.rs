@@ -32,15 +32,55 @@ impl LtcBlockProvider {
         Ok(Arc::new(LtcBlockProvider { client, block_stream }))
     }
 
-    // Optional helper only used in benches/tests; disable to avoid serde bounds on bitcoin::Block.
-    // #[allow(dead_code)]
-    // pub fn block_from_file(size: &str, height: u32, tx_count: usize) -> (bitcoin::Block, LtcCBOR) {
-    //     info!("Getting {} block with {} txs", size, tx_count);
-    //     let path = format!("blocks/{}_block.json", size);
-    //     let file_content = fs::read_to_string(path).expect("Failed to read block file");
-    //     let block: bitcoin::Block = serde_json::from_str(&file_content).expect("Failed to deserialize block from JSON");
-    //     (block.clone(), LtcCBOR { height: Height(height), raw: bitcoin::consensus::encode::serialize(&block) })
-    // }
+    // Helper used in benches/tests to load canned blocks from JSON (same format as BTC benches)
+    #[allow(dead_code)]
+    pub fn block_from_file(size: &str, height: u32, tx_count: usize) -> (bitcoin::Block, LtcCBOR) {
+        use bitcoin::Block;
+        use bitcoin::block::Header as BlockHeader;
+        use bitcoin::CompactTarget;
+        use std::str::FromStr;
+
+        info!("Getting {} block with {} txs", size, tx_count);
+        let path = format!("blocks/{}_block.json", size);
+        let file_content = fs::read_to_string(path).expect("Failed to read block file");
+        let v: serde_json::Value = serde_json::from_str(&file_content).expect("Failed to parse JSON");
+
+        // Parse header fields from Litecoin Core-like JSON
+        let version = v["version"].as_i64().unwrap() as i32;
+        let prev_hash_s = v["previousblockhash"].as_str().unwrap();
+        let merkle_root_s = v["merkleroot"].as_str().unwrap();
+        let time = v["time"].as_u64().unwrap() as u32;
+        let bits_hex = v["bits"].as_str().unwrap();
+        let bits = u32::from_str_radix(bits_hex, 16).expect("invalid bits");
+        let nonce = v["nonce"].as_u64().unwrap() as u32;
+
+        let prev_hash = bitcoin::BlockHash::from_str(prev_hash_s).expect("invalid prev hash");
+        let merkle_root = bitcoin::hash_types::TxMerkleNode::from_str(merkle_root_s).expect("invalid merkle root");
+
+        let header = BlockHeader {
+            version: bitcoin::block::Version::from_consensus(version),
+            prev_blockhash: prev_hash,
+            merkle_root,
+            time,
+            bits: CompactTarget::from_consensus(bits),
+            nonce,
+        };
+
+        // Transactions: each entry contains a hex-encoded tx
+        let mut txs = Vec::new();
+        if let Some(arr) = v["tx"].as_array() {
+            for txv in arr {
+                let tx_hex = txv["hex"].as_str().expect("missing tx hex");
+                let tx_bytes = hex::decode(tx_hex).expect("invalid tx hex");
+                let tx: bitcoin::Transaction = bitcoin::consensus::encode::deserialize(&tx_bytes).expect("tx deser");
+                txs.push(tx);
+            }
+        }
+
+        let block = Block { header, txdata: txs };
+        let raw = bitcoin::consensus::encode::serialize(&block);
+        (block.clone(), LtcCBOR { height: Height(height), raw })
+    }
 
     pub fn process_block_pure(cbor: &LtcCBOR) -> Result<Block, ChainError> {
         let block: bitcoin::Block = bitcoin::consensus::encode::deserialize(&cbor.raw).map_err(|e| ChainError::new(&format!("Failed to deser CBOR: {}", e)))?;
