@@ -18,6 +18,9 @@ path = "src/main.rs"
 [lib]
 doctest = false
 
+[[bench]]
+name = "ltc_benchmark"
+harness = false
 
 [dev-dependencies]
 criterion = { version = "0.7.0", features = ["async_tokio", "html_reports"] }
