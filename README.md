@@ -342,7 +342,10 @@ to avoid benchmarking our SSD by random-access writes, ie. to rapidly reduce wri
     - redbit macro derives the exact R/W code for the user commands so the only overhead is either :
         - serialization of value to bytes
         - handing a reference to redb in case we use `Vec<u8>` or `&[u8]` directly
-    - we write by many threads (CPU gen get fully utilized) and the dispatching thread would otherwise become a bottleneck
+    - we sort/write by many threads (CPU gen get fully utilized) and the dispatching thread would otherwise become a bottleneck. 
+      If we want both : to abstract over a system (like ANY utxo blockchain) AND write `300 000 rows/s`,
+      than code generation to inline hot paths and remove the abstraction overhead like dynamic dispatching through traits, is the way to go,
+      it is just a loop through `300 000 elements/s` to serialize and passing it to a sorting & writing thread queue. 
 
 So, I find model driven development with code generation a great fit for Rust and blockchains. It performs very well unless we generate 50k lines of code
 which would be the case of deeply nested entities with many indexes and dictionaries.
