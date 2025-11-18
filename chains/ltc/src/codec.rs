@@ -1,4 +1,4 @@
-use bech32::{Fe32, hrp, segwit};
+use bech32::{hrp, segwit, Fe32};
 use bitcoin::WitnessVersion;
 use redbit::ByteVecColumnSerde;
 use serde::{Deserialize, Deserializer, Serializer};
@@ -251,10 +251,6 @@ mod tests {
     #[serde_as]
     #[derive(Debug, PartialEq, Serialize, Deserialize)]
     struct Base58Wrap(#[serde_as(as = "Base58")] Vec<u8>);
-
-    #[serde_as]
-    #[derive(Debug, PartialEq, Serialize, Deserialize)]
-    struct Bech32Wrap(#[serde_as(as = "Bech32")] Vec<u8>);
 
     #[serde_as]
     #[derive(Debug, PartialEq, Serialize, Deserialize)]
