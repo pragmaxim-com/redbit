@@ -1,5 +1,4 @@
-use bech32::{hrp, segwit, Fe32};
-use bitcoin::WitnessVersion;
+use bech32::{hrp, segwit};
 use redbit::ByteVecColumnSerde;
 use serde::{Deserialize, Deserializer, Serializer};
 use serde_with::{DeserializeAs, SerializeAs};
@@ -162,12 +161,18 @@ fn encode_tagged_segwit<S: Serializer>(src: &[u8], ser: S) -> Result<S::Ok, S::E
     // src = [TAG_SEGWIT, ver, program]
     let ver = src[1];
     let prog = &src[2..];
-    if ver > 16 { return Err(serde::ser::Error::custom("invalid segwit version")); }
-    if prog.len() != 20 && prog.len() != 32 { return Err(serde::ser::Error::custom("invalid segwit program length")); }
-    let wv = WitnessVersion::try_from(ver)
-        .map_err(|e| serde::ser::Error::custom(format!("WitnessVersion error: {e}")))?;
+    if prog.len() != 20 && prog.len() != 32 {
+        return Err(serde::ser::Error::custom("invalid segwit program length"));
+    }
+    // Map our stored numeric version to bech32::segwit Version.
+    // We explicitly support v0 and v1 for now; others can be added if needed.
+    let version = match ver {
+        0 => segwit::VERSION_0,
+        1 => segwit::VERSION_1,
+        _ => return Err(serde::ser::Error::custom(format!("unsupported segwit version {ver}"))),
+    };
     // HRP: "ltc"
-    let enc = segwit::encode(hrp::Hrp::parse_unchecked("ltc"), Fe32::from(wv), prog)
+    let enc = segwit::encode(hrp::Hrp::parse_unchecked("ltc"), version, prog)
         .map_err(|e| serde::ser::Error::custom(format!("Bech32 encode error: {e}")))?;
     ser.serialize_str(&enc)
 }
