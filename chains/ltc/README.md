@@ -1,5 +1,8 @@
 ### Litecoin
 
+Note that current version fails on processing blocks since MWEB activation which would require patching the litcoin crate.
+It fails right at the start because chain indexer processes the tip block header. 
+
 Download Litecoin Node:
 ```
 wget https://download.litecoin.org/litecoin-0.21.4/linux/litecoin-0.21.4-x86_64-linux-gnu.tar.gz
