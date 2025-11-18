@@ -1,0 +1,53 @@
+[package]
+edition = "2024"
+name = "bch"
+version.workspace = true
+
+[features]
+default = ["chain"]
+integration = []
+bench = []
+ci = []
+chain = ["redbit/chain"]
+tracing = ["chain/tracing"]
+
+[[bin]]
+name = "bch"
+path = "src/main.rs"
+
+[lib]
+doctest = false
+
+[dev-dependencies]
+criterion = { version = "0.7.0", features = ["async_tokio", "html_reports"] }
+axum-test = "17.3.0"
+
+[[bench]]
+name = "bch_benchmark"
+harness = false
+
+[dependencies]
+redbit = { path = "../../redbit" }
+chain = { path = "../../chain" }
+tokio = { version = "1.45.1", features = ["full", "tracing"] }
+tokio-stream = { version = "0.1.17", features = ["sync"] }
+tokio-util = "0.7.16"
+config = "0.15.11"
+bitcoin = "0.32.0"
+async-trait = "0.1.81"
+futures = "0.3.30"
+serde = { version = "1.0.219", features = ["derive"] }
+bs58 = { version = "0.5", features = ["check"] }
+axum = {  version = "0.8.4", features = ["default", "macros"] }
+thiserror = "2.0.12"
+chrono = "0.4.38"
+anyhow = "1.0.80"
+bincode = "2.0.1"
+serde_with = {  version = "3.14.0", features = ["hex", "chrono_0_4", "base64", "time_0_3"] }
+serde_json = "1.0.142"
+hex = "0.4.3"
+reqwest = { version = "0.12.23", default-features = false, features = [
+    "json",
+    "blocking",
+] }
+bitcoincore-rpc = "0.19.0"
