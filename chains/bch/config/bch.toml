@@ -1,4 +1,4 @@
 api_host = "http://127.0.0.1:7332"
 fetching_parallelism = "high"   # low / mild / high
-rpc_user = ""
+rpc_user = "" # change this either in .env file or export is as env var
 rpc_password = ""
