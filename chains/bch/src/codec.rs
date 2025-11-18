@@ -77,7 +77,9 @@ impl ByteVecColumnSerde for BaseOrBech {
     }
 }
 
+// Special tag indicating an OP_RETURN output (used for data-carrying outputs in Bitcoin Cash).
 pub const TAG_OP_RETURN: u8 = 0xF0;
+// Special tag indicating a non-address (reserved value, 0xFF is outside valid address version range).
 pub const TAG_NON_ADDR: u8 = 0xFF;
 
 fn base58_serialize<S: Serializer>(src: &[u8], ser: S) -> Result<S::Ok, S::Error> {

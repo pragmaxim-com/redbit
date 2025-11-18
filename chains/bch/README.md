@@ -1,4 +1,4 @@
-### Bitcoin Cache
+### Bitcoin Cash
 
 Download Bitcoin Cash Node:
 ```
@@ -22,8 +22,8 @@ port=7333
 
 Export RPC credentials :
 ```
-export BITCOINCASH__rpc_user = "foo"
-export BITCOINCASH__rpc_password = "bar"
+export BITCOINCASH__rpc_user="foo"
+export BITCOINCASH__rpc_password="bar"
 ```
 
 Start the node :

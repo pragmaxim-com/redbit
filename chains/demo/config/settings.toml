@@ -2,11 +2,11 @@
 name = "demo"
 db_path = "/tmp/chain"
 enable = true
-node_sync_interval_s = 0        # 0 means only chatching up but no periodic sync
+node_sync_interval_s = 0        # 0 means only catching up but no periodic sync
 fork_detection_heights = 10     # max 255, how many blocks from tip to check for forks
 db_cache_size_gb = "low"        # off / tiny / low / mild / high / ultra
 min_entity_batch_size = 200     # Sum of : inputs + outputs + assets/tokens
-max_entity_buffer_kb_size = 512 # total size of fetched blocks in MB to buffer
+max_entity_buffer_kb_size = 512 # total size of fetched blocks in KB to buffer
 non_durable_batches = 20        # how many batches to commit non-durably before forcing a durable commit
 processing_parallelism = "low"  # off / tiny / low / mild / high / ultra
 validation_from_height = 0
