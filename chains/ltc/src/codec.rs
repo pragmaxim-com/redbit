@@ -223,7 +223,7 @@ impl<'de> DeserializeAs<'de, Vec<u8>> for BaseOrBech {
             }
             let ver = match ver.to_u8() {
                 n if n <= 16 => n as u8,
-                _ => return Err(serde::de::Error::custom("invalid segwit version")),
+                _ => return Err(serde::de::Error::custom("invalid segwit version (expected 0-16)")),
             };
             let mut out = Vec::with_capacity(2 + prog.len());
             out.push(TAG_SEGWIT);

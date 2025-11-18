@@ -126,8 +126,11 @@ impl ByteVecColumnSerde for BaseOrBech {
     }
 }
 
+/// Tag for SegWit (Bech32) addresses. 0xB0 is chosen to distinguish SegWit payloads from legacy types.
 pub const TAG_SEGWIT: u8 = 0xB0;
+/// Tag for OP_RETURN outputs. 0xF0 is used to mark data-carrying outputs (not spendable addresses).
 pub const TAG_OP_RETURN: u8 = 0xF0;
+/// Tag for non-address payloads. 0xFF is reserved to indicate an invalid or non-address type.
 pub const TAG_NON_ADDR: u8 = 0xFF;
 
 

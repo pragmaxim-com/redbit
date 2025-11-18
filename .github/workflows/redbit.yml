@@ -16,7 +16,37 @@ permissions:
   contents: write
 
 jobs:
+  check_skip:
+    runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.check.outputs.skip }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Determine skip token
+        id: check
+        run: |
+          SKIP=false
+
+          # push event: github.event.head_commit.message exists
+          if [ "${{ github.event_name }}" = "push" ]; then
+            MSG="${{ github.event.head_commit.message }}"
+            if echo "$MSG" | grep -qiE '\[skip ci\]|\[ci skip\]'; then
+              SKIP=true
+            fi
+          else
+            MSG=$(git log -1 --pretty=%B)
+            if echo "$MSG" | grep -qiE '\[skip ci\]|\[ci skip\]'; then
+              SKIP=true
+            fi
+          fi
+
   test:
+    needs: check_skip
+    if: ${{ needs.check_skip.outputs.skip != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
