@@ -9,6 +9,9 @@ pub mod utils;
 pub mod error;
 pub mod rest;
 pub mod codec;
+pub mod entity_model;
+pub mod schema;
+pub mod manual_entity;
 mod macro_rules;
 
 pub use axum;
@@ -235,6 +238,12 @@ where for<'a> Self: Borrow<<Self as Value>::SelfType<'a>>,
     where
         Self: 'a;
 }
+
+// Provide DbKey impls for common primitives used in manual runtimes/tests.
+impl_copy_owned_value_identity!(u8);
+impl_copy_owned_value_identity!(u16);
+impl_copy_owned_value_identity!(u32);
+impl_copy_owned_value_identity!(u64);
 
 pub trait BinaryCodec {
     fn from_le_bytes(bytes: &[u8]) -> Self;

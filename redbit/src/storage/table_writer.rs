@@ -31,6 +31,11 @@ impl<K: DbKey + Send, V: DbVal + Send, KP: KeyPartitioner<K>, VP: ValuePartition
     pub fn new(root_pk: bool, shards: Vec<TxFSM<K, V, F>>, router: Arc<dyn Router<K, V>>, deferred: AtomicBool) -> Result<Self, AppError> {
         Ok(Self { root_pk, router, deferred, shards, sync_buf: RefCell::new(Vec::new()), _pd: PhantomData })
     }
+
+    /// For debugging/manual paths: force deferred flag off so subsequent flush uses Flush instead of FlushWhenReady.
+    pub fn clear_deferred(&self) {
+        self.deferred.store(false, Ordering::SeqCst);
+    }
 }
 
 impl<K: DbKey + Send, V: DbVal + Send, KP: KeyPartitioner<K>, VP: ValuePartitioner<V>,F> WriteComponentRef for ShardedTableWriter<K,V,KP,VP,F>

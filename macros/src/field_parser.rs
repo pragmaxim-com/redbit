@@ -396,6 +396,7 @@ fn parse_entity_field(field: &Field) -> syn::Result<ColumnDef> {
                     return if let Some(m) = multiplicity {
                         let field = FieldDef { name: column_name.clone(), tpe: column_type.clone() };
                         let column_props = ColumnProps::for_key(db_cache_weight);
+                        let parent_type = parent_type.or_else(|| Some(column_type.clone()));
                         Ok(ColumnDef::Key(KeyDef::Fk { field_def: field.clone(), multiplicity: m, parent_type, column_props }))
                     } else {
                         Err(syn::Error::new(attr.span(), "Foreign key must specify either `one2many` or `one2one`"))

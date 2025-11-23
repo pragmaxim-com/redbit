@@ -5,7 +5,7 @@ use crate::storage;
 use crate::table::{DictTableDefs, IndexTableDefs, PlainTableDef};
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
-use syn::{parse_quote, ItemStruct};
+use syn::{parse_quote, ItemStruct, Type};
 use crate::relationship::StoreStatement;
 
 pub mod query;
@@ -18,11 +18,38 @@ pub mod info;
 pub mod init;
 pub mod chain;
 pub mod context;
+mod manual_accessors;
+
+fn vec_inner(ty: &Type) -> Option<Type> {
+    if let Type::Path(p) = ty {
+        if let Some(seg) = p.path.segments.last() {
+            if seg.ident == "Vec" {
+                if let syn::PathArguments::AngleBracketed(ab) = &seg.arguments {
+                    if let Some(syn::GenericArgument::Type(t)) = ab.args.first() {
+                        return Some(t.clone());
+                    }
+                }
+            }
+        }
+    }
+    None
+}
 
 pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStream), syn::Error> {
     let entity_name = &item_struct.ident;
-    let (entity_def, one_to_many_parent_def, field_macros) =
+    let (entity_def, one_to_many_parent_def, field_macros, col_defs) =
         FieldMacros::new(item_struct, entity_name, parse_quote! { #entity_name })?;
+    // Collect write_from source field names to tailor sampling of transient fields.
+    let write_from_sources: Vec<String> = col_defs
+        .iter()
+        .filter_map(|c| {
+            if let crate::field_parser::ColumnDef::Relationship(_, Some(wf), _, _) = c {
+                Some(wf.from.to_string())
+            } else {
+                None
+            }
+        })
+        .collect();
     let mut field_defs = Vec::new();
     let mut plain_table_defs: Vec<PlainTableDef> = Vec::new();
     let mut index_table_defs: Vec<IndexTableDefs> = Vec::new();
@@ -51,6 +78,26 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
         table_info_items.extend(field_macro.table_info_items());
         struct_inits.push(field_macro.struct_init());
         struct_inits_with_query.push(field_macro.struct_init_with_query());
+        // If this field is a write_from source, sample it relative to the previous pk so hashes exist.
+        let fname = field_macro.field_def().name.clone();
+        let fname_str = fname.to_string();
+        if write_from_sources.contains(&fname_str) {
+            // For write_from sources (transient fields feeding hooks), sample from previous pk so referenced hashes exist.
+            let init = if let Some(inner) = vec_inner(&field_macro.field_def().tpe) {
+                quote! {
+                    let #fname = <#inner as Sampleable>::sample_many_from(3, pk.total_index().saturating_sub(1) as usize);
+                }
+            } else {
+                quote! { let #fname = Default::default(); }
+            };
+            struct_default_inits.push(init.clone());
+            struct_default_inits_with_query.push(init);
+            store_statements.extend(field_macro.store_statements());
+            delete_statements.extend(field_macro.delete_statements());
+            delete_many_statements.extend(field_macro.delete_many_statements());
+            column_function_defs.extend(field_macro.function_defs());
+            continue;
+        }
         struct_default_inits.push(field_macro.struct_default_init());
         struct_default_inits_with_query.push(field_macro.struct_default_init_with_query());
         store_statements.extend(field_macro.store_statements());
@@ -96,6 +143,7 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
         Rest::new(&function_defs);
 
     let test_suite = tests::test_suite(&entity_def, one_to_many_parent_def.clone(), &function_defs);
+    let manual_tokens = manual_accessors::emit(&entity_def, &col_defs);
 
     let stream: TokenStream =
         quote! {
@@ -118,6 +166,7 @@ pub fn new(item_struct: &ItemStruct) -> Result<(KeyDef, Vec<FieldDef>, TokenStre
                 // entity fields have their own dbs
                 #db_defs
             }
+            #manual_tokens
             // unit tests and rest api tests
             #test_suite
         };

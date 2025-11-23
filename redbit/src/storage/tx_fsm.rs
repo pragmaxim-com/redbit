@@ -2,6 +2,7 @@ use crate::storage::sort_buffer::MergeBuffer;
 use crate::storage::table_writer_api::*;
 use crate::{error, AppError, DbKey, DbVal};
 use crossbeam::channel::{unbounded, Receiver, Sender};
+use log::debug;
 use redb::{Database, Key};
 use std::cell::RefCell;
 use std::marker::PhantomData;
@@ -16,6 +17,7 @@ struct TxState<'txn, 'c, K: DbKey + Send, V: DbVal + Send, F: TableFactory<K, V>
     deferred: Option<FlushState>,
     write_error: Option<AppError>,
     collecting_start: Instant,
+    factory_name: String,
 }
 
 impl<'txn, 'c, K: DbKey + Send, V: DbVal + Send, F: TableFactory<K, V>> TxState<'txn, 'c, K, V, F> {
@@ -87,6 +89,7 @@ impl<'txn, 'c, K: DbKey + Send, V: DbVal + Send, F: TableFactory<K, V>> TxState<
                 Ok(Control::Continue)
             }
             WriterCommand::FlushWhenReady(ack) => {
+                debug!("{} FlushWhenReady sender_pending={} sum={}", self.factory_name, self.deferred.as_ref().and_then(|d| d.sender.as_ref()).is_some(), self.deferred.as_ref().map(|d| d.sum).unwrap_or(0));
                 match &mut self.deferred {
                     Some(FlushState { sender, .. }) => {
                         if sender.is_some() {
@@ -97,19 +100,20 @@ impl<'txn, 'c, K: DbKey + Send, V: DbVal + Send, F: TableFactory<K, V>> TxState<
                     None => self.deferred = Some(FlushState { sender: Some(ack.clone()), sum: 0, shards: None }),
                 }
                 if let Some(FlushState { sender: Some(_), sum, shards: Some(total) }) = &self.deferred {
-                    if *sum == *total {
+                    if *sum >= *total {
                         return self.step(WriterCommand::Flush(ack));
                     }
                 }
                 Ok(Control::Continue)
             }
             WriterCommand::ReadyForFlush(total) => {
+                debug!("{} ReadyForFlush total={} deferred_present={}", self.factory_name, total, self.deferred.is_some());
                 match &mut self.deferred {
                     Some(FlushState { sum, shards, .. }) => { *sum += 1; *shards = Some(total); }
                     None => self.deferred = Some(FlushState { sender: None, sum: 1, shards: Some(total) }),
                 }
                 if let Some(FlushState { sender: Some(ack), sum, shards: Some(t) }) = &self.deferred {
-                    if *sum == *t {
+                    if *sum >= *t {
                         return self.step(WriterCommand::Flush(ack.clone()));
                     }
                 }
@@ -143,12 +147,13 @@ pub struct TxFSM<K: DbKey + Send, V: Key + Send + 'static, F> {
 
 impl<K: DbKey + Send, V: DbVal + Send, F: TableFactory<K, V> + Send + 'static> TxFSM<K, V, F> {
     pub fn new(db_weak: Weak<Database>, factory: F) -> Result<Self, AppError> {
+        let factory_name = factory.name();
         let (topic, receiver): (Sender<WriterCommand<K, V>>, Receiver<WriterCommand<K, V>>) = unbounded();
         let handle = thread::spawn(move || {
             'outer: loop {
                 let cmd = match receiver.recv() {
                     Ok(c) => c,
-                    Err(e) => { error!("writer {} terminated: {}", factory.name(), e.to_string()); break; }
+                    Err(e) => { error!("writer {} terminated: {}", factory_name, e.to_string()); break; }
                 };
 
                 match cmd {
@@ -180,6 +185,7 @@ impl<K: DbKey + Send, V: DbVal + Send, F: TableFactory<K, V> + Send + 'static> T
                             deferred: None,
                             write_error: None,
                             collecting_start: Instant::now(),
+                            factory_name: factory_name.clone(),
                         };
 
                         'in_tx: loop {
@@ -237,9 +243,22 @@ impl<K: DbKey + Send, V: DbVal + Send, F: TableFactory<K, V> + Send + 'static> T
                         let _ = ack.send(Ok(()));
                         break 'outer;
                     }
+                    WriterCommand::FlushWhenReady(ack) => {
+                        // If a flush arrives with no open tx, unblock the caller and keep running.
+                        let _ = ack.send(Err(AppError::Custom("flush outside transaction".to_string())));
+                        continue;
+                    }
+                    WriterCommand::ReadyForFlush(total) => {
+                        debug!("{} received ReadyForFlush({}) outside <Begin - Flush> scope; ignoring", factory_name, total);
+                        continue;
+                    }
+                    WriterCommand::MergeUnsortedInserts(_) => {
+                        debug!("{} received MergeUnsortedInserts outside <Begin - Flush> scope; ignoring", factory_name);
+                        continue;
+                    }
                     other => {
-                        error!("{} received {:?} outside <Begin - Flush> scope; ignoring", factory.name(), std::mem::discriminant(&other));
-                        break 'outer;
+                        debug!("{} received {:?} outside <Begin - Flush> scope; ignoring", factory_name, std::mem::discriminant(&other));
+                        continue;
                     }
                 }
             }

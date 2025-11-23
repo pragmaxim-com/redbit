@@ -5,6 +5,8 @@ pub mod block_provider;
 pub mod model_v1;
 pub mod routes;
 pub mod hook;
+pub mod manual_runtime;
+pub mod manual_chain;
 
 use crate::model_v1::chrono::DateTime;
 use std::fmt::Display;

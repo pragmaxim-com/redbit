@@ -23,11 +23,11 @@ pub enum FieldMacros {
 }
 
 impl FieldMacros {
-    pub fn new(
+pub fn new(
         item_struct: &ItemStruct,
         entity_name: &Ident,
         entity_type: Type
-    ) -> Result<(EntityDef, Option<OneToManyParentDef>, Vec<FieldMacros>), syn::Error> {
+    ) -> Result<(EntityDef, Option<OneToManyParentDef>, Vec<FieldMacros>, Vec<ColumnDef>), syn::Error> {
         let (key_def, col_defs) = field_parser::get_field_macros(item_struct)?;
         let one_to_many_parent_def =
             match key_def.clone() {
@@ -72,7 +72,7 @@ impl FieldMacros {
                 FieldMacros::Transient(TransientMacros::new(field.clone()))
             }
         }).collect::<Vec<FieldMacros>>();
-        Ok((entity_def, one_to_many_parent_def, field_macros))
+        Ok((entity_def, one_to_many_parent_def, field_macros, col_defs))
     }
 
     pub fn field_def(&self) -> FieldDef {
