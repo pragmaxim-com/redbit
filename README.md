@@ -324,6 +324,14 @@ The same api is accessible through http endpoints at http://127.0.0.1:3033/swagg
 
 ### FAQ
 
+**Why sharding?**
+
+BTrees do not have good write throughput when they grow very large (eg. billions of entries).
+Evenly distributed range sharding with round‑robin merge at query time fixes this problem.
+If we split 2 billions of addresses into 8 shards, BTrees are still at their sweet spot.
+
+Some solve it by using LSM trees with WAL but it has its own drawbacks like massive write amplification at compaction time.
+
 **Why and when redb?**
 
 Redb is copy-on-write (COW) B+Tree based so in comparison to LSM tree with WAL or log-structured heap, in order
