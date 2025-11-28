@@ -326,11 +326,12 @@ The same api is accessible through http endpoints at http://127.0.0.1:3033/swagg
 
 **Why sharding?**
 
-BTrees do not have good write throughput when they grow very large (eg. billions of entries).
-Evenly distributed range sharding with round‑robin merge at query time fixes this problem.
-If we split 2 billions of addresses into 8 shards, BTrees are still at their sweet spot.
-
-Some solve it by using LSM trees with WAL but it has its own drawbacks like massive write amplification at compaction time.
+- At times of starting, RocksDB `v10.1.3` was at 50% of performance for my use case compared to `v10.7.5` due to various optimizations like parallel compression.
+- BTrees do not have good write throughput when they grow very large (eg. billions of entries).
+  - Evenly distributed range sharding with round‑robin merge at query time fixes this problem.
+  - If we split 2 billion addresses into 8 shards 
+    - BTrees are still at their sweet spot 
+    - you can spread massive tree reorganization or flushing IO over time, so that you don't suddenly block whole indexing
 
 **Why and when redb?**
 
