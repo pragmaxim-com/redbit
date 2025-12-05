@@ -1,7 +1,11 @@
-**Warning** : `redbit` is being rewritten in parallel based on different principles, 
-because current `300k rows/s` is not enough for BTC, I need at least `700k rows/s` 
-on average to index it under 4 hours, with 0.4TB disk space and 8GB RAM for wallet explorer
-and under 8 hours with 0.8TB disk space and 8GB RAM for analytics platform.
+**Warning** : `redbit` is being rewritten in parallel based on different principles : 
+- more modular 
+- Typed IR (intermediate Representation) instead of Macros
+- native support for (e)utxo and account based chains
+- multiple db engines abstraction (some chains perform better with LSM Trees, some with BTrees)
+- average `600k rows/s` throughput on average with indexing time 
+  - under 4 hours, with 0.4TB disk space and 8GB RAM for wallet explorer
+  - under 8 hours with 0.8TB disk space and 16GB RAM for analytics platform.
 
 Built for blazing fast persistence of terra bytes of structured data on a single machine
 while offering rich querying capabilities, e.g. bitcoin/blockchain data.
