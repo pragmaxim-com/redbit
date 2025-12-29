@@ -1,11 +1,18 @@
-**Warning** : `redbit` is being rewritten in parallel based on different principles : 
-- more modular 
-- Typed IR (intermediate Representation) instead of Macros
+**Warning** : `redbit` is being rewritten on different principles :
+- more modular (http/rcp client/server, block stream, storage, chain, sync, mempool, etc.)
+- Typed IR (Intermediate Representation) instead of Macros
 - native support for (e)utxo and account based chains
+- native tokens/asset support
 - multiple db engines abstraction (some chains perform better with LSM Trees, some with BTrees)
-- average `600k rows/s` throughput on average with indexing time 
-  - under 4 hours, with 0.4TB disk space and 8GB RAM for wallet explorer
-  - under 8 hours with 0.8TB disk space and 16GB RAM for analytics platform.
+- balance pre-aggregations at indexing time for both utxo and account chains
+- indexing throughput on average with PCIe5 NVMe SSD without RAID0 :
+  - BTC
+    - 4 hours with 0.4TB disk space and 8GB RAM
+  - ETH
+    - 16 hours with 1.6TB disk space and 16GB RAM
+- query response times :
+  - account balance including tokens : under `1ms` for hottest addresses
+  - tx history : under `1ms` first page and under `1s` for entire history of the hottest addresses 
 
 Built for blazing fast persistence of terra bytes of structured data on a single machine
 while offering rich querying capabilities, e.g. bitcoin/blockchain data.
