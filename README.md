@@ -4,8 +4,9 @@
 - native support for (e)utxo and account based chains
 - native tokens/asset support
 - multiple db engines abstraction (some chains perform better with LSM Trees, some with BTrees)
+- new sharding with simpler mount-point-per-shard model (because RAID0 helps only for sequential writes)
 - balance pre-aggregations at indexing time for both utxo and account chains
-- indexing throughput on average with PCIe5 NVMe SSD without RAID0 :
+- indexing throughput on average with PCIe5 NVMe SSD :
   - BTC
     - 4 hours with 0.4TB disk space and 8GB RAM
   - ETH
@@ -342,7 +343,9 @@ The same api is accessible through http endpoints at http://127.0.0.1:3033/swagg
 
 **Why sharding?**
 
-- At times of starting, RocksDB `v10.1.3` was at 50% of performance for my use case compared to `v10.7.5` due to various optimizations like parallel compression.
+- disk IO is ALWAYS the bottlenec
+  - sharding (by addres in blockchains) allows for concurrent R/W to multiple ssds
+  - write throughtput scales linearly with # of ssds
 - BTrees do not have good write throughput when they grow very large (eg. billions of entries).
   - Evenly distributed range sharding with round‑robin merge at query time fixes this problem.
   - If we split 2 billion addresses into 8 shards 
